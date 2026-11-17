@@ -5,6 +5,7 @@ use futures::StreamExt;
 use ratatui::Terminal;
 
 use crate::{
+    alloc_count,
     cache::{self, Cache},
     inbox_view::InboxView,
     keymap::{self, Action},
@@ -53,34 +54,43 @@ pub async fn run(
     let mut resync = std::pin::pin!(resync);
     let mut whole = false;
     let mut syncing = true;
+    // A frame's allocations count from what triggered it, the input or the
+    // Cache read, to the end of its draw; waiting on input is left out.
+    let mut frame_start = alloc_count::count();
     loop {
         terminal
             .draw(|frame| {
                 frame.render_stateful_widget(MessageList { theme }, frame.area(), &mut view);
             })
             .map_err(Error::Terminal)?;
+        alloc_count::report(frame_start);
         if !whole {
             whole = true;
+            frame_start = alloc_count::count();
             show(&mut view, cache, None)?;
             continue;
         }
 
         tokio::select! {
             result = &mut resync, if syncing => {
+                frame_start = alloc_count::count();
                 syncing = false;
                 result.map_err(Error::Sync)?;
                 show(&mut view, cache, None)?;
             }
-            event = events.next() => match event {
-                None => return Ok(()),
-                Some(Err(source)) => return Err(Error::Terminal(source)),
-                Some(Ok(Event::Key(key))) => match keymap::action(key) {
-                    Some(Action::Quit) => return Ok(()),
-                    Some(Action::Move(movement)) => view.apply(movement),
-                    None => {}
-                },
-                Some(Ok(_)) => {}
-            },
+            event = events.next() => {
+                frame_start = alloc_count::count();
+                match event {
+                    None => return Ok(()),
+                    Some(Err(source)) => return Err(Error::Terminal(source)),
+                    Some(Ok(Event::Key(key))) => match keymap::action(key) {
+                        Some(Action::Quit) => return Ok(()),
+                        Some(Action::Move(movement)) => view.apply(movement),
+                        None => {}
+                    },
+                    Some(Ok(_)) => {}
+                }
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+mod alloc_count;
 mod cache;
 mod cli;
 mod config;

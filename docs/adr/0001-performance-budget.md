@@ -55,3 +55,8 @@ A test-only Cargo feature `alloc-count` swaps in a counting global allocator;
 the binary logs allocations per frame. A pty test scrolls the Message List
 through the fake IMAP server and asserts zero allocations per frame. Release
 builds keep the system allocator.
+
+The count covers the UI thread only, from the input or Cache read that starts
+a frame to the end of its draw; waiting for input and the log writer's thread
+are left out. CI runs it as
+`cargo test --features alloc-count --test frame_allocations`.

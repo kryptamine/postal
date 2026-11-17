@@ -25,6 +25,10 @@ unicode-segmentation = "1.13.3"
 unicode-width = "0.2.3"
 webpki-roots = "1.0.12"
 
+[features]
+# Test-only: counts allocations per frame, see docs/adr/0001-performance-budget.md.
+alloc-count = []
+
 [dev-dependencies]
 imap-codec = { version = "=2.0.0-alpha.10", features = ["ext_condstore_qresync"] }
 imap-next = "0.3.4"
@@ -32,6 +36,10 @@ insta = "1.49.0"
 rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
 tempfile = "3.27.0"
 termlens = "0.11.10"
+
+[[test]]
+name = "frame_allocations"
+required-features = ["alloc-count"]
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }

@@ -94,6 +94,7 @@ fn the_wire_trace_never_carries_the_password_or_literals() {
 
 // ADR 0001: an enabled event allocates, so scrolling logs nothing at the default level.
 #[test]
+#[cfg_attr(feature = "alloc-count", ignore = "alloc-count logs every frame")]
 fn scrolling_logs_nothing_at_the_default_level() {
     let server = FakeImap::start(messages());
     let still = run(&Home::for_server(&server), &[], &[], &[]);
