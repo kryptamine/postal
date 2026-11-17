@@ -20,6 +20,11 @@ const CARD_HEIGHT: u16 = 3;
 const MIN_WIDTH_WITH_DATE: u16 = 40;
 const MIN_WIDTH: u16 = 20;
 
+/// How many cards fit a list `height` rows tall, its border included.
+pub fn capacity(height: u16) -> usize {
+    usize::from(height.saturating_sub(2) / CARD_HEIGHT).max(1)
+}
+
 /// One three-line card per Message, `● sender … date` / subject / Snippet,
 /// inside a border titled with the Unread count.
 pub struct MessageList<'a> {
@@ -54,7 +59,7 @@ impl StatefulWidget for MessageList<'_> {
             return centred("Inbox is empty", inner, buf);
         }
 
-        let fitting = usize::from(inner.height / CARD_HEIGHT).max(1);
+        let fitting = capacity(area.height);
         if view.selected < view.offset {
             view.offset = view.selected;
         } else if view.selected >= view.offset + fitting {

@@ -1,17 +1,19 @@
 //! A scriptable IMAP server inside the test process, on `127.0.0.1:0`.
-//! It serves a fixed Inbox and records every command the client sends.
+//! It serves an Inbox the test can change between runs and records every
+//! command the client sends.
 
 use std::{
     net::Ipv4Addr,
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     sync::{Arc, Mutex},
     thread,
+    time::Duration,
 };
 
 use imap_codec::{CommandCodec, encode::Encoder};
 use imap_next::{
     imap_types::{
-        command::{Command, CommandBody},
+        command::{Command, CommandBody, FetchModifier},
         core::{IString, NString, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
@@ -19,7 +21,7 @@ use imap_next::{
         flag::{Flag, FlagFetch},
         response::{Code, Data, Greeting, Status},
         search::SearchKey,
-        sequence::{SeqOrUid, Sequence},
+        sequence::{SeqOrUid, Sequence, SequenceSet},
     },
     server::{Event, Options, Server},
     stream::Stream,
@@ -28,6 +30,9 @@ use tokio::net::TcpListener;
 
 pub const EMAIL: &str = "me@example.com";
 pub const PASSWORD: &str = "abcd efgh ijkl mnop";
+
+/// The UID of the first Message given to `FakeImap::start`; the rest follow.
+pub const FIRST_UID: u32 = 101;
 
 #[derive(Clone)]
 pub struct FakeMessage {
@@ -74,9 +79,46 @@ impl FakeMessage {
     }
 }
 
+/// Where the server stops answering until `FakeImap::release`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Stall {
+    /// Before the greeting: the client sees no byte at all.
+    Greeting,
+    /// After a `FETCH` or `UID FETCH` is recorded, before its answer.
+    Fetch,
+}
+
+struct Stored {
+    uid: u32,
+    modseq: u64,
+    message: FakeMessage,
+}
+
+struct Inbox {
+    uid_validity: u32,
+    uid_next: u32,
+    /// `None` serves the Inbox without CONDSTORE.
+    highest_modseq: Option<u64>,
+    messages: Vec<Stored>,
+    stall: Option<Stall>,
+}
+
+impl Inbox {
+    fn bump(&mut self) -> u64 {
+        let next = self.highest_modseq.unwrap_or_default() + 1;
+        self.highest_modseq = self.highest_modseq.map(|_| next);
+        next
+    }
+
+    fn stored(&mut self, uid: u32) -> &mut Stored {
+        self.messages.iter_mut().find(|m| m.uid == uid).unwrap()
+    }
+}
+
 pub struct FakeImap {
     pub port: u16,
     commands: Arc<Mutex<Vec<String>>>,
+    inbox: Arc<Mutex<Inbox>>,
 }
 
 impl FakeImap {
@@ -86,8 +128,23 @@ impl FakeImap {
         let port = std_listener.local_addr().unwrap().port();
         std_listener.set_nonblocking(true).unwrap();
         let commands = Arc::new(Mutex::new(Vec::new()));
-        let recorded = Arc::clone(&commands);
-        let messages = Arc::new(messages);
+        let inbox = Arc::new(Mutex::new(Inbox {
+            uid_validity: 1,
+            uid_next: FIRST_UID,
+            highest_modseq: Some(1),
+            messages: Vec::new(),
+            stall: None,
+        }));
+        let server = Self {
+            port,
+            commands: Arc::clone(&commands),
+            inbox: Arc::clone(&inbox),
+        };
+
+        for message in messages {
+            server.deliver(message);
+        }
+
         thread::spawn(move || {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -100,27 +157,90 @@ impl FakeImap {
                         return;
                     };
 
-                    let recorded = Arc::clone(&recorded);
-                    let messages = Arc::clone(&messages);
-                    tokio::spawn(serve(Stream::insecure(tcp), messages, recorded));
+                    let commands = Arc::clone(&commands);
+                    let inbox = Arc::clone(&inbox);
+                    tokio::spawn(serve(Stream::insecure(tcp), inbox, commands));
                 }
             });
         });
 
-        Self { port, commands }
+        server
     }
 
     /// Each command as the client sent it, without its tag.
     pub fn commands(&self) -> Vec<String> {
         self.commands.lock().unwrap().clone()
     }
+
+    pub fn clear_commands(&self) {
+        self.commands.lock().unwrap().clear();
+    }
+
+    /// Appends a Message with the next UID and returns that UID.
+    pub fn deliver(&self, message: FakeMessage) -> u32 {
+        let mut inbox = self.inbox.lock().unwrap();
+        let uid = inbox.uid_next;
+        let modseq = inbox.bump();
+        inbox.uid_next += 1;
+        inbox.messages.push(Stored {
+            uid,
+            modseq,
+            message,
+        });
+        uid
+    }
+
+    pub fn expunge(&self, uid: u32) {
+        let mut inbox = self.inbox.lock().unwrap();
+        inbox.bump();
+        inbox.messages.retain(|m| m.uid != uid);
+    }
+
+    pub fn set_seen(&self, uid: u32, seen: bool) {
+        let mut inbox = self.inbox.lock().unwrap();
+        let modseq = inbox.bump();
+        let stored = inbox.stored(uid);
+        stored.modseq = modseq;
+        stored.message.seen = seen;
+        drop(inbox);
+    }
+
+    /// Serves the Inbox as a server without CONDSTORE: no `HIGHESTMODSEQ`.
+    pub fn without_condstore(&self) {
+        self.inbox.lock().unwrap().highest_modseq = None;
+    }
+
+    /// Replaces the Inbox under a new UIDVALIDITY, its UIDs starting at 1.
+    pub fn renumber(&self, messages: Vec<FakeMessage>) {
+        {
+            let mut inbox = self.inbox.lock().unwrap();
+            inbox.uid_validity += 1;
+            inbox.uid_next = 1;
+            inbox.messages.clear();
+        }
+
+        for message in messages {
+            self.deliver(message);
+        }
+    }
+
+    pub fn stall(&self, stall: Stall) {
+        self.inbox.lock().unwrap().stall = Some(stall);
+    }
+
+    pub fn release(&self) {
+        self.inbox.lock().unwrap().stall = None;
+    }
 }
 
-async fn serve(
-    mut stream: Stream,
-    messages: Arc<Vec<FakeMessage>>,
-    recorded: Arc<Mutex<Vec<String>>>,
-) {
+async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
+    while inbox.lock().unwrap().stall == Some(stall) {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>, recorded: Arc<Mutex<Vec<String>>>) {
+    wait_unless_stalled(&inbox, Stall::Greeting).await;
     let greeting = Greeting::ok(None, "fake IMAP ready").unwrap();
     let mut server = Server::new(Options::default(), greeting);
     let mut logging_out = false;
@@ -133,7 +253,11 @@ async fn serve(
             Event::CommandReceived { command } => {
                 recorded.lock().unwrap().push(untagged(&command));
                 logging_out = matches!(command.body, CommandBody::Logout);
-                respond(&mut server, command, &messages);
+                if matches!(command.body, CommandBody::Fetch { .. }) {
+                    wait_unless_stalled(&inbox, Stall::Fetch).await;
+                }
+
+                respond(&mut server, command, &inbox.lock().unwrap());
             }
             Event::ResponseSent { response, .. } if logging_out => {
                 if matches!(
@@ -156,7 +280,7 @@ fn untagged(command: &Command<'_>) -> String {
         .to_owned()
 }
 
-fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessage]) {
+fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
     let tag = Some(command.tag);
     match command.body {
         CommandBody::Login { username, password } => {
@@ -171,9 +295,7 @@ fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessa
             server.enqueue_status(status.unwrap());
         }
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
-            let exists = u32::try_from(messages.len()).unwrap();
-            server.enqueue_data(Data::Exists(exists));
-            server.enqueue_data(Data::Flags(vec![Flag::Seen]));
+            examine(server, inbox);
             server.enqueue_status(
                 Status::ok(tag, Some(Code::ReadOnly), "EXAMINE completed").unwrap(),
             );
@@ -182,30 +304,29 @@ fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessa
             criteria,
             uid: true,
             ..
-        } if matches!(criteria.as_ref(), [SearchKey::Unseen]) => {
-            server.enqueue_data(Data::Search(unseen(messages)));
-            server.enqueue_status(Status::ok(tag, None, "SEARCH completed").unwrap());
-        }
+        } => match search(criteria.as_ref(), inbox) {
+            Some(uids) => {
+                let uids = uids.into_iter().map(|uid| NonZeroU32::new(uid).unwrap());
+                server.enqueue_data(Data::Search(uids.collect(), None));
+                server.enqueue_status(Status::ok(tag, None, "SEARCH completed").unwrap());
+            }
+            None => {
+                server.enqueue_status(Status::bad(tag, None, "not faked").unwrap());
+            }
+        },
         CommandBody::Fetch {
             sequence_set,
             macro_or_item_names,
-            ..
+            uid,
+            modifiers,
         } => {
             let from_header = header_fields(&macro_or_item_names);
-            let max = u32::try_from(messages.len()).unwrap();
-            for sequence in sequence_set.0.as_ref() {
-                let (first, last) = match sequence {
-                    Sequence::Single(one) => (resolve(*one, max), resolve(*one, max)),
-                    Sequence::Range(a, b) => {
-                        let (a, b) = (resolve(*a, max), resolve(*b, max));
-                        (a.min(b), a.max(b))
-                    }
-                };
-
-                for seq in first..=last {
-                    let message = &messages[usize::try_from(seq - 1).unwrap()];
-                    server.enqueue_data(fetch(seq, message, from_header.as_ref()));
-                }
+            let changed_since = modifiers.iter().find_map(|m| match m {
+                FetchModifier::ChangedSince(modseq) => Some(modseq.get()),
+                FetchModifier::Vanished => None,
+            });
+            for (seq, stored) in fetched(inbox, &sequence_set, uid, changed_since) {
+                server.enqueue_data(fetch(seq, stored, from_header.as_ref()));
             }
 
             server.enqueue_status(Status::ok(tag, None, "FETCH completed").unwrap());
@@ -220,11 +341,75 @@ fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessa
     }
 }
 
-const fn resolve(value: SeqOrUid, max: u32) -> u32 {
-    match value {
+fn examine(server: &mut Server, inbox: &Inbox) {
+    let exists = u32::try_from(inbox.messages.len()).unwrap();
+    server.enqueue_data(Data::Exists(exists));
+    server.enqueue_data(Data::Flags(vec![Flag::Seen]));
+    let mut codes = vec![
+        Code::UidValidity(NonZeroU32::new(inbox.uid_validity).unwrap()),
+        Code::UidNext(NonZeroU32::new(inbox.uid_next).unwrap()),
+    ];
+    if let Some(modseq) = inbox.highest_modseq {
+        codes.push(Code::HighestModSeq(NonZeroU64::new(modseq).unwrap()));
+    }
+
+    for code in codes {
+        server.enqueue_status(Status::ok(None, Some(code), "fake").unwrap());
+    }
+}
+
+/// The UIDs a `UID SEARCH` matches; `None` for criteria the fake does not know.
+fn search(criteria: &[SearchKey<'_>], inbox: &Inbox) -> Option<Vec<u32>> {
+    let max = inbox.messages.last().map_or(0, |m| m.uid);
+    let mut uids = Vec::new();
+    for stored in &inbox.messages {
+        let matches = match criteria {
+            [SearchKey::Unseen] => !stored.message.seen,
+            [SearchKey::Uid(set)] => contains(set, stored.uid, max),
+            _ => return None,
+        };
+
+        if matches {
+            uids.push(stored.uid);
+        }
+    }
+
+    Some(uids)
+}
+
+/// The Messages a `FETCH` names, with their sequence numbers.
+fn fetched<'a>(
+    inbox: &'a Inbox,
+    set: &'a SequenceSet,
+    uid: bool,
+    changed_since: Option<u64>,
+) -> impl Iterator<Item = (u32, &'a Stored)> {
+    let max = if uid {
+        inbox.messages.last().map_or(0, |m| m.uid)
+    } else {
+        u32::try_from(inbox.messages.len()).unwrap()
+    };
+
+    (1..).zip(&inbox.messages).filter(move |&(seq, stored)| {
+        contains(set, if uid { stored.uid } else { seq }, max)
+            && changed_since.is_none_or(|since| stored.modseq > since)
+    })
+}
+
+/// Whether `set` holds `value`, with `*` standing for `max`.
+fn contains(set: &SequenceSet, value: u32, max: u32) -> bool {
+    let resolve = |bound: &SeqOrUid| match bound {
         SeqOrUid::Value(n) => n.get(),
         SeqOrUid::Asterisk => max,
-    }
+    };
+
+    set.0.as_ref().iter().any(|sequence| match sequence {
+        Sequence::Single(one) => resolve(one) == value,
+        Sequence::Range(a, b) => {
+            let (a, b) = (resolve(a), resolve(b));
+            (a.min(b)..=a.max(b)).contains(&value)
+        }
+    })
 }
 
 /// The `HEADER.FIELDS` section the client asked for, if any; the fake serves
@@ -243,19 +428,9 @@ fn header_fields(items: &MacroOrMessageDataItemNames<'static>) -> Option<Section
     })
 }
 
-const fn uid(seq: u32) -> NonZeroU32 {
-    NonZeroU32::new(seq + 100).unwrap()
-}
-
-fn unseen(messages: &[FakeMessage]) -> Vec<NonZeroU32> {
-    (1..)
-        .zip(messages)
-        .filter(|(_, m)| !m.seen)
-        .map(|(seq, _)| uid(seq))
-        .collect()
-}
-
-fn fetch(seq: u32, message: &FakeMessage, from_header: Option<&Section<'static>>) -> Data<'static> {
+/// Every item whatever the client asked for, as a client must cope with extras.
+fn fetch(seq: u32, stored: &Stored, from_header: Option<&Section<'static>>) -> Data<'static> {
+    let message = &stored.message;
     let nstring = |s: &str| NString(Some(IString::try_from(s.to_owned()).unwrap()));
     let (mailbox, host) = message.from_address.split_once('@').unwrap();
     let from = Address {
@@ -291,10 +466,11 @@ fn fetch(seq: u32, message: &FakeMessage, from_header: Option<&Section<'static>>
     };
     let received = chrono::DateTime::parse_from_rfc3339(&message.internal_date).unwrap();
     let mut items = vec![
-        MessageDataItem::Uid(uid(seq)),
+        MessageDataItem::Uid(NonZeroU32::new(stored.uid).unwrap()),
         MessageDataItem::Flags(flags),
         MessageDataItem::InternalDate(DateTime::try_from(received).unwrap()),
         MessageDataItem::Envelope(envelope),
+        MessageDataItem::ModSeq(NonZeroU64::new(stored.modseq).unwrap()),
     ];
     if let Some(section) = from_header {
         items.push(MessageDataItem::BodyExt {

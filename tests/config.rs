@@ -14,6 +14,7 @@ fn postal(home: &Home) -> Output {
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .output()
         .unwrap()
 }

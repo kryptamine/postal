@@ -8,4 +8,4 @@ mod traced;
 mod wire_trace;
 
 pub use error::Error;
-pub use session::{ImapSession, MailServer};
+pub use session::{Examined, ImapSession, MailServer};

@@ -1,5 +1,5 @@
 //! A throwaway `$XDG_CONFIG_HOME` holding Postal's config and secret, and an
-//! `$XDG_STATE_HOME` for its log.
+//! `$XDG_STATE_HOME` for its log and an `$XDG_CACHE_HOME` for its Cache.
 
 use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
@@ -39,6 +39,14 @@ impl Home {
 
     pub fn xdg_state_home(&self) -> PathBuf {
         self.dir.path().join("state")
+    }
+
+    pub fn xdg_cache_home(&self) -> PathBuf {
+        self.dir.path().join("cache")
+    }
+
+    pub fn cache_path(&self) -> PathBuf {
+        self.xdg_cache_home().join("postal/cache.sqlite3")
     }
 
     pub fn log_path(&self) -> PathBuf {

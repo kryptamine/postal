@@ -1,0 +1,156 @@
+use std::fmt;
+
+use crate::{
+    cache::{self, Cache, Changes},
+    imap::{self, Examined, MailServer},
+    sync_state::SyncState,
+};
+
+/// The first run, and a run after a UIDVALIDITY change, fetches this many of
+/// the newest Messages.
+const WINDOW: u32 = 500;
+
+#[derive(Debug)]
+pub enum Error {
+    Imap(imap::Error),
+    Cache(cache::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Imap(source) => source.fmt(f),
+            Self::Cache(source) => source.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<imap::Error> for Error {
+    fn from(source: imap::Error) -> Self {
+        Self::Imap(source)
+    }
+}
+
+impl From<cache::Error> for Error {
+    fn from(source: cache::Error) -> Self {
+        Self::Cache(source)
+    }
+}
+
+/// Brings the Cache up to the server's Inbox and writes the result in one
+/// transaction, so the Message List never shows a half-applied resync.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+pub async fn resync(server: &mut impl MailServer, cache: &Cache) -> Result<(), Error> {
+    let examined = server.examine().await?;
+    let unread = server.unread_count().await?;
+    let known = cache.state()?;
+    let cached = cache.uids()?;
+    let changes = match known {
+        Some(known) if known.uid_validity == examined.state.uid_validity && !cached.is_empty() => {
+            update(server, &examined, known, &cached, unread).await?
+        }
+        _ => {
+            if let Some(known) = known
+                && known.uid_validity != examined.state.uid_validity
+            {
+                tracing::info!(
+                    "UIDVALIDITY changed from {} to {}: refetching the Inbox",
+                    known.uid_validity,
+                    examined.state.uid_validity
+                );
+            }
+
+            refetch(server, &examined, unread).await?
+        }
+    };
+
+    cache.apply(&changes)?;
+    Ok(())
+}
+
+async fn refetch(
+    server: &mut impl MailServer,
+    examined: &Examined,
+    unread: usize,
+) -> Result<Changes, Error> {
+    let new = if examined.exists == 0 {
+        tracing::info!("the Inbox is empty");
+        Vec::new()
+    } else {
+        server.newest(examined.exists, WINDOW).await?
+    };
+
+    Ok(Changes {
+        state: examined.state,
+        unread,
+        replace: true,
+        new,
+        expunged: Vec::new(),
+        flags: Vec::new(),
+    })
+}
+
+/// New mail by UID range, expunges over the cached range, then flags.
+/// `cached` is ascending and not empty.
+async fn update(
+    server: &mut impl MailServer,
+    examined: &Examined,
+    known: SyncState,
+    cached: &[u32],
+    unread: usize,
+) -> Result<Changes, Error> {
+    let (first, last) = (cached[0], cached[cached.len() - 1]);
+    let new = if examined.state.uid_next.is_some() && examined.state.uid_next == known.uid_next {
+        Vec::new()
+    } else {
+        server.since_uid(last + 1).await?
+    };
+
+    let older = u32::try_from(new.len()).map_or(0, |new| examined.exists.saturating_sub(new));
+    let expunged = expunged(server, older, cached).await?;
+    let flags = match (known.highest_modseq, examined.state.highest_modseq) {
+        (Some(before), Some(now)) if before == now => Vec::new(),
+        (Some(before), Some(_)) => server.unread_flags(first, last, Some(before)).await?,
+        _ => server.unread_flags(first, last, None).await?,
+    };
+
+    Ok(Changes {
+        state: examined.state,
+        unread,
+        replace: false,
+        new,
+        expunged,
+        flags,
+    })
+}
+
+/// The cached UIDs gone from the server. `older` counts the server's
+/// Messages up to the newest cached one.
+async fn expunged(
+    server: &mut impl MailServer,
+    older: u32,
+    cached: &[u32],
+) -> Result<Vec<u32>, Error> {
+    let (first, last) = (cached[0], cached[cached.len() - 1]);
+    // No UID is ever assigned inside the cached range, so when the server
+    // holds as many Messages from `first` on as the Cache does, none is gone.
+    if let Some(sequence) = server.sequence_number(first).await?
+        && usize::try_from(older.saturating_sub(sequence - 1)) == Ok(cached.len())
+    {
+        return Ok(Vec::new());
+    }
+
+    let present = server.uids(first, last).await?;
+    let gone: Vec<_> = cached
+        .iter()
+        .copied()
+        .filter(|uid| !present.contains(uid))
+        .collect();
+    tracing::info!("{} Messages expunged", gone.len());
+    Ok(gone)
+}

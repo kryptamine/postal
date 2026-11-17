@@ -13,6 +13,13 @@ Postal sends plain `UID SEARCH UNSEEN` and counts the UIDs. The count is the
 same; the answer grows with the number of Unread Messages, about 7 bytes each,
 which stays off the frame path.
 
+Resync's expunge check (issue #25) hits the same wall with
+`UID SEARCH RETURN (ALL)`. Postal sends `UID SEARCH UID first:last` over the
+cached range and diffs the plain list against the Cache. The list costs about
+7 bytes per cached Message, and the search runs only when the server holds
+fewer Messages in that range than the Cache does, which one `UID FETCH` of the
+oldest cached UID tells.
+
 ## Considered options
 
 - **`STATUS INBOX (UNSEEN)`.** One number, parsed by async-imap, but RFC 3501

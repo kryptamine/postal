@@ -27,6 +27,7 @@ fn spawn(home: &Home, args: &[&str], env: &[(&str, &str)]) -> Terminal {
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .args(args)
         .timeout(Duration::from_secs(10));
     for (key, value) in env {
@@ -132,6 +133,7 @@ fn help_names_the_log_and_what_the_trace_holds() {
         .arg("--help")
         .env_clear()
         .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -154,6 +156,7 @@ fn an_error_before_the_screen_is_logged_and_names_the_log() {
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .output()
         .unwrap();
     assert!(!output.status.success());
@@ -177,6 +180,7 @@ fn an_unknown_argument_is_refused() {
         .arg("--frobnicate")
         .env_clear()
         .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .output()
         .unwrap();
     assert!(!output.status.success());

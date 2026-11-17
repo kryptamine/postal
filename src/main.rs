@@ -1,3 +1,4 @@
+mod cache;
 mod cli;
 mod config;
 mod credential;
@@ -13,6 +14,8 @@ mod message_list;
 mod panic_hook;
 mod run;
 mod secret;
+mod sync;
+mod sync_state;
 mod theme;
 mod truncate;
 mod xdg;
@@ -23,15 +26,8 @@ use std::{
 };
 
 use crate::{
-    config::Config,
-    credential::Credential,
-    imap::{ImapSession, MailServer},
-    inbox::Inbox,
-    theme::Theme,
+    cache::Cache, config::Config, credential::Credential, imap::ImapSession, theme::Theme,
 };
-
-/// The first run fetches this many of the newest Messages.
-const WINDOW: u32 = 500;
 
 fn main() -> ExitCode {
     let log = match start() {
@@ -81,21 +77,32 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = xdg::config_dir()?;
     let config = Config::load(&dir.join("config.toml"))?;
     let password = secret::read(&dir.join("secret"))?;
+    let cache = Cache::open(&xdg::cache_dir()?)?;
     let theme = Theme::from_env();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     runtime.block_on(async {
         let mut terminal = ratatui::init();
-        let result = run::run(&mut terminal, &theme, load_inbox(&config, &password)).await;
+        let result = run::run(
+            &mut terminal,
+            &theme,
+            &cache,
+            resync(&config, &password, &cache),
+        )
+        .await;
         ratatui::restore();
         Ok(result?)
     })
 }
 
-async fn load_inbox(config: &Config, password: &Credential) -> Result<Inbox, imap::Error> {
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn resync(config: &Config, password: &Credential, cache: &Cache) -> Result<(), sync::Error> {
     let mut session = ImapSession::open(config, password).await?;
-    let inbox = session.inbox(WINDOW).await?;
+    sync::resync(&mut session, cache).await?;
     session.logout().await?;
-    Ok(inbox)
+    Ok(())
 }

@@ -2,7 +2,7 @@ use crate::{inbox::Inbox, keymap::Move, message::Message};
 
 /// The Message List's contents, selection and scroll position.
 pub struct InboxView {
-    /// `None` until the server has answered.
+    /// `None` until the Cache or the server has rows to show.
     pub messages: Option<Vec<Message>>,
     /// The server's count over the whole Inbox.
     pub unread: usize,
@@ -21,14 +21,20 @@ impl InboxView {
         }
     }
 
-    /// Shows the Messages newest `INTERNALDATE` first, with the newest selected.
+    /// Shows rows already ordered newest first. The selection stays on the
+    /// same Message, or on the same index when that Message is gone.
     pub fn show(&mut self, inbox: Inbox) {
-        let mut messages = inbox.messages;
-        messages.sort_by_key(|m| std::cmp::Reverse(m.received));
-        self.messages = Some(messages);
+        let selected = self
+            .messages
+            .as_ref()
+            .and_then(|m| m.get(self.selected))
+            .map(|m| m.uid);
+        let last = inbox.messages.len().saturating_sub(1);
+        self.selected = selected
+            .and_then(|uid| inbox.messages.iter().position(|m| m.uid == uid))
+            .unwrap_or_else(|| self.selected.min(last));
+        self.messages = Some(inbox.messages);
         self.unread = inbox.unread;
-        self.selected = 0;
-        self.offset = 0;
     }
 
     pub fn apply(&mut self, movement: Move) {

@@ -26,6 +26,11 @@ pub fn state_dir() -> Result<PathBuf, NoHome> {
     postal_dir("XDG_STATE_HOME", ".local/state")
 }
 
+/// `$XDG_CACHE_HOME/postal`, falling back to `~/.cache/postal` on macOS too.
+pub fn cache_dir() -> Result<PathBuf, NoHome> {
+    postal_dir("XDG_CACHE_HOME", ".cache")
+}
+
 /// A relative XDG variable is ignored, as the XDG spec requires.
 fn postal_dir(variable: &'static str, under_home: &str) -> Result<PathBuf, NoHome> {
     let base = std::env::var_os(variable)
