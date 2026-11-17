@@ -13,6 +13,7 @@ use html2text::config::{self, ImageRenderMode};
 use html2text::render::{TaggedLineElement, TextDecorator};
 use html2text::{Colour, Element, Handle, RcDom};
 use html5ever::interface::{NodeOrText, TreeSink};
+use html5ever::tendril::StrTendril;
 use html5ever::{ns, LocalName, QualName};
 use mail_parser::{MessageParser, PartType};
 use ratatui::{
@@ -98,6 +99,7 @@ struct Opts {
     hide: bool,
     flatten: bool,
     borders: bool,
+    stack: bool,
     colour: ColourMode,
     view: View,
     width: Option<usize>,
@@ -111,6 +113,7 @@ impl Default for Opts {
             hide: true,
             flatten: true,
             borders: false,
+            stack: true,
             colour: ColourMode::Semantic,
             view: View::Rendered,
             width: None,
@@ -206,6 +209,9 @@ impl TextDecorator for Deco {
     }
     fn decorate_image(&mut self, src: &str, title: &str) -> (String, Ann) {
         let _ = src;
+        if self.st.borrow().open.is_empty() {
+            return (String::new(), Ann::None);
+        }
         (format!("[{}]", title.trim()), Ann::Image)
     }
     fn header_prefix(&self, _level: usize) -> String {
@@ -243,6 +249,7 @@ struct PassStats {
     pixels: usize,
     flattened: usize,
     data_tables: usize,
+    stacked: usize,
 }
 
 fn tag(h: &Handle) -> Option<&str> {
@@ -347,7 +354,7 @@ fn div(dom: &RcDom) -> Handle {
     dom.create_element(QualName::new(None, ns!(html), LocalName::from("div")), vec![], Default::default())
 }
 
-fn clean(dom: &RcDom, node: &Handle, o: Opts, st: &mut PassStats) {
+fn clean(dom: &RcDom, node: &Handle, o: Opts, width: usize, st: &mut PassStats) {
     let kids: Vec<Handle> = node.children.borrow().clone();
     for c in kids {
         let Some(name) = tag(&c).map(str::to_owned) else { continue };
@@ -366,7 +373,7 @@ fn clean(dom: &RcDom, node: &Handle, o: Opts, st: &mut PassStats) {
             continue;
         }
         let layout = name == "table" && is_layout(&c);
-        clean(dom, &c, o, st);
+        clean(dom, &c, o, width, st);
         if name == "table" {
             if o.flatten && layout {
                 let outer = div(dom);
@@ -384,11 +391,86 @@ fn clean(dom: &RcDom, node: &Handle, o: Opts, st: &mut PassStats) {
                 dom.append_before_sibling(&c, NodeOrText::AppendNode(outer));
                 dom.remove_from_parent(&c);
                 st.flattened += 1;
+            } else if o.stack && !fits(&c, width) {
+                stack(dom, &c);
+                st.stacked += 1;
             } else {
                 st.data_tables += 1;
             }
         }
     }
+}
+
+fn cell_text(h: &Handle) -> String {
+    let mut b = Vec::new();
+    let _ = h.serialize(&mut b);
+    let raw = String::from_utf8_lossy(&b);
+    let mut out = String::new();
+    let mut in_tag = false;
+    for ch in raw.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                out.push(' ');
+            }
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    let out = out.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">");
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+// Columns stay only when every cell fits on one line at this width.
+fn fits(table: &Handle, width: usize) -> bool {
+    let mut cols: Vec<usize> = Vec::new();
+    for r in rows(table) {
+        for (i, c) in cells(&r).iter().enumerate() {
+            let w = cell_text(c).chars().count();
+            if cols.len() <= i {
+                cols.push(0);
+            }
+            cols[i] = cols[i].max(w);
+        }
+    }
+    cols.iter().sum::<usize>() + 2 * cols.len().saturating_sub(1) <= width
+}
+
+fn el(dom: &RcDom, name: &str) -> Handle {
+    dom.create_element(QualName::new(None, ns!(html), LocalName::from(name)), vec![], Default::default())
+}
+
+fn stack(dom: &RcDom, table: &Handle) {
+    let rs = rows(table);
+    let header: Option<Vec<String>> = rs
+        .first()
+        .filter(|r| cells(r).iter().all(|c| tag(c) == Some("th")))
+        .map(|r| cells(r).iter().map(cell_text).collect());
+    let outer = el(dom, "div");
+    for r in rs.iter().skip(usize::from(header.is_some())) {
+        let p = el(dom, "p");
+        for (i, cell) in cells(r).iter().enumerate() {
+            if cell_text(cell).is_empty() && !has_desc(cell, "a") {
+                continue;
+            }
+            let d = el(dom, "div");
+            if let Some(h) = header.as_ref().and_then(|h| h.get(i)).filter(|h| !h.is_empty()) {
+                let b = el(dom, "b");
+                dom.append(&b, NodeOrText::AppendText(StrTendril::from(format!("{h}: "))));
+                dom.append(&d, NodeOrText::AppendNode(b));
+            }
+            let moved: Vec<Handle> = cell.children.borrow().clone();
+            for m in moved {
+                dom.remove_from_parent(&m);
+                dom.append(&d, NodeOrText::AppendNode(m));
+            }
+            dom.append(&p, NodeOrText::AppendNode(d));
+        }
+        dom.append(&outer, NodeOrText::AppendNode(p));
+    }
+    dom.append_before_sibling(table, NodeOrText::AppendNode(outer));
+    dom.remove_from_parent(table);
 }
 
 // ---------- render ----------
@@ -430,7 +512,7 @@ fn render(m: &Msg, width: usize, o: Opts) -> Rendered {
                     cfg = cfg.no_table_borders();
                 }
                 let dom = cfg.parse_html(html.as_bytes()).map_err(|e| e.to_string())?;
-                clean(&dom, &dom.document, o, &mut stats);
+                clean(&dom, &dom.document, o, width, &mut stats);
                 let tree = cfg.dom_to_render_tree(&dom).map_err(|e| e.to_string())?;
                 let lines = cfg.render_to_lines(tree, width).map_err(|e| e.to_string())?;
                 Ok::<_, String>(
@@ -658,8 +740,8 @@ fn main() -> io::Result<()> {
             let r = render(m, 80, o);
             let mut body = as_text(m, &r, o);
             body.push_str(&format!(
-                "\n---\nsnippet: {}\nms: {:.2} hidden: {} pixels: {} flattened: {} data tables: {} err: {:?}\n",
-                r.snippet, r.ms, r.stats.hidden, r.stats.pixels, r.stats.flattened, r.stats.data_tables, r.err
+                "\n---\nsnippet: {}\nms: {:.2} hidden: {} pixels: {} flattened: {} data tables: {} stacked: {} err: {:?}\n",
+                r.snippet, r.ms, r.stats.hidden, r.stats.pixels, r.stats.flattened, r.stats.data_tables, r.stats.stacked, r.err
             ));
             std::fs::write(out.join(format!("{}.txt", m.name)), body)?;
         }
@@ -707,6 +789,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             KeyCode::Char('h') => app.o.hide = !app.o.hide,
             KeyCode::Char('f') => app.o.flatten = !app.o.flatten,
             KeyCode::Char('b') => app.o.borders = !app.o.borders,
+            KeyCode::Char('s') => app.o.stack = !app.o.stack,
             KeyCode::Char('a') => app.o.pager_ansi = !app.o.pager_ansi,
             KeyCode::Char('m') => {
                 app.o.colour = match app.o.colour {
@@ -764,11 +847,12 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
     let on = |b: bool| if b { "on" } else { "off" };
     f.render_widget(
         Paragraph::new(format!(
-            " PROTOTYPE  c css:{}  h hide:{}  f flatten:{}  b borders:{}  m colour:{:?}  v view:{:?}  w width:{}  a pager-ansi:{}",
+            " PROTOTYPE  c css:{}  h hide:{}  f flatten:{}  b borders:{}  s stack:{}  m colour:{:?}  v view:{:?}  w width:{}  a pager-ansi:{}",
             on(o.css),
             on(o.hide),
             on(o.flatten),
             on(o.borders),
+            on(o.stack),
             o.colour,
             o.view,
             o.width.map_or("pane".into(), |w| w.to_string()),
@@ -823,7 +907,14 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         pl.push(Line::raw(""));
         for (i, u) in r.footnotes.iter().enumerate() {
             let mark = Style::default().fg(if o.colour == ColourMode::Off { Color::Reset } else { Color::DarkGray });
-            pl.push(Line::from(vec![Span::styled(format!("[{}] ", i + 1), mark), Span::raw(u.clone())]));
+            let short = u.split_once("://").map_or(u.as_str(), |(_, r)| r);
+            let room = pw.saturating_sub(format!("[{}] ", i + 1).len());
+            let shown: String = if short.chars().count() > room {
+                short.chars().take(room.saturating_sub(1)).chain(['…']).collect()
+            } else {
+                short.to_string()
+            };
+            pl.push(Line::from(vec![Span::styled(format!("[{}] ", i + 1), mark), Span::raw(shown)]));
         }
     }
     let max_scroll = pl.len().saturating_sub(1);
@@ -866,7 +957,7 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         f.render_widget(Clear, r);
         f.render_widget(
             Paragraph::new(
-                "j/k g/G   move\nCtrl-d/u  scroll Preview\nEnter/l   pipe to $PAGER\nq         quit\n\nc  doc CSS (display:none)\nh  hidden-style + pixel removal\nf  flatten layout tables\nb  table borders\nm  colour: Semantic / Html / Off\nv  view: Rendered / text/plain / raw HTML\nw  width: pane / 40 / 60 / 80 / 100\na  pager ANSI on/off",
+                "j/k g/G   move\nCtrl-d/u  scroll Preview\nEnter/l   pipe to $PAGER\nq         quit\n\nc  doc CSS (display:none)\nh  hidden-style + pixel removal\nf  flatten layout tables\nb  table borders\ns  stack data tables that do not fit\nm  colour: Semantic / Html / Off\nv  view: Rendered / text/plain / raw HTML\nw  width: pane / 40 / 60 / 80 / 100\na  pager ANSI on/off",
             )
             .block(Block::default().borders(Borders::ALL).title(" ? ")),
             r,
