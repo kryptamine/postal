@@ -1017,8 +1017,38 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         pl.push(Line::styled(format!("render error: {e}"), Style::default().fg(Color::Red)));
     }
     let body_start = pl.len();
+    let mut order: Vec<String> = Vec::new();
     for l in &r.lines {
-        pl.push(Line::from(l.iter().map(|(s, a)| Span::styled(s.clone(), style(a, o.colour))).collect::<Vec<_>>()));
+        for (_, a) in l {
+            if let Some(u) = link_url(a, &r) {
+                if !order.contains(&u) {
+                    order.push(u);
+                }
+            }
+        }
+    }
+    app.targets = hint_labels(order.len()).into_iter().zip(order).collect();
+    let label_style = Style::default().bg(Color::Yellow).fg(Color::Black).add_modifier(Modifier::BOLD);
+    let mut prev_url: Option<String> = None;
+    for l in &r.lines {
+        let mut spans = Vec::new();
+        for (s, a) in l {
+            let url = link_url(a, &r);
+            if let (Some(prefix), Some(u)) = (&app.hint, &url) {
+                if prev_url.as_ref() != Some(u) {
+                    if let Some((lbl, _)) = app.targets.iter().find(|(_, t)| t == u) {
+                        if lbl.starts_with(prefix.as_str()) {
+                            spans.push(Span::styled(format!("[{lbl}]"), label_style));
+                        }
+                    }
+                }
+            }
+            if !s.trim().is_empty() || url.is_none() {
+                prev_url = url;
+            }
+            spans.push(Span::styled(s.clone(), style(a, o.colour)));
+        }
+        pl.push(Line::from(spans));
     }
     app.hypers.clear();
     {
@@ -1069,28 +1099,6 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         prev_a,
     );
 
-    let mut urls: Vec<&str> = Vec::new();
-    for h in &app.hypers {
-        if !urls.contains(&h.url.as_str()) {
-            urls.push(&h.url);
-        }
-    }
-    let labels = hint_labels(urls.len());
-    app.targets = urls.iter().zip(&labels).map(|(u, l)| (l.clone(), (*u).to_string())).collect();
-    if let Some(prefix) = &app.hint {
-        let mut done: Vec<&str> = Vec::new();
-        for h in &app.hypers {
-            if done.contains(&h.url.as_str()) {
-                continue;
-            }
-            done.push(&h.url);
-            if let Some((l, _)) = app.targets.iter().find(|(_, u)| *u == h.url) {
-                if l.starts_with(prefix.as_str()) {
-                    f.buffer_mut().set_string(h.x, h.y, l, Style::default().bg(Color::Yellow).fg(Color::Black).add_modifier(Modifier::BOLD));
-                }
-            }
-        }
-    }
     let s = r.stats;
     f.render_widget(
         Paragraph::new(format!(
@@ -1108,9 +1116,11 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         bottom,
     );
     if app.hint.is_some() {
+        f.render_widget(Clear, bottom);
         f.render_widget(Paragraph::new(" -- open link: type its label, any other key cancels --").style(Style::default().fg(Color::Yellow)), bottom);
     }
     if let Some(t) = &app.toast {
+        f.render_widget(Clear, bottom);
         f.render_widget(Paragraph::new(t.as_str()), bottom);
     }
     if app.help {
