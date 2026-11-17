@@ -824,9 +824,8 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     let mut preview_w = 80;
     loop {
         term.draw(|f| preview_w = draw(f, app))?;
-        if app.o.links != LinkMode::Footnotes && app.hint.is_none() {
-            write_hypers(&app.hypers)?;
-        }
+        // Decision: no OSC 8 in the MVP; links open through hint mode.
+        let _ = write_hypers;
         let Event::Key(k) = event::read()? else { continue };
         if k.kind != KeyEventKind::Press {
             continue;
@@ -911,8 +910,9 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             KeyCode::Enter | KeyCode::Char('l') => {
                 let size = term.size()?;
                 let w = app.o.width.unwrap_or((size.width as usize).min(100) - 2);
-                let r = render(&app.msgs[app.sel], w, app.o);
-                let text = as_text(&app.msgs[app.sel], &r, app.o);
+                let po = Opts { links: LinkMode::Footnotes, ..app.o };
+                let r = render(&app.msgs[app.sel], w, po);
+                let text = as_text(&app.msgs[app.sel], &r, po);
                 ratatui::restore();
                 let pager = std::env::var("PAGER").unwrap_or_else(|_| "less".into());
                 let mut cmd = Command::new(&pager);
