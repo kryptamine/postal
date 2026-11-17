@@ -1,2 +1,4 @@
 target/
 .DS_Store
+.afk.toml
+.claude/worktrees/

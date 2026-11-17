@@ -1,6 +1,0 @@
-allow = [
-  "Bash(cargo *)",
-  "Bash(shellcheck *)",
-  "Bash(echo *)",
-  "Read(~/.cargo/registry/**)",
-]
