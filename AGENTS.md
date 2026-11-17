@@ -74,6 +74,13 @@ paragraph goes in `docs/adr/`, with one line in the code pointing at it.
 Before writing or editing a comment, read
 [.claude/rules/comments.md](.claude/rules/comments.md).
 
+## Spacing rule (mandatory)
+
+**A statement that spans several lines and ends in a brace (`if`, `match`,
+`for`, `let ... else`, a struct literal) is followed by a blank line** before
+the next statement. rustfmt keeps blank lines but never adds them, and no lint
+checks this.
+
 ## Working here
 
 - Search the repository through the `fff` MCP (`.mcp.json`), for file names and
