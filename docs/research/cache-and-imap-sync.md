@@ -212,8 +212,8 @@ List is drawn):
    UID from the in-memory ordered list and the Cache. On `FETCH FLAGS`, update
    the row. Re-issue `IDLE` before 29 minutes. After a reconnect, rerun steps
    1–7.
-9. Fetch bodies with `BODY.PEEK[]` on demand, keyed by `X-GM-MSGID`. This is
-   needed even though `EXAMINE` already prevents `\Seen` from being set.
+9. Fetch bodies with `BODY.PEEK[]` on demand, keyed by `X-GM-MSGID`.
+   `EXAMINE` is a second guard against setting `\Seen`.
 
 **Do not depend on QRESYNC** (Gmail does not advertise it). Treat CONDSTORE as
 an optimisation, not a requirement. Before locking the design, confirm the
