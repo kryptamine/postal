@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::credential::Credential;
+
 #[derive(Debug)]
 pub enum Error {
     Read { path: PathBuf, source: io::Error },
@@ -26,7 +28,7 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// Reads the credential from the file secret store, which must be `0600`.
-pub fn read(path: &Path) -> Result<String, Error> {
+pub fn read(path: &Path) -> Result<Credential, Error> {
     let read_error = |source| Error::Read {
         path: path.to_owned(),
         source,
@@ -45,5 +47,5 @@ pub fn read(path: &Path) -> Result<String, Error> {
     }
 
     let secret = std::fs::read_to_string(path).map_err(read_error)?;
-    Ok(secret.trim().to_owned())
+    Ok(Credential::new(secret.trim().to_owned()))
 }

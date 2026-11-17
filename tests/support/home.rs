@@ -1,4 +1,5 @@
-//! A throwaway `$XDG_CONFIG_HOME` holding Postal's config and secret.
+//! A throwaway `$XDG_CONFIG_HOME` holding Postal's config and secret, and an
+//! `$XDG_STATE_HOME` for its log.
 
 use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
@@ -34,6 +35,14 @@ impl Home {
 
     pub fn xdg_config_home(&self) -> PathBuf {
         self.dir.path().to_owned()
+    }
+
+    pub fn xdg_state_home(&self) -> PathBuf {
+        self.dir.path().join("state")
+    }
+
+    pub fn log_path(&self) -> PathBuf {
+        self.xdg_state_home().join("postal/postal.log")
     }
 
     pub fn config_path(&self) -> PathBuf {

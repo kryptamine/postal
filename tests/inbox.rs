@@ -21,6 +21,7 @@ fn postal_with(home: &Home, (cols, rows): (u16, u16), env: &[(&str, &str)]) -> T
         .size(cols, rows)
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
+        .env("XDG_STATE_HOME", home.xdg_state_home())
         .env("TZ", "UTC")
         .timeout(Duration::from_secs(10));
     for (key, value) in env {

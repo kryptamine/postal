@@ -1,8 +1,8 @@
 use async_imap::{Client, Session, types::Fetch, types::Flag};
 use futures::TryStreamExt;
 
-use super::{Error, connect::Transport};
-use crate::{config::Config, header, inbox::Inbox, message::Message};
+use super::{Error, connect::Transport, traced::Traced, wire_trace};
+use crate::{config::Config, credential::Credential, header, inbox::Inbox, message::Message};
 
 /// The raw `From` header rides along, for a `From` the server cannot parse.
 const ITEMS: &str = "(UID FLAGS INTERNALDATE ENVELOPE BODY.PEEK[HEADER.FIELDS (FROM)])";
@@ -18,17 +18,24 @@ pub struct ImapSession {
 }
 
 impl ImapSession {
-    pub async fn open(config: &Config, password: &str) -> Result<Self, Error> {
-        let mut client = Client::new(super::connect::connect(&config.imap).await?);
+    pub async fn open(config: &Config, password: &Credential) -> Result<Self, Error> {
+        tracing::info!("connecting to {}:{}", config.imap.host, config.imap.port);
+        let mut transport = super::connect::connect(&config.imap).await?;
+        if wire_trace::enabled() {
+            transport = Box::new(Traced::new(transport));
+        }
+
+        let mut client = Client::new(transport);
         client
             .read_response()
             .await
             .map_err(|e| Error::Imap(e.into()))?
             .ok_or(Error::Closed)?;
         let session = client
-            .login(&config.email, password)
+            .login(&config.email, password.expose())
             .await
             .map_err(|(e, _)| e)?;
+        tracing::info!("logged in");
         Ok(Self { session })
     }
 
@@ -44,6 +51,7 @@ impl MailServer for ImapSession {
         // see docs/adr/0004-unread-count-by-uid-search.md.
         let unread = self.session.uid_search("UNSEEN").await?.len();
         if exists == 0 {
+            tracing::info!("the Inbox is empty");
             return Ok(Inbox {
                 messages: Vec::new(),
                 unread,
@@ -52,7 +60,8 @@ impl MailServer for ImapSession {
 
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
         let fetches = self.session.fetch(format!("{first}:*"), ITEMS).await?;
-        let messages = fetches.map_ok(|f| message(&f)).try_collect().await?;
+        let messages: Vec<_> = fetches.map_ok(|f| message(&f)).try_collect().await?;
+        tracing::info!("fetched {} Messages, {unread} unread", messages.len());
         Ok(Inbox { messages, unread })
     }
 }

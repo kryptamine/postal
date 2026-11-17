@@ -1,22 +1,30 @@
+mod cli;
 mod config;
+mod credential;
 mod date_label;
 mod header;
 mod imap;
 mod inbox;
 mod inbox_view;
 mod keymap;
+mod logging;
 mod message;
 mod message_list;
+mod panic_hook;
 mod run;
 mod secret;
 mod theme;
 mod truncate;
 mod xdg;
 
-use std::process::ExitCode;
+use std::{
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
 use crate::{
     config::Config,
+    credential::Credential,
     imap::{ImapSession, MailServer},
     inbox::Inbox,
     theme::Theme,
@@ -26,10 +34,44 @@ use crate::{
 const WINDOW: u32 = 500;
 
 fn main() -> ExitCode {
-    match try_main() {
-        Ok(()) => ExitCode::SUCCESS,
+    let log = match start() {
+        Ok(Some(log)) => log,
+        Ok(None) => return ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("postal: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let code = logged(&log);
+    logging::flush();
+    code
+}
+
+/// Parses the flags and opens the log; `None` once `--help` is printed.
+fn start() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let args = cli::parse(std::env::args_os().skip(1))?;
+    let log = logging::path(&xdg::state_dir()?);
+    if args.help {
+        print!("{}", cli::help(&log));
+        return Ok(None);
+    }
+
+    logging::init(&log, args.verbosity)?;
+    panic_hook::install(log.clone());
+    Ok(Some(log))
+}
+
+fn logged(log: &Path) -> ExitCode {
+    tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
+    match try_main() {
+        Ok(()) => {
+            tracing::info!("exiting");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            tracing::error!("{error}");
+            eprintln!("postal: {error}\nLog: {}", log.display());
             ExitCode::FAILURE
         }
     }
@@ -51,7 +93,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     })
 }
 
-async fn load_inbox(config: &Config, password: &str) -> Result<Inbox, imap::Error> {
+async fn load_inbox(config: &Config, password: &Credential) -> Result<Inbox, imap::Error> {
     let mut session = ImapSession::open(config, password).await?;
     let inbox = session.inbox(WINDOW).await?;
     session.logout().await?;
