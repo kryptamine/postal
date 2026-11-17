@@ -16,6 +16,7 @@ mod run;
 mod secret;
 mod sync;
 mod sync_state;
+mod terminal_backend;
 mod theme;
 mod truncate;
 mod xdg;
@@ -83,7 +84,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
         .enable_all()
         .build()?;
     runtime.block_on(async {
-        let mut terminal = ratatui::init();
+        let mut terminal = terminal_backend::init()?;
         let result = run::run(
             &mut terminal,
             &theme,

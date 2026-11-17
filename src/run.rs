@@ -2,7 +2,7 @@ use std::io;
 
 use crossterm::event::{Event, EventStream};
 use futures::StreamExt;
-use ratatui::DefaultTerminal;
+use ratatui::Terminal;
 
 use crate::{
     cache::{self, Cache},
@@ -10,6 +10,7 @@ use crate::{
     keymap::{self, Action},
     message_list::{self, MessageList},
     sync,
+    terminal_backend::TerminalBackend,
     theme::Theme,
 };
 
@@ -40,7 +41,7 @@ impl std::error::Error for Error {}
     reason = "Postal runs on a current-thread runtime"
 )]
 pub async fn run(
-    terminal: &mut DefaultTerminal,
+    terminal: &mut Terminal<TerminalBackend>,
     theme: &Theme,
     cache: &Cache,
     resync: impl Future<Output = Result<(), sync::Error>>,
