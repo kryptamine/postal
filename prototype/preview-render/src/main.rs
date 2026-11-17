@@ -93,8 +93,16 @@ enum View {
     RawHtml,
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum LinkMode {
+    Inline,
+    Footnotes,
+    Both,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 struct Opts {
+    links: LinkMode,
     css: bool,
     hide: bool,
     flatten: bool,
@@ -109,6 +117,7 @@ struct Opts {
 impl Default for Opts {
     fn default() -> Self {
         Self {
+            links: LinkMode::Inline,
             css: true,
             hide: true,
             flatten: true,
@@ -128,7 +137,7 @@ impl Default for Opts {
 enum Ann {
     #[default]
     None,
-    Link,
+    Link(usize),
     Marker,
     Image,
     Em,
@@ -149,6 +158,7 @@ struct Notes {
 struct Deco {
     st: Rc<RefCell<Notes>>,
     html_colours: bool,
+    markers: bool,
 }
 
 impl TextDecorator for Deco {
@@ -169,12 +179,12 @@ impl TextDecorator for Deco {
             })
         };
         st.open.push(n);
-        (String::new(), Ann::Link)
+        (String::new(), Ann::Link(n.unwrap_or(0)))
     }
     fn decorate_link_end(&mut self) -> String {
         match self.st.borrow_mut().open.pop().flatten() {
-            Some(n) => format!("\u{e000}[{n}]"),
-            None => String::new(),
+            Some(n) if self.markers => format!("\u{e000}[{n}]"),
+            _ => String::new(),
         }
     }
     fn decorate_em_start(&self) -> (String, Ann) {
@@ -335,10 +345,9 @@ fn cells(row: &Handle) -> Vec<Handle> {
     row.children.borrow().iter().filter(|c| matches!(tag(c), Some("td" | "th"))).cloned().collect()
 }
 
-fn has_block(h: &Handle) -> bool {
+fn has_alt_img(h: &Handle) -> bool {
     h.children.borrow().iter().any(|c| {
-        matches!(tag(c), Some("table" | "div" | "p" | "ul" | "ol" | "h1" | "h2" | "h3" | "h4" | "br" | "blockquote" | "pre"))
-            || has_block(c)
+        (tag(c) == Some("img") && attr(c, "alt").is_some_and(|a| !a.trim().is_empty())) || has_alt_img(c)
     })
 }
 
@@ -378,6 +387,9 @@ fn clean(dom: &RcDom, node: &Handle, o: Opts, width: usize, st: &mut PassStats) 
             dom.remove_from_parent(&c);
             st.pixels += 1;
             continue;
+        }
+        if name == "a" && o.links != LinkMode::Footnotes && cell_text(&c).is_empty() && !has_alt_img(&c) {
+            dom.append(&c, NodeOrText::AppendText(StrTendril::from("[link]")));
         }
         let layout = name == "table" && is_layout(&c);
         clean(dom, &c, o, width, st);
@@ -504,7 +516,7 @@ fn render(m: &Msg, width: usize, o: Opts) -> Rendered {
         (View::RawHtml, Some(h), _) => Ok(h.lines().map(|l| vec![(l.to_string(), vec![])]).collect()),
         (View::Plain, _, Some(t)) | (View::Rendered, None, Some(t)) => Ok(wrap_plain(t, width)),
         (View::Rendered, Some(h), _) => {
-            let deco = Deco { st: st.clone(), html_colours: o.colour == ColourMode::Html };
+            let deco = Deco { st: st.clone(), html_colours: o.colour == ColourMode::Html, markers: o.links != LinkMode::Inline };
             let html = h.clone();
             let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 let mut cfg = config::with_decorator(deco)
@@ -623,7 +635,7 @@ fn snippet(lines: &[Row]) -> String {
             .collect();
         {
             for w in line.split_whitespace() {
-                if !w.chars().all(|c| "─│>•".contains(c)) {
+                if w != "[link]" && !w.chars().all(|c| "─│>•".contains(c)) {
                     s.push_str(w);
                     s.push(' ');
                 }
@@ -645,7 +657,7 @@ fn style(anns: &[Ann], mode: ColourMode) -> Style {
     }
     for a in anns {
         st = match a {
-            Ann::Link => st.fg(Color::Blue).add_modifier(Modifier::UNDERLINED),
+            Ann::Link(_) => st.fg(Color::Blue).add_modifier(Modifier::UNDERLINED),
             Ann::Marker => st.fg(Color::DarkGray),
             Ann::Image => st.fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
             Ann::Em => st.add_modifier(Modifier::ITALIC),
@@ -700,15 +712,22 @@ fn as_text(m: &Msg, r: &Rendered, o: Opts) -> String {
     for l in &r.lines {
         for (s, a) in l {
             let code = if o.pager_ansi { ansi(style(a, o.colour)) } else { String::new() };
+            let url = link_url(a, r).filter(|_| o.pager_ansi && o.links != LinkMode::Footnotes);
+            if let Some(u) = &url {
+                out.push_str(&format!("\x1b]8;;{u}\x1b\\"));
+            }
             if code.is_empty() {
                 out.push_str(s);
             } else {
                 out.push_str(&format!("{code}{s}\x1b[0m"));
             }
+            if url.is_some() {
+                out.push_str("\x1b]8;;\x1b\\");
+            }
         }
         out.push('\n');
     }
-    if !r.footnotes.is_empty() {
+    if !r.footnotes.is_empty() && o.links != LinkMode::Inline {
         out.push('\n');
         for (i, u) in r.footnotes.iter().enumerate() {
             if o.pager_ansi {
@@ -719,6 +738,24 @@ fn as_text(m: &Msg, r: &Rendered, o: Opts) -> String {
         }
     }
     out
+}
+
+fn link_url(a: &[Ann], r: &Rendered) -> Option<String> {
+    a.iter().rev().find_map(|x| match x {
+        Ann::Link(n) if *n > 0 => r.footnotes.get(n - 1).map(|u| {
+            if u.contains('@') && !u.contains("://") { format!("mailto:{u}") } else { u.clone() }
+        }),
+        _ => None,
+    })
+}
+
+// Screen run of link text to re-print wrapped in OSC 8 after ratatui draws.
+struct Hyper {
+    x: u16,
+    y: u16,
+    text: String,
+    style: Style,
+    url: String,
 }
 
 // ---------- app ----------
@@ -732,6 +769,7 @@ struct App {
     help: bool,
     cache: Option<(usize, usize, Opts, Rc<Rendered>)>,
     toast: Option<String>,
+    hypers: Vec<Hyper>,
 }
 
 impl App {
@@ -759,7 +797,8 @@ fn main() -> io::Result<()> {
     if args.get(2).map(String::as_str) == Some("--dump") {
         let out = PathBuf::from(args.get(3).expect("--dump <out>"));
         std::fs::create_dir_all(&out)?;
-        let o = Opts { pager_ansi: false, ..Opts::default() };
+        let inline = std::env::var("DUMP_INLINE").is_ok();
+        let o = Opts { pager_ansi: inline, links: if inline { LinkMode::Inline } else { LinkMode::Footnotes }, ..Opts::default() };
         for m in &msgs {
             let r = render(m, 80, o);
             let mut body = as_text(m, &r, o);
@@ -772,7 +811,7 @@ fn main() -> io::Result<()> {
         println!("dumped {} messages to {}", msgs.len(), out.display());
         return Ok(());
     }
-    let mut app = App { msgs, sel: 0, off: 0, scroll: 0, o: Opts::default(), help: false, cache: None, toast: None };
+    let mut app = App { msgs, sel: 0, off: 0, scroll: 0, o: Opts::default(), help: false, cache: None, toast: None, hypers: Vec::new() };
     let mut term = ratatui::init();
     let res = run(&mut term, &mut app);
     ratatui::restore();
@@ -783,6 +822,7 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     let mut preview_w = 80;
     loop {
         term.draw(|f| preview_w = draw(f, app))?;
+        write_hypers(&app.hypers)?;
         let Event::Key(k) = event::read()? else { continue };
         if k.kind != KeyEventKind::Press {
             continue;
@@ -815,6 +855,13 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             KeyCode::Char('b') => app.o.borders = !app.o.borders,
             KeyCode::Char('s') => app.o.stack = !app.o.stack,
             KeyCode::Char('a') => app.o.pager_ansi = !app.o.pager_ansi,
+            KeyCode::Char('o') => {
+                app.o.links = match app.o.links {
+                    LinkMode::Inline => LinkMode::Footnotes,
+                    LinkMode::Footnotes => LinkMode::Both,
+                    LinkMode::Both => LinkMode::Inline,
+                }
+            }
             KeyCode::Char('m') => {
                 app.o.colour = match app.o.colour {
                     ColourMode::Semantic => ColourMode::Html,
@@ -863,6 +910,16 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     }
 }
 
+fn write_hypers(hs: &[Hyper]) -> io::Result<()> {
+    use crossterm::{cursor::MoveTo, queue, style::Print};
+    let mut out = io::stdout();
+    for h in hs {
+        let code = ansi(h.style);
+        queue!(out, MoveTo(h.x, h.y), Print(format!("\x1b]8;;{}\x1b\\{code}{}\x1b[0m\x1b]8;;\x1b\\", h.url, h.text)))?;
+    }
+    out.flush()
+}
+
 fn draw(f: &mut Frame, app: &mut App) -> usize {
     let area = f.area();
     let [top, main, bottom] =
@@ -871,7 +928,8 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
     let on = |b: bool| if b { "on" } else { "off" };
     f.render_widget(
         Paragraph::new(format!(
-            " PROTOTYPE  c css:{}  h hide:{}  f flatten:{}  b borders:{}  s stack:{}  m colour:{:?}  v view:{:?}  w width:{}  a pager-ansi:{}",
+            " PROTOTYPE  o links:{:?}  c css:{}  h hide:{}  f flatten:{}  b borders:{}  s stack:{}  m colour:{:?}  v view:{:?}  w width:{}  a pager-ansi:{}",
+            o.links,
             on(o.css),
             on(o.hide),
             on(o.flatten),
@@ -924,10 +982,32 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
     if let Some(e) = &r.err {
         pl.push(Line::styled(format!("render error: {e}"), Style::default().fg(Color::Red)));
     }
+    let body_start = pl.len();
     for l in &r.lines {
         pl.push(Line::from(l.iter().map(|(s, a)| Span::styled(s.clone(), style(a, o.colour))).collect::<Vec<_>>()));
     }
-    if !r.footnotes.is_empty() {
+    app.hypers.clear();
+    if o.links != LinkMode::Footnotes {
+        let (ix, iy) = (prev_a.x + 2, prev_a.y + 1);
+        let ih = prev_a.height.saturating_sub(2) as usize;
+        for (li, l) in r.lines.iter().enumerate() {
+            let row = body_start + li;
+            if row < app.scroll || row - app.scroll >= ih {
+                continue;
+            }
+            let mut x = 0usize;
+            for (s, a) in l {
+                let w = s.chars().count();
+                if let Some(url) = link_url(a, &r) {
+                    if x + w <= pw {
+                        app.hypers.push(Hyper { x: ix + x as u16, y: iy + (row - app.scroll) as u16, text: s.clone(), style: style(a, o.colour), url });
+                    }
+                }
+                x += w;
+            }
+        }
+    }
+    if !r.footnotes.is_empty() && o.links != LinkMode::Inline {
         pl.push(Line::raw(""));
         for (i, u) in r.footnotes.iter().enumerate() {
             let mark = Style::default().fg(if o.colour == ColourMode::Off { Color::Reset } else { Color::DarkGray });
@@ -976,12 +1056,12 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
     }
     if app.help {
         let w = 64.min(area.width);
-        let h = 16.min(area.height);
+        let h = 18.min(area.height);
         let r = ratatui::layout::Rect { x: (area.width - w) / 2, y: (area.height - h) / 2, width: w, height: h };
         f.render_widget(Clear, r);
         f.render_widget(
             Paragraph::new(
-                "j/k g/G   move\nCtrl-d/u  scroll Preview\nEnter/l   pipe to $PAGER\nq         quit\n\nc  doc CSS (display:none)\nh  hidden-style + pixel removal\nf  flatten layout tables\nb  table borders\ns  stack data tables that do not fit\nm  colour: Semantic / Html / Off\nv  view: Rendered / text/plain / raw HTML\nw  width: pane / 40 / 60 / 80 / 100\na  pager ANSI on/off",
+                "j/k g/G   move\nCtrl-d/u  scroll Preview\nEnter/l   pipe to $PAGER\nq         quit\n\nc  doc CSS (display:none)\nh  hidden-style + pixel removal\nf  flatten layout tables\no  links: Inline (OSC 8) / Footnotes / Both\nb  table borders\ns  stack data tables that do not fit\nm  colour: Semantic / Html / Off\nv  view: Rendered / text/plain / raw HTML\nw  width: pane / 40 / 60 / 80 / 100\na  pager ANSI on/off",
             )
             .block(Block::default().borders(Borders::ALL).title(" ? ")),
             r,
