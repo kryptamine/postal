@@ -209,7 +209,7 @@ impl TextDecorator for Deco {
     }
     fn decorate_image(&mut self, src: &str, title: &str) -> (String, Ann) {
         let _ = src;
-        if self.st.borrow().open.is_empty() {
+        if self.st.borrow().open.is_empty() || title.trim().is_empty() {
             return (String::new(), Ann::None);
         }
         (format!("[{}]", title.trim()), Ann::Image)
@@ -335,6 +335,13 @@ fn cells(row: &Handle) -> Vec<Handle> {
     row.children.borrow().iter().filter(|c| matches!(tag(c), Some("td" | "th"))).cloned().collect()
 }
 
+fn has_block(h: &Handle) -> bool {
+    h.children.borrow().iter().any(|c| {
+        matches!(tag(c), Some("table" | "div" | "p" | "ul" | "ol" | "h1" | "h2" | "h3" | "h4" | "br" | "blockquote" | "pre"))
+            || has_block(c)
+    })
+}
+
 fn has_desc(h: &Handle, name: &str) -> bool {
     h.children.borrow().iter().any(|c| tag(c) == Some(name) || has_desc(c, name))
 }
@@ -378,7 +385,8 @@ fn clean(dom: &RcDom, node: &Handle, o: Opts, width: usize, st: &mut PassStats) 
             if o.flatten && layout {
                 let outer = div(dom);
                 for r in rows(&c) {
-                    for cell in cells(&r) {
+                    let cs = cells(&r);
+                    for cell in cs {
                         let d = div(dom);
                         let moved: Vec<Handle> = cell.children.borrow().clone();
                         for m in moved {
@@ -494,9 +502,7 @@ fn render(m: &Msg, width: usize, o: Opts) -> Rendered {
     let st = Rc::new(RefCell::new(Notes::default()));
     let res: Result<Vec<Row>, String> = match (o.view, &m.html, &m.text) {
         (View::RawHtml, Some(h), _) => Ok(h.lines().map(|l| vec![(l.to_string(), vec![])]).collect()),
-        (View::Plain, _, Some(t)) | (View::Rendered, None, Some(t)) => {
-            Ok(t.lines().map(|l| vec![(l.to_string(), vec![])]).collect())
-        }
+        (View::Plain, _, Some(t)) | (View::Rendered, None, Some(t)) => Ok(wrap_plain(t, width)),
         (View::Rendered, Some(h), _) => {
             let deco = Deco { st: st.clone(), html_colours: o.colour == ColourMode::Html };
             let html = h.clone();
@@ -541,6 +547,24 @@ fn render(m: &Msg, width: usize, o: Opts) -> Rendered {
     let snippet = snippet(&lines);
     let footnotes = std::mem::take(&mut st.borrow_mut().urls);
     Rendered { lines, footnotes, snippet, ms: t0.elapsed().as_secs_f64() * 1e3, stats, err }
+}
+
+fn wrap_plain(t: &str, width: usize) -> Vec<Row> {
+    let mut out = Vec::new();
+    for l in t.lines() {
+        let prefix: String = l.chars().take_while(|c| *c == '>' || *c == ' ').collect();
+        let mut cur = prefix.clone();
+        for w in l[prefix.len()..].split(' ') {
+            if cur.chars().count() + w.chars().count() + 1 > width && cur.len() > prefix.len() {
+                out.push(vec![(cur.trim_end().to_string(), vec![])]);
+                cur = prefix.clone();
+            }
+            cur.push_str(w);
+            cur.push(' ');
+        }
+        out.push(vec![(cur.trim_end().to_string(), vec![])]);
+    }
+    out
 }
 
 // Link-end markers arrive glued to link text; split so they style separately.
