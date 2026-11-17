@@ -15,9 +15,10 @@ use imap_next::{
         core::{IString, NString, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
-        fetch::MessageDataItem,
+        fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Section},
         flag::{Flag, FlagFetch},
         response::{Code, Data, Greeting, Status},
+        search::SearchKey,
         sequence::{SeqOrUid, Sequence},
     },
     server::{Event, Options, Server},
@@ -32,6 +33,8 @@ pub const PASSWORD: &str = "abcd efgh ijkl mnop";
 pub struct FakeMessage {
     pub from_name: Option<&'static str>,
     pub from_address: &'static str,
+    /// A raw `From` header the server could not parse: the envelope then has no `From`.
+    pub unparsable_from: Option<&'static str>,
     /// Raw header text, so a test can send RFC 2047 encoded words.
     pub subject: String,
     /// RFC 3339.
@@ -44,6 +47,7 @@ impl FakeMessage {
         Self {
             from_name: Some(from_name),
             from_address: "someone@example.com",
+            unparsable_from: None,
             subject: subject.to_owned(),
             internal_date: internal_date.to_owned(),
             seen: true,
@@ -53,6 +57,20 @@ impl FakeMessage {
     pub const fn unread(mut self) -> Self {
         self.seen = false;
         self
+    }
+
+    pub const fn unparsable_from(mut self, raw: &'static str) -> Self {
+        self.unparsable_from = Some(raw);
+        self
+    }
+
+    /// The `From` header's value as the Message carries it.
+    fn sender_header(&self) -> String {
+        match (self.unparsable_from, self.from_name) {
+            (Some(raw), _) => raw.to_owned(),
+            (None, Some(name)) => format!("{name} <{}>", self.from_address),
+            (None, None) => self.from_address.to_owned(),
+        }
     }
 }
 
@@ -160,7 +178,20 @@ fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessa
                 Status::ok(tag, Some(Code::ReadOnly), "EXAMINE completed").unwrap(),
             );
         }
-        CommandBody::Fetch { sequence_set, .. } => {
+        CommandBody::Search {
+            criteria,
+            uid: true,
+            ..
+        } if matches!(criteria.as_ref(), [SearchKey::Unseen]) => {
+            server.enqueue_data(Data::Search(unseen(messages)));
+            server.enqueue_status(Status::ok(tag, None, "SEARCH completed").unwrap());
+        }
+        CommandBody::Fetch {
+            sequence_set,
+            macro_or_item_names,
+            ..
+        } => {
+            let from_header = header_fields(&macro_or_item_names);
             let max = u32::try_from(messages.len()).unwrap();
             for sequence in sequence_set.0.as_ref() {
                 let (first, last) = match sequence {
@@ -173,7 +204,7 @@ fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessa
 
                 for seq in first..=last {
                     let message = &messages[usize::try_from(seq - 1).unwrap()];
-                    server.enqueue_data(fetch(seq, message));
+                    server.enqueue_data(fetch(seq, message, from_header.as_ref()));
                 }
             }
 
@@ -196,7 +227,35 @@ const fn resolve(value: SeqOrUid, max: u32) -> u32 {
     }
 }
 
-fn fetch(seq: u32, message: &FakeMessage) -> Data<'static> {
+/// The `HEADER.FIELDS` section the client asked for, if any; the fake serves
+/// only the `From` field whatever the list names.
+fn header_fields(items: &MacroOrMessageDataItemNames<'static>) -> Option<Section<'static>> {
+    let MacroOrMessageDataItemNames::MessageDataItemNames(names) = items else {
+        return None;
+    };
+
+    names.iter().find_map(|name| match name {
+        MessageDataItemName::BodyExt {
+            section: Some(section @ Section::HeaderFields(..)),
+            ..
+        } => Some(section.clone()),
+        _ => None,
+    })
+}
+
+const fn uid(seq: u32) -> NonZeroU32 {
+    NonZeroU32::new(seq + 100).unwrap()
+}
+
+fn unseen(messages: &[FakeMessage]) -> Vec<NonZeroU32> {
+    (1..)
+        .zip(messages)
+        .filter(|(_, m)| !m.seen)
+        .map(|(seq, _)| uid(seq))
+        .collect()
+}
+
+fn fetch(seq: u32, message: &FakeMessage, from_header: Option<&Section<'static>>) -> Data<'static> {
     let nstring = |s: &str| NString(Some(IString::try_from(s.to_owned()).unwrap()));
     let (mailbox, host) = message.from_address.split_once('@').unwrap();
     let from = Address {
@@ -206,12 +265,18 @@ fn fetch(seq: u32, message: &FakeMessage) -> Data<'static> {
         host: nstring(host),
     };
 
+    let from = if message.unparsable_from.is_some() {
+        vec![]
+    } else {
+        vec![from]
+    };
+
     let envelope = Envelope {
         date: NString(None),
         subject: nstring(&message.subject),
-        from: vec![from.clone()],
-        sender: vec![from.clone()],
-        reply_to: vec![from],
+        from: from.clone(),
+        sender: from.clone(),
+        reply_to: from,
         to: vec![],
         cc: vec![],
         bcc: vec![],
@@ -225,12 +290,20 @@ fn fetch(seq: u32, message: &FakeMessage) -> Data<'static> {
         vec![]
     };
     let received = chrono::DateTime::parse_from_rfc3339(&message.internal_date).unwrap();
-    let items = vec![
-        MessageDataItem::Uid(NonZeroU32::new(seq + 100).unwrap()),
+    let mut items = vec![
+        MessageDataItem::Uid(uid(seq)),
         MessageDataItem::Flags(flags),
         MessageDataItem::InternalDate(DateTime::try_from(received).unwrap()),
         MessageDataItem::Envelope(envelope),
     ];
+    if let Some(section) = from_header {
+        items.push(MessageDataItem::BodyExt {
+            section: Some(section.clone()),
+            origin: None,
+            data: nstring(&format!("From: {}\r\n\r\n", message.sender_header())),
+        });
+    }
+
     Data::Fetch {
         seq: NonZeroU32::new(seq).unwrap(),
         items: Vec1::try_from(items).unwrap(),

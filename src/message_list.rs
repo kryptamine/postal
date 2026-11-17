@@ -3,7 +3,8 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::Style,
-    widgets::{Paragraph, StatefulWidget, Widget},
+    text::Line,
+    widgets::{Block, Paragraph, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -12,12 +13,15 @@ use crate::{
 };
 
 const MARKER: &str = "●";
-const GAP: u16 = 2;
-/// Below this width the date column is dropped.
+/// The marker column and its gap; the subject and Snippet lines indent by the same.
+const INDENT: u16 = 2;
+const CARD_HEIGHT: u16 = 3;
+/// Below this terminal width the date is dropped.
 const MIN_WIDTH_WITH_DATE: u16 = 40;
 const MIN_WIDTH: u16 = 20;
 
-/// One row per Message: `● sender  subject  date`.
+/// One three-line card per Message, `● sender … date` / subject / Snippet,
+/// inside a border titled with the Unread count.
 pub struct MessageList<'a> {
     pub theme: &'a Theme,
     pub now: DateTime<Local>,
@@ -31,91 +35,95 @@ impl StatefulWidget for MessageList<'_> {
             return centred("terminal too small", area, buf);
         }
 
+        let title = if view.messages.is_some() {
+            format!(" Inbox  {} unread ", view.unread)
+        } else {
+            " Inbox ".to_owned()
+        };
+
+        let block = Block::bordered()
+            .border_style(self.theme.border)
+            .title(Line::styled(title, self.theme.title));
+        let inner = block.inner(area);
+        block.render(area, buf);
         let Some(messages) = view.messages.as_deref() else {
-            return centred("Loading Inbox…", area, buf);
+            return centred("Loading Inbox…", inner, buf);
         };
 
         if messages.is_empty() {
-            return centred("Inbox is empty", area, buf);
+            return centred("Inbox is empty", inner, buf);
         }
 
-        let height = usize::from(area.height);
+        let fitting = usize::from(inner.height / CARD_HEIGHT).max(1);
         if view.selected < view.offset {
             view.offset = view.selected;
-        } else if view.selected >= view.offset + height {
-            view.offset = view.selected + 1 - height;
+        } else if view.selected >= view.offset + fitting {
+            view.offset = view.selected + 1 - fitting;
         }
 
-        let visible = messages.iter().enumerate().skip(view.offset).take(height);
-        for (y, (index, message)) in (area.y..).zip(visible) {
-            let row = Rect::new(area.x, y, area.width, 1);
-            self.row(message, index == view.selected, row, buf);
+        let cards = Cards {
+            theme: self.theme,
+            now: (area.width >= MIN_WIDTH_WITH_DATE).then_some(self.now),
+        };
+
+        let visible = messages.iter().enumerate().skip(view.offset).take(fitting);
+        for (y, (index, message)) in (inner.y..).step_by(CARD_HEIGHT.into()).zip(visible) {
+            let card = Rect::new(inner.x, y, inner.width, CARD_HEIGHT).intersection(inner);
+            cards.draw(message, index == view.selected, card, buf);
         }
     }
 }
 
-impl MessageList<'_> {
-    fn row(&self, message: &Message, selected: bool, row: Rect, buf: &mut Buffer) {
-        let columns = Columns::new(row.width);
-        let mut style = Style::new();
+/// Draws cards; `now` is `None` when the terminal is too narrow for the date.
+struct Cards<'a> {
+    theme: &'a Theme,
+    now: Option<DateTime<Local>>,
+}
+
+impl Cards<'_> {
+    fn draw(&self, message: &Message, selected: bool, card: Rect, buf: &mut Buffer) {
+        let base = if selected {
+            self.theme.selected
+        } else {
+            Style::new()
+        };
+
+        // The selected card keeps one style throughout, so nothing on it is muted.
+        let muted = if selected {
+            base
+        } else {
+            base.patch(self.theme.muted)
+        };
+
+        let strong = if message.unread {
+            base.patch(self.theme.unread)
+        } else {
+            base
+        };
+
+        buf.set_style(card, base);
         if message.unread {
-            style = style.patch(self.theme.unread);
+            buf.set_string(card.x, card.y, MARKER, strong);
         }
 
-        if selected {
-            style = style.patch(self.theme.selected);
-        }
-
-        buf.set_style(row, style);
-        if message.unread {
-            buf.set_string(row.x, row.y, MARKER, style.patch(self.theme.unread_marker));
-        }
-
-        let sender_x = row.x + columns.marker;
-        let sender = Rect::new(sender_x, row.y, columns.sender, 1);
-        cell(buf, sender, &message.sender, style);
-        let subject = Rect::new(sender_x + columns.sender + GAP, row.y, columns.subject, 1);
-        cell(buf, subject, &message.subject, style);
-        if columns.date > 0 {
-            let label = DateLabel::new(&message.received, &self.now);
+        let text_width = card.width.saturating_sub(INDENT);
+        let sender_width = (card.width / 4).clamp(12, 24).min(text_width);
+        let sender = Rect::new(card.x + INDENT, card.y, sender_width, 1);
+        cell(buf, sender, &message.sender, strong);
+        if let Some(now) = &self.now {
+            let label = DateLabel::new(&message.received, now);
             let date = label.as_str();
-            let right = row.x + row.width;
             #[expect(
                 clippy::cast_possible_truncation,
                 reason = "a DateLabel is at most 10 columns"
             )]
-            let date_x = right - date.width() as u16;
-            buf.set_string(date_x, row.y, date, style.patch(self.theme.date));
+            let date_x = card.right() - date.width() as u16;
+            buf.set_string(date_x, card.y, date, muted);
         }
-    }
-}
 
-struct Columns {
-    marker: u16,
-    sender: u16,
-    subject: u16,
-    date: u16,
-}
-
-impl Columns {
-    /// The sender takes 25% of the width within 12..=24 columns; the subject the rest.
-    fn new(width: u16) -> Self {
-        let marker = 2;
-        let sender = (width / 4).clamp(12, 24);
-        #[expect(clippy::cast_possible_truncation, reason = "DateLabel::WIDTH is 10")]
-        let date = if width >= MIN_WIDTH_WITH_DATE {
-            DateLabel::WIDTH as u16
-        } else {
-            0
-        };
-
-        let date_gap = if date > 0 { GAP } else { 0 };
-        let subject = width.saturating_sub(marker + sender + GAP + date_gap + date);
-        Self {
-            marker,
-            sender,
-            subject,
-            date,
+        if card.height > 1 {
+            let subject = Rect::new(card.x + INDENT, card.y + 1, text_width, 1);
+            cell(buf, subject, &message.subject, strong);
         }
     }
 }

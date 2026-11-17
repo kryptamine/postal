@@ -1,11 +1,13 @@
-use crate::{keymap::Move, message::Message};
+use crate::{inbox::Inbox, keymap::Move, message::Message};
 
 /// The Message List's contents, selection and scroll position.
 pub struct InboxView {
     /// `None` until the server has answered.
     pub messages: Option<Vec<Message>>,
+    /// The server's count over the whole Inbox.
+    pub unread: usize,
     pub selected: usize,
-    /// Index of the first visible row; kept by the widget so the selection stays on screen.
+    /// Index of the first visible card; kept by the widget so the selection stays on screen.
     pub offset: usize,
 }
 
@@ -13,15 +15,18 @@ impl InboxView {
     pub const fn loading() -> Self {
         Self {
             messages: None,
+            unread: 0,
             selected: 0,
             offset: 0,
         }
     }
 
-    /// Shows `messages` newest `INTERNALDATE` first, with the newest selected.
-    pub fn show(&mut self, mut messages: Vec<Message>) {
+    /// Shows the Messages newest `INTERNALDATE` first, with the newest selected.
+    pub fn show(&mut self, inbox: Inbox) {
+        let mut messages = inbox.messages;
         messages.sort_by_key(|m| std::cmp::Reverse(m.received));
         self.messages = Some(messages);
+        self.unread = inbox.unread;
         self.selected = 0;
         self.offset = 0;
     }

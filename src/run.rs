@@ -6,9 +6,9 @@ use ratatui::DefaultTerminal;
 
 use crate::{
     imap,
+    inbox::Inbox,
     inbox_view::InboxView,
     keymap::{self, Action},
-    message::Message,
     message_list::MessageList,
     theme::Theme,
 };
@@ -34,7 +34,7 @@ impl std::error::Error for Error {}
 pub async fn run(
     terminal: &mut DefaultTerminal,
     theme: &Theme,
-    inbox: impl Future<Output = Result<Vec<Message>, imap::Error>>,
+    inbox: impl Future<Output = Result<Inbox, imap::Error>>,
 ) -> Result<(), Error> {
     let mut events = EventStream::new();
     let mut view = InboxView::loading();

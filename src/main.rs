@@ -2,6 +2,7 @@ mod config;
 mod date_label;
 mod header;
 mod imap;
+mod inbox;
 mod inbox_view;
 mod keymap;
 mod message;
@@ -17,7 +18,7 @@ use std::process::ExitCode;
 use crate::{
     config::Config,
     imap::{ImapSession, MailServer},
-    message::Message,
+    inbox::Inbox,
     theme::Theme,
 };
 
@@ -50,9 +51,9 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     })
 }
 
-async fn load_inbox(config: &Config, password: &str) -> Result<Vec<Message>, imap::Error> {
+async fn load_inbox(config: &Config, password: &str) -> Result<Inbox, imap::Error> {
     let mut session = ImapSession::open(config, password).await?;
-    let messages = session.newest(WINDOW).await?;
+    let inbox = session.inbox(WINDOW).await?;
     session.logout().await?;
-    Ok(messages)
+    Ok(inbox)
 }

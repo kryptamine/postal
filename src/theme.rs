@@ -1,10 +1,13 @@
 use ratatui::style::{Color, Modifier, Style};
 
+/// The terminal's own palette: named ANSI colours and modifiers, no explicit
+/// background. Muted text is `DIM`, since bright black vanishes in Solarized.
 pub struct Theme {
-    pub unread_marker: Style,
     pub unread: Style,
-    pub date: Style,
+    pub muted: Style,
     pub selected: Style,
+    pub border: Style,
+    pub title: Style,
 }
 
 impl Theme {
@@ -12,10 +15,13 @@ impl Theme {
     /// so the selection and Unread rows stay visible.
     pub fn from_env() -> Self {
         let theme = Self {
-            unread_marker: Style::new().fg(Color::Cyan),
             unread: Style::new().add_modifier(Modifier::BOLD),
-            date: Style::new().fg(Color::DarkGray),
-            selected: Style::new().add_modifier(Modifier::REVERSED),
+            muted: Style::new().add_modifier(Modifier::DIM),
+            selected: Style::new()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::REVERSED),
+            border: Style::new().add_modifier(Modifier::DIM),
+            title: Style::new().add_modifier(Modifier::BOLD),
         };
 
         if std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()) {
@@ -34,10 +40,11 @@ impl Theme {
         };
 
         Self {
-            unread_marker: strip(self.unread_marker),
             unread: strip(self.unread),
-            date: strip(self.date),
+            muted: strip(self.muted),
             selected: strip(self.selected),
+            border: strip(self.border),
+            title: strip(self.title),
         }
     }
 }

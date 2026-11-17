@@ -1,0 +1,19 @@
+---
+source: tests/inbox.rs
+expression: screen
+---
+size: 100x14  cursor: hidden
+┌ Inbox  1 unread ─────────────────────────────────────────────────────────────────────────────────┐
+│● Александр                                                                             2024-11-17│
+│  Café menu for the week ahead                                                                    │
+│                                                                                                  │
+│  山田太郎                                                                              2024-11-16│
+│  東京オフィス移転のお知らせ：新しい住所、引っ越しの日程、各部署の座席表、駐車場の利用方法、そし… │
+│                                                                                                  │
+│  Events Team                                                                           2024-11-15│
+│  🎉 Launch party on Friday 🍕🍺🍕🍺🍕🍺 for everyone on the team, families and friends welcome … │
+│                                                                                                  │
+│  Café Bot <broken                                                                      2024-11-14│
+│  (no subject)                                                                                    │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
