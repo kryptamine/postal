@@ -1,0 +1,9 @@
+---
+source: tests/inbox.rs
+expression: screen
+---
+size: 80x12  cursor: hidden
+● Carol                 Newest                                        2024-05-10
+  Alice                 Second newest                                 2024-03-02
+  Dave                  Third                                         2024-01-15
+  Bob                   Oldest                                        2023-12-31

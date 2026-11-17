@@ -1,0 +1,7 @@
+---
+source: tests/inbox.rs
+expression: screen
+---
+size: 80x12  cursor: hidden
+  Александр             Café menu for the week ahead, with every di…  2024-02-01
+  someone@example.com   (no subject)                                  2024-01-01

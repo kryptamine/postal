@@ -6,6 +6,28 @@ rust-version = "1.88"
 description = "A keyboard-driven terminal mail client that reads one IMAP mailbox"
 publish = false
 
+[dependencies]
+async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
+chrono = "0.4.45"
+crossterm = { version = "0.29", features = ["event-stream"] }
+futures = "0.3.34"
+ratatui = "0.30"
+rfc2047-decoder = "1.1.2"
+serde = { version = "1.0.229", features = ["derive"] }
+tokio = { version = "1.54.1", features = ["rt", "macros", "net"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+toml = "1.2.1"
+unicode-segmentation = "1.13.3"
+unicode-width = "0.2.3"
+webpki-roots = "1.0.12"
+
+[dev-dependencies]
+imap-codec = "=2.0.0-alpha.10"
+imap-next = "0.3.4"
+insta = "1.49.0"
+tempfile = "3.27.0"
+termlens = "0.11.10"
+
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
