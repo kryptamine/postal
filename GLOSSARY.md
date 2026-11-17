@@ -28,6 +28,10 @@ _Avoid_: new, unseen
 The rendered body of the selected Message, cleaned of markup.
 _Avoid_: reader, viewer, body pane
 
+**Snippet**:
+The first words of a Message's body, shown under its subject in the Message List.
+_Avoid_: preview, excerpt, summary
+
 **Cache**:
 Messages kept on disk between runs, so the Message List shows before the server answers.
 _Avoid_: store, database, offline copy
