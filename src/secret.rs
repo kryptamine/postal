@@ -31,6 +31,7 @@ pub fn read(path: &Path) -> Result<String, Error> {
         path: path.to_owned(),
         source,
     };
+
     let mode = std::fs::metadata(path)
         .map_err(read_error)?
         .permissions()
@@ -42,6 +43,7 @@ pub fn read(path: &Path) -> Result<String, Error> {
             mode,
         });
     }
+
     let secret = std::fs::read_to_string(path).map_err(read_error)?;
     Ok(secret.trim().to_owned())
 }

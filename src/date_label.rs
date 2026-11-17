@@ -23,6 +23,7 @@ impl DateLabel {
             bytes: [0; Self::WIDTH],
             len: 0,
         };
+
         // Every form fits WIDTH, so the write cannot fail.
         let _ = if local.date_naive() == now.date_naive() {
             write!(label, "{:02}:{:02}", local.hour(), local.minute())
@@ -37,6 +38,7 @@ impl DateLabel {
                 local.day()
             )
         };
+
         label
     }
 

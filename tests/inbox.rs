@@ -23,6 +23,7 @@ fn postal_with(home: &Home, env: &[(&str, &str)]) -> Terminal {
     for (key, value) in env {
         builder = builder.env(key, value);
     }
+
     builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
 }
 
@@ -207,6 +208,7 @@ fn colours_unless_no_color_is_set() {
         assert!(newest.bold, "the Unread row stays bold");
         assert_eq!(screen.cell(0, 0).unwrap().contents(), "●");
     }
+
     let plain_cells = (0..plain.rows()).flat_map(|r| (0..plain.cols()).map(move |c| (r, c)));
     for (row, col) in plain_cells {
         let style = plain.cell(row, col).unwrap().style();

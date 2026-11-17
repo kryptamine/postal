@@ -17,6 +17,7 @@ impl Theme {
             date: Style::new().fg(Color::DarkGray),
             selected: Style::new().add_modifier(Modifier::REVERSED),
         };
+
         if std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()) {
             theme.without_colours()
         } else {
@@ -31,6 +32,7 @@ impl Theme {
             underline_color: None,
             ..style
         };
+
         Self {
             unread_marker: strip(self.unread_marker),
             unread: strip(self.unread),

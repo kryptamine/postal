@@ -23,12 +23,14 @@ pub async fn connect(imap: &Imap) -> Result<Box<dyn Transport>, Error> {
         address: address.clone(),
         source,
     };
+
     let tcp = TcpStream::connect((imap.host.as_str(), imap.port))
         .await
         .map_err(connect_error)?;
     if !imap.tls {
         return Ok(Box::new(tcp));
     }
+
     let config = ClientConfig::builder_with_provider(Arc::new(ring::default_provider()))
         .with_safe_default_protocol_versions()
         .map_err(|e| connect_error(io::Error::other(e)))?

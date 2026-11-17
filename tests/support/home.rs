@@ -15,6 +15,7 @@ impl Home {
         let home = Self {
             dir: tempfile::tempdir().unwrap(),
         };
+
         fs::create_dir_all(home.postal_dir()).unwrap();
         fs::write(home.config_path(), config).unwrap();
         let secret = home.postal_dir().join("secret");

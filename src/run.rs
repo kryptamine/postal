@@ -47,6 +47,7 @@ pub async fn run(
                     theme,
                     now: chrono::Local::now(),
                 };
+
                 frame.render_stateful_widget(list, frame.area(), &mut view);
             })
             .map_err(Error::Terminal)?;

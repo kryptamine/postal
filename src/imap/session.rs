@@ -40,6 +40,7 @@ impl MailServer for ImapSession {
         if exists == 0 {
             return Ok(Vec::new());
         }
+
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
         let fetches = self
             .session
@@ -69,16 +70,19 @@ fn sender(envelope: &async_imap::imap_proto::Envelope<'_>) -> String {
     let Some(from) = envelope.from.as_ref().and_then(|list| list.first()) else {
         return String::new();
     };
+
     if let Some(name) = from.name.as_deref().map(header::decode)
         && !name.trim().is_empty()
     {
         return name;
     }
+
     let mut address =
         String::from_utf8_lossy(from.mailbox.as_deref().unwrap_or_default()).into_owned();
     if let Some(host) = from.host.as_deref() {
         address.push('@');
         address.push_str(&String::from_utf8_lossy(host));
     }
+
     address
 }

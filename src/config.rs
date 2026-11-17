@@ -112,11 +112,13 @@ impl Config {
                 message: message.trim_end().to_owned(),
             }
         };
+
         let raw: RawConfig =
             toml::from_str(&text).map_err(|e| invalid(e.span().unwrap_or(0..0), e.message()))?;
         match (raw.auth, raw.secrets.store) {
             (Auth::AppPassword, SecretStore::File) => {}
         }
+
         let tls = *raw.imap.tls.get_ref();
         if !tls && !is_loopback(&raw.imap.host) {
             return Err(invalid(
@@ -124,6 +126,7 @@ impl Config {
                 "`tls = false` is allowed only for a loopback host",
             ));
         }
+
         Ok(Self {
             email: raw.email,
             imap: Imap {

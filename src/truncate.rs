@@ -7,6 +7,7 @@ pub fn fit(text: &str, width: usize) -> (&str, bool) {
     if text.width() <= width {
         return (text, false);
     }
+
     let budget = width.saturating_sub(1);
     let mut used = 0;
     let mut end = 0;
@@ -15,7 +16,9 @@ pub fn fit(text: &str, width: usize) -> (&str, bool) {
         if used > budget {
             break;
         }
+
         end = start + grapheme.len();
     }
+
     (&text[..end], true)
 }

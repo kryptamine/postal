@@ -30,18 +30,22 @@ impl StatefulWidget for MessageList<'_> {
         if area.width < MIN_WIDTH {
             return centred("terminal too small", area, buf);
         }
+
         let Some(messages) = view.messages.as_deref() else {
             return centred("Loading Inbox…", area, buf);
         };
+
         if messages.is_empty() {
             return centred("Inbox is empty", area, buf);
         }
+
         let height = usize::from(area.height);
         if view.selected < view.offset {
             view.offset = view.selected;
         } else if view.selected >= view.offset + height {
             view.offset = view.selected + 1 - height;
         }
+
         let visible = messages.iter().enumerate().skip(view.offset).take(height);
         for (y, (index, message)) in (area.y..).zip(visible) {
             let row = Rect::new(area.x, y, area.width, 1);
@@ -57,13 +61,16 @@ impl MessageList<'_> {
         if message.unread {
             style = style.patch(self.theme.unread);
         }
+
         if selected {
             style = style.patch(self.theme.selected);
         }
+
         buf.set_style(row, style);
         if message.unread {
             buf.set_string(row.x, row.y, MARKER, style.patch(self.theme.unread_marker));
         }
+
         let sender_x = row.x + columns.marker;
         let sender = Rect::new(sender_x, row.y, columns.sender, 1);
         cell(buf, sender, &message.sender, style);
@@ -101,6 +108,7 @@ impl Columns {
         } else {
             0
         };
+
         let date_gap = if date > 0 { GAP } else { 0 };
         let subject = width.saturating_sub(marker + sender + GAP + date_gap + date);
         Self {

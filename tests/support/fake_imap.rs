@@ -81,12 +81,14 @@ impl FakeImap {
                     let Ok((tcp, _)) = listener.accept().await else {
                         return;
                     };
+
                     let recorded = Arc::clone(&recorded);
                     let messages = Arc::clone(&messages);
                     tokio::spawn(serve(Stream::insecure(tcp), messages, recorded));
                 }
             });
         });
+
         Self { port, commands }
     }
 
@@ -108,6 +110,7 @@ async fn serve(
         let Ok(event) = stream.next(&mut server).await else {
             return;
         };
+
         match event {
             Event::CommandReceived { command } => {
                 recorded.lock().unwrap().push(untagged(&command));
@@ -146,6 +149,7 @@ fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessa
             } else {
                 Status::no(tag, None, "Invalid credentials")
             };
+
             server.enqueue_status(status.unwrap());
         }
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
@@ -166,11 +170,13 @@ fn respond(server: &mut Server, command: Command<'static>, messages: &[FakeMessa
                         (a.min(b), a.max(b))
                     }
                 };
+
                 for seq in first..=last {
                     let message = &messages[usize::try_from(seq - 1).unwrap()];
                     server.enqueue_data(fetch(seq, message));
                 }
             }
+
             server.enqueue_status(Status::ok(tag, None, "FETCH completed").unwrap());
         }
         CommandBody::Logout => {
@@ -199,6 +205,7 @@ fn fetch(seq: u32, message: &FakeMessage) -> Data<'static> {
         mailbox: nstring(mailbox),
         host: nstring(host),
     };
+
     let envelope = Envelope {
         date: NString(None),
         subject: nstring(&message.subject),
@@ -211,6 +218,7 @@ fn fetch(seq: u32, message: &FakeMessage) -> Data<'static> {
         in_reply_to: NString(None),
         message_id: NString(None),
     };
+
     let flags = if message.seen {
         vec![FlagFetch::Flag(Flag::Seen)]
     } else {
