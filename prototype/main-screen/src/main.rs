@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap},
     DefaultTerminal, Frame,
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -58,6 +58,7 @@ struct App {
     enter_mode: EnterMode,
     cutoff: u16,
     list_pct: u16,
+    pad: u16,
     show_slash: bool,
     three_line: bool,
     msgs: Vec<Msg>,
@@ -84,6 +85,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
         enter_mode: EnterMode::Pager,
         cutoff: 84,
         list_pct: 35,
+        pad: 1,
         show_slash: false,
         three_line: true,
         msgs: fake_messages(),
@@ -140,6 +142,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             KeyCode::Char('s') => app.show_slash = !app.show_slash,
             KeyCode::Char(',') => app.list_pct = app.list_pct.saturating_sub(5).max(20),
             KeyCode::Char('.') => app.list_pct = (app.list_pct + 5).min(70),
+            KeyCode::Char('p') => app.pad = (app.pad + 1) % 3,
             KeyCode::Char('r') => app.three_line = !app.three_line,
             KeyCode::Char('?') => app.help = true,
             KeyCode::Char('/') => app.toast = Some("search is not in the MVP".into()),
@@ -297,10 +300,11 @@ fn draw_proto_bar(f: &mut Frame, area: Rect, app: &App, width: u16) {
         EnterMode::ZoomPreview => "zoom",
     };
     let text = format!(
-        " PROTOTYPE  {}  | rows {} list {}% | width {width} cutoff {} -> {layout} | Enter={enter} | / {} |  1/2/3 e [ ] , . s r ",
+        " PROTOTYPE  {}  | rows {} list {}% pad {} | width {width} cutoff {} -> {layout} | Enter={enter} | / {} |  1/2/3 e [ ] , . p s r ",
         app.variant.label(),
         if app.three_line { "3-line" } else { "1-line" },
         app.list_pct,
+        app.pad,
         app.cutoff,
         if app.show_slash { "shown" } else { "hidden" },
     );
@@ -324,7 +328,8 @@ fn draw_list(f: &mut Frame, area: Rect, app: &mut App, full: bool) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border(focused))
-        .title(format!(" Inbox  {unread} unread "));
+        .title(format!(" Inbox  {unread} unread "))
+        .padding(Padding::new(app.pad, app.pad, app.pad.min(1), 0));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -426,13 +431,14 @@ fn fit(s: &str, w: usize) -> String {
 }
 
 fn draw_preview(f: &mut Frame, area: Rect, app: &mut App, zoomed: bool) {
-    app.preview_h = area.height.saturating_sub(2);
+    app.preview_h = area.height.saturating_sub(3);
     let focused = zoomed || app.focus == Focus::Preview;
     let m = &app.msgs[app.selected];
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border(focused))
-        .title(format!(" {}/{} ", app.selected + 1, app.msgs.len()));
+        .title(format!(" {}/{} ", app.selected + 1, app.msgs.len()))
+        .padding(Padding::new(app.pad * 2, app.pad * 2, app.pad.min(1), 0));
     let mut lines = vec![
         Line::from(vec![Span::styled("From    ", Style::default().fg(Color::DarkGray)), Span::raw(m.sender)]),
         Line::from(vec![
