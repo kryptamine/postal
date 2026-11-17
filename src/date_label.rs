@@ -1,29 +1,24 @@
-use std::fmt::{self, Write};
+use std::fmt::Write;
 
 use chrono::{DateTime, Datelike, FixedOffset, TimeZone, Timelike};
+
+use crate::stack_str::StackStr;
 
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+/// The widest form, `2024-11-17`.
+const WIDTH: usize = 10;
+
 /// The date column, formatted on the stack so drawing a frame does not allocate.
-pub struct DateLabel {
-    bytes: [u8; Self::WIDTH],
-    len: usize,
-}
+pub struct DateLabel(StackStr<WIDTH>);
 
 impl DateLabel {
-    /// The widest form, `2024-11-17`.
-    pub const WIDTH: usize = 10;
-
     /// Today `14:05`, this year `17 Nov`, older `2024-11-17`, in `now`'s time zone.
     pub fn new<Tz: TimeZone>(received: &DateTime<FixedOffset>, now: &DateTime<Tz>) -> Self {
         let local = received.with_timezone(&now.timezone());
-        let mut label = Self {
-            bytes: [0; Self::WIDTH],
-            len: 0,
-        };
-
+        let mut label = StackStr::new();
         // Every form fits WIDTH, so the write cannot fail.
         let _ = if local.date_naive() == now.date_naive() {
             write!(label, "{:02}:{:02}", local.hour(), local.minute())
@@ -39,23 +34,11 @@ impl DateLabel {
             )
         };
 
-        label
+        Self(label)
     }
 
     pub fn as_str(&self) -> &str {
-        std::str::from_utf8(&self.bytes[..self.len]).unwrap_or_default()
-    }
-}
-
-impl Write for DateLabel {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        let end = self.len + s.len();
-        self.bytes
-            .get_mut(self.len..end)
-            .ok_or(fmt::Error)?
-            .copy_from_slice(s.as_bytes());
-        self.len = end;
-        Ok(())
+        self.0.as_str()
     }
 }
 

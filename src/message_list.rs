@@ -1,15 +1,17 @@
+use std::fmt::Write;
+
 use chrono::{DateTime, Local};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::Style,
-    text::Line,
     widgets::{Block, Paragraph, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    date_label::DateLabel, inbox_view::InboxView, message::Message, theme::Theme, truncate,
+    date_label::DateLabel, inbox_view::InboxView, message::Message, stack_str::StackStr,
+    theme::Theme, truncate,
 };
 
 const MARKER: &str = "●";
@@ -40,17 +42,25 @@ impl StatefulWidget for MessageList<'_> {
             return centred("terminal too small", area, buf);
         }
 
-        let title = if view.messages.is_some() {
-            format!(" Inbox  {} unread ", view.unread)
-        } else {
-            " Inbox ".to_owned()
-        };
-
-        let block = Block::bordered()
-            .border_style(self.theme.border)
-            .title(Line::styled(title, self.theme.title));
+        let block = Block::bordered().border_style(self.theme.border);
         let inner = block.inner(area);
         block.render(area, buf);
+        // Drawn over the border rather than as a Block title, which allocates.
+        let mut title = StackStr::<40>::new();
+        let _ = if view.messages.is_some() {
+            write!(title, " Inbox  {} unread ", view.unread)
+        } else {
+            title.write_str(" Inbox ")
+        };
+
+        let title_width = usize::from(inner.width);
+        buf.set_stringn(
+            inner.x,
+            area.y,
+            title.as_str(),
+            title_width,
+            self.theme.title,
+        );
         let Some(messages) = view.messages.as_deref() else {
             return centred("Loading Inbox…", inner, buf);
         };

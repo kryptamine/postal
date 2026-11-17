@@ -14,6 +14,7 @@ mod message_list;
 mod panic_hook;
 mod run;
 mod secret;
+mod stack_str;
 mod sync;
 mod sync_state;
 mod terminal_backend;
