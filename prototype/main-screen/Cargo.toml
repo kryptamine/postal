@@ -1,0 +1,13 @@
+# PROTOTYPE: throwaway, answers "Prototype the main screen layout" (#10).
+[package]
+name = "prototype-main-screen"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+unicode-width = "0.2"
+
+[workspace]
