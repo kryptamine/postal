@@ -329,7 +329,7 @@ fn draw_list(f: &mut Frame, area: Rect, app: &mut App, full: bool) {
         .borders(Borders::ALL)
         .border_style(border(focused))
         .title(format!(" Inbox  {unread} unread "))
-        .padding(Padding::new(app.pad, app.pad, app.pad.min(1), 0));
+        .padding(Padding::new(app.pad, app.pad, app.pad / 2, 0));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -431,14 +431,14 @@ fn fit(s: &str, w: usize) -> String {
 }
 
 fn draw_preview(f: &mut Frame, area: Rect, app: &mut App, zoomed: bool) {
-    app.preview_h = area.height.saturating_sub(3);
+    app.preview_h = area.height.saturating_sub(2 + app.pad / 2);
     let focused = zoomed || app.focus == Focus::Preview;
     let m = &app.msgs[app.selected];
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(border(focused))
         .title(format!(" {}/{} ", app.selected + 1, app.msgs.len()))
-        .padding(Padding::new(app.pad * 2, app.pad * 2, app.pad.min(1), 0));
+        .padding(Padding::new(app.pad, app.pad, app.pad / 2, 0));
     let mut lines = vec![
         Line::from(vec![Span::styled("From    ", Style::default().fg(Color::DarkGray)), Span::raw(m.sender)]),
         Line::from(vec![
