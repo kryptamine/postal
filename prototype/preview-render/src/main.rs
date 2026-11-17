@@ -288,8 +288,18 @@ fn is_hidden(h: &Handle) -> bool {
         || s.contains("visibility:hidden")
         || s.contains("mso-hide:all")
         || zero_val(&s, "opacity:")
-        || zero_val(&s, "font-size:")
+        || (zero_val(&s, "font-size:") && !resets_font(h))
         || (zero_val(&s, "max-height:") && s.contains("overflow:hidden"))
+}
+
+// MJML wrappers set font-size:0 to kill inline-block gaps, then reset it inside.
+fn resets_font(h: &Handle) -> bool {
+    h.children.borrow().iter().any(|c| {
+        attr(c, "style").is_some_and(|st| {
+            let st = st.to_ascii_lowercase().replace(' ', "");
+            st.contains("font-size:") && !zero_val(&st, "font-size:")
+        }) || resets_font(c)
+    })
 }
 
 fn is_pixel(h: &Handle) -> bool {
