@@ -1,0 +1,12 @@
+[package]
+name = "postal"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "A keyboard-driven terminal mail client that reads one IMAP mailbox"
+publish = false
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
