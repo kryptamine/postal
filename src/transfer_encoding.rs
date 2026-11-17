@@ -5,7 +5,7 @@ use base64::{
 };
 
 /// A part's `Content-Transfer-Encoding`, reduced to what decoding needs.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy)]
 pub enum TransferEncoding {
     /// `7bit`, `8bit`, `binary`, and any encoding Postal does not know.
     Identity,
