@@ -17,7 +17,7 @@ use imap_next::{
         core::{IString, NString, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
-        fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Section},
+        fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
         flag::{Flag, FlagFetch},
         response::{Code, Data, Greeting, Status},
         search::SearchKey,
@@ -27,6 +27,8 @@ use imap_next::{
     stream::Stream,
 };
 use tokio::net::TcpListener;
+
+use super::fake_body::FakeBody;
 
 pub const EMAIL: &str = "me@example.com";
 pub const PASSWORD: &str = "abcd efgh ijkl mnop";
@@ -45,6 +47,7 @@ pub struct FakeMessage {
     /// RFC 3339.
     pub internal_date: String,
     pub seen: bool,
+    pub body: FakeBody,
 }
 
 impl FakeMessage {
@@ -56,7 +59,13 @@ impl FakeMessage {
             subject: subject.to_owned(),
             internal_date: internal_date.to_owned(),
             seen: true,
+            body: FakeBody::plain(""),
         }
+    }
+
+    pub fn body(mut self, body: FakeBody) -> Self {
+        self.body = body;
+        self
     }
 
     pub const fn unread(mut self) -> Self {
@@ -86,6 +95,8 @@ pub enum Stall {
     Greeting,
     /// After a `FETCH` or `UID FETCH` is recorded, before its answer.
     Fetch,
+    /// As `Fetch`, but only for a fetch of a body part.
+    Part,
 }
 
 struct Stored {
@@ -253,8 +264,15 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>, recorded: Arc<Mutex
             Event::CommandReceived { command } => {
                 recorded.lock().unwrap().push(untagged(&command));
                 logging_out = matches!(command.body, CommandBody::Logout);
-                if matches!(command.body, CommandBody::Fetch { .. }) {
+                if let CommandBody::Fetch {
+                    macro_or_item_names,
+                    ..
+                } = &command.body
+                {
                     wait_unless_stalled(&inbox, Stall::Fetch).await;
+                    if body_part(macro_or_item_names).is_some() {
+                        wait_unless_stalled(&inbox, Stall::Part).await;
+                    }
                 }
 
                 respond(&mut server, command, &inbox.lock().unwrap());
@@ -320,13 +338,16 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
             uid,
             modifiers,
         } => {
-            let from_header = header_fields(&macro_or_item_names);
+            let asked = Asked {
+                from_header: header_fields(&macro_or_item_names),
+                part: body_part(&macro_or_item_names),
+            };
             let changed_since = modifiers.iter().find_map(|m| match m {
                 FetchModifier::ChangedSince(modseq) => Some(modseq.get()),
                 FetchModifier::Vanished => None,
             });
             for (seq, stored) in fetched(inbox, &sequence_set, uid, changed_since) {
-                server.enqueue_data(fetch(seq, stored, from_header.as_ref()));
+                server.enqueue_data(fetch(seq, stored, &asked));
             }
 
             server.enqueue_status(Status::ok(tag, None, "FETCH completed").unwrap());
@@ -428,8 +449,54 @@ fn header_fields(items: &MacroOrMessageDataItemNames<'static>) -> Option<Section
     })
 }
 
+/// A body part number the client asked for, and the octets it asked for.
+struct PartAsked {
+    path: Vec1<NonZeroU32>,
+    partial: Option<(u32, NonZeroU32)>,
+}
+
+/// The items of a `FETCH` the fake answers only when asked.
+struct Asked {
+    from_header: Option<Section<'static>>,
+    part: Option<PartAsked>,
+}
+
+fn body_part(items: &MacroOrMessageDataItemNames<'static>) -> Option<PartAsked> {
+    let MacroOrMessageDataItemNames::MessageDataItemNames(names) = items else {
+        return None;
+    };
+
+    names.iter().find_map(|name| match name {
+        MessageDataItemName::BodyExt {
+            section: Some(Section::Part(Part(path))),
+            partial,
+            ..
+        } => Some(PartAsked {
+            path: path.clone(),
+            partial: *partial,
+        }),
+        _ => None,
+    })
+}
+
+/// The octets asked for, empty for a part the body does not have.
+fn body_part_item(body: &FakeBody, asked: &PartAsked) -> MessageDataItem<'static> {
+    let content = body.part(asked.path.as_ref()).unwrap_or_default();
+    let (start, len) = asked.partial.map_or((0, content.len()), |(start, len)| {
+        (start as usize, len.get() as usize)
+    });
+    let served = content.get(start..).unwrap_or_default();
+    let served = &served[..len.min(served.len())];
+    MessageDataItem::BodyExt {
+        section: Some(Section::Part(Part(asked.path.clone()))),
+        origin: asked.partial.map(|(start, _)| start),
+        // A short part goes quoted, as a server may send it.
+        data: NString(Some(IString::try_from(served.to_vec()).unwrap())),
+    }
+}
+
 /// Every item whatever the client asked for, as a client must cope with extras.
-fn fetch(seq: u32, stored: &Stored, from_header: Option<&Section<'static>>) -> Data<'static> {
+fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
     let message = &stored.message;
     let nstring = |s: &str| NString(Some(IString::try_from(s.to_owned()).unwrap()));
     let (mailbox, host) = message.from_address.split_once('@').unwrap();
@@ -471,8 +538,13 @@ fn fetch(seq: u32, stored: &Stored, from_header: Option<&Section<'static>>) -> D
         MessageDataItem::InternalDate(DateTime::try_from(received).unwrap()),
         MessageDataItem::Envelope(envelope),
         MessageDataItem::ModSeq(NonZeroU64::new(stored.modseq).unwrap()),
+        MessageDataItem::BodyStructure(message.body.structure()),
     ];
-    if let Some(section) = from_header {
+    if let Some(asked) = &asked.part {
+        items.push(body_part_item(&message.body, asked));
+    }
+
+    if let Some(section) = &asked.from_header {
         items.push(MessageDataItem::BodyExt {
             section: Some(section.clone()),
             origin: None,

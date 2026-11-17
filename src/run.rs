@@ -1,7 +1,7 @@
 use std::io;
 
 use crossterm::event::{Event, EventStream};
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use ratatui::Terminal;
 
 use crate::{
@@ -34,9 +34,9 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// The one event loop: terminal input and the resync, redrawn after each.
-/// The first frame draws only the rows it shows, read from the Cache before
-/// any network; the rest of the Cache follows right after it.
+/// The one event loop: input, and `updates` once per Cache write the sync
+/// makes, redrawn after each. The first frame reads only the rows it shows
+/// from the Cache, before any network; the rest follows right after it.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -45,15 +45,17 @@ pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
     theme: &Theme,
     cache: &Cache,
-    resync: impl Future<Output = Result<(), sync::Error>>,
+    sync: impl Future<Output = Result<(), sync::Error>>,
+    mut updates: impl Stream<Item = ()> + Unpin,
 ) -> Result<(), Error> {
     let mut events = EventStream::new();
     let mut view = InboxView::loading();
     let height = terminal.size().map_err(Error::Terminal)?.height;
     show(&mut view, cache, Some(message_list::capacity(height)))?;
-    let mut resync = std::pin::pin!(resync);
+    let mut sync = std::pin::pin!(sync);
     let mut whole = false;
     let mut syncing = true;
+    let mut listening = true;
     // A frame's allocations count from what triggered it, the input or the
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
@@ -72,11 +74,17 @@ pub async fn run(
         }
 
         tokio::select! {
-            result = &mut resync, if syncing => {
+            result = &mut sync, if syncing => {
                 frame_start = alloc_count::count();
                 syncing = false;
                 result.map_err(Error::Sync)?;
-                show(&mut view, cache, None)?;
+            }
+            update = updates.next(), if listening => {
+                frame_start = alloc_count::count();
+                match update {
+                    Some(()) => show(&mut view, cache, None)?,
+                    None => listening = false,
+                }
             }
             event = events.next() => {
                 frame_start = alloc_count::count();

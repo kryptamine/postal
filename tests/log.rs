@@ -1,7 +1,11 @@
 #[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
-use std::{fs, process::Command, time::Duration};
+use std::{
+    fs,
+    process::Command,
+    time::{Duration, Instant},
+};
 
 use support::{
     fake_imap::{FakeImap, FakeMessage, PASSWORD},
@@ -37,10 +41,20 @@ fn spawn(home: &Home, args: &[&str], env: &[(&str, &str)]) -> Terminal {
     builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
 }
 
-/// Loads the Inbox, presses `keys`, quits, and returns the run's log.
-fn run(home: &Home, args: &[&str], env: &[(&str, &str)], keys: &[Key]) -> String {
+/// Loads the Inbox, waits for the sync to log out, presses `keys`, quits,
+/// and returns the run's log.
+fn run(
+    server: &FakeImap,
+    home: &Home,
+    args: &[&str],
+    env: &[(&str, &str)],
+    keys: &[Key],
+) -> String {
+    let logouts = || server.commands().iter().filter(|c| *c == "LOGOUT").count();
+    let before = logouts();
     let mut t = spawn(home, args, env);
     t.wait_until(|s| s.contains(" unread ")).unwrap();
+    wait_for(|| logouts() > before);
     for &key in keys {
         t.send(key).unwrap();
     }
@@ -50,18 +64,26 @@ fn run(home: &Home, args: &[&str], env: &[(&str, &str)], keys: &[Key]) -> String
     fs::read_to_string(home.log_path()).unwrap()
 }
 
+fn wait_for(condition: impl Fn() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !condition() {
+        assert!(Instant::now() < deadline, "timed out");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 #[test]
 fn each_run_keeps_the_previous_log_and_no_older_one() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
-    let first = run(&home, &[], &[], &[]);
+    let first = run(&server, &home, &[], &[], &[]);
     assert!(first.contains("starting"), "{first}");
 
-    let second = run(&home, &[], &[], &[]);
+    let second = run(&server, &home, &[], &[], &[]);
     let previous = home.log_path().with_extension("log.1");
     assert_eq!(fs::read_to_string(&previous).unwrap(), first);
 
-    run(&home, &[], &[], &[]);
+    run(&server, &home, &[], &[], &[]);
     assert_eq!(fs::read_to_string(&previous).unwrap(), second);
     assert!(!home.log_path().with_extension("log.2").exists());
 }
@@ -70,7 +92,7 @@ fn each_run_keeps_the_previous_log_and_no_older_one() {
 fn a_full_log_ends_with_one_truncation_line() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
-    let log = run(&home, &["-vv"], &[("POSTAL_LOG_CAP", "4000")], &[]);
+    let log = run(&server, &home, &["-vv"], &[("POSTAL_LOG_CAP", "4000")], &[]);
     assert!(log.ends_with("\nlog truncated\n"), "{log}");
     assert_eq!(log.matches("log truncated").count(), 1);
     assert!(log.len() <= 4000 + "log truncated\n".len(), "{}", log.len());
@@ -82,7 +104,7 @@ fn a_full_log_ends_with_one_truncation_line() {
 fn the_wire_trace_never_carries_the_password_or_literals() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
-    let log = run(&home, &["-vv"], &[], &[]);
+    let log = run(&server, &home, &["-vv"], &[], &[]);
     assert!(log.contains("C: "), "{log}");
     assert!(log.contains("EXAMINE"), "{log}");
     assert!(log.contains(" bytes>"), "{log}");
@@ -97,12 +119,12 @@ fn the_wire_trace_never_carries_the_password_or_literals() {
 #[cfg_attr(feature = "alloc-count", ignore = "alloc-count logs every frame")]
 fn scrolling_logs_nothing_at_the_default_level() {
     let server = FakeImap::start(messages());
-    let still = run(&Home::for_server(&server), &[], &[], &[]);
+    let still = run(&server, &Home::for_server(&server), &[], &[], &[]);
     let keys = [Key::Char('j'); 20]
         .into_iter()
         .chain([Key::Char('G'), Key::Char('k'), Key::Char('g')])
         .collect::<Vec<_>>();
-    let scrolled = run(&Home::for_server(&server), &[], &[], &keys);
+    let scrolled = run(&server, &Home::for_server(&server), &[], &[], &keys);
     assert_eq!(
         still.lines().count(),
         scrolled.lines().count(),
@@ -114,7 +136,7 @@ fn scrolling_logs_nothing_at_the_default_level() {
 fn postal_log_overrides_the_flags() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
-    let log = run(&home, &["-vv"], &[("POSTAL_LOG", "warn")], &[]);
+    let log = run(&server, &home, &["-vv"], &[("POSTAL_LOG", "warn")], &[]);
     assert!(log.is_empty(), "{log}");
 }
 
@@ -122,7 +144,7 @@ fn postal_log_overrides_the_flags() {
 fn rust_log_is_ignored() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
-    let log = run(&home, &[], &[("RUST_LOG", "trace")], &[]);
+    let log = run(&server, &home, &[], &[("RUST_LOG", "trace")], &[]);
     assert!(!log.contains("C: "), "{log}");
     assert!(log.contains("starting"), "{log}");
 }

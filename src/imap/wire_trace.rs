@@ -1,7 +1,8 @@
 use std::io::Write;
 
-/// Turns the bytes of both directions into trace lines, with every literal
-/// shown as `<N bytes>` and the client's LOGIN or AUTHENTICATE exchange dropped.
+/// Turns the bytes of both directions into trace lines, with every literal and
+/// quoted body section shown as `<N bytes>`, and the client's LOGIN or
+/// AUTHENTICATE exchange dropped.
 #[derive(Debug, Default)]
 pub struct WireTrace {
     client: Lines,
@@ -44,9 +45,56 @@ impl WireTrace {
                 *login = None;
             }
 
-            tracing::trace!("S: {}", String::from_utf8_lossy(line));
+            tracing::trace!("S: {}", String::from_utf8_lossy(&quoted_sections(line)));
         });
     }
+}
+
+/// `line` with each section sent as a quoted string, rather than a literal,
+/// shown as `<N bytes>`: a short body part may come quoted.
+fn quoted_sections(line: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(at) = rest
+        .windows(5)
+        .position(|w| w.eq_ignore_ascii_case(b"BODY["))
+    {
+        let Some(close) = rest[at..].iter().position(|&b| b == b']') else {
+            break;
+        };
+
+        let mut end = at + close + 1;
+        if rest.get(end) == Some(&b'<') {
+            end += rest[end..]
+                .iter()
+                .position(|&b| b == b'>')
+                .map_or(0, |n| n + 1);
+        }
+
+        out.extend_from_slice(&rest[..end]);
+        rest = &rest[end..];
+        let Some(quoted) = rest.strip_prefix(b" \"") else {
+            continue;
+        };
+
+        let size = quoted_len(quoted).unwrap_or(quoted.len());
+        let _ = write!(out, " <{size} bytes>");
+        rest = quoted.get(size + 1..).unwrap_or_default();
+    }
+
+    out.extend_from_slice(rest);
+    out
+}
+
+/// The length of a quoted string's content, `quoted` starting after its
+/// opening quote; `None` when the line ends before the closing one.
+fn quoted_len(quoted: &[u8]) -> Option<usize> {
+    let mut escaped = false;
+    quoted.iter().position(|&b| {
+        let closing = b == b'"' && !escaped;
+        escaped = b == b'\\' && !escaped;
+        closing
+    })
 }
 
 /// One direction of the stream, split into lines with literals elided.

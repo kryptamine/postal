@@ -10,6 +10,7 @@ use std::{
 };
 
 use support::{
+    fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
 };
@@ -30,14 +31,15 @@ fn postal(home: &Home) -> Terminal {
         .unwrap()
 }
 
-/// Read and Unread Messages, with subjects long enough to be cut.
+/// Read and Unread Messages, with subjects and Snippets long enough to be cut.
 fn messages() -> Vec<FakeMessage> {
     (0..MESSAGES)
         .map(|i| {
             let date = chrono::DateTime::UNIX_EPOCH + chrono::Duration::days(19_000 + i);
             let subject =
                 format!("Message {i} about a topic that needs far more room than a card has");
-            let message = FakeMessage::new("Sender", &subject, &date.to_rfc3339());
+            let body = FakeBody::plain(&format!("The Snippet of {subject}, also cut"));
+            let message = FakeMessage::new("Sender", &subject, &date.to_rfc3339()).body(body);
             if i % 3 == 0 {
                 message.unread()
             } else {

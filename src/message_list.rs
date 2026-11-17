@@ -139,6 +139,11 @@ impl Cards<'_> {
             let subject = Rect::new(card.x + INDENT, card.y + 1, text_width, 1);
             cell(buf, subject, &message.subject, strong);
         }
+
+        if card.height > 2 {
+            let snippet = Rect::new(card.x + INDENT, card.y + 2, text_width, 1);
+            cell(buf, snippet, &message.snippet, muted);
+        }
     }
 }
 

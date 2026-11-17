@@ -8,4 +8,7 @@ pub struct Message {
     pub unread: bool,
     pub sender: String,
     pub subject: String,
+    /// Empty until the second fetch phase reaches the Message, and for good
+    /// when it has no text part.
+    pub snippet: String,
 }

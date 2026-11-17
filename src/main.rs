@@ -5,6 +5,7 @@ mod config;
 mod credential;
 mod date_label;
 mod header;
+mod html_text;
 mod imap;
 mod inbox;
 mod inbox_view;
@@ -12,14 +13,19 @@ mod keymap;
 mod logging;
 mod message;
 mod message_list;
+mod new_message;
 mod panic_hook;
 mod run;
 mod secret;
+mod snippet;
+mod snippets;
 mod stack_str;
 mod sync;
 mod sync_state;
 mod terminal_backend;
+mod text_part;
 mod theme;
+mod transfer_encoding;
 mod truncate;
 mod xdg;
 
@@ -85,13 +91,20 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
+    let (written, updates) = futures::channel::mpsc::unbounded();
+    let written = move || {
+        // The send fails only once the event loop has stopped listening.
+        let _ = written.unbounded_send(());
+    };
+
     runtime.block_on(async {
         let mut terminal = terminal_backend::init()?;
         let result = run::run(
             &mut terminal,
             &theme,
             &cache,
-            resync(&config, &password, &cache),
+            sync(&config, &password, &cache, written),
+            updates,
         )
         .await;
         ratatui::restore();
@@ -103,9 +116,17 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-async fn resync(config: &Config, password: &Credential, cache: &Cache) -> Result<(), sync::Error> {
+/// Resyncs, then cuts the Snippets; `written` follows every Cache write.
+async fn sync(
+    config: &Config,
+    password: &Credential,
+    cache: &Cache,
+    written: impl Fn(),
+) -> Result<(), sync::Error> {
     let mut session = ImapSession::open(config, password).await?;
     sync::resync(&mut session, cache).await?;
+    written();
+    snippets::fetch(&mut session, cache, &written).await?;
     session.logout().await?;
     Ok(())
 }

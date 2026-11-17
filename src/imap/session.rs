@@ -1,15 +1,21 @@
 use std::collections::HashSet;
 
-use async_imap::{Client, Session, types::Fetch, types::Flag};
+use async_imap::{
+    Client, Session,
+    imap_proto::SectionPath,
+    types::{Fetch, Flag},
+};
 use futures::TryStreamExt;
 
-use super::{Error, connect::Transport, traced::Traced, wire_trace};
+use super::{Error, connect::Transport, text_part, traced::Traced, wire_trace};
 use crate::{
-    config::Config, credential::Credential, header, message::Message, sync_state::SyncState,
+    config::Config, credential::Credential, header, message::Message, new_message::NewMessage,
+    snippet, sync_state::SyncState,
 };
 
 /// The raw `From` header rides along, for a `From` the server cannot parse.
-const ITEMS: &str = "(UID FLAGS INTERNALDATE ENVELOPE BODY.PEEK[HEADER.FIELDS (FROM)])";
+const ITEMS: &str =
+    "(UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
 /// The Inbox as `EXAMINE` reports it.
 pub struct Examined {
@@ -22,10 +28,10 @@ pub trait MailServer {
     async fn examine(&mut self) -> Result<Examined, Error>;
 
     /// The newest `count` of the `exists` Messages, by sequence number.
-    async fn newest(&mut self, exists: u32, count: u32) -> Result<Vec<Message>, Error>;
+    async fn newest(&mut self, exists: u32, count: u32) -> Result<Vec<NewMessage>, Error>;
 
     /// The Messages whose UID is at least `first`.
-    async fn since_uid(&mut self, first: u32) -> Result<Vec<Message>, Error>;
+    async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
 
     /// `None` when no Message has this UID any more.
     async fn sequence_number(&mut self, uid: u32) -> Result<Option<u32>, Error>;
@@ -44,6 +50,14 @@ pub trait MailServer {
 
     /// Unread Messages in the whole Inbox.
     async fn unread_count(&mut self) -> Result<usize, Error>;
+
+    /// The first `snippet::FETCHED` octets of part `section` of each of
+    /// `uids`, as sent; a UID the server did not answer for is left out.
+    async fn text_parts(
+        &mut self,
+        uids: &[u32],
+        section: &str,
+    ) -> Result<Vec<(u32, Vec<u8>)>, Error>;
 }
 
 pub struct ImapSession {
@@ -97,7 +111,7 @@ impl MailServer for ImapSession {
         })
     }
 
-    async fn newest(&mut self, exists: u32, count: u32) -> Result<Vec<Message>, Error> {
+    async fn newest(&mut self, exists: u32, count: u32) -> Result<Vec<NewMessage>, Error> {
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
         let fetches = self.session.fetch(format!("{first}:*"), ITEMS).await?;
         let messages: Vec<_> = fetches
@@ -108,13 +122,13 @@ impl MailServer for ImapSession {
         Ok(messages)
     }
 
-    async fn since_uid(&mut self, first: u32) -> Result<Vec<Message>, Error> {
+    async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error> {
         let fetches = self.uid_fetch(format!("{first}:*"), ITEMS).await?;
         // `first:*` always matches the last Message, even below `first`.
         let messages: Vec<_> = fetches
             .iter()
             .filter_map(message)
-            .filter(|m| m.uid >= first)
+            .filter(|m| m.row.uid >= first)
             .collect();
         tracing::info!("fetched {} new Messages", messages.len());
         Ok(messages)
@@ -161,6 +175,29 @@ impl MailServer for ImapSession {
         // see docs/adr/0004-unread-count-by-uid-search.md.
         Ok(self.session.uid_search("UNSEEN").await?.len())
     }
+
+    async fn text_parts(
+        &mut self,
+        uids: &[u32],
+        section: &str,
+    ) -> Result<Vec<(u32, Vec<u8>)>, Error> {
+        let path = SectionPath::Part(
+            section.split('.').filter_map(|n| n.parse().ok()).collect(),
+            None,
+        );
+        let set = uids
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        // PEEK, or the server would mark every Message seen.
+        let items = format!("(BODY.PEEK[{section}]<0.{}>)", snippet::FETCHED);
+        let fetches = self.uid_fetch(set, &items).await?;
+        Ok(fetches
+            .iter()
+            .filter_map(|f| Some((f.uid?, f.section(&path)?.to_vec())))
+            .collect())
+    }
 }
 
 fn unread(fetch: &Fetch) -> bool {
@@ -168,19 +205,25 @@ fn unread(fetch: &Fetch) -> bool {
 }
 
 /// `None` when the server left out the UID.
-fn message(fetch: &Fetch) -> Option<Message> {
+fn message(fetch: &Fetch) -> Option<NewMessage> {
     let envelope = fetch.envelope();
     let subject = envelope
         .and_then(|e| e.subject.as_deref())
         .map(header::decode)
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "(no subject)".to_owned());
-    Some(Message {
+    let row = Message {
         uid: fetch.uid?,
         received: fetch.internal_date().unwrap_or_default(),
         unread: unread(fetch),
         sender: envelope.and_then(sender).unwrap_or_else(|| raw_from(fetch)),
         subject,
+        snippet: String::new(),
+    };
+
+    Some(NewMessage {
+        row,
+        text_part: fetch.bodystructure().and_then(text_part::find),
     })
 }
 

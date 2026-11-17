@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 1;
+pub const VERSION: i64 = 2;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -23,7 +23,14 @@ CREATE TABLE message (
     received_offset INTEGER NOT NULL,
     unread INTEGER NOT NULL,
     sender TEXT NOT NULL,
-    subject TEXT NOT NULL
+    subject TEXT NOT NULL,
+    -- NULL until the second fetch phase writes it.
+    snippet TEXT,
+    -- Where the Snippet is cut from; NULL with no text part.
+    text_section TEXT,
+    text_encoding TEXT,
+    text_charset TEXT,
+    text_html INTEGER
 );
 CREATE INDEX message_by_arrival ON message (received DESC, uid DESC);
 ";

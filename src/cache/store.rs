@@ -4,7 +4,10 @@ use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::{Changes, Error, schema};
-use crate::{inbox::Inbox, message::Message, sync_state::SyncState};
+use crate::{
+    inbox::Inbox, message::Message, sync_state::SyncState, text_part::TextPart,
+    transfer_encoding::TransferEncoding,
+};
 
 pub struct Cache {
     connection: Connection,
@@ -31,7 +34,8 @@ impl Cache {
         // SQLite reads a negative LIMIT as no limit.
         let limit = limit.map_or(-1, |n| i64::try_from(n).unwrap_or(i64::MAX));
         let mut statement = self.connection.prepare_cached(
-            "SELECT uid, received, received_offset, unread, sender, subject FROM message
+            "SELECT uid, received, received_offset, unread, sender, subject, coalesce(snippet, '')
+             FROM message
              ORDER BY received DESC, uid DESC LIMIT ?1",
         )?;
         let messages = statement
@@ -69,6 +73,45 @@ impl Cache {
         Ok(uids)
     }
 
+    /// Up to `limit` Messages still without a Snippet, newest first, and
+    /// the part each one's Snippet is cut from.
+    pub fn pending_snippets(&self, limit: usize) -> Result<Vec<(u32, TextPart)>, Error> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let mut statement = self.connection.prepare_cached(
+            "SELECT uid, text_section, text_encoding, text_charset, text_html FROM message
+             WHERE snippet IS NULL ORDER BY received DESC, uid DESC LIMIT ?1",
+        )?;
+        let pending = statement
+            .query_map([limit], |row| {
+                let encoding: String = row.get(2)?;
+                let part = TextPart {
+                    section: row.get(1)?,
+                    encoding: TransferEncoding::from_label(&encoding),
+                    charset: row.get(3)?,
+                    html: row.get(4)?,
+                };
+
+                Ok((row.get(0)?, part))
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(pending)
+    }
+
+    /// Writes one batch of Snippets in one transaction; a UID no longer
+    /// cached is ignored.
+    pub fn write_snippets(&self, snippets: &[(u32, String)]) -> Result<(), Error> {
+        let transaction = self.connection.unchecked_transaction()?;
+        let mut update =
+            transaction.prepare_cached("UPDATE message SET snippet = ?2 WHERE uid = ?1")?;
+        for (uid, snippet) in snippets {
+            update.execute(params![uid, snippet])?;
+        }
+
+        drop(update);
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn apply(&self, changes: &Changes) -> Result<(), Error> {
         let transaction = self.connection.unchecked_transaction()?;
         if changes.replace {
@@ -77,10 +120,12 @@ impl Cache {
 
         let mut insert = transaction.prepare_cached(
             "INSERT OR REPLACE INTO message
-             (uid, received, received_offset, unread, sender, subject)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+             (uid, received, received_offset, unread, sender, subject, snippet,
+              text_section, text_encoding, text_charset, text_html)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )?;
-        for m in &changes.new {
+        for new in &changes.new {
+            let (m, part) = (&new.row, new.text_part.as_ref());
             insert.execute(params![
                 m.uid,
                 m.received.timestamp(),
@@ -88,6 +133,11 @@ impl Cache {
                 m.unread,
                 m.sender,
                 m.subject,
+                part.is_none().then_some(""),
+                part.map(|p| &p.section),
+                part.map(|p| p.encoding.label()),
+                part.map(|p| &p.charset),
+                part.map(|p| p.html),
             ])?;
         }
 
@@ -130,5 +180,6 @@ fn message(row: &Row<'_>) -> rusqlite::Result<Message> {
         unread: row.get(3)?,
         sender: row.get(4)?,
         subject: row.get(5)?,
+        snippet: row.get(6)?,
     })
 }

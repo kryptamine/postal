@@ -10,7 +10,8 @@ use support::{
 };
 use termlens::{Key, Screen, Terminal};
 
-const FETCH: &str = "FETCH 1:* (UID FLAGS INTERNALDATE ENVELOPE BODY.PEEK[HEADER.FIELDS (FROM)])";
+const FETCH: &str =
+    "FETCH 1:* (UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
 fn postal(home: &Home) -> Terminal {
     postal_with(home, (80, 12), &[])

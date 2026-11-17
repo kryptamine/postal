@@ -4,6 +4,7 @@
 mod connect;
 mod error;
 mod session;
+mod text_part;
 mod traced;
 mod wire_trace;
 

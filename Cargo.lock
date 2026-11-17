@@ -1558,12 +1558,15 @@ name = "postal"
 version = "0.1.0"
 dependencies = [
  "async-imap",
+ "base64 0.22.1",
+ "charset",
  "chrono",
  "crossterm",
  "futures",
  "imap-codec",
  "imap-next",
  "insta",
+ "quoted_printable",
  "ratatui",
  "rfc2047-decoder",
  "rusqlite",
