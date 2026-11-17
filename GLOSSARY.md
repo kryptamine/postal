@@ -17,8 +17,12 @@ One email as stored on the server.
 _Avoid_: mail, letter, email
 
 **Message List**:
-The ordered rows of Messages in the Inbox, newest first.
+The ordered rows of Messages in the Inbox, one row per Message, newest arrival first.
 _Avoid_: index, table, thread list
+
+**Unread**:
+A Message the server has not marked as seen. Postal shows this state and never changes it.
+_Avoid_: new, unseen
 
 **Preview**:
 The rendered body of the selected Message, cleaned of markup.
