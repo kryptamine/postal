@@ -1,0 +1,15 @@
+# PROTOTYPE: throwaway, answers "Prototype Preview rendering on real HTML mail" (#11).
+[package]
+name = "prototype-preview-render"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+html2text = { version = "0.17", features = ["css"] }
+mail-parser = { version = "0.11", features = ["full_encoding"] }
+html5ever = "0.40.1"
+
+[workspace]
