@@ -57,6 +57,7 @@ struct App {
     variant: Variant,
     enter_mode: EnterMode,
     cutoff: u16,
+    list_pct: u16,
     show_slash: bool,
     three_line: bool,
     msgs: Vec<Msg>,
@@ -82,6 +83,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
         variant: Variant::Adaptive,
         enter_mode: EnterMode::Pager,
         cutoff: 84,
+        list_pct: 35,
         show_slash: false,
         three_line: true,
         msgs: fake_messages(),
@@ -136,6 +138,8 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             KeyCode::Char('[') => app.cutoff = app.cutoff.saturating_sub(4).max(40),
             KeyCode::Char(']') => app.cutoff = (app.cutoff + 4).min(200),
             KeyCode::Char('s') => app.show_slash = !app.show_slash,
+            KeyCode::Char(',') => app.list_pct = app.list_pct.saturating_sub(5).max(20),
+            KeyCode::Char('.') => app.list_pct = (app.list_pct + 5).min(70),
             KeyCode::Char('r') => app.three_line = !app.three_line,
             KeyCode::Char('?') => app.help = true,
             KeyCode::Char('/') => app.toast = Some("search is not in the MVP".into()),
@@ -271,7 +275,7 @@ fn draw(f: &mut Frame, app: &mut App) {
 }
 
 fn side_by_side(f: &mut Frame, main: Rect, app: &mut App) {
-    let [l, p] = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+    let [l, p] = Layout::horizontal([Constraint::Percentage(app.list_pct), Constraint::Min(0)])
         .areas(main);
     draw_list(f, l, app, false);
     draw_preview(f, p, app, false);
@@ -293,9 +297,10 @@ fn draw_proto_bar(f: &mut Frame, area: Rect, app: &App, width: u16) {
         EnterMode::ZoomPreview => "zoom",
     };
     let text = format!(
-        " PROTOTYPE  {}  | rows {} | width {width} cutoff {} -> {layout} | Enter={enter} | / {} |  1/2/3 e [ ] s r ",
+        " PROTOTYPE  {}  | rows {} list {}% | width {width} cutoff {} -> {layout} | Enter={enter} | / {} |  1/2/3 e [ ] , . s r ",
         app.variant.label(),
         if app.three_line { "3-line" } else { "1-line" },
+        app.list_pct,
         app.cutoff,
         if app.show_slash { "shown" } else { "hidden" },
     );
