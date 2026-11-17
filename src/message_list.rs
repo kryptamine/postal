@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, FixedOffset};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
@@ -31,7 +31,6 @@ pub fn capacity(height: u16) -> usize {
 /// inside a border titled with the Unread count.
 pub struct MessageList<'a> {
     pub theme: &'a Theme,
-    pub now: DateTime<Local>,
 }
 
 impl StatefulWidget for MessageList<'_> {
@@ -78,7 +77,7 @@ impl StatefulWidget for MessageList<'_> {
 
         let cards = Cards {
             theme: self.theme,
-            now: (area.width >= MIN_WIDTH_WITH_DATE).then_some(self.now),
+            now: (area.width >= MIN_WIDTH_WITH_DATE).then(|| view.now()),
         };
 
         let visible = messages.iter().enumerate().skip(view.offset).take(fitting);
@@ -92,7 +91,7 @@ impl StatefulWidget for MessageList<'_> {
 /// Draws cards; `now` is `None` when the terminal is too narrow for the date.
 struct Cards<'a> {
     theme: &'a Theme,
-    now: Option<DateTime<Local>>,
+    now: Option<DateTime<FixedOffset>>,
 }
 
 impl Cards<'_> {

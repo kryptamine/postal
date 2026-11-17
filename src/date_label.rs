@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use chrono::{DateTime, Datelike, FixedOffset, TimeZone, Timelike};
+use chrono::{DateTime, Datelike, FixedOffset, Timelike};
 
 use crate::stack_str::StackStr;
 
@@ -15,22 +15,27 @@ const WIDTH: usize = 10;
 pub struct DateLabel(StackStr<WIDTH>);
 
 impl DateLabel {
-    /// Today `14:05`, this year `17 Nov`, older `2024-11-17`, in `now`'s time zone.
-    pub fn new<Tz: TimeZone>(received: &DateTime<FixedOffset>, now: &DateTime<Tz>) -> Self {
-        let local = received.with_timezone(&now.timezone());
+    /// Today `14:05`, this year `17 Nov`, older `2024-11-17`. Both times are
+    /// local already, each at the offset in force at its own instant.
+    pub fn new(received: &DateTime<FixedOffset>, now: &DateTime<FixedOffset>) -> Self {
         let mut label = StackStr::new();
         // Every form fits WIDTH, so the write cannot fail.
-        let _ = if local.date_naive() == now.date_naive() {
-            write!(label, "{:02}:{:02}", local.hour(), local.minute())
-        } else if local.year() == now.year() {
-            write!(label, "{} {}", local.day(), MONTHS[local.month0() as usize])
+        let _ = if received.date_naive() == now.date_naive() {
+            write!(label, "{:02}:{:02}", received.hour(), received.minute())
+        } else if received.year() == now.year() {
+            write!(
+                label,
+                "{} {}",
+                received.day(),
+                MONTHS[received.month0() as usize]
+            )
         } else {
             write!(
                 label,
                 "{:04}-{:02}-{:02}",
-                local.year(),
-                local.month(),
-                local.day()
+                received.year(),
+                received.month(),
+                received.day()
             )
         };
 
@@ -58,18 +63,28 @@ mod tests {
     }
 
     #[test]
-    fn today_shows_the_time_in_the_local_zone() {
+    fn today_shows_the_time() {
         assert_eq!(
-            label("2026-11-17T10:05:00Z", "2026-11-17T23:00:00+04:00"),
+            label("2026-11-17T14:05:00+04:00", "2026-11-17T23:00:00+04:00"),
             "14:05"
         );
     }
 
     #[test]
-    fn yesterday_in_the_local_zone_is_not_today() {
+    fn yesterday_is_not_today() {
         assert_eq!(
             label("2026-11-16T22:30:00Z", "2026-11-17T09:00:00+00:00"),
             "16 Nov"
+        );
+    }
+
+    // A summer Message keeps its summer offset in winter, or its date would
+    // move back a day when it arrived just after midnight.
+    #[test]
+    fn each_time_keeps_its_own_offset() {
+        assert_eq!(
+            label("2026-07-01T00:30:00+02:00", "2026-11-17T12:00:00+01:00"),
+            "1 Jul"
         );
     }
 

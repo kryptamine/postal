@@ -56,12 +56,7 @@ pub async fn run(
     loop {
         terminal
             .draw(|frame| {
-                let list = MessageList {
-                    theme,
-                    now: chrono::Local::now(),
-                };
-
-                frame.render_stateful_widget(list, frame.area(), &mut view);
+                frame.render_stateful_widget(MessageList { theme }, frame.area(), &mut view);
             })
             .map_err(Error::Terminal)?;
         if !whole {
