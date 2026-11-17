@@ -329,7 +329,7 @@ fn draw_list(f: &mut Frame, area: Rect, app: &mut App, full: bool) {
         .borders(Borders::ALL)
         .border_style(border(focused))
         .title(format!(" Inbox  {unread} unread "))
-        .padding(Padding::new(app.pad, app.pad, app.pad / 2, 0));
+        .padding(Padding::new(0, 0, app.pad / 2, 0));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
