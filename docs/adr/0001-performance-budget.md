@@ -41,6 +41,10 @@ buffer) and reuse buffers. The hot paths are:
 3. parsing IMAP responses (`FETCH`, IDLE);
 4. showing an already rendered Preview.
 
+An enabled `tracing` event allocates, so hot paths emit nothing at `info` or
+above; debug and trace events there are allowed, because the allocation check
+runs at the default level.
+
 Everywhere else (Onboarding, config, sync logic, the HTML converter, which runs
 off the UI thread and is cached) `clone` is fine when it reads more simply.
 Arenas only after a measurement shows the need.
