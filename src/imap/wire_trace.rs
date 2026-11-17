@@ -105,5 +105,6 @@ fn literal(line: &[u8]) -> Option<(usize, usize)> {
     } else {
         open
     };
+
     Some((start, size))
 }
