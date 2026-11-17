@@ -770,6 +770,8 @@ struct App {
     cache: Option<(usize, usize, Opts, Rc<Rendered>)>,
     toast: Option<String>,
     hypers: Vec<Hyper>,
+    hint: Option<String>,
+    targets: Vec<(String, String)>,
 }
 
 impl App {
@@ -811,7 +813,7 @@ fn main() -> io::Result<()> {
         println!("dumped {} messages to {}", msgs.len(), out.display());
         return Ok(());
     }
-    let mut app = App { msgs, sel: 0, off: 0, scroll: 0, o: Opts::default(), help: false, cache: None, toast: None, hypers: Vec::new() };
+    let mut app = App { msgs, sel: 0, off: 0, scroll: 0, o: Opts::default(), help: false, cache: None, toast: None, hypers: Vec::new(), hint: None, targets: Vec::new() };
     let mut term = ratatui::init();
     let res = run(&mut term, &mut app);
     ratatui::restore();
@@ -822,7 +824,9 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     let mut preview_w = 80;
     loop {
         term.draw(|f| preview_w = draw(f, app))?;
-        write_hypers(&app.hypers)?;
+        if app.o.links != LinkMode::Footnotes && app.hint.is_none() {
+            write_hypers(&app.hypers)?;
+        }
         let Event::Key(k) = event::read()? else { continue };
         if k.kind != KeyEventKind::Press {
             continue;
@@ -832,6 +836,24 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         if app.help {
             app.help = false;
+            continue;
+        }
+        if let Some(prefix) = app.hint.as_mut() {
+            match k.code {
+                KeyCode::Char(c) => {
+                    prefix.push(c);
+                    let p = prefix.clone();
+                    if let Some((_, url)) = app.targets.iter().find(|(l, _)| *l == p) {
+                        let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+                        let _ = Command::new(opener).arg(url).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+                        app.toast = Some(format!(" opened {url}"));
+                        app.hint = None;
+                    } else if !app.targets.iter().any(|(l, _)| l.starts_with(&p)) {
+                        app.hint = None;
+                    }
+                }
+                _ => app.hint = None,
+            }
             continue;
         }
         match k.code {
@@ -855,7 +877,8 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
             KeyCode::Char('b') => app.o.borders = !app.o.borders,
             KeyCode::Char('s') => app.o.stack = !app.o.stack,
             KeyCode::Char('a') => app.o.pager_ansi = !app.o.pager_ansi,
-            KeyCode::Char('o') => {
+            KeyCode::Char('o') if !app.targets.is_empty() => app.hint = Some(String::new()),
+            KeyCode::Char('L') => {
                 app.o.links = match app.o.links {
                     LinkMode::Inline => LinkMode::Footnotes,
                     LinkMode::Footnotes => LinkMode::Both,
@@ -910,6 +933,17 @@ fn run(term: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     }
 }
 
+// Equal-length labels so no label is a prefix of another.
+fn hint_labels(n: usize) -> Vec<String> {
+    const ONE: &str = "asdfghjklqwertyuiopzxcvbnm";
+    const HOME: &str = "asdfghjkl";
+    if n <= ONE.len() {
+        ONE.chars().take(n).map(String::from).collect()
+    } else {
+        HOME.chars().flat_map(|a| HOME.chars().map(move |b| format!("{a}{b}"))).take(n).collect()
+    }
+}
+
 fn write_hypers(hs: &[Hyper]) -> io::Result<()> {
     use crossterm::{cursor::MoveTo, queue, style::Print};
     let mut out = io::stdout();
@@ -928,7 +962,7 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
     let on = |b: bool| if b { "on" } else { "off" };
     f.render_widget(
         Paragraph::new(format!(
-            " PROTOTYPE  o links:{:?}  c css:{}  h hide:{}  f flatten:{}  b borders:{}  s stack:{}  m colour:{:?}  v view:{:?}  w width:{}  a pager-ansi:{}",
+            " PROTOTYPE  L links:{:?}  c css:{}  h hide:{}  f flatten:{}  b borders:{}  s stack:{}  m colour:{:?}  v view:{:?}  w width:{}  a pager-ansi:{}",
             o.links,
             on(o.css),
             on(o.hide),
@@ -987,7 +1021,7 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         pl.push(Line::from(l.iter().map(|(s, a)| Span::styled(s.clone(), style(a, o.colour))).collect::<Vec<_>>()));
     }
     app.hypers.clear();
-    if o.links != LinkMode::Footnotes {
+    {
         let (ix, iy) = (prev_a.x + 2, prev_a.y + 1);
         let ih = prev_a.height.saturating_sub(2) as usize;
         for (li, l) in r.lines.iter().enumerate() {
@@ -1035,6 +1069,28 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         prev_a,
     );
 
+    let mut urls: Vec<&str> = Vec::new();
+    for h in &app.hypers {
+        if !urls.contains(&h.url.as_str()) {
+            urls.push(&h.url);
+        }
+    }
+    let labels = hint_labels(urls.len());
+    app.targets = urls.iter().zip(&labels).map(|(u, l)| (l.clone(), (*u).to_string())).collect();
+    if let Some(prefix) = &app.hint {
+        let mut done: Vec<&str> = Vec::new();
+        for h in &app.hypers {
+            if done.contains(&h.url.as_str()) {
+                continue;
+            }
+            done.push(&h.url);
+            if let Some((l, _)) = app.targets.iter().find(|(_, u)| *u == h.url) {
+                if l.starts_with(prefix.as_str()) {
+                    f.buffer_mut().set_string(h.x, h.y, l, Style::default().bg(Color::Yellow).fg(Color::Black).add_modifier(Modifier::BOLD));
+                }
+            }
+        }
+    }
     let s = r.stats;
     f.render_widget(
         Paragraph::new(format!(
@@ -1051,17 +1107,20 @@ fn draw(f: &mut Frame, app: &mut App) -> usize {
         .style(Style::default().fg(Color::Gray)),
         bottom,
     );
+    if app.hint.is_some() {
+        f.render_widget(Paragraph::new(" -- open link: type its label, any other key cancels --").style(Style::default().fg(Color::Yellow)), bottom);
+    }
     if let Some(t) = &app.toast {
         f.render_widget(Paragraph::new(t.as_str()), bottom);
     }
     if app.help {
         let w = 64.min(area.width);
-        let h = 18.min(area.height);
+        let h = 19.min(area.height);
         let r = ratatui::layout::Rect { x: (area.width - w) / 2, y: (area.height - h) / 2, width: w, height: h };
         f.render_widget(Clear, r);
         f.render_widget(
             Paragraph::new(
-                "j/k g/G   move\nCtrl-d/u  scroll Preview\nEnter/l   pipe to $PAGER\nq         quit\n\nc  doc CSS (display:none)\nh  hidden-style + pixel removal\nf  flatten layout tables\no  links: Inline (OSC 8) / Footnotes / Both\nb  table borders\ns  stack data tables that do not fit\nm  colour: Semantic / Html / Off\nv  view: Rendered / text/plain / raw HTML\nw  width: pane / 40 / 60 / 80 / 100\na  pager ANSI on/off",
+                "j/k g/G   move\nCtrl-d/u  scroll Preview\nEnter/l   pipe to $PAGER\nq         quit\n\nc  doc CSS (display:none)\nh  hidden-style + pixel removal\nf  flatten layout tables\no  open a link by label (hint mode)\nL  links: Inline (OSC 8) / Footnotes / Both\nb  table borders\ns  stack data tables that do not fit\nm  colour: Semantic / Html / Off\nv  view: Rendered / text/plain / raw HTML\nw  width: pane / 40 / 60 / 80 / 100\na  pager ANSI on/off",
             )
             .block(Block::default().borders(Borders::ALL).title(" ? ")),
             r,
