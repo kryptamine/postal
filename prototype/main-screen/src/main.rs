@@ -2,7 +2,9 @@
 // Prototype keys (top bar): 1/2/3 variant, e Enter mode, [ ] cutoff, s show `/`.
 use std::io;
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use std::io::Write as _;
+use std::process::{Command, Stdio};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -37,6 +39,7 @@ enum Focus {
 
 #[derive(Clone, Copy, PartialEq)]
 enum EnterMode {
+    Pager,
     FocusPreview,
     ZoomPreview,
 }
@@ -63,6 +66,7 @@ struct App {
     zoomed: bool,
     scroll: u16,
     help: bool,
+    preview_h: u16,
     toast: Option<String>,
 }
 
@@ -76,7 +80,7 @@ fn main() -> io::Result<()> {
 fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
     let mut app = App {
         variant: Variant::Adaptive,
-        enter_mode: EnterMode::FocusPreview,
+        enter_mode: EnterMode::Pager,
         cutoff: 84,
         show_slash: false,
         three_line: true,
@@ -87,6 +91,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
         zoomed: false,
         scroll: 0,
         help: false,
+        preview_h: 10,
         toast: None,
     };
     loop {
@@ -100,14 +105,32 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             app.help = false;
             continue;
         }
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            let half = (app.preview_h / 2).max(1);
+            match key.code {
+                KeyCode::Char('d') => app.scroll = app.scroll.saturating_add(half),
+                KeyCode::Char('u') => app.scroll = app.scroll.saturating_sub(half),
+                KeyCode::Char('c') => return Ok(()),
+                _ => {}
+            }
+            continue;
+        }
+        if matches!(key.code, KeyCode::Enter | KeyCode::Char('l'))
+            && app.enter_mode == EnterMode::Pager
+            && !app.zoomed
+        {
+            pager(terminal, &app)?;
+            continue;
+        }
         match key.code {
             KeyCode::Char('1') => set_variant(&mut app, Variant::SideBySide),
             KeyCode::Char('2') => set_variant(&mut app, Variant::FullScreen),
             KeyCode::Char('3') => set_variant(&mut app, Variant::Adaptive),
             KeyCode::Char('e') => {
                 app.enter_mode = match app.enter_mode {
+                    EnterMode::Pager => EnterMode::FocusPreview,
                     EnterMode::FocusPreview => EnterMode::ZoomPreview,
-                    EnterMode::ZoomPreview => EnterMode::FocusPreview,
+                    EnterMode::ZoomPreview => EnterMode::Pager,
                 };
             }
             KeyCode::Char('[') => app.cutoff = app.cutoff.saturating_sub(4).max(40),
@@ -148,6 +171,24 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             _ => {}
         }
     }
+}
+
+// Suspends the TUI and pipes the rendered Message to $PAGER (default `less`).
+fn pager(terminal: &mut DefaultTerminal, app: &App) -> io::Result<()> {
+    let m = &app.msgs[app.selected];
+    let text = format!("From    {}\nSubject {}\nDate    {}\n\n{}", m.sender, m.subject, m.date, m.body);
+    ratatui::restore();
+    let pager = std::env::var("PAGER").unwrap_or_else(|_| "less".into());
+    let mut child = Command::new("sh")
+        .arg("-c")
+        .arg(&pager)
+        .env("LESS", "-R")
+        .stdin(Stdio::piped())
+        .spawn()?;
+    child.stdin.take().unwrap().write_all(text.as_bytes())?;
+    child.wait()?;
+    *terminal = ratatui::init();
+    terminal.clear()
 }
 
 fn set_variant(app: &mut App, v: Variant) {
@@ -247,6 +288,7 @@ fn draw_proto_bar(f: &mut Frame, area: Rect, app: &App, width: u16) {
         }
     };
     let enter = match app.enter_mode {
+        EnterMode::Pager => "pager",
         EnterMode::FocusPreview => "focus",
         EnterMode::ZoomPreview => "zoom",
     };
@@ -378,7 +420,8 @@ fn fit(s: &str, w: usize) -> String {
     out
 }
 
-fn draw_preview(f: &mut Frame, area: Rect, app: &App, zoomed: bool) {
+fn draw_preview(f: &mut Frame, area: Rect, app: &mut App, zoomed: bool) {
+    app.preview_h = area.height.saturating_sub(2);
     let focused = zoomed || app.focus == Focus::Preview;
     let m = &app.msgs[app.selected];
     let block = Block::default()
@@ -415,7 +458,7 @@ fn draw_hints(f: &mut Frame, area: Rect, app: &App) {
         } else if app.variant == Variant::FullScreen {
             vec!["j/k: move", "enter: open", "q: quit"]
         } else {
-            vec!["j/k: move", "J/K: scroll", "enter: read", "q: quit"]
+            vec!["j/k: move", "^d/^u: scroll", "enter: open", "q: quit"]
         };
         if app.show_slash {
             keys.push("/: search");
@@ -442,8 +485,8 @@ fn draw_help(f: &mut Frame, main: Rect) {
         Line::styled("Message List", Style::default().add_modifier(Modifier::BOLD)),
         Line::raw("  j/k ↓/↑   move selection"),
         Line::raw("  g/G       first / last"),
-        Line::raw("  J/K       scroll Preview"),
-        Line::raw("  enter/l   read (focus or zoom Preview)"),
+        Line::raw("  ^d/^u     scroll Preview half a page"),
+        Line::raw("  enter/l   open in $PAGER"),
         Line::raw("  tab       switch pane"),
         Line::raw(""),
         Line::styled("Preview", Style::default().add_modifier(Modifier::BOLD)),
