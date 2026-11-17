@@ -46,6 +46,7 @@ struct Msg {
     sender: &'static str,
     subject: &'static str,
     date: &'static str,
+    snippet: &'static str,
     body: String,
 }
 
@@ -54,6 +55,7 @@ struct App {
     enter_mode: EnterMode,
     cutoff: u16,
     show_slash: bool,
+    three_line: bool,
     msgs: Vec<Msg>,
     selected: usize,
     list_offset: usize,
@@ -77,6 +79,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
         enter_mode: EnterMode::FocusPreview,
         cutoff: 84,
         show_slash: false,
+        three_line: true,
         msgs: fake_messages(),
         selected: 0,
         list_offset: 0,
@@ -110,6 +113,7 @@ fn run(terminal: &mut DefaultTerminal) -> io::Result<()> {
             KeyCode::Char('[') => app.cutoff = app.cutoff.saturating_sub(4).max(40),
             KeyCode::Char(']') => app.cutoff = (app.cutoff + 4).min(200),
             KeyCode::Char('s') => app.show_slash = !app.show_slash,
+            KeyCode::Char('r') => app.three_line = !app.three_line,
             KeyCode::Char('?') => app.help = true,
             KeyCode::Char('/') => app.toast = Some("search is not in the MVP".into()),
             KeyCode::Char('j') | KeyCode::Down if app.focus == Focus::List && !app.zoomed => {
@@ -247,8 +251,9 @@ fn draw_proto_bar(f: &mut Frame, area: Rect, app: &App, width: u16) {
         EnterMode::ZoomPreview => "zoom",
     };
     let text = format!(
-        " PROTOTYPE  {}  | width {width} cutoff {} -> {layout} | Enter={enter} | / {} |  1/2/3 e [ ] s ",
+        " PROTOTYPE  {}  | rows {} | width {width} cutoff {} -> {layout} | Enter={enter} | / {} |  1/2/3 e [ ] s r ",
         app.variant.label(),
+        if app.three_line { "3-line" } else { "1-line" },
         app.cutoff,
         if app.show_slash { "shown" } else { "hidden" },
     );
@@ -276,7 +281,8 @@ fn draw_list(f: &mut Frame, area: Rect, app: &mut App, full: bool) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let h = inner.height as usize;
+    let per = if app.three_line { 3 } else { 1 };
+    let h = inner.height as usize / per;
     if app.selected < app.list_offset {
         app.list_offset = app.selected;
     } else if app.selected >= app.list_offset + h {
@@ -289,7 +295,13 @@ fn draw_list(f: &mut Frame, area: Rect, app: &mut App, full: bool) {
         .enumerate()
         .skip(app.list_offset)
         .take(h)
-        .map(|(i, m)| row(m, w, i == app.selected, focused))
+        .flat_map(|(i, m)| {
+            if app.three_line {
+                card(m, w, i == app.selected, focused)
+            } else {
+                vec![row(m, w, i == app.selected, focused)]
+            }
+        })
         .collect();
     f.render_widget(Paragraph::new(lines), inner);
 }
@@ -320,6 +332,29 @@ fn row(m: &Msg, w: usize, selected: bool, focused: bool) -> Line<'static> {
         };
     }
     Line::from(Span::styled(text, style))
+}
+
+fn card(m: &Msg, w: usize, selected: bool, focused: bool) -> Vec<Line<'static>> {
+    let date_w = m.date.width();
+    let sender_w = w.saturating_sub(2 + 2 + date_w);
+    let mut base = Style::default();
+    if selected {
+        base = if focused { base.bg(Color::Blue).fg(Color::White) } else { base.bg(Color::DarkGray) };
+    }
+    let mut head = base;
+    if m.unread {
+        head = head.add_modifier(Modifier::BOLD);
+    }
+    let dim = if selected { base } else { base.fg(Color::DarkGray) };
+    let mark = if m.unread { "● " } else { "  " };
+    vec![
+        Line::from(vec![
+            Span::styled(format!("{mark}{}  ", fit(m.sender, sender_w)), head),
+            Span::styled(m.date.to_owned(), dim),
+        ]),
+        Line::from(Span::styled(format!("  {}", fit(m.subject, w.saturating_sub(2))), head)),
+        Line::from(Span::styled(format!("  {}", fit(m.snippet, w.saturating_sub(2))), dim)),
+    ]
 }
 
 // Pad or cut to exactly `w` display columns, ending in `…` when cut.
@@ -447,14 +482,35 @@ fn fake_messages() -> Vec<Msg> {
         (false, "Apple", "Your receipt from Apple.", "2025-11-04"),
         (false, "Old Friend", "long time no see", "2024-11-17"),
     ];
+    let snippets: &[&str] = &[
+        "kryptamine assigned this to you. Which layout does the main screen use: side by side, full-screen or adaptive?",
+        "Sure, Friday works! Shall we try that new Georgian place near the station? I can book for 8.",
+        "Receipt #2931-0042. Amount paid $12.40. Fly.io usage for October 2026. Questions? Contact support.",
+        "1. Rust 1.94 released (412 points) 2. How SQLite stores a B-tree page 3. Show HN: a terminal mail client",
+        "New sign-in to your Google Account on a Mac device. If this was you, you don't need to do anything.",
+        "3 issues completed, 2 in progress. Cycle 14 ends in 4 days. View your team's progress in Linear.",
+        "お疲れ様です。第3四半期レビューの議事録を共有します。ご確認ください。",
+        "Her birthday is on Sunday!! Call her in the morning, she's going to the theatre in the evening 💐",
+        "You have chosen to subscribe to the topic arn:aws:sns:eu-central-1:1234:alerts. To confirm, visit",
+        "Hello, I'm writing to check how Postal renders a sender name that is far longer than any column.",
+        "Hotel Avenida, Lisbon. Check-in Thu 4 Dec from 15:00. Confirmation number 4123.881.209.",
+        "",
+        "Your crates.io API token 'laptop' expires in 7 days. Generate a new one at crates.io/settings/tokens.",
+        "Get ready: your top artists, songs and genres of the year land on 4 December.",
+        "Hello and welcome to another issue of This Week in Rust! Updates from the Rust community.",
+        "> > > What if it only shows the inbox? I'd actually use that every day. Let's keep it tiny.",
+        "Apple ID receipt. iCloud+ with 200 GB storage, monthly. Total 2,99 €.",
+        "Hey! Found your address in an old notebook. How have you been? Still writing code?",
+    ];
     let mut out = Vec::new();
     for round in 0..3 {
-        for (unread, sender, subject, date) in rows {
+        for (n, (unread, sender, subject, date)) in rows.iter().enumerate() {
             out.push(Msg {
                 unread: *unread && round == 0,
                 sender,
                 subject,
                 date,
+                snippet: snippets[n],
                 body: fake_body(sender),
             });
         }
