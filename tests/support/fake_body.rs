@@ -101,6 +101,7 @@ impl FakeBody {
                     content_transfer_encoding: string(encoding),
                     size: u32::try_from(content.len()).unwrap(),
                 };
+
                 let specific = if *media_type == "text" {
                     SpecificFields::Text {
                         subtype: string(subtype),
@@ -113,6 +114,7 @@ impl FakeBody {
                         subtype: string(subtype),
                     }
                 };
+
                 let extension_data = attachment.then(|| SinglePartExtensionData {
                     md5: NString(None),
                     tail: Some(Disposition {

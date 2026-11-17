@@ -342,6 +342,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
                 from_header: header_fields(&macro_or_item_names),
                 part: body_part(&macro_or_item_names),
             };
+
             let changed_since = modifiers.iter().find_map(|m| match m {
                 FetchModifier::ChangedSince(modseq) => Some(modseq.get()),
                 FetchModifier::Vanished => None,
