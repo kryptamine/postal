@@ -3,12 +3,16 @@
 #include "render_item.h"
 #include "types.h"
 
+#include <algorithm>
+
 void litehtml::table_grid::add_cell(const std::shared_ptr<render_item>& el)
 {
     table_cell cell;
     cell.el      = el;
-    cell.colspan = atoi(el->src_el()->get_attr("colspan", "1"));
-    cell.rowspan = atoi(el->src_el()->get_attr("rowspan", "1"));
+    // Postal: spans clamped as HTML parses them. A colspan of 0 read the
+    // column before the first, memory outside the grid.
+    cell.colspan = std::clamp(atoi(el->src_el()->get_attr("colspan", "1")), 1, 1000);
+    cell.rowspan = std::clamp(atoi(el->src_el()->get_attr("rowspan", "1")), 1, 65534);
     cell.borders = el->get_borders();
 
     while(is_rowspanned(static_cast<int>(m_cells.size()) - 1, static_cast<int>(m_cells.back().size())))

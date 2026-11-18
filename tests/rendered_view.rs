@@ -588,3 +588,21 @@ fn an_alt_the_mail_shows_as_a_title_is_dropped() {
         .count();
     assert_eq!(titles, 1, "{}", screen.text());
 }
+
+// `colspan="0"` is one column in HTML; litehtml took the cell's width from
+// the column before the first, outside its grid, and wrapped it word by word.
+#[test]
+fn a_cell_spanning_no_columns_spans_one() {
+    let body = html(
+        "<table><tr><td colspan=\"0\">One two</td><td>B</td></tr>\
+         <tr><td>One two three</td><td>D</td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "three");
+    assert!(
+        pane(&screen)
+            .iter()
+            .any(|r| r.contains("One two ") && r.contains('B')),
+        "{}",
+        screen.text()
+    );
+}
