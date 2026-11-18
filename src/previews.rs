@@ -40,9 +40,10 @@ pub struct Previews {
     folder: Arc<str>,
     rendered: RenderedPreviews,
     rendering: HashSet<PreviewKey>,
-    /// UIDs asked of the server; one it does not answer for stays here.
+    /// UIDs of the latest request not yet answered: the server serves only
+    /// that one. One it does not answer for stays here.
     fetching: HashSet<u32>,
-    /// The UID last asked for as the selection, which the server serves first.
+    /// The selection of the latest request.
     asked: Option<u32>,
     /// UIDs found without a body while the link is down.
     offline: HashSet<u32>,
@@ -155,37 +156,37 @@ impl Previews {
                 view: view.html,
             };
 
-            // A selection asked for only as a neighbour is asked again: that
-            // request may be passed over, or come after the selection's own.
-            let again = index == selected && self.only_neighbour(message.uid);
             if self.rendered.touch(key)
                 || self.rendering.contains(&key)
-                || (self.waits(message.uid) && !again)
+                || self.unavailable(message.uid)
             {
                 continue;
             }
 
-            if let Some(body) = cache.body(&self.folder, message.uid)? {
-                self.render(key, body, message);
-            } else if self.link == Link::Live {
-                self.fetching.insert(message.uid);
-                if index == selected {
-                    self.asked = Some(message.uid);
-                    request.selected = Some(message.uid);
-                } else {
-                    request.neighbours.push(message.uid);
+            // A body on its way is not in the Cache yet.
+            let body = if self.fetching.contains(&message.uid) {
+                None
+            } else {
+                cache.body(&self.folder, message.uid)?
+            };
+
+            match body {
+                Some(body) => self.render(key, body, message),
+                None if self.link == Link::Live => {
+                    if index == selected {
+                        request.selected = Some(message.uid);
+                    } else {
+                        request.neighbours.push(message.uid);
+                    }
                 }
-            } else if self.link == Link::Down {
-                self.offline.insert(message.uid);
+                None if self.link == Link::Down => {
+                    self.offline.insert(message.uid);
+                }
+                None => {}
             }
         }
 
-        if request.selected.is_some() || !request.neighbours.is_empty() {
-            request.neighbours.sort_unstable();
-            // The send fails only once the body fetch has stopped.
-            let _ = self.requests.unbounded_send(Request::Bodies(request));
-        }
-
+        self.ask(request);
         if let Some(message) = view.selected_message() {
             self.ready_header(message);
         }
@@ -204,15 +205,29 @@ impl Previews {
         self.header = None;
     }
 
-    /// Whether the body of `uid` is on its way, or cannot come for now.
-    fn waits(&self, uid: u32) -> bool {
-        self.fetching.contains(&uid)
-            || self.offline.contains(&uid)
-            || self.refused.contains_key(&uid)
+    /// Whether the body of `uid` cannot come for now.
+    fn unavailable(&self, uid: u32) -> bool {
+        self.offline.contains(&uid) || self.refused.contains_key(&uid)
     }
 
-    fn only_neighbour(&self, uid: u32) -> bool {
-        self.fetching.contains(&uid) && self.asked != Some(uid)
+    /// Sends `request` unless the latest one covers it, selection included.
+    fn ask(&mut self, mut request: BodyRequest) {
+        let covered = request.selected.is_none_or(|uid| self.asked == Some(uid))
+            && request
+                .neighbours
+                .iter()
+                .all(|uid| self.fetching.contains(uid));
+        if covered {
+            return;
+        }
+
+        request.neighbours.sort_unstable();
+        self.asked = request.selected;
+        self.fetching.clear();
+        self.fetching
+            .extend(request.selected.iter().chain(&request.neighbours));
+        // The send fails only once the body fetch has stopped.
+        let _ = self.requests.unbounded_send(Request::Bodies(request));
     }
 
     fn render(&mut self, key: PreviewKey, body: Vec<u8>, message: &Message) {
@@ -262,11 +277,6 @@ impl Previews {
                     self.offline.remove(&uid);
                 }
             }
-            Fetched::Skipped(uids) => {
-                for uid in uids {
-                    self.fetching.remove(&uid);
-                }
-            }
             Fetched::Refused { uids, reason } => {
                 for uid in uids {
                     self.fetching.remove(&uid);
@@ -286,6 +296,7 @@ impl Previews {
         } else {
             self.link = Link::Down;
             self.fetching.clear();
+            self.asked = None;
         }
     }
 

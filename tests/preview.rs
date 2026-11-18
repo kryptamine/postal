@@ -115,7 +115,12 @@ fn an_html_only_message_shows_its_html_and_one_without_text_says_so() {
 
 /// UIDs 101 to 106, the newest last, so the list shows 106 first.
 fn six() -> Vec<FakeMessage> {
-    (1..=6)
+    numbered(6)
+}
+
+/// Messages from day 1 to day `days`, each body naming its day.
+fn numbered(days: u32) -> Vec<FakeMessage> {
+    (1..=days)
         .map(|day| {
             let body = FakeBody::plain(&format!("Body number {day}"));
             message("Sender", &format!("Subject {day}"), day, body)
@@ -237,13 +242,7 @@ fn a_preview_not_yet_fetched_shows_a_placeholder_and_never_blocks() {
 // selection comes next, and rows scrolled past are never fetched.
 #[test]
 fn scrolling_past_unfetched_rows_fetches_only_where_it_stops() {
-    let thirty = (1..=30)
-        .map(|day| {
-            let body = FakeBody::plain(&format!("Body number {day}"));
-            message("Sender", &format!("Subject {day}"), day, body)
-        })
-        .collect();
-    let server = FakeImap::start(thirty);
+    let server = FakeImap::start(numbered(30));
     server.stall(Stall::Whole);
     let home = Home::for_server(&server);
     let mut t = postal(&home, 120);

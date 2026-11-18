@@ -18,8 +18,9 @@ pub enum Request {
     Backfill(Arc<str>),
 }
 
-/// Bodies the Preview needs, by UID in `folder`. The selected one comes
-/// alone, so it does not wait on its neighbours.
+/// Bodies the Preview needs, by UID in `folder`. Each request replaces the
+/// one before it, so it names every body still missing. The selected one
+/// comes alone, so it does not wait on its neighbours.
 pub struct BodyRequest {
     pub folder: Arc<str>,
     pub selected: Option<u32>,
@@ -32,8 +33,6 @@ pub enum Fetched {
     Stored(Vec<u32>),
     /// The server answered `NO` for these UIDs, with this reason.
     Refused { uids: Vec<u32>, reason: String },
-    /// Not asked for: a newer selection came first.
-    Skipped(Vec<u32>),
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each went:
@@ -49,12 +48,12 @@ pub async fn serve(
     (requests, mut examined): (&mut UnboundedReceiver<Request>, Option<Arc<str>>),
     send: impl Fn(Update),
 ) -> Result<(), Error> {
-    let mut waiting = Vec::new();
+    let mut waiting = None;
     let mut older = None;
     // Rows of this Folder below this UID still wait for their Snippets.
     let mut snippets_below: Option<(Arc<str>, u32)> = None;
     loop {
-        if waiting.is_empty() && older.is_none() && snippets_below.is_none() {
+        if waiting.is_none() && older.is_none() && snippets_below.is_none() {
             let Some(first) = requests.next().await else {
                 return Ok(());
             };
@@ -62,7 +61,7 @@ pub async fn serve(
             take(first, &mut waiting, &mut older);
         }
 
-        while let Some(request) = newest(requests, &mut waiting, &mut older, &send) {
+        while let Some(request) = latest(requests, &mut waiting, &mut older) {
             if !open(server, &mut examined, &request.folder).await? {
                 continue;
             }
@@ -76,13 +75,9 @@ pub async fn serve(
                 fetch_each(server, cache, &folder, vec![uid], &send).await?;
             }
 
-            while let Ok(more) = requests.try_recv() {
-                take(more, &mut waiting, &mut older);
-            }
-
-            if !waiting.is_empty() {
-                send(Update::Bodies(folder, Fetched::Skipped(neighbours)));
-            } else if !neighbours.is_empty() {
+            // The neighbours of a selection already left behind are not fetched.
+            receive(requests, &mut waiting, &mut older);
+            if waiting.is_none() && !neighbours.is_empty() {
                 fetch_each(server, cache, &folder, neighbours, &send).await?;
             }
         }
@@ -113,25 +108,25 @@ pub async fn serve(
     }
 }
 
-/// The newest request, the selection on screen. Older ones were passed over
-/// while scrolling: they are dropped, and asked for again if still wanted.
-fn newest(
+/// The request last received, if not yet served; the ones before it were
+/// passed over while scrolling.
+fn latest(
     requests: &mut UnboundedReceiver<Request>,
-    waiting: &mut Vec<BodyRequest>,
+    waiting: &mut Option<BodyRequest>,
     older: &mut Option<Arc<str>>,
-    send: &impl Fn(Update),
 ) -> Option<BodyRequest> {
+    receive(requests, waiting, older);
+    waiting.take()
+}
+
+fn receive(
+    requests: &mut UnboundedReceiver<Request>,
+    waiting: &mut Option<BodyRequest>,
+    older: &mut Option<Arc<str>>,
+) {
     while let Ok(more) = requests.try_recv() {
         take(more, waiting, older);
     }
-
-    let newest = waiting.pop();
-    for stale in waiting.drain(..) {
-        let uids = stale.selected.into_iter().chain(stale.neighbours).collect();
-        send(Update::Bodies(stale.folder, Fetched::Skipped(uids)));
-    }
-
-    newest
 }
 
 /// Fetches `uids` and says how it went. A `NO` names no UID: they are asked
@@ -160,9 +155,9 @@ async fn fetch_each(
     Ok(())
 }
 
-fn take(request: Request, waiting: &mut Vec<BodyRequest>, older: &mut Option<Arc<str>>) {
+fn take(request: Request, waiting: &mut Option<BodyRequest>, older: &mut Option<Arc<str>>) {
     match request {
-        Request::Bodies(bodies) => waiting.push(bodies),
+        Request::Bodies(bodies) => *waiting = Some(bodies),
         Request::Backfill(folder) => *older = Some(folder),
     }
 }
