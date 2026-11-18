@@ -1,17 +1,18 @@
-use std::io;
+use std::{io, sync::Arc};
 
 use crossterm::event::{Event, EventStream};
 use futures::{Stream, StreamExt};
 use ratatui::{Terminal, layout::Rect};
 
 use crate::{
-    alloc_count,
+    alloc_count, browser,
     cache::{self, Cache},
     help_popup::HelpPopup,
     hint_line::HintLine,
     inbox_view::InboxView,
     keymap::{self, Action},
     layout,
+    link_hints::{LinkHints, Typed},
     message_list::{self, MessageList},
     pager, pager_text,
     preview_pane::{self, PreviewPane},
@@ -119,6 +120,8 @@ pub async fn run(
                 let half_page = text.map_or(1, |t| usize::from(t.height / 2).max(1));
                 match handle(event, &mut view, &mut screen, half_page)? {
                     Step::Stay => {}
+                    Step::Links => label_links(&mut screen, previews, &view, text),
+                    Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, &view)?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::Quit => return Ok(()),
@@ -146,7 +149,14 @@ fn draw(
             frame.render_stateful_widget(MessageList { theme }, panes.list, view);
             if let Some(pane) = panes.preview {
                 let preview = previews.get(view, preview_pane::text_area(pane).width);
-                frame.render_stateful_widget(PreviewPane { theme, preview }, pane, view);
+                let hints = screen.hints.as_ref();
+                let widget = PreviewPane {
+                    theme,
+                    preview,
+                    hints,
+                };
+
+                frame.render_stateful_widget(widget, pane, view);
             }
 
             let toast = screen.toast.as_ref().map(|toast| toast.text);
@@ -179,6 +189,7 @@ fn apply(
 struct Screen {
     help: bool,
     toast: Option<Toast>,
+    hints: Option<LinkHints>,
 }
 
 impl Screen {
@@ -193,6 +204,8 @@ impl Screen {
 /// What the event loop does after one input event.
 enum Step {
     Stay,
+    Links,
+    Browse(Arc<str>),
     Page,
     Suspend,
     Quit,
@@ -212,10 +225,23 @@ fn handle(
             screen.help = !keymap::closes_help(key);
             Ok(Step::Stay)
         }
+        Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
+        Some(Ok(Event::Key(key))) if screen.hints.is_some() => {
+            let typed = screen.hints.as_mut().map_or(Typed::Cancel, |h| h.key(key));
+            if !matches!(typed, Typed::Partial) {
+                screen.hints = None;
+            }
+
+            Ok(match typed {
+                Typed::Open(url) => Step::Browse(url),
+                Typed::Partial | Typed::Cancel => Step::Stay,
+            })
+        }
         Some(Ok(Event::Key(key))) => Ok(match keymap::action(key) {
             Some(Action::Quit) => Step::Quit,
             Some(Action::Open) => Step::Page,
             Some(Action::Suspend) => Step::Suspend,
+            Some(Action::Links) => Step::Links,
             Some(Action::Help) => {
                 screen.help = true;
                 Step::Stay
@@ -230,8 +256,33 @@ fn handle(
             }
             None => Step::Stay,
         }),
+        // The labels sit where the old width laid the links out.
+        Some(Ok(Event::Resize(..))) => {
+            screen.hints = None;
+            Ok(Step::Stay)
+        }
         Some(Ok(_)) => Ok(Step::Stay),
     }
+}
+
+/// Enters hint mode on the links the Preview window shows, or says there
+/// are none. `text` is where the Preview's text goes, if it is shown.
+fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text: Option<Rect>) {
+    screen.hints = text.and_then(|text| {
+        let preview = previews.get(view, text.width)?;
+        let lines = preview_pane::body_lines(view.preview_scroll, text);
+        LinkHints::find(&preview.body, lines)
+    });
+    if screen.hints.is_none() {
+        screen.toast = Some(Toast::new("no links"));
+    }
+}
+
+/// Opens `url`; returns the Toast to show when that fails.
+fn browse(url: &str) -> Option<Toast> {
+    let error = browser::open(url).err()?;
+    tracing::error!("opening a link failed: {error}");
+    Some(Toast::new("could not open the link"))
 }
 
 /// Runs `program` in the foreground with the terminal handed back, then

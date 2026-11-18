@@ -28,8 +28,8 @@ fn write(out: &mut Vec<u8>, preview: &Preview, theme: &Theme) -> io::Result<()> 
 
     out.write_all(b"\n")?;
     for line in &preview.body {
-        for (text, marks) in line.segments() {
-            ansi::styled(out, text, theme.marked(marks))?;
+        for segment in line.segments() {
+            ansi::styled(out, segment.text, theme.marked(segment.marks))?;
         }
 
         out.write_all(b"\n")?;

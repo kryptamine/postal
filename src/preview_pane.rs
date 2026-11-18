@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{fmt::Write, ops::Range};
 
 use ratatui::{
     buffer::Buffer,
@@ -8,8 +8,8 @@ use ratatui::{
 };
 
 use crate::{
-    centred::centred, inbox_view::InboxView, preview::Preview, stack_str::StackStr,
-    styled_line::StyledLine, theme::Theme, truncate,
+    centred::centred, inbox_view::InboxView, link_hints::LinkHints, preview::Preview,
+    stack_str::StackStr, theme::Theme, truncate,
 };
 
 /// The header labels, padded so the values line up.
@@ -29,12 +29,19 @@ pub const fn text_area(pane: Rect) -> Rect {
     }
 }
 
+/// The body lines that `text` shows from scroll position `scroll`.
+pub const fn body_lines(scroll: usize, text: Rect) -> Range<usize> {
+    let end = scroll + text.height as usize;
+    scroll.saturating_sub(HEADER_ROWS)..end.saturating_sub(HEADER_ROWS)
+}
+
 /// The selected Message's Preview inside a border titled `i/N`: the header,
 /// then the body from the scroll position on. `preview` is `None` until it
-/// is rendered.
+/// is rendered. In hint mode, `hints` labels its links.
 pub struct PreviewPane<'a> {
     pub theme: &'a Theme,
     pub preview: Option<&'a Preview>,
+    pub hints: Option<&'a LinkHints>,
 }
 
 impl StatefulWidget for PreviewPane<'_> {
@@ -71,8 +78,8 @@ impl StatefulWidget for PreviewPane<'_> {
             let row = Rect::new(text.x, y, text.width, 1);
             if let Some(&(value, style)) = header.get(index) {
                 self.header(buf, row, LABELS[index], (value, style));
-            } else if let Some(line) = preview.body.get(index.wrapping_sub(HEADER_ROWS)) {
-                self.line(buf, row, line);
+            } else if let Some(line) = index.checked_sub(HEADER_ROWS) {
+                self.line(buf, row, preview, line);
             }
         }
     }
@@ -91,17 +98,27 @@ impl PreviewPane<'_> {
         truncate::draw(buf, value_area, value, style);
     }
 
-    fn line(&self, buf: &mut Buffer, row: Rect, line: &StyledLine) {
+    fn line(&self, buf: &mut Buffer, row: Rect, preview: &Preview, index: usize) {
+        let Some(line) = preview.body.get(index) else {
+            return;
+        };
+
+        let room = |x: u16| usize::from(row.right().saturating_sub(x));
         let mut x = row.x;
-        for (text, marks) in line.segments() {
-            let room = usize::from(row.right().saturating_sub(x));
-            if room == 0 {
+        for (run, segment) in line.segments().enumerate() {
+            // Drawn before the link text, which moves right to make room.
+            if let Some(label) = self.hints.and_then(|hints| hints.label(index, run)) {
+                x = buf
+                    .set_stringn(x, row.y, label.as_str(), room(x), self.theme.label)
+                    .0;
+            }
+
+            if room(x) == 0 {
                 return;
             }
 
-            x = buf
-                .set_stringn(x, row.y, text, room, self.theme.marked(marks))
-                .0;
+            let style = self.theme.marked(segment.marks);
+            x = buf.set_stringn(x, row.y, segment.text, room(x), style).0;
         }
     }
 }

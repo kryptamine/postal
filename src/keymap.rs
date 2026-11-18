@@ -7,6 +7,8 @@ pub enum Action {
     Scroll(Scroll),
     /// The selected Message in `$PAGER`.
     Open,
+    /// Hint mode on the links in the Preview window.
+    Links,
     Help,
     Suspend,
     Quit,
@@ -80,7 +82,6 @@ pub const BINDINGS: [Binding; 8] = [
             description: "open",
         }),
     },
-    // Listed ahead of hint mode, which binds it; until then `o` does nothing.
     Binding {
         group: "Links",
         keys: "o",
@@ -146,6 +147,7 @@ pub const fn action(key: KeyEvent) -> Option<Action> {
         KeyCode::PageDown => Some(Action::Scroll(Scroll::Down)),
         KeyCode::PageUp => Some(Action::Scroll(Scroll::Up)),
         KeyCode::Enter | KeyCode::Char('l') => Some(Action::Open),
+        KeyCode::Char('o') => Some(Action::Links),
         KeyCode::Char('?') => Some(Action::Help),
         KeyCode::Char('q') => Some(Action::Quit),
         _ => None,
@@ -159,6 +161,6 @@ pub const fn closes_help(key: KeyEvent) -> bool {
         && matches!(key.code, KeyCode::Char('?' | 'q') | KeyCode::Esc)
 }
 
-const fn pressed(key: KeyEvent) -> bool {
+pub const fn pressed(key: KeyEvent) -> bool {
     matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat)
 }

@@ -1,14 +1,16 @@
+use std::sync::Arc;
+
 use html2text::render::{TaggedLine, TextDecorator};
 
 use crate::marks::Marks;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Annotation {
     #[default]
     Plain,
     Strong,
     Emphasis,
-    Link,
+    Link(Arc<str>),
     Code,
     Alt,
 }
@@ -27,18 +29,29 @@ pub fn marks(annotations: &[Annotation]) -> Marks {
                 Annotation::Plain => Marks::default(),
                 Annotation::Strong => Marks::STRONG,
                 Annotation::Emphasis => Marks::EMPHASIS,
-                Annotation::Link => Marks::LINK,
+                Annotation::Link(_) => Marks::LINK,
                 Annotation::Code => Marks::CODE,
                 Annotation::Alt => Marks::ALT,
             })
         })
 }
 
+/// The URL of the innermost link around text inside `annotations`.
+pub fn link(annotations: &[Annotation]) -> Option<&Arc<str>> {
+    annotations
+        .iter()
+        .rev()
+        .find_map(|annotation| match annotation {
+            Annotation::Link(url) => Some(url),
+            _ => None,
+        })
+}
+
 impl TextDecorator for Decorator {
     type Annotation = Annotation;
 
-    fn decorate_link_start(&mut self, _url: &str) -> (String, Annotation) {
-        (String::new(), Annotation::Link)
+    fn decorate_link_start(&mut self, url: &str) -> (String, Annotation) {
+        (String::new(), Annotation::Link(Arc::from(url)))
     }
 
     fn decorate_link_end(&mut self) -> String {

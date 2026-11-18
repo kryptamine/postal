@@ -40,6 +40,10 @@ _Avoid_: store, database, offline copy
 A short notice in the right slot of the hint line, shown for three seconds; a new one replaces the old.
 _Avoid_: notification, flash, alert
 
+**Hint mode**:
+Entered with `o`: each distinct URL the Preview window shows gets a label of home-row letters, and typing one opens it.
+_Avoid_: link mode, follow mode, footnotes
+
 **Onboarding**:
 The first-run flow that turns an email address into a working Account.
 _Avoid_: setup wizard, registration

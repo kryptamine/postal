@@ -29,7 +29,8 @@ pub fn styled(lines: Vec<TaggedLine<Vec<Annotation>>>) -> Vec<StyledLine> {
                     .filter(|c| !INVISIBLE.contains(c))
                     .map(|c| if c == '\u{a0}' { ' ' } else { c }),
             );
-            out.push(&piece, decorator::marks(&tagged.tag));
+            let tag = &tagged.tag;
+            out.push(&piece, decorator::marks(tag), decorator::link(tag));
         }
 
         out.trim_end();
