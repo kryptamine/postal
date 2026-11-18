@@ -88,6 +88,8 @@ checks this.
 - Non-trivial work starts from an issue, with scope settled there. Small fixes
   go straight to a commit: a typo, an obvious bug, a dependency bump.
 - Tests land with the behaviour they cover.
+- While working, run the single test file you touch. Run the full suite once,
+  as the last step before the commit: after the code review and its fixes.
 - The code is the source of truth, then the docs, then a comment. A doc that
   contradicts the code is a bug in the doc: fix it in the change that found it.
 
