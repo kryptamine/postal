@@ -5,20 +5,26 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 3;
+pub const VERSION: i64 = 4;
 
 const FILE: &str = "cache.sqlite3";
 
 const TABLES: &str = "
+-- One row per Folder, from `LIST` or a resync; the sync columns are NULL
+-- until the Folder is first resynced.
 CREATE TABLE mailbox (
-    id INTEGER PRIMARY KEY CHECK (id = 0),
-    uid_validity INTEGER NOT NULL,
+    name TEXT PRIMARY KEY,
+    -- Its special use (RFC 6154), as `Role::label` names it; NULL for none.
+    role TEXT,
+    uid_validity INTEGER,
     uid_next INTEGER,
     highest_modseq INTEGER,
-    unread INTEGER NOT NULL
+    -- NULL until a resync or a `STATUS` counts it.
+    unread INTEGER
 );
 CREATE TABLE message (
-    uid INTEGER PRIMARY KEY,
+    mailbox TEXT NOT NULL,
+    uid INTEGER NOT NULL,
     -- The `body` row of this Message, once fetched: see docs/adr/0005-body-cache-key.md.
     body_key INTEGER NOT NULL,
     received INTEGER NOT NULL,
@@ -32,10 +38,12 @@ CREATE TABLE message (
     text_section TEXT,
     text_encoding TEXT,
     text_charset TEXT,
-    text_html INTEGER
+    text_html INTEGER,
+    PRIMARY KEY (mailbox, uid)
 );
-CREATE INDEX message_by_arrival ON message (received DESC, uid DESC);
--- Not dropped with the rows on a UIDVALIDITY change; a byte-bounded LRU.
+CREATE INDEX message_by_arrival ON message (mailbox, received DESC, uid DESC);
+-- Shared by every Folder, and not dropped with the rows on a UIDVALIDITY
+-- change; a byte-bounded LRU.
 CREATE TABLE body (
     key INTEGER PRIMARY KEY,
     raw BLOB NOT NULL,

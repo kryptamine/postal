@@ -5,10 +5,9 @@ use crate::{cache::Cache, imap::MailServer, snippet, sync::Error};
 /// Messages per batch: each batch is one Cache write and one redraw.
 const BATCH: usize = 50;
 
-/// The second fetch phase: cuts a Snippet for every cached Message still
-/// without one, newest first, calling `written` after each batch; with
-/// `below`, only those with a lower UID. Every pending Message gets one,
-/// empty when the server sends nothing for it.
+/// The second fetch phase: cuts a Snippet, empty when the server sends none,
+/// for every Message of the examined `folder` still without one, newest first;
+/// with `below`, only lower UIDs. `written` follows each batch.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -16,10 +15,11 @@ const BATCH: usize = 50;
 pub async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
+    folder: &str,
     below: Option<u32>,
     written: impl Fn(),
 ) -> Result<(), Error> {
-    while batch(server, cache, below, &written).await? {}
+    while batch(server, cache, folder, below, &written).await? {}
     Ok(())
 }
 
@@ -31,10 +31,11 @@ pub async fn fetch(
 pub async fn batch(
     server: &mut impl MailServer,
     cache: &Cache,
+    folder: &str,
     below: Option<u32>,
     written: impl Fn(),
 ) -> Result<bool, Error> {
-    let pending = cache.pending_snippets(BATCH, below)?;
+    let pending = cache.pending_snippets(folder, BATCH, below)?;
     if pending.is_empty() {
         return Ok(false);
     }
@@ -60,7 +61,7 @@ pub async fn batch(
             (*uid, snippet)
         })
         .collect();
-    cache.write_snippets(&snippets)?;
+    cache.write_snippets(folder, &snippets)?;
     tracing::info!("cut {} Snippets", snippets.len());
     written();
     Ok(true)

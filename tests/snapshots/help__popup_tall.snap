@@ -2,7 +2,7 @@
 source: tests/help.rs
 expression: screen
 ---
-size: 80x32  cursor: hidden
+size: 80x36  cursor: hidden
 ┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
 │   Bob     ┌ Help ────────────────────────────────────────────────┐2024-11-18 │
 │   Newer   │                                                      │           │
@@ -15,15 +15,15 @@ size: 80x32  cursor: hidden
 │           │ Enter    l            read the Message full screen   │           │
 │           │ |                     open the Message in $PAGER     │           │
 │           │                                                      │           │
-└───────────│ Links                                                │───────────┘
-┌ 1/2 ──────│ o                     label the links in the Preview │───────────┐
-│ From    Bo│                                                      │           │
-│ Subject Ne│ View                                                 │           │
-│ Date    Mo│ v                     rendered / text view of HTML   │           │
-│           │                                                      │           │
-│ Newer body│ App                                                  │           │
+│           │ Links                                                │           │
+│           │ o                     label the links in the Preview │           │
+└───────────│                                                      │───────────┘
+┌ 1/2 ──────│ View                                                 │───────────┐
+│ From    Bo│ v                     rendered / text view of HTML   │           │
+│ Subject Ne│                                                      │           │
+│ Date    Mo│ App                                                  │           │
 │           │ ?                     this help                      │           │
-│           │ q        ^c           quit                           │           │
+│ Newer body│ q        ^c           quit                           │           │
 │           │ ^z                    suspend to the shell           │           │
 │           │                                                      │           │
 │           │ Search                                               │           │
@@ -32,6 +32,10 @@ size: 80x32  cursor: hidden
 │           │ Enter                 keep the Query                 │           │
 │           │ Esc                   end the Search                 │           │
 │           │                                                      │           │
+│           │ Folders                                              │           │
+│           │ f                     pick the Folder to show        │           │
+│           │                                                      │           │
 │           └──────────────────────────────────────────────────────┘           │
+│                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

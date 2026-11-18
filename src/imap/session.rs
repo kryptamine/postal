@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Duration};
 use async_imap::{
     Client, Session,
     extensions::idle::IdleResponse,
-    imap_proto::{Response, SectionPath, Status},
+    imap_proto::{NameAttribute, Response, SectionPath, Status},
     types::{Fetch, Flag},
 };
 use futures::TryStreamExt;
@@ -13,8 +13,15 @@ use super::{
     xoauth2::XOAuth2,
 };
 use crate::{
-    body_key::body_key, config::Config, header, message::Message, new_message::NewMessage,
-    sign_in::SignIn, snippet, sync_state::SyncState,
+    body_key::body_key,
+    config::Config,
+    folder::{Folder, Role},
+    header,
+    message::Message,
+    new_message::NewMessage,
+    sign_in::SignIn,
+    snippet,
+    sync_state::SyncState,
 };
 
 /// The raw `From` header rides along, for a `From` the server cannot parse.
@@ -29,7 +36,7 @@ const GMAIL_ITEMS: &str =
 /// Messages between two progress reports of the first fetch, each a redraw.
 const PROGRESS_EVERY: u32 = 50;
 
-/// The Inbox as `EXAMINE` reports it.
+/// A Folder as `EXAMINE` reports it.
 pub struct Examined {
     pub exists: u32,
     pub state: SyncState,
@@ -37,7 +44,14 @@ pub struct Examined {
 
 /// What Postal needs from a mail server, kept apart from the IMAP library.
 pub trait MailServer {
-    async fn examine(&mut self) -> Result<Examined, Error>;
+    /// Opens the Folder named `folder` read-only; later commands read it.
+    async fn examine(&mut self, folder: &str) -> Result<Examined, Error>;
+
+    /// Every Folder the server lists that can be opened.
+    async fn folders(&mut self) -> Result<Vec<Folder>, Error>;
+
+    /// Unread Messages in a Folder other than the examined one, by `STATUS`.
+    async fn unread_in(&mut self, folder: &str) -> Result<usize, Error>;
 
     /// The newest `count` of the `exists` Messages, by sequence number;
     /// `progress` gets how many have come so far, now and then.
@@ -63,7 +77,7 @@ pub trait MailServer {
     /// `None` when no Message has this UID any more.
     async fn sequence_number(&mut self, uid: u32) -> Result<Option<u32>, Error>;
 
-    /// The UIDs in `first..=last` still in the Inbox.
+    /// The UIDs in `first..=last` still in the Folder.
     async fn uids(&mut self, first: u32, last: u32) -> Result<HashSet<u32>, Error>;
 
     /// Unread per UID in `first..=last`; with `changed_since`, only for the
@@ -75,7 +89,7 @@ pub trait MailServer {
         changed_since: Option<u64>,
     ) -> Result<Vec<(u32, bool)>, Error>;
 
-    /// Unread Messages in the whole Inbox.
+    /// Unread Messages in the whole examined Folder.
     async fn unread_count(&mut self) -> Result<usize, Error>;
 
     /// The first `snippet::FETCHED` octets of part `section` of each of
@@ -93,9 +107,13 @@ pub trait MailServer {
     /// What the server announced during earlier commands, in order.
     fn pushed(&mut self) -> Vec<Pushed>;
 
-    /// Waits in `IDLE` for the server to announce a change, at most `period`;
-    /// empty when none came.
-    async fn idle(self, period: Duration) -> Result<(Self, Vec<Pushed>), Error>
+    /// Waits in `IDLE` for the server to announce a change, at most `period`
+    /// and no longer than `stop` takes; empty when none came.
+    async fn idle(
+        self,
+        period: Duration,
+        stop: impl Future<Output = ()>,
+    ) -> Result<(Self, Vec<Pushed>), Error>
     where
         Self: Sized;
 }
@@ -180,10 +198,10 @@ impl ImapSession {
 }
 
 impl MailServer for ImapSession {
-    async fn examine(&mut self) -> Result<Examined, Error> {
+    async fn examine(&mut self, folder: &str) -> Result<Examined, Error> {
         // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
         // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
-        let mailbox = self.session.examine("INBOX").await?;
+        let mailbox = self.session.examine(folder).await?;
         self.uid_validity = mailbox.uid_validity.unwrap_or_default();
         Ok(Examined {
             exists: mailbox.exists,
@@ -193,6 +211,23 @@ impl MailServer for ImapSession {
                 highest_modseq: mailbox.highest_modseq,
             },
         })
+    }
+
+    async fn folders(&mut self) -> Result<Vec<Folder>, Error> {
+        let names = self.session.list(Some(""), Some("*")).await?;
+        let names: Vec<_> = names.try_collect().await?;
+        let folders: Vec<_> = names
+            .iter()
+            .filter(|name| !name.attributes().contains(&NameAttribute::NoSelect))
+            .map(|name| Folder::new(name.name(), role(name.attributes())))
+            .collect();
+        tracing::info!("listed {} Folders", folders.len());
+        Ok(folders)
+    }
+
+    async fn unread_in(&mut self, folder: &str) -> Result<usize, Error> {
+        let status = self.session.status(folder, "(UNSEEN)").await?;
+        Ok(status.unseen.map_or(0, |n| n as usize))
     }
 
     async fn newest(
@@ -317,7 +352,11 @@ impl MailServer for ImapSession {
         pushed
     }
 
-    async fn idle(self, period: Duration) -> Result<(Self, Vec<Pushed>), Error> {
+    async fn idle(
+        self,
+        period: Duration,
+        stop: impl Future<Output = ()>,
+    ) -> Result<(Self, Vec<Pushed>), Error> {
         let Self {
             session,
             items,
@@ -328,9 +367,10 @@ impl MailServer for ImapSession {
         let first = {
             let (wait, _stop) = handle.wait_with_timeout(period);
             // The library's own timeout restarts on every keepalive line.
-            match tokio::time::timeout(period, wait).await {
-                Ok(response) => response?,
-                Err(_) => IdleResponse::Timeout,
+            tokio::select! {
+                response = wait => response?,
+                () = tokio::time::sleep(period) => IdleResponse::Timeout,
+                () = stop => IdleResponse::ManualInterrupt,
             }
         };
 
@@ -353,6 +393,19 @@ impl MailServer for ImapSession {
         pushed.extend(server.pushed());
         Ok((server, pushed))
     }
+}
+
+/// The special use `LIST` gave a Folder, if one Postal lists apart.
+fn role(attributes: &[NameAttribute<'_>]) -> Option<Role> {
+    attributes.iter().find_map(|attribute| match attribute {
+        NameAttribute::Flagged => Some(Role::Starred),
+        NameAttribute::Sent => Some(Role::Sent),
+        NameAttribute::Drafts => Some(Role::Drafts),
+        NameAttribute::All => Some(Role::All),
+        NameAttribute::Junk => Some(Role::Spam),
+        NameAttribute::Trash => Some(Role::Trash),
+        _ => None,
+    })
 }
 
 /// The text of a `BYE`; `None` for any other response.

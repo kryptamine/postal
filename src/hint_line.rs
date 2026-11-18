@@ -39,8 +39,8 @@ impl Widget for HintLine<'_> {
 
         let status = self.status.text(self.now);
         let (right, style) = match self.toast {
-            Some(toast) if toast.error => (toast.text, self.theme.error),
-            Some(toast) => (toast.text, Style::new()),
+            Some(toast) if toast.error => (&*toast.text, self.theme.error),
+            Some(toast) => (&*toast.text, Style::new()),
             None if self.status == Status::SignedOut => (status.as_str(), self.theme.error),
             None if self.status.warns() => (status.as_str(), self.theme.warning),
             None => (status.as_str(), self.theme.muted),

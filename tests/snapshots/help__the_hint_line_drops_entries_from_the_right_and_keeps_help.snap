@@ -2,7 +2,7 @@
 source: tests/help.rs
 expression: lines
 ---
-100 | j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help                             |
+100 | j/k move  ^d/^u scroll  enter read  o links  q quit  / search  f folders  ?: help                  |
  62 | j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help |
  61 | j/k move  ^d/^u scroll  enter read  o links  ?: help        |
  40 | j/k move  ^d/^u scroll  ?: help        |

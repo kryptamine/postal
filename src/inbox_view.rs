@@ -1,6 +1,7 @@
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 use crate::{
+    folder::Folder,
     inbox::Inbox,
     keymap::{By, Direction, Move, Scroll},
     message::Message,
@@ -10,12 +11,14 @@ use crate::{
 
 /// The Message List's contents, selection and scroll position.
 pub struct InboxView {
+    /// The Folder shown; the Inbox on every run.
+    pub folder: Folder,
     /// `None` until the Cache or the server has rows to show. Their dates
     /// are local, each at the offset in force when it was received.
     pub messages: Option<Vec<Message>>,
     /// Narrows the rows shown; `selected` and `offset` index those.
     pub search: Option<Search>,
-    /// The server's count over the whole Inbox.
+    /// The server's count over the whole Folder.
     pub unread: usize,
     pub selected: usize,
     /// Index of the first visible card; kept by the widget so the selection stays on screen.
@@ -33,6 +36,7 @@ pub struct InboxView {
 impl InboxView {
     pub fn loading() -> Self {
         Self {
+            folder: Folder::inbox(),
             messages: None,
             search: None,
             unread: 0,
@@ -67,6 +71,18 @@ impl InboxView {
 
         self.unread = inbox.unread;
         self.zone = Local::now().offset().fix();
+    }
+
+    /// Shows `folder` in place of the one shown, without its rows until
+    /// `show`: any Search ends, and the newest Message will be selected.
+    pub fn switch(&mut self, folder: Folder) {
+        self.folder = folder;
+        self.messages = None;
+        self.search = None;
+        self.unread = 0;
+        self.selected = 0;
+        self.offset = 0;
+        self.preview_scroll = 0;
     }
 
     /// Starts a Search, or resumes the one under way; false before any

@@ -2,6 +2,8 @@
 //! Gmail extension, so `X-GM-MSGID` is taken out of each command here and
 //! added to each `FETCH` answer, and commands are recorded as sent.
 
+use std::sync::{Arc, Mutex};
+
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     net::{
@@ -12,27 +14,29 @@ use tokio::{
 
 const MSGID: &str = "X-GM-MSGID";
 
-/// `record` gets each command line without its tag; `msgid` maps a UID to
-/// its `X-GM-MSGID`, and is `None` for a server without Gmail's extensions.
+/// `record` gets each command line without its tag; `msgid` maps a Folder
+/// and UID to its `X-GM-MSGID`, and is `None` for a server without Gmail's
+/// extensions.
 pub async fn relay(
     client: TcpStream,
     server: TcpStream,
     record: impl Fn(String) + Send,
-    msgid: Option<impl Fn(u32) -> Option<u64> + Send>,
+    msgid: Option<impl Fn(&str, u32) -> Option<u64> + Send>,
 ) {
     let (client_read, client_write) = client.into_split();
     let (server_read, server_write) = server.into_split();
     let gmail = msgid.is_some();
+    let examined = Arc::new(Mutex::new(String::from("INBOX")));
     tokio::join!(
-        commands(client_read, server_write, record, gmail),
-        responses(server_read, client_write, msgid),
+        commands(client_read, server_write, (record, &examined), gmail),
+        responses(server_read, client_write, (msgid, &examined)),
     );
 }
 
 async fn commands(
     from: OwnedReadHalf,
     mut to: OwnedWriteHalf,
-    record: impl Fn(String),
+    (record, examined): (impl Fn(String), &Mutex<String>),
     gmail: bool,
 ) {
     let mut reader = BufReader::new(from);
@@ -40,6 +44,10 @@ async fn commands(
     while reader.read_line(&mut line).await.is_ok_and(|n| n > 0) {
         let command = line.trim_end_matches(['\r', '\n']);
         let untagged = command.split_once(' ').map_or(command, |(_, rest)| rest);
+        if let Some(name) = untagged.strip_prefix("EXAMINE ") {
+            *examined.lock().unwrap() = unquoted(name);
+        }
+
         record(untagged.to_owned());
         let forwarded = if gmail {
             line.replace(&format!("{MSGID} "), "")
@@ -61,7 +69,7 @@ async fn commands(
 async fn responses(
     from: OwnedReadHalf,
     mut to: OwnedWriteHalf,
-    msgid: Option<impl Fn(u32) -> Option<u64>>,
+    (msgid, examined): (Option<impl Fn(&str, u32) -> Option<u64>>, &Mutex<String>),
 ) {
     let mut reader = BufReader::new(from);
     let mut line = Vec::new();
@@ -72,7 +80,7 @@ async fn responses(
     {
         let id = msgid
             .as_ref()
-            .and_then(|msgid| fetched_uid(&line).and_then(msgid));
+            .and_then(|msgid| msgid(&examined.lock().unwrap(), fetched_uid(&line)?));
         if let Some(id) = id {
             let at = line.windows(7).position(|w| w == b"FETCH (").unwrap() + 7;
             line.splice(at..at, format!("{MSGID} {id} ").into_bytes());
@@ -112,4 +120,13 @@ fn literal_len(line: &[u8]) -> Option<usize> {
         .trim_end_matches(['\r', '\n']);
     let open = line.strip_suffix('}')?.rfind('{')?;
     line[open + 1..line.len() - 1].parse().ok()
+}
+
+/// A mailbox name as async-imap quotes it.
+fn unquoted(name: &str) -> String {
+    let inner = name
+        .strip_prefix('"')
+        .and_then(|n| n.strip_suffix('"'))
+        .unwrap_or(name);
+    inner.replace("\\\"", "\"").replace("\\\\", "\\")
 }

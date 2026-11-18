@@ -16,12 +16,14 @@ const WINDOW: u32 = 500;
 pub enum Error {
     Imap(imap::Error),
     Cache(cache::Error),
+    /// `EXAMINE` was refused: the server no longer has the Folder.
+    Gone(imap::Error),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Imap(source) => source.fmt(f),
+            Self::Imap(source) | Self::Gone(source) => source.fmt(f),
             Self::Cache(source) => source.fmt(f),
         }
     }
@@ -32,7 +34,7 @@ impl Error {
     pub fn outage(&self) -> Option<Outage> {
         match self {
             Self::Imap(source) => source.outage(),
-            Self::Cache(_) => None,
+            Self::Cache(_) | Self::Gone(_) => None,
         }
     }
 
@@ -55,7 +57,18 @@ impl From<cache::Error> for Error {
     }
 }
 
-/// Brings the Cache up to the server's Inbox and writes the result in one
+/// Examines `folder` and returns what it saw; `Gone` when refused.
+pub async fn examine(server: &mut impl MailServer, folder: &str) -> Result<Examined, Error> {
+    server.examine(folder).await.map_err(|error| {
+        if error.refusal().is_some() {
+            Error::Gone(error)
+        } else {
+            Error::Imap(error)
+        }
+    })
+}
+
+/// Brings the Cache up to the server's `folder` and writes the result in one
 /// transaction, so the Message List never shows a half-applied resync. Returns
 /// what its `EXAMINE` saw; `report` follows the first fetch, then says `Live`.
 #[expect(
@@ -65,12 +78,13 @@ impl From<cache::Error> for Error {
 pub async fn resync(
     server: &mut impl MailServer,
     cache: &Cache,
+    folder: &str,
     report: &dyn Fn(Status),
 ) -> Result<Examined, Error> {
-    let examined = server.examine().await?;
+    let examined = examine(server, folder).await?;
     let unread = server.unread_count().await?;
-    let known = cache.state()?;
-    let cached = cache.uids()?;
+    let known = cache.state(folder)?;
+    let cached = cache.uids(folder)?;
     let changes = match known {
         Some(known) if known.uid_validity == examined.state.uid_validity && !cached.is_empty() => {
             update(server, &examined, known, &cached, unread).await?
@@ -80,17 +94,17 @@ pub async fn resync(
                 && known.uid_validity != examined.state.uid_validity
             {
                 tracing::info!(
-                    "UIDVALIDITY changed from {} to {}: refetching the Inbox",
+                    "UIDVALIDITY of {folder} changed from {} to {}: refetching it",
                     known.uid_validity,
                     examined.state.uid_validity
                 );
             }
 
-            refetch(server, &examined, unread, report).await?
+            refetch(server, (folder, &examined), unread, report).await?
         }
     };
 
-    cache.apply(&changes)?;
+    cache.apply(folder, &changes)?;
     report(Status::Live);
     Ok(examined)
 }
@@ -101,12 +115,12 @@ pub async fn resync(
 )]
 async fn refetch(
     server: &mut impl MailServer,
-    examined: &Examined,
+    (folder, examined): (&str, &Examined),
     unread: usize,
     report: &dyn Fn(Status),
 ) -> Result<Changes, Error> {
     let new = if examined.exists == 0 {
-        tracing::info!("the Inbox is empty");
+        tracing::info!("{folder} is empty");
         Vec::new()
     } else {
         let total = examined.exists.min(WINDOW);

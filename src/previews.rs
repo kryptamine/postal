@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::mpsc,
+    sync::{Arc, mpsc},
     thread,
 };
 
@@ -9,6 +9,7 @@ use futures::channel::mpsc::UnboundedSender;
 use crate::{
     body_fetch::{BodyRequest, Fetched, Request},
     cache::{self, Cache},
+    folder,
     inbox_view::InboxView,
     mail_colours::MailColours,
     message::Message,
@@ -34,8 +35,9 @@ enum Link {
 }
 
 /// Gets Previews ready: fetches bodies the Cache lacks, renders on a thread
-/// of its own, and keeps what it rendered.
+/// of its own, and keeps what it rendered. Its UIDs are those of `folder`.
 pub struct Previews {
+    folder: Arc<str>,
     rendered: RenderedPreviews,
     rendering: HashSet<PreviewKey>,
     /// UIDs asked of the server; one it does not answer for stays here.
@@ -74,6 +76,7 @@ impl Previews {
         });
 
         Self {
+            folder: folder::INBOX.into(),
             rendered: RenderedPreviews::default(),
             rendering: HashSet::new(),
             fetching: HashSet::new(),
@@ -126,9 +129,14 @@ impl Previews {
         view: &InboxView,
         width: u16,
     ) -> Result<(), cache::Error> {
+        if self.folder != view.folder.name {
+            self.switch(&view.folder.name);
+        }
+
         let selected = view.selected;
         let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
         let mut request = BodyRequest {
+            folder: Arc::clone(&self.folder),
             selected: None,
             neighbours: Vec::new(),
         };
@@ -149,7 +157,7 @@ impl Previews {
                 continue;
             }
 
-            if let Some(body) = cache.body(message.uid)? {
+            if let Some(body) = cache.body(&self.folder, message.uid)? {
                 self.render(key, body, message);
             } else if self.link == Link::Live {
                 self.fetching.insert(message.uid);
@@ -174,6 +182,16 @@ impl Previews {
         }
 
         Ok(())
+    }
+
+    /// Forgets what it knew by UID: those were another Folder's. Rendered
+    /// Previews are kept by body, shared across Folders.
+    fn switch(&mut self, folder: &Arc<str>) {
+        self.folder = Arc::clone(folder);
+        self.fetching.clear();
+        self.offline.clear();
+        self.refused.clear();
+        self.header = None;
     }
 
     /// Whether the body of `uid` is on its way, or cannot come for now.
@@ -216,7 +234,13 @@ impl Previews {
         }
     }
 
-    pub fn fetched(&mut self, fetched: Fetched) {
+    /// Bodies fetched in `folder`; those of a Folder no longer shown are
+    /// in the Cache, and no UID here waits on them.
+    pub fn fetched(&mut self, folder: &str, fetched: Fetched) {
+        if *self.folder != *folder {
+            return;
+        }
+
         match fetched {
             Fetched::Stored(uids) => {
                 for uid in uids {

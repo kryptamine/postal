@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     backfill::Backfill, body_fetch::Fetched, preview::Preview, rendered_previews::PreviewKey,
     status::Status,
@@ -7,7 +9,11 @@ use crate::{
 pub enum Update {
     /// The sync wrote rows or Snippets to the Cache.
     Inbox,
-    Bodies(Fetched),
+    /// The sync wrote the Folder list or an Unread count to the Cache.
+    Folders,
+    /// The server no longer has this Folder; the sync went back to the Inbox.
+    FolderGone(Arc<str>),
+    Bodies(Arc<str>, Fetched),
     /// The connection for bodies is up, or has gone down.
     BodyLink(bool),
     Rendered(PreviewKey, Preview),

@@ -1,8 +1,8 @@
 # The Unread count comes from `UID SEARCH UNSEEN`
 
-The Message List title shows ` Inbox  N unread `, with N counted by the server
-over the whole Inbox, not over the fetched rows. Sync semantics (issue #14)
-chose `UID SEARCH RETURN (COUNT) UNSEEN`, which answers with one number.
+The Message List title names the Folder and its Unread count, as
+` Inbox  N unread `, with N counted by the server over the whole Folder, not
+over the fetched rows. Sync semantics (issue #14) chose `UID SEARCH RETURN (COUNT) UNSEEN`, which answers with one number.
 
 `RETURN` makes the server answer with an `ESEARCH` response (RFC 4731), and
 neither `imap-proto` 0.17, which async-imap parses with, nor `imap-types`,

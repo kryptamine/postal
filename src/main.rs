@@ -13,6 +13,9 @@ mod cli;
 mod config;
 mod credential;
 mod date_label;
+mod folder;
+mod folder_list;
+mod folder_picker;
 mod header;
 mod help_popup;
 mod hint_line;
@@ -44,6 +47,7 @@ mod pager_text;
 mod paint;
 mod panic_hook;
 mod partial_config;
+mod picker_popup;
 mod preview;
 mod preview_pane;
 mod preview_render;
@@ -64,6 +68,7 @@ mod snippet;
 mod snippets;
 mod stack_str;
 mod status;
+mod steering;
 mod styled_line;
 mod suspend;
 mod sync;
@@ -87,13 +92,14 @@ use std::{
 };
 
 use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
+use steering::Steering;
 
 use crate::{
     body_fetch::Request,
     cache::Cache,
     cli::Command,
     config::{Auth, Config, SecretStore},
-    imap::{ImapSession, MailServer},
+    imap::ImapSession,
     oauth::Tokens,
     older_pages::OlderPages,
     previews::Previews,
@@ -237,6 +243,7 @@ fn session(
         .build()?;
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (requests, requested) = futures::channel::mpsc::unbounded();
+    let (asks, asked) = futures::channel::mpsc::unbounded();
     let older = OlderPages::new(requests.clone());
     let updates_to_previews = sender.clone();
     let send = move |update| {
@@ -257,8 +264,8 @@ fn session(
                         config,
                         sign_in,
                         &cache,
-                        || send(Update::Inbox),
-                        |status| send(Update::Status(status)),
+                        Steering::new(asked),
+                        (&send, |status| send(Update::Status(status))),
                     ),
                     bodies(config, sign_in, &cache, requested, &send),
                 )
@@ -269,6 +276,7 @@ fn session(
             work,
             updates,
             older,
+            asks,
         };
 
         let result = run::run(&mut terminal, &theme, &cache, &mut previews, background).await;
@@ -292,11 +300,13 @@ async fn bodies(
 ) -> Result<(), sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
         let mut session = ImapSession::open(config, sign_in).await?;
-        session.examine().await?;
+        // Every run starts in the Inbox: its first Preview waits on no EXAMINE.
+        sync::examine(&mut session, folder::INBOX).await?;
         // Asked for before an outage: the Preview asks again once told Live.
         while requests.try_recv().is_ok() {}
         report(Status::Live);
-        body_fetch::serve(&mut session, cache, &mut requests, &send).await
+        let examined = Some(folder::INBOX.into());
+        body_fetch::serve(&mut session, cache, (&mut requests, examined), &send).await
     };
 
     // The status slot follows the sync connection alone, but for a refused Account.
@@ -314,18 +324,18 @@ async fn bodies(
     reason = "Postal runs on a current-thread runtime"
 )]
 /// Resyncs and IDLEs on one connection, as the sequence numbers IDLE sends
-/// count in its `EXAMINE`. `written` follows every Cache write, `report` the
-/// connection.
+/// count in its `EXAMINE`, on the Folder `steering` follows. `send` follows
+/// every Cache write, `report` the connection.
 async fn sync(
     config: &Config,
     sign_in: &SignIn,
     cache: &Cache,
-    written: impl Fn(),
-    report: impl Fn(Status),
+    mut steering: Steering,
+    (send, report): (&impl Fn(Update), impl Fn(Status)),
 ) -> Result<(), sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
         let session = ImapSession::open(config, sign_in).await?;
-        idle::listen(session, cache, &written, report).await
+        idle::listen(session, cache, &mut steering, send, report).await
     };
 
     reconnect::retry(attempt, report).await

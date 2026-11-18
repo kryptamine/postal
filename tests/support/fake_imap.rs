@@ -15,16 +15,18 @@ use imap_next::{
     imap_types::{
         auth::{AuthMechanism, AuthenticateData},
         command::{Command, CommandBody, FetchModifier},
-        core::{Atom, IString, NString, Tag, Vec1},
+        core::{Atom, IString, NString, QuotedChar, Tag, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
-        flag::{Flag, FlagFetch},
+        flag::{Flag, FlagFetch, FlagNameAttribute},
+        mailbox::Mailbox,
         response::{
             Capability, Code, CodeOther, CommandContinuationRequest, Data, Greeting, Status,
         },
         search::SearchKey,
         sequence::{SeqOrUid, Sequence, SequenceSet},
+        status::StatusDataItem,
     },
     server::{Event, Options, Server},
     stream::Stream,
@@ -137,15 +139,49 @@ struct Stored {
     message: FakeMessage,
 }
 
-struct Inbox {
+pub const INBOX: &str = "INBOX";
+
+/// One mailbox the server lists.
+struct Folder {
+    name: String,
+    /// As `LIST` sends them, such as `\\Sent` or `\\Noselect`.
+    attributes: Vec<&'static str>,
     uid_validity: u32,
     uid_next: u32,
+    /// `None` serves the Folder without CONDSTORE.
+    highest_modseq: Option<u64>,
+    messages: Vec<Stored>,
+}
+
+impl Folder {
+    fn new(name: &str, attributes: &[&'static str]) -> Self {
+        Self {
+            name: name.to_owned(),
+            attributes: attributes.to_vec(),
+            uid_validity: 1,
+            uid_next: FIRST_UID,
+            highest_modseq: Some(1),
+            messages: Vec::new(),
+        }
+    }
+
+    fn bump(&mut self) -> u64 {
+        let next = self.highest_modseq.unwrap_or_default() + 1;
+        self.highest_modseq = self.highest_modseq.map(|_| next);
+        next
+    }
+
+    fn stored(&mut self, uid: u32) -> &mut Stored {
+        self.messages.iter_mut().find(|m| m.uid == uid).unwrap()
+    }
+}
+
+struct Inbox {
+    /// The Inbox first.
+    folders: Vec<Folder>,
     next_msgid: u64,
     /// Advertises `X-GM-EXT-1` and answers `X-GM-MSGID`.
     gmail: bool,
-    /// `None` serves the Inbox without CONDSTORE.
-    highest_modseq: Option<u64>,
-    messages: Vec<Stored>,
     stall: Option<Stall>,
     /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
     /// a Message it cannot serve.
@@ -158,14 +194,16 @@ struct Inbox {
 }
 
 impl Inbox {
-    fn bump(&mut self) -> u64 {
-        let next = self.highest_modseq.unwrap_or_default() + 1;
-        self.highest_modseq = self.highest_modseq.map(|_| next);
-        next
+    fn folder(&self, name: &str) -> Option<&Folder> {
+        self.folders.iter().find(|f| f.name == name)
     }
 
-    fn stored(&mut self, uid: u32) -> &mut Stored {
-        self.messages.iter_mut().find(|m| m.uid == uid).unwrap()
+    fn folder_mut(&mut self, name: &str) -> &mut Folder {
+        self.folders.iter_mut().find(|f| f.name == name).unwrap()
+    }
+
+    fn inbox(&mut self) -> &mut Folder {
+        self.folder_mut(INBOX)
     }
 }
 
@@ -183,12 +221,9 @@ impl FakeImap {
         std_listener.set_nonblocking(true).unwrap();
         let commands = Arc::new(Mutex::new(Vec::new()));
         let inbox = Arc::new(Mutex::new(Inbox {
-            uid_validity: 1,
-            uid_next: FIRST_UID,
+            folders: vec![Folder::new(INBOX, &[])],
             next_msgid: FIRST_MSGID,
             gmail: true,
-            highest_modseq: Some(1),
-            messages: Vec::new(),
             stall: None,
             outage: None,
             refused: Vec::new(),
@@ -225,21 +260,50 @@ impl FakeImap {
         self.commands.lock().unwrap().clear();
     }
 
-    /// Appends a Message with the next UID and returns that UID.
+    /// Appends a Message to the Inbox with the next UID and returns that UID.
     pub fn deliver(&self, message: FakeMessage) -> u32 {
+        self.deliver_to(INBOX, message)
+    }
+
+    /// As `deliver`, to the Folder named `folder`.
+    pub fn deliver_to(&self, folder: &str, message: FakeMessage) -> u32 {
         let mut inbox = self.inbox.lock().unwrap();
-        let uid = inbox.uid_next;
         let msgid = inbox.next_msgid;
-        let modseq = inbox.bump();
-        inbox.uid_next += 1;
         inbox.next_msgid += 1;
-        inbox.messages.push(Stored {
+        let folder = inbox.folder_mut(folder);
+        let uid = folder.uid_next;
+        let modseq = folder.bump();
+        folder.uid_next += 1;
+        folder.messages.push(Stored {
             uid,
             msgid,
             modseq,
             message,
         });
+        drop(inbox);
         uid
+    }
+
+    /// Lists a new Folder after the others, holding `messages` in sequence
+    /// order; `attributes` as `LIST` sends them, such as `\\Sent`.
+    pub fn add_folder(&self, name: &str, attributes: &[&'static str], messages: Vec<FakeMessage>) {
+        self.inbox
+            .lock()
+            .unwrap()
+            .folders
+            .push(Folder::new(name, attributes));
+        for message in messages {
+            self.deliver_to(name, message);
+        }
+    }
+
+    /// Deletes the Folder, as another client may.
+    pub fn remove_folder(&self, name: &str) {
+        self.inbox
+            .lock()
+            .unwrap()
+            .folders
+            .retain(|f| f.name != name);
     }
 
     pub fn expunge(&self, uid: u32) {
@@ -248,23 +312,26 @@ impl FakeImap {
 
     /// Expunges every UID in `uids` at once, so one IDLE announces them all.
     pub fn expunge_range(&self, uids: std::ops::RangeInclusive<u32>) {
-        let mut inbox = self.inbox.lock().unwrap();
+        let mut state = self.inbox.lock().unwrap();
+        let inbox = state.inbox();
         inbox.bump();
         inbox.messages.retain(|m| !uids.contains(&m.uid));
+        drop(state);
     }
 
     pub fn set_seen(&self, uid: u32, seen: bool) {
-        let mut inbox = self.inbox.lock().unwrap();
+        let mut state = self.inbox.lock().unwrap();
+        let inbox = state.inbox();
         let modseq = inbox.bump();
         let stored = inbox.stored(uid);
         stored.modseq = modseq;
         stored.message.seen = seen;
-        drop(inbox);
+        drop(state);
     }
 
     /// The `X-GM-MSGID` of the Message with this UID.
     pub fn msgid(&self, uid: u32) -> u64 {
-        self.inbox.lock().unwrap().stored(uid).msgid
+        self.inbox.lock().unwrap().inbox().stored(uid).msgid
     }
 
     /// Serves later connections as a server without Gmail's extensions.
@@ -272,18 +339,22 @@ impl FakeImap {
         self.inbox.lock().unwrap().gmail = false;
     }
 
-    /// Serves the Inbox as a server without CONDSTORE: no `HIGHESTMODSEQ`.
+    /// Serves every Folder as a server without CONDSTORE: no `HIGHESTMODSEQ`.
     pub fn without_condstore(&self) {
-        self.inbox.lock().unwrap().highest_modseq = None;
+        for folder in &mut self.inbox.lock().unwrap().folders {
+            folder.highest_modseq = None;
+        }
     }
 
     /// Replaces the Inbox under a new UIDVALIDITY, its UIDs starting at 1.
     pub fn renumber(&self, messages: Vec<FakeMessage>) {
         {
-            let mut inbox = self.inbox.lock().unwrap();
+            let mut state = self.inbox.lock().unwrap();
+            let inbox = state.inbox();
             inbox.uid_validity += 1;
             inbox.uid_next = 1;
             inbox.messages.clear();
+            drop(state);
         }
 
         for message in messages {
@@ -356,9 +427,10 @@ async fn accept(
         let inbox = Arc::clone(&inbox);
         let gmail = inbox.lock().unwrap().gmail;
         let record = move |command| commands.lock().unwrap().push(command);
-        let msgid = move |uid| {
+        let msgid = move |folder: &str, uid| {
             let inbox = inbox.lock().unwrap();
             inbox
+                .folder(folder)?
                 .messages
                 .iter()
                 .find(|m| m.uid == uid)
@@ -435,13 +507,14 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     let bye = outage == Some(Outage::Bye);
     let mut server = Server::new(Options::default(), greeting(bye));
     let mut view = Vec::new();
+    let mut selected = INBOX.to_owned();
     let mut idling = None;
     let mut authenticating = None;
     loop {
         let next = tokio::select! {
             next = stream.next(&mut server) => next,
             () = tokio::time::sleep(Duration::from_millis(10)) => {
-                if !tick(&mut server, &mut view, &inbox, cut, idling.is_some()) {
+                if !tick(&mut server, (&mut view, &selected), &inbox, cut, idling.is_some()) {
                     return;
                 }
 
@@ -473,8 +546,8 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                 server.enqueue_status(done);
             }
             Event::CommandReceived { command } => {
-                if matches!(command.body, CommandBody::Examine { .. }) {
-                    view = seen(&inbox.lock().unwrap());
+                if let Some(examined) = examined(&command.body, &inbox) {
+                    (selected, view) = examined;
                 }
 
                 if let CommandBody::Fetch {
@@ -486,11 +559,22 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                     wait_unless_fetch_stalled(&inbox, macro_or_item_names, *uid).await;
                 }
 
-                respond(&mut server, command, &inbox.lock().unwrap());
+                respond(&mut server, command, &inbox.lock().unwrap(), &selected);
             }
             _ => {}
         }
     }
+}
+
+/// The Folder an `EXAMINE` opens, and what an idling client is told of it.
+fn examined(body: &CommandBody<'_>, inbox: &Mutex<Inbox>) -> Option<(String, Vec<(u32, bool)>)> {
+    let (CommandBody::Examine { mailbox, .. } | CommandBody::Select { mailbox, .. }) = body else {
+        return None;
+    };
+
+    let name = mailbox_name(mailbox);
+    let view = inbox.lock().unwrap().folder(&name).map(seen);
+    Some((name, view.unwrap_or_default()))
 }
 
 fn greeting(bye: bool) -> Greeting<'static> {
@@ -507,7 +591,7 @@ fn greeting(bye: bool) -> Greeting<'static> {
 /// opened at `cut` is to be dropped.
 fn tick(
     server: &mut Server,
-    view: &mut Vec<(u32, bool)>,
+    (view, selected): (&mut Vec<(u32, bool)>, &str),
     inbox: &Mutex<Inbox>,
     cut: u64,
     idling: bool,
@@ -517,8 +601,8 @@ fn tick(
         return false;
     }
 
-    if idling {
-        announce(server, view, &inbox);
+    if idling && let Some(folder) = inbox.folder(selected) {
+        announce(server, view, folder);
     }
 
     drop(inbox);
@@ -526,8 +610,8 @@ fn tick(
 }
 
 /// Each Message's UID and `\Seen`, in sequence order.
-fn seen(inbox: &Inbox) -> Vec<(u32, bool)> {
-    inbox
+fn seen(folder: &Folder) -> Vec<(u32, bool)> {
+    folder
         .messages
         .iter()
         .map(|m| (m.uid, m.message.seen))
@@ -537,8 +621,8 @@ fn seen(inbox: &Inbox) -> Vec<(u32, bool)> {
 /// Tells an idling client what changed since its `view`, as a server does:
 /// expunges lowest first, each renumbering the rest, then flags without the
 /// UID, then the new count.
-fn announce(server: &mut Server, view: &mut Vec<(u32, bool)>, inbox: &Inbox) {
-    let now = seen(inbox);
+fn announce(server: &mut Server, view: &mut Vec<(u32, bool)>, folder: &Folder) {
+    let now = seen(folder);
     let current: HashMap<_, _> = now.iter().copied().collect();
     let mut index = 0;
     while index < view.len() {
@@ -639,8 +723,42 @@ fn capabilities(inbox: &Inbox) -> Data<'static> {
     Data::Capability(Vec1::try_from(capabilities).unwrap())
 }
 
-fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
+/// The name a command gives a mailbox, as `LIST` sends it.
+fn mailbox_name(mailbox: &Mailbox<'_>) -> String {
+    match mailbox {
+        Mailbox::Inbox => INBOX.to_owned(),
+        Mailbox::Other(other) => String::from_utf8(other.as_ref().to_vec()).unwrap(),
+    }
+}
+
+/// The Folder `body` reads, `None` when it is gone. The Inbox stands in
+/// for a gone one where no command reads it.
+fn selected_folder<'a>(
+    body: &CommandBody<'_>,
+    inbox: &'a Inbox,
+    selected: &str,
+) -> Option<&'a Folder> {
+    let reads = matches!(
+        body,
+        CommandBody::Examine { .. }
+            | CommandBody::Select { .. }
+            | CommandBody::Search { .. }
+            | CommandBody::Fetch { .. }
+    );
+    match inbox.folder(selected) {
+        None if !reads => inbox.folders.first(),
+        found => found,
+    }
+}
+
+fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox, selected: &str) {
     let tag = Some(command.tag);
+    let Some(folder) = selected_folder(&command.body, inbox, selected) else {
+        let status = Status::no(tag, Some(code("NONEXISTENT")), "Unknown Mailbox");
+        server.enqueue_status(status.unwrap());
+        return;
+    };
+
     match command.body {
         CommandBody::Login { .. } if inbox.outage == Some(Outage::Throttled) => {
             let status = Status::no(tag, Some(code("THROTTLED")), "Too many logins");
@@ -656,8 +774,12 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
             server.enqueue_data(capabilities(inbox));
             server.enqueue_status(Status::ok(tag, None, "CAPABILITY completed").unwrap());
         }
+        body @ (CommandBody::List { .. } | CommandBody::Status { .. }) => {
+            let status = answer_folders(server, tag, body, inbox);
+            server.enqueue_status(status);
+        }
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
-            examine(server, inbox);
+            examine(server, folder);
             server.enqueue_status(
                 Status::ok(tag, Some(Code::ReadOnly), "EXAMINE completed").unwrap(),
             );
@@ -666,7 +788,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
             criteria,
             uid: true,
             ..
-        } => match search(criteria.as_ref(), inbox) {
+        } => match search(criteria.as_ref(), folder) {
             Some(uids) => {
                 let uids = uids.into_iter().map(|uid| NonZeroU32::new(uid).unwrap());
                 server.enqueue_data(Data::Search(uids.collect(), None));
@@ -677,7 +799,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
             }
         },
         body @ CommandBody::Fetch { .. } => {
-            let status = answer_fetch(server, tag, body, inbox);
+            let status = answer_fetch(server, tag, body, (inbox, folder));
             server.enqueue_status(status);
         }
         _ => {
@@ -686,12 +808,39 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
     }
 }
 
+/// Enqueues what a `LIST` or a `STATUS` asks for and returns its tagged status.
+fn answer_folders(
+    server: &mut Server,
+    tag: Option<Tag<'static>>,
+    body: CommandBody<'static>,
+    inbox: &Inbox,
+) -> Status<'static> {
+    let CommandBody::Status { mailbox, .. } = body else {
+        for folder in &inbox.folders {
+            server.enqueue_data(listed(folder));
+        }
+
+        return Status::ok(tag, None, "LIST completed").unwrap();
+    };
+
+    let Some(folder) = inbox.folder(&mailbox_name(&mailbox)) else {
+        return Status::no(tag, Some(code("NONEXISTENT")), "Unknown Mailbox").unwrap();
+    };
+
+    let unseen = folder.messages.iter().filter(|m| !m.message.seen).count();
+    server.enqueue_data(Data::Status {
+        mailbox,
+        items: vec![StatusDataItem::Unseen(u32::try_from(unseen).unwrap())].into(),
+    });
+    Status::ok(tag, None, "STATUS completed").unwrap()
+}
+
 /// Enqueues what a `FETCH` asks for and returns its tagged status.
 fn answer_fetch(
     server: &mut Server,
     tag: Option<Tag<'static>>,
     body: CommandBody<'static>,
-    inbox: &Inbox,
+    (inbox, folder): (&Inbox, &Folder),
 ) -> Status<'static> {
     let CommandBody::Fetch {
         sequence_set,
@@ -709,7 +858,7 @@ fn answer_fetch(
         whole: whole_body(&macro_or_item_names),
     };
 
-    let refused = fetched(inbox, &sequence_set, uid, None)
+    let refused = fetched(folder, &sequence_set, uid, None)
         .any(|(_, stored)| inbox.refused.contains(&stored.uid));
     if asked.whole && refused {
         let text = "Some messages could not be FETCHed (Failure)";
@@ -720,14 +869,28 @@ fn answer_fetch(
         FetchModifier::ChangedSince(modseq) => Some(modseq.get()),
         FetchModifier::Vanished => None,
     });
-    for (seq, stored) in fetched(inbox, &sequence_set, uid, changed_since) {
+    for (seq, stored) in fetched(folder, &sequence_set, uid, changed_since) {
         server.enqueue_data(fetch(seq, stored, &asked));
     }
 
     Status::ok(tag, None, "FETCH completed").unwrap()
 }
 
-fn examine(server: &mut Server, inbox: &Inbox) {
+/// The `LIST` line of `folder`, `/` its hierarchy delimiter as on Gmail.
+fn listed(folder: &Folder) -> Data<'static> {
+    let items = folder
+        .attributes
+        .iter()
+        .map(|a| FlagNameAttribute::from(Atom::try_from(a.trim_start_matches('\\')).unwrap()))
+        .collect();
+    Data::List {
+        items,
+        delimiter: Some(QuotedChar::try_from('/').unwrap()),
+        mailbox: Mailbox::try_from(folder.name.clone()).unwrap(),
+    }
+}
+
+fn examine(server: &mut Server, inbox: &Folder) {
     let exists = u32::try_from(inbox.messages.len()).unwrap();
     server.enqueue_data(Data::Exists(exists));
     server.enqueue_data(Data::Flags(vec![Flag::Seen]));
@@ -745,7 +908,7 @@ fn examine(server: &mut Server, inbox: &Inbox) {
 }
 
 /// The UIDs a `UID SEARCH` matches; `None` for criteria the fake does not know.
-fn search(criteria: &[SearchKey<'_>], inbox: &Inbox) -> Option<Vec<u32>> {
+fn search(criteria: &[SearchKey<'_>], inbox: &Folder) -> Option<Vec<u32>> {
     let max = inbox.messages.last().map_or(0, |m| m.uid);
     let mut uids = Vec::new();
     for stored in &inbox.messages {
@@ -765,7 +928,7 @@ fn search(criteria: &[SearchKey<'_>], inbox: &Inbox) -> Option<Vec<u32>> {
 
 /// The Messages a `FETCH` names, with their sequence numbers.
 fn fetched<'a>(
-    inbox: &'a Inbox,
+    inbox: &'a Folder,
     set: &'a SequenceSet,
     uid: bool,
     changed_since: Option<u64>,

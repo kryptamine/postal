@@ -105,7 +105,7 @@ fn the_help_popup_lists_the_keymap_by_group() {
     let sizes = [
         ("popup_80", (80, 24)),
         ("popup_44", (44, 18)),
-        ("popup_tall", (80, 32)),
+        ("popup_tall", (80, 36)),
     ];
     for (name, size) in sizes {
         let mut t = postal(&home, size);

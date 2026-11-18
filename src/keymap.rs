@@ -31,7 +31,21 @@ pub enum Action {
     },
     /// The login flow again, while signed out.
     SignIn,
+    Folders,
     Suspend,
+    Quit,
+}
+
+/// What a key does while the Folder Picker is open.
+#[derive(Clone, Copy)]
+pub enum Pick {
+    Type(char),
+    Erase,
+    Down,
+    Up,
+    /// Shows the selected Folder.
+    Choose,
+    Close,
     Quit,
 }
 
@@ -86,7 +100,7 @@ const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 21] = [
+const BINDINGS: [Binding; 23] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -271,6 +285,15 @@ const BINDINGS: [Binding; 21] = [
         hint: None,
     },
     Binding {
+        group: "App",
+        modes: READING,
+        signed_out: false,
+        keys: "f",
+        aliases: "",
+        description: "pick the Folder to show",
+        hint: None,
+    },
+    Binding {
         group: "Search",
         modes: LIST,
         signed_out: false,
@@ -308,6 +331,18 @@ const BINDINGS: [Binding; 21] = [
         aliases: "",
         description: "end the Search",
         hint: None,
+    },
+    Binding {
+        group: "Folders",
+        modes: LIST,
+        signed_out: false,
+        keys: "f",
+        aliases: "",
+        description: "pick the Folder to show",
+        hint: Some(Hint {
+            keys: "f",
+            description: "folders",
+        }),
     },
 ];
 
@@ -359,6 +394,7 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (_, KeyCode::Char('|')) => Some(Action::Page),
         (_, KeyCode::Char('?')) => Some(Action::Help),
         (_, KeyCode::Char('L')) => Some(Action::SignIn),
+        (_, KeyCode::Char('f')) => Some(Action::Folders),
         (Mode::List | Mode::Query, KeyCode::Char('j') | KeyCode::Down) => {
             Some(Action::Move(Move::Down))
         }
@@ -382,6 +418,32 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (Mode::Reading, KeyCode::Char('q' | 'h') | KeyCode::Esc | KeyCode::Left) => {
             Some(Action::Back)
         }
+        _ => None,
+    }
+}
+
+/// What `key` does in the Folder Picker; every character is the Query's.
+pub const fn pick(key: KeyEvent) -> Option<Pick> {
+    if !pressed(key) {
+        return None;
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return match key.code {
+            KeyCode::Char('c') => Some(Pick::Quit),
+            KeyCode::Char('n') => Some(Pick::Down),
+            KeyCode::Char('p') => Some(Pick::Up),
+            _ => None,
+        };
+    }
+
+    match key.code {
+        KeyCode::Enter => Some(Pick::Choose),
+        KeyCode::Esc => Some(Pick::Close),
+        KeyCode::Backspace => Some(Pick::Erase),
+        KeyCode::Down => Some(Pick::Down),
+        KeyCode::Up => Some(Pick::Up),
+        KeyCode::Char(c) => Some(Pick::Type(c)),
         _ => None,
     }
 }

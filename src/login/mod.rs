@@ -7,6 +7,7 @@ pub use self::{app_password::app_password, oauth::oauth};
 use crate::{
     atomic_file, cache,
     config::{Auth, Config, SecretStore},
+    folder,
     imap::{self, ImapSession, MailServer},
     keychain,
     partial_config::PartialConfig,
@@ -123,7 +124,7 @@ fn writes(
 async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
     let verified = async {
         let mut session = ImapSession::open(config, sign_in).await?;
-        session.examine().await?;
+        session.examine(folder::INBOX).await?;
         Ok(())
     };
 

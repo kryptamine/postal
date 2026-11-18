@@ -1,12 +1,16 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     cache::{Cache, Changes},
+    folder::INBOX,
+    folder_list,
     imap::{MailServer, Pushed},
     sequence_numbers::SequenceNumbers,
     snippets,
     status::Status,
+    steering::Steering,
     sync::{self, Error},
+    update::Update,
 };
 
 /// How long one `IDLE` lasts before it is ended and sent again: a server
@@ -14,9 +18,9 @@ use crate::{
 /// connection hides a dead one.
 const PERIOD: Duration = Duration::from_secs(10 * 60);
 
-/// Resyncs, cuts the Snippets, then keeps the Cache live from the server's
-/// announcements, forever. `written` follows every Cache write, `report` the
-/// resyncs.
+/// Resyncs the Folder `steering` follows, then keeps its Cache live from the
+/// server's announcements until the screen stops asking; IDLE gives way to
+/// each ask (ADR 0008). `send` follows every Cache write, `report` the resyncs.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -24,49 +28,111 @@ const PERIOD: Duration = Duration::from_secs(10 * 60);
 pub async fn listen<S: MailServer>(
     mut server: S,
     cache: &Cache,
-    written: impl Fn(),
+    steering: &mut Steering,
+    send: &impl Fn(Update),
     report: &dyn Fn(Status),
 ) -> Result<(), Error> {
-    let mut sequence = resynced(&mut server, cache, &written, report).await?;
+    let Some(mut asked) = steering.take() else {
+        return Ok(());
+    };
+
+    let mut sequence = shown(&mut server, cache, steering, send, report).await?;
     // What came during the resync and the Snippets goes first.
     let mut pushed = server.pushed();
     loop {
-        if pushed.is_empty() {
-            (server, pushed) = server.idle(PERIOD).await?;
-            continue;
-        }
-
-        if let Some(why) = resync_for(cache, &sequence, &pushed)? {
-            tracing::info!("{why}: resyncing");
-            sequence = resynced(&mut server, cache, &written, report).await?;
+        // The switch goes first, so `STATUS` never reaches the examined Folder.
+        if std::mem::take(&mut asked.switched) {
+            sequence = shown(&mut server, cache, steering, send, report).await?;
             pushed = server.pushed();
             continue;
         }
 
-        let Some(changes) = changes(&mut server, cache, &mut sequence, pushed).await? else {
+        if std::mem::take(&mut asked.list) {
+            if !folder_list::refresh(&mut server, cache, &steering.folder, send).await? {
+                gone(steering, send);
+                asked.switched = true;
+            }
+
+            pushed.extend(server.pushed());
+            continue;
+        }
+
+        if pushed.is_empty() {
+            (server, pushed) = server.idle(PERIOD, steering.asking()).await?;
+            let Some(more) = steering.take() else {
+                return Ok(());
+            };
+
+            asked = more;
+            continue;
+        }
+
+        let folder = Arc::clone(&steering.folder);
+        if let Some(why) = resync_for(cache, &folder, &sequence, &pushed)? {
+            tracing::info!("{why}: resyncing");
+            sequence = resynced(&mut server, cache, &folder, send, report).await?;
+            pushed = server.pushed();
+            continue;
+        }
+
+        let Some(changes) = changes(&mut server, cache, (&folder, &mut sequence), pushed).await?
+        else {
             pushed = server.pushed();
             continue;
         };
 
-        cache.apply(&changes)?;
+        cache.apply(&folder, &changes)?;
         tracing::debug!(
             "IDLE: {} new, {} expunged, {} flag changes",
             changes.new.len(),
             changes.expunged.len(),
             changes.flags.len()
         );
-        written();
+        send(Update::Inbox);
         if !changes.new.is_empty() {
-            snippets::fetch(&mut server, cache, None, &written).await?;
+            snippets::fetch(&mut server, cache, &folder, None, || send(Update::Inbox)).await?;
         }
 
         pushed = server.pushed();
     }
 }
 
+/// Resyncs the Folder `steering` follows, dropping what the server
+/// announced of the one examined before; back to the Inbox when it is gone.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn shown(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    steering: &mut Steering,
+    send: &impl Fn(Update),
+    report: &dyn Fn(Status),
+) -> Result<SequenceNumbers, Error> {
+    server.pushed();
+    let folder = Arc::clone(&steering.folder);
+    match resynced(server, cache, &folder, send, report).await {
+        Err(Error::Gone(error)) if *folder != *INBOX => {
+            tracing::warn!("{folder} is gone: {error}");
+            cache.remove_folder(&folder)?;
+            gone(steering, send);
+            resynced(server, cache, INBOX, send, report).await
+        }
+        result => result,
+    }
+}
+
+/// The Folder `steering` follows is no longer on the server.
+fn gone(steering: &mut Steering, send: &impl Fn(Update)) {
+    let folder = std::mem::replace(&mut steering.folder, INBOX.into());
+    send(Update::FolderGone(folder));
+}
+
 /// Why `pushed` cannot be read against `sequence`; `None` when it can.
 fn resync_for(
     cache: &Cache,
+    folder: &str,
     sequence: &SequenceNumbers,
     pushed: &[Pushed],
 ) -> Result<Option<&'static str>, Error> {
@@ -77,14 +143,14 @@ fn resync_for(
     // Rows the fetch connection added below the numbered ones take this
     // connection's own EXAMINE to number.
     let backfilled = matches!(
-        (cache.oldest_uid()?, sequence.oldest()),
+        (cache.oldest_uid(folder)?, sequence.oldest()),
         (Some(cached), Some(numbered)) if cached < numbered
     );
     Ok(backfilled.then_some("older Messages were backfilled"))
 }
 
-/// Resyncs and cuts the Snippets; numbers the cached UIDs as the resync's
-/// `EXAMINE` did.
+/// Resyncs `folder` and cuts its Snippets; numbers the cached UIDs as the
+/// resync's `EXAMINE` did.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -92,13 +158,14 @@ fn resync_for(
 async fn resynced(
     server: &mut impl MailServer,
     cache: &Cache,
-    written: &impl Fn(),
+    folder: &str,
+    send: &impl Fn(Update),
     report: &dyn Fn(Status),
 ) -> Result<SequenceNumbers, Error> {
-    let examined = sync::resync(server, cache, report).await?;
-    written();
-    snippets::fetch(server, cache, None, written).await?;
-    let uids = cache.uids()?;
+    let examined = sync::resync(server, cache, folder, report).await?;
+    send(Update::Inbox);
+    snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
+    let uids = cache.uids(folder)?;
     Ok(SequenceNumbers::new(
         examined.exists,
         examined.state.uid_next,
@@ -106,8 +173,8 @@ async fn resynced(
     ))
 }
 
-/// The rows `pushed` changes, plus the Unread count; `None` before the
-/// first resync has written the Inbox.
+/// The rows of `folder` that `pushed` changes, plus the Unread count;
+/// `None` before the first resync has written the Folder.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -115,10 +182,10 @@ async fn resynced(
 async fn changes(
     server: &mut impl MailServer,
     cache: &Cache,
-    sequence: &mut SequenceNumbers,
+    (folder, sequence): (&str, &mut SequenceNumbers),
     pushed: Vec<Pushed>,
 ) -> Result<Option<Changes>, Error> {
-    let Some(state) = cache.state()? else {
+    let Some(state) = cache.state(folder)? else {
         return Ok(None);
     };
 

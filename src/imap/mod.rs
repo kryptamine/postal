@@ -1,4 +1,4 @@
-//! The IMAP boundary. Postal only reads: the Inbox is opened with `EXAMINE`
+//! The IMAP boundary. Postal only reads: each Folder is opened with `EXAMINE`
 //! and nothing is ever stored, copied or expunged.
 
 mod connect;

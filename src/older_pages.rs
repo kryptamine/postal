@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use futures::channel::mpsc::UnboundedSender;
 
 use crate::{backfill::Backfill, body_fetch::Request, inbox_view::InboxView, update::Update};
@@ -13,8 +15,9 @@ pub struct OlderPages {
     /// Whether the fetch connection is up.
     live: bool,
     asked: bool,
-    /// The oldest cached UID when the server had nothing older for it.
-    nothing_below: Option<u32>,
+    /// A Folder and its oldest cached UID, when the server had nothing
+    /// older for it.
+    nothing_below: Option<(Arc<str>, u32)>,
 }
 
 impl OlderPages {
@@ -40,27 +43,40 @@ impl OlderPages {
             return;
         }
 
-        let oldest = messages.iter().map(|m| m.uid).min();
-        if oldest.is_none() || oldest == self.nothing_below {
+        let Some(oldest) = messages.iter().map(|m| m.uid).min() else {
+            return;
+        };
+
+        let folder = &view.folder.name;
+        if self
+            .nothing_below
+            .as_ref()
+            .is_some_and(|(nothing, below)| nothing == folder && *below == oldest)
+        {
             return;
         }
 
         self.asked = true;
         // The send fails only once the fetch connection has stopped.
-        let _ = self.requests.unbounded_send(Request::Backfill);
+        let _ = self
+            .requests
+            .unbounded_send(Request::Backfill(Arc::clone(folder)));
     }
 
     /// Follows the fetch connection, and passes `update` on. A request in
     /// flight when the connection went down was dropped with it.
-    pub const fn notice(&mut self, update: Update) -> Update {
-        match update {
+    pub fn notice(&mut self, update: Update) -> Update {
+        match &update {
             Update::BodyLink(live) => {
-                self.live = live;
+                self.live = *live;
                 self.asked = false;
             }
-            Update::Backfill(Backfill::Paged { nothing_below }) => {
+            Update::Backfill(Backfill::Paged {
+                folder,
+                nothing_below,
+            }) => {
                 self.asked = false;
-                self.nothing_below = nothing_below;
+                self.nothing_below = nothing_below.map(|uid| (Arc::clone(folder), uid));
             }
             _ => {}
         }

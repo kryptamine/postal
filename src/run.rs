@@ -3,6 +3,7 @@ use std::{io, sync::Arc};
 use crossterm::event::{Event, EventStream};
 use futures::{
     FutureExt, Stream, StreamExt,
+    channel::mpsc::UnboundedSender,
     future::{Fuse, FusedFuture},
 };
 use ratatui::{Terminal, layout::Rect};
@@ -13,22 +14,26 @@ use crate::{
     backfill::Backfill,
     browser,
     cache::{self, Cache},
+    folder::Folder,
+    folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
     inbox_view::InboxView,
-    keymap::{self, Action},
+    keymap::{self, Action, Pick},
     layout,
     link_hints::{LinkHints, Typed},
     message_list::{self, MessageList},
     mode::Mode,
     older_pages::OlderPages,
     pager, pager_text,
+    picker_popup::PickerPopup,
     preview_pane::{self, PreviewPane},
     preview_render::{self, Job},
     previews::Previews,
     rendered_previews::PreviewKey,
     search::Search,
     status::Status,
+    steering::Ask,
     suspend, sync,
     terminal_backend::{self, TerminalBackend},
     theme::Theme,
@@ -62,12 +67,13 @@ pub enum Exit {
     SignIn,
 }
 
-/// The network work behind the screen, what it reports as it goes, and the
-/// pages of older Messages asked of it.
+/// The network work behind the screen, what it reports as it goes, the
+/// pages of older Messages asked of it, and what the sync connection is asked.
 pub struct Background<W, U> {
     pub work: Work<W>,
     pub updates: U,
     pub older: OlderPages,
+    pub asks: UnboundedSender<Ask>,
 }
 
 pub enum Work<W> {
@@ -109,7 +115,7 @@ pub async fn run(
     let mut view = InboxView::loading();
     let rows = first_rows(terminal)?;
     show(&mut view, cache, Some(rows))?;
-    let (mut updates, mut older) = (background.updates, background.older);
+    let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
     let mut screen = Screen::opening(cache, &background.work);
     (screen.status == Status::SignedOut).then(|| previews.link(false));
     let mut work = std::pin::pin!(background.work.fused());
@@ -153,10 +159,10 @@ pub async fn run(
             }
             event = events.next() => {
                 frame_start = alloc_count::count();
-                let half_page = text.map_or(1, |t| usize::from(t.height / 2).max(1));
-                match handle(event, &mut view, &mut screen, half_page)? {
+                match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
+                    step @ (Step::Folders | Step::Show(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, &view)?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
@@ -166,6 +172,11 @@ pub async fn run(
             }
         }
     }
+}
+
+/// Rows a half-page scroll moves the Preview `text` by.
+fn half_page(text: Option<Rect>) -> usize {
+    text.map_or(1, |t| usize::from(t.height / 2).max(1))
 }
 
 /// The background work's end; signed out, the screen stays usable.
@@ -245,6 +256,12 @@ fn draw(
             }
 
             frame.render_widget(hint_line, panes.hint);
+            if let Some(picker) = &screen.picker {
+                let popup = PickerPopup { theme, picker };
+                frame.set_cursor_position(popup.cursor(panes.body));
+                frame.render_widget(popup, panes.body);
+            }
+
             if screen.help {
                 let signed_out = screen.status == Status::SignedOut;
                 let mode = screen.mode;
@@ -280,8 +297,21 @@ fn apply(
                     screen.mode = Mode::List;
                 }
             }
+
+            relist(screen, view, cache)?;
         }
-        Update::Bodies(fetched) => previews.fetched(fetched),
+        Update::Folders => relist(screen, view, cache)?,
+        Update::FolderGone(folder) => {
+            if folder == view.folder.name {
+                let gone = format!("Folder {} no longer exists", view.folder.label());
+                // The sync connection is back on the Inbox already.
+                switch(view, screen, cache, Folder::inbox())?;
+                screen.toast = Some(Toast::new(gone));
+            }
+
+            relist(screen, view, cache)?;
+        }
+        Update::Bodies(folder, fetched) => previews.fetched(&folder, fetched),
         Update::BodyLink(live) => {
             previews.link(live);
             screen.backfill = None;
@@ -307,6 +337,7 @@ fn apply(
 #[derive(Default)]
 struct Screen {
     help: bool,
+    picker: Option<FolderPicker>,
     toast: Option<Toast>,
     /// The sync connection's.
     status: Status,
@@ -369,6 +400,8 @@ impl Screen {
 enum Step {
     Stay,
     Links,
+    Folders,
+    Show(Folder),
     Browse(Arc<str>),
     Page,
     Suspend,
@@ -391,6 +424,7 @@ fn handle(
             Ok(Step::Stay)
         }
         Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
+        Some(Ok(Event::Key(key))) if screen.picker.is_some() => Ok(pick(key, screen)),
         Some(Ok(Event::Key(key))) if screen.hints.is_some() => {
             let typed = screen.hints.as_mut().map_or(Typed::Cancel, |h| h.key(key));
             if !matches!(typed, Typed::Partial) {
@@ -440,6 +474,7 @@ fn act(
         Some(Action::Suspend) => Step::Suspend,
         Some(Action::SignIn) if screen.status == Status::SignedOut => Step::SignIn,
         Some(Action::Links) => Step::Links,
+        Some(Action::Folders) => Step::Folders,
         Some(Action::SwitchView) => {
             view.html = view.html.other();
             view.preview_scroll = 0;
@@ -467,6 +502,90 @@ fn act(
         }
         Some(Action::SignIn) | None => Step::Stay,
     }
+}
+
+/// Acts on one key in the Folder Picker, which takes them all.
+fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
+    let Some(picker) = screen.picker.as_mut() else {
+        return Step::Stay;
+    };
+
+    match keymap::pick(key) {
+        Some(Pick::Type(c)) => picker.push(c),
+        Some(Pick::Erase) => picker.pop(),
+        Some(Pick::Down) => picker.down(),
+        Some(Pick::Up) => picker.up(),
+        Some(Pick::Choose) => {
+            let chosen = picker.chosen().cloned();
+            if let Some(folder) = chosen {
+                screen.picker = None;
+                return Step::Show(folder);
+            }
+        }
+        Some(Pick::Close) => screen.picker = None,
+        Some(Pick::Quit) => return Step::Quit,
+        None => {}
+    }
+
+    Step::Stay
+}
+
+/// Shows `folder` in the Message List, from the Cache, unless it is shown
+/// already; true when it was not, for the sync connection to follow.
+fn switch(
+    view: &mut InboxView,
+    screen: &mut Screen,
+    cache: &Cache,
+    folder: Folder,
+) -> Result<bool, Error> {
+    if folder.name == view.folder.name {
+        return Ok(false);
+    }
+
+    screen.mode = Mode::List;
+    screen.hints = None;
+    view.switch(folder);
+    show(view, cache, None)?;
+    Ok(true)
+}
+
+/// Opens the Folder Picker as the Cache last saw the Folders, or shows the
+/// Folder picked, asking the sync connection to follow.
+fn steer(
+    step: Step,
+    view: &mut InboxView,
+    screen: &mut Screen,
+    cache: &Cache,
+    asks: &UnboundedSender<Ask>,
+) -> Result<(), Error> {
+    let ask = match step {
+        Step::Folders => {
+            let folders = cache.folders().map_err(Error::Cache)?;
+            screen.picker = Some(FolderPicker::new(folders, &view.folder));
+            Ask::ListFolders
+        }
+        Step::Show(folder) => {
+            if !switch(view, screen, cache, folder)? {
+                return Ok(());
+            }
+
+            Ask::Show(view.folder.name.clone())
+        }
+        _ => return Ok(()),
+    };
+
+    // The send fails only while signed out, when nothing syncs.
+    let _ = asks.unbounded_send(ask);
+    Ok(())
+}
+
+/// Lists the Folders anew in an open Folder Picker.
+fn relist(screen: &mut Screen, view: &InboxView, cache: &Cache) -> Result<(), Error> {
+    if let Some(picker) = &mut screen.picker {
+        picker.reload(cache.folders().map_err(Error::Cache)?, &view.folder);
+    }
+
+    Ok(())
 }
 
 fn search(action: Action, view: &mut InboxView, screen: &mut Screen) {
@@ -536,7 +655,8 @@ fn open(
         return Ok(None);
     };
 
-    let Some(body) = cache.body(message.uid).map_err(Error::Cache)? else {
+    let folder = &view.folder.name;
+    let Some(body) = cache.body(folder, message.uid).map_err(Error::Cache)? else {
         return Ok(Some(Toast::new("not downloaded")));
     };
 
@@ -560,7 +680,10 @@ fn open(
 }
 
 fn show(view: &mut InboxView, cache: &Cache, limit: Option<usize>) -> Result<(), Error> {
-    if let Some(inbox) = cache.inbox(limit).map_err(Error::Cache)? {
+    if let Some(inbox) = cache
+        .inbox(&view.folder.name, limit)
+        .map_err(Error::Cache)?
+    {
         view.show(inbox);
     }
 

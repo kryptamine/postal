@@ -29,7 +29,7 @@ pub fn capacity(height: u16) -> usize {
 }
 
 /// One three-line card per Message, `● sender … date` / subject / Snippet,
-/// inside a border titled with the Unread count.
+/// inside a border titled with the Folder and its Unread count.
 pub struct MessageList<'a> {
     pub theme: &'a Theme,
 }
@@ -46,27 +46,29 @@ impl StatefulWidget for MessageList<'_> {
         let inner = block.inner(area);
         block.render(area, buf);
         // Drawn over the border rather than as a Block title, which allocates.
-        let mut title = StackStr::<40>::new();
+        let label = view.folder.label();
+        let mut count = StackStr::<40>::new();
         let _ = if view.messages.is_some() {
-            write!(title, " Inbox  {} unread ", view.unread)
+            write!(count, "  {} unread ", view.unread)
         } else {
-            title.write_str(" Inbox ")
+            count.write_str(" ")
         };
 
-        let title_width = usize::from(inner.width);
-        buf.set_stringn(
-            inner.x,
-            area.y,
-            title.as_str(),
-            title_width,
-            self.theme.title,
-        );
+        let mut x = inner.x;
+        for part in [" ", label, count.as_str()] {
+            let room = usize::from(inner.right().saturating_sub(x));
+            x = buf.set_stringn(x, area.y, part, room, self.theme.title).0;
+        }
+
+        let mut text = StackStr::<160>::new();
         let Some(messages) = view.messages.as_deref() else {
-            return centred("Loading Inbox…", inner, buf);
+            let loading = write!(text, "Loading {label}…").map_or("Loading…", |()| text.as_str());
+            return centred(loading, inner, buf);
         };
 
         if messages.is_empty() {
-            return centred("Inbox is empty", inner, buf);
+            let empty = write!(text, "{label} is empty").map_or("empty", |()| text.as_str());
+            return centred(empty, inner, buf);
         }
 
         let rows = view.rows();

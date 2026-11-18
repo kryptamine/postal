@@ -14,7 +14,7 @@ size: 120x12  cursor: hidden
 │                                        ││                                                                            │
 │                                        ││                                                                            │
 └────────────────────────────────────────┘└────────────────────────────────────────────────────────────────────────────┘
- j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help
+ j/k move  ^d/^u scroll  enter read  o links  q quit  / search  f folders  ?: help
 
 styles:
 0: 0 dim; 1-17 bold; 18-42 dim; 43-47 bold; 48-119 dim
@@ -28,4 +28,4 @@ styles:
 8: 0 dim; 41-42 dim; 119 dim
 9: 0 dim; 41-42 dim; 119 dim
 10: 0-119 dim
-11: 1-3 bold; 4-8 dim; 11-15 bold; 16-22 dim; 25-29 bold; 30-34 dim; 37 bold; 38-43 dim; 46 bold; 47-51 dim; 54 bold; 55-61 dim; 64-65 bold; 66-70 dim
+11: 1-3 bold; 4-8 dim; 11-15 bold; 16-22 dim; 25-29 bold; 30-34 dim; 37 bold; 38-43 dim; 46 bold; 47-51 dim; 54 bold; 55-61 dim; 64 bold; 65-72 dim; 75-76 bold; 77-81 dim
