@@ -58,6 +58,19 @@ pub fn read(account: &str, config: &Path) -> Result<Credential, Error> {
     Ok(Credential::new(secret))
 }
 
+/// Stores the credential of `account` in the OS keychain, replacing any.
+pub fn write(account: &str, secret: &Credential, config: &Path) -> Result<(), Error> {
+    forced_failure()
+        .map_or_else(
+            || keyring::Entry::new(SERVICE, account)?.set_password(secret.expose()),
+            Err,
+        )
+        .map_err(|source| Error::Unavailable {
+            source,
+            config: config.to_owned(),
+        })
+}
+
 /// Test seam: a test cannot lock the real keychain, so `POSTAL_KEYCHAIN_FAIL`
 /// makes it refuse access, with the variable's value as the reason.
 fn forced_failure() -> Option<keyring::Error> {

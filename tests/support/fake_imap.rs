@@ -33,7 +33,8 @@ use tokio::net::{TcpListener, TcpStream};
 use super::{fake_body::FakeBody, relay::relay};
 
 pub const EMAIL: &str = "me@example.com";
-pub const PASSWORD: &str = "abcd efgh ijkl mnop";
+/// As Gmail stores an app password; its page shows it in groups of four.
+pub const PASSWORD: &str = "abcdefghijklmnop";
 
 /// The UID of the first Message given to `FakeImap::start`; the rest follow.
 pub const FIRST_UID: u32 = 101;
@@ -562,7 +563,11 @@ fn login(tag: Option<Tag<'static>>, ok: bool) -> Status<'static> {
     let status = if ok {
         Status::ok(tag, None, "LOGIN completed")
     } else {
-        Status::no(tag, None, "Invalid credentials")
+        Status::no(
+            tag,
+            Some(code("AUTHENTICATIONFAILED")),
+            "Invalid credentials",
+        )
     };
 
     status.unwrap()

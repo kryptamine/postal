@@ -1,5 +1,6 @@
 mod alloc_count;
 mod ansi;
+mod atomic_file;
 mod backfill;
 mod backoff;
 mod body_fetch;
@@ -25,6 +26,7 @@ mod keymap;
 mod layout;
 mod link_hints;
 mod logging;
+mod login;
 mod marks;
 mod message;
 mod message_list;
@@ -34,10 +36,12 @@ mod outage;
 mod pager;
 mod pager_text;
 mod panic_hook;
+mod partial_config;
 mod preview;
 mod preview_pane;
 mod preview_render;
 mod previews;
+mod prompt;
 mod reconnect;
 mod rendered_previews;
 mod run;
@@ -73,6 +77,7 @@ use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
 use crate::{
     body_fetch::Request,
     cache::Cache,
+    cli::Command,
     config::{Config, SecretStore},
     credential::Credential,
     imap::{ImapSession, MailServer},
@@ -85,8 +90,8 @@ use crate::{
 };
 
 fn main() -> ExitCode {
-    let log = match start() {
-        Ok(Some(log)) => log,
+    let (log, command) = match start() {
+        Ok(Some(started)) => started,
         Ok(None) => return ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("postal: {error}");
@@ -94,13 +99,13 @@ fn main() -> ExitCode {
         }
     };
 
-    let code = logged(&log);
+    let code = logged(&log, command);
     logging::flush();
     code
 }
 
 /// Parses the flags and opens the log; `None` once `--help` is printed.
-fn start() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+fn start() -> Result<Option<(PathBuf, Command)>, Box<dyn std::error::Error>> {
     let args = cli::parse(std::env::args_os().skip(1))?;
     let log = logging::path(&xdg::state_dir()?);
     if args.help {
@@ -110,12 +115,19 @@ fn start() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
 
     logging::init(&log, args.verbosity)?;
     panic_hook::install(log.clone());
-    Ok(Some(log))
+    Ok(Some((log, args.command)))
 }
 
-fn logged(log: &Path) -> ExitCode {
+fn logged(log: &Path, command: Command) -> ExitCode {
     tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
-    match try_main() {
+    let result = match command {
+        Command::Run => try_main(),
+        Command::LoginAppPassword => xdg::config_dir()
+            .map_err(Into::into)
+            .and_then(|dir| login::app_password(&dir)),
+    };
+
+    match result {
         Ok(()) => {
             tracing::info!("exiting");
             ExitCode::SUCCESS

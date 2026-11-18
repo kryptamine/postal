@@ -57,6 +57,10 @@ impl Home {
         self.postal_dir().join("config.toml")
     }
 
+    pub fn secret_path(&self) -> PathBuf {
+        self.postal_dir().join("secret")
+    }
+
     fn postal_dir(&self) -> PathBuf {
         self.dir.path().join("postal")
     }

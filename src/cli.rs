@@ -5,37 +5,67 @@ pub struct Args {
     pub help: bool,
     /// How many times `-v` was given.
     pub verbosity: usize,
+    pub command: Command,
+}
+
+#[derive(Clone, Copy)]
+pub enum Command {
+    /// The TUI.
+    Run,
+    LoginAppPassword,
 }
 
 #[derive(Debug)]
-pub struct UnknownArgument(OsString);
+pub enum Error {
+    Unknown(OsString),
+    /// Sign-in through the browser is not built, so the flag is required.
+    LoginWithoutAppPassword,
+}
 
-impl fmt::Display for UnknownArgument {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "unknown argument `{}`; see `postal --help`",
-            self.0.display()
-        )
+        match self {
+            Self::Unknown(arg) => write!(
+                f,
+                "unknown argument `{}`; see `postal --help`",
+                arg.display()
+            ),
+            Self::LoginWithoutAppPassword => {
+                f.write_str("sign in with `postal login --app-password`; see `postal --help`")
+            }
+        }
     }
 }
 
-impl std::error::Error for UnknownArgument {}
+impl std::error::Error for Error {}
 
-pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Args, UnknownArgument> {
+pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Args, Error> {
     let mut parsed = Args {
         help: false,
         verbosity: 0,
+        command: Command::Run,
     };
 
+    let mut login = false;
+    let mut app_password = false;
     for arg in args {
         match arg.to_str() {
             Some("-h" | "--help") => parsed.help = true,
+            Some("login") if !login => login = true,
+            Some("--app-password") if login && !app_password => app_password = true,
             Some(flag) if flag.len() > 1 && flag.strip_prefix('-').is_some_and(only_v) => {
                 parsed.verbosity += flag.len() - 1;
             }
-            _ => return Err(UnknownArgument(arg)),
+            _ => return Err(Error::Unknown(arg)),
         }
+    }
+
+    if login {
+        if !app_password && !parsed.help {
+            return Err(Error::LoginWithoutAppPassword);
+        }
+
+        parsed.command = Command::LoginAppPassword;
     }
 
     Ok(parsed)
@@ -50,6 +80,11 @@ pub fn help(log: &Path) -> String {
         "A keyboard-driven terminal mail client that reads one IMAP mailbox
 
 Usage: postal [-v | -vv]
+       postal login --app-password [-v | -vv]
+
+Commands:
+  login --app-password  sign in to Gmail with an app password;
+                        needs 2-Step Verification on the Google Account
 
 Options:
   -v          log debug events

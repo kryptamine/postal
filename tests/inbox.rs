@@ -309,5 +309,6 @@ fn a_rejected_login_exits_with_the_reason() {
     let mut t = postal(&home);
     let status = t.wait_exit().unwrap();
     assert!(!status.success());
-    assert!(t.screen().contains("Invalid credentials"), "{}", t.screen());
+    let text = t.screen().logical_text();
+    assert!(text.contains("Invalid credentials"), "{text}");
 }

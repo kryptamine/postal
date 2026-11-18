@@ -38,6 +38,13 @@ impl Error {
         }
     }
 
+    /// The server refused the user name or password, as RFC 5530's
+    /// `AUTHENTICATIONFAILED` says; async-imap leaves the code in the text.
+    pub fn bad_credentials(&self) -> bool {
+        matches!(self, Self::Imap(async_imap::error::Error::No(text))
+            if text.to_ascii_lowercase().contains("[authenticationfailed]"))
+    }
+
     /// The server's own words when it answered `NO` to this command alone,
     /// leaving the connection usable; `None` for any other error.
     pub fn refusal(&self) -> Option<&str> {

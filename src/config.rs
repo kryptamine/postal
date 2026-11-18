@@ -1,11 +1,12 @@
 use std::{
-    fmt, io,
-    net::IpAddr,
+    fmt::{self, Write},
+    io,
     path::{Path, PathBuf},
 };
 
 use serde::Deserialize;
-use toml::Spanned;
+
+use crate::partial_config::PartialConfig;
 
 /// The Account settings read from `config.toml`.
 pub struct Config {
@@ -14,36 +15,21 @@ pub struct Config {
     pub secrets: SecretStore,
 }
 
+#[derive(PartialEq, Eq)]
 pub struct Imap {
     pub host: String,
     pub port: u16,
     pub tls: bool,
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawConfig {
-    email: String,
-    auth: Auth,
-    #[serde(default)]
-    imap: RawImap,
-    #[serde(default)]
-    secrets: Secrets,
-}
-
-// Only the hand-written variants exist so far; any other value is rejected
-// with its line by serde.
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum Auth {
-    AppPassword,
-}
-
-#[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-struct Secrets {
-    #[serde(default)]
-    store: SecretStore,
+impl Imap {
+    pub fn gmail() -> Self {
+        Self {
+            host: "imap.gmail.com".to_owned(),
+            port: 993,
+            tls: true,
+        }
+    }
 }
 
 #[derive(Deserialize, Default, Clone, Copy)]
@@ -52,24 +38,6 @@ pub enum SecretStore {
     #[default]
     Keychain,
     File,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, default)]
-struct RawImap {
-    host: String,
-    port: u16,
-    tls: Spanned<bool>,
-}
-
-impl Default for RawImap {
-    fn default() -> Self {
-        Self {
-            host: "imap.gmail.com".to_owned(),
-            port: 993,
-            tls: Spanned::new(0..0, true),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -84,6 +52,10 @@ pub enum Error {
         column: usize,
         message: String,
     },
+    Missing {
+        path: PathBuf,
+        field: &'static str,
+    },
 }
 
 impl fmt::Display for Error {
@@ -96,6 +68,9 @@ impl fmt::Display for Error {
                 column,
                 message,
             } => write!(f, "{}:{line}:{column}: {message}", path.display()),
+            Self::Missing { path, field } => {
+                write!(f, "{}: missing field `{field}`", path.display())
+            }
         }
     }
 }
@@ -108,53 +83,34 @@ impl Config {
             path: path.to_owned(),
             source,
         })?;
-        let invalid = |span: std::ops::Range<usize>, message: &str| {
-            let (line, column) = line_and_column(&text, span.start);
-            Error::Invalid {
+        PartialConfig::parse(path, &text)?
+            .config()
+            .map_err(|field| Error::Missing {
                 path: path.to_owned(),
-                line,
-                column,
-                message: message.trim_end().to_owned(),
-            }
-        };
-
-        let raw: RawConfig =
-            toml::from_str(&text).map_err(|e| invalid(e.span().unwrap_or(0..0), e.message()))?;
-        match raw.auth {
-            Auth::AppPassword => {}
-        }
-
-        let tls = *raw.imap.tls.get_ref();
-        if !tls && !is_loopback(&raw.imap.host) {
-            return Err(invalid(
-                raw.imap.tls.span(),
-                "`tls = false` is allowed only for a loopback host",
-            ));
-        }
-
-        Ok(Self {
-            email: raw.email,
-            imap: Imap {
-                host: raw.imap.host,
-                port: raw.imap.port,
-                tls,
-            },
-            secrets: raw.secrets.store,
-        })
+                field,
+            })
     }
-}
 
-fn is_loopback(host: &str) -> bool {
-    host.eq_ignore_ascii_case("localhost")
-        || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
-}
+    /// The file `load` reads back as this Config; the defaults are left out.
+    pub fn to_toml(&self) -> String {
+        let mut text = format!(
+            "email = {}\nauth = \"app-password\"\n",
+            toml::Value::from(self.email.as_str())
+        );
+        if self.imap != Imap::gmail() {
+            let host = toml::Value::from(self.imap.host.as_str());
+            let Imap { port, tls, .. } = self.imap;
+            // Writing to a String cannot fail.
+            let _ = write!(
+                text,
+                "\n[imap]\nhost = {host}\nport = {port}\ntls = {tls}\n"
+            );
+        }
 
-/// Both are 1-based; the column counts characters, not bytes.
-fn line_and_column(text: &str, offset: usize) -> (usize, usize) {
-    let before = &text[..offset.min(text.len())];
-    let line_start = before.rfind('\n').map_or(0, |i| i + 1);
-    (
-        before.matches('\n').count() + 1,
-        before[line_start..].chars().count() + 1,
-    )
+        if matches!(self.secrets, SecretStore::File) {
+            text += "\n[secrets]\nstore = \"file\"\n";
+        }
+
+        text
+    }
 }
