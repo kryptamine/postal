@@ -7,8 +7,8 @@ use super::{
 };
 
 /// Readies the DOM of a Message for html2text at `width`: drops what a mail
-/// client hides and every image outside a link, gives an empty link a
-/// `[link]` label, and turns tables into blocks unless they read as data.
+/// client hides and every image outside a link, labels a link left empty by
+/// a dropped image `[link]`, and turns tables into blocks unless they read as data.
 pub fn clean(dom: &RcDom, width: usize) {
     clean_below(dom, &dom.document, false, width);
 }
@@ -37,14 +37,18 @@ fn clean_below(dom: &RcDom, node: &Handle, in_link: bool, width: usize) {
 
         let is_table = tag == "table";
         let link = tag == "a";
+        let had_image = link && dom::has_image(&child);
         let layout = is_table && tables::layout(&child);
         clean_below(dom, &child, in_link || link, width);
-        if link
-            && dom::attr(&child, "href").is_some()
-            && dom::text(&child).is_empty()
-            && !dom::has_image(&child)
-        {
-            dom::append_text(dom, &child, "[link]");
+        if link && dom::text(&child).is_empty() && !dom::has_image(&child) {
+            // A browser shows an empty link as nothing; one whose only image
+            // was dropped is still a visible link there.
+            if had_image && dom::attr(&child, "href").is_some() {
+                dom::append_text(dom, &child, "[link]");
+            } else {
+                dom.remove_from_parent(&child);
+                continue;
+            }
         }
 
         if layout {

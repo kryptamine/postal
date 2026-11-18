@@ -10,7 +10,7 @@ size: 120x40  cursor: hidden
 │                                        ││                                                                            │
 │                                        ││ [link]                                                                     │
 │                                        ││ [Spring jackets] [link]                                                    │
-│                                        ││ [link]                                                                     │
+│                                        ││                                                                            │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
@@ -52,7 +52,7 @@ styles:
 4: 0 dim; 41-42 dim; 119 dim
 5: 0 dim; 41-42 dim; 44-49 fg=4 underline; 119 dim
 6: 0 dim; 41-42 dim; 44-59 fg=4 dim underline; 61-66 fg=4 underline; 119 dim
-7: 0 dim; 41-42 dim; 44-49 fg=4 underline; 119 dim
+7: 0 dim; 41-42 dim; 119 dim
 8: 0 dim; 41-42 dim; 119 dim
 9: 0 dim; 41-42 dim; 119 dim
 10: 0 dim; 41-42 dim; 119 dim

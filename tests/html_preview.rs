@@ -75,7 +75,8 @@ fn an_mjml_newsletter_shows_only_what_a_mail_client_shows() {
 }
 
 // A linked image shows its alt; with an empty alt, or none, a link with no
-// text shows `[link]`, so image-only mail keeps every link.
+// text shows `[link]`, so image-only mail keeps every link. A link with
+// nothing inside shows nothing, as in a browser.
 #[test]
 fn image_only_mail_keeps_its_links() {
     let screen = preview(fixture("image-only"), WIDE, "[link]");
