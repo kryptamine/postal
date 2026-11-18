@@ -142,6 +142,8 @@ struct Inbox {
     outage: Option<Outage>,
     /// Bumped to drop every connection open before.
     cut: u64,
+    /// The `cut` each connection being served opened under.
+    open: Vec<u64>,
 }
 
 impl Inbox {
@@ -180,6 +182,7 @@ impl FakeImap {
             outage: None,
             refused: Vec::new(),
             cut: 0,
+            open: Vec::new(),
         }));
         let server = Self {
             port,
@@ -286,10 +289,25 @@ impl FakeImap {
     }
 
     /// Drops every open connection and turns new ones away as `outage` says.
+    /// Returns once they are all gone, so no later command reaches one.
     pub fn fail(&self, outage: Outage) {
-        let mut inbox = self.inbox.lock().unwrap();
-        inbox.outage = Some(outage);
-        inbox.cut += 1;
+        let cut = {
+            let mut inbox = self.inbox.lock().unwrap();
+            inbox.outage = Some(outage);
+            inbox.cut += 1;
+            inbox.cut
+        };
+
+        while self
+            .inbox
+            .lock()
+            .unwrap()
+            .open
+            .iter()
+            .any(|&open| open < cut)
+        {
+            thread::sleep(Duration::from_millis(5));
+        }
     }
 
     pub fn recover(&self) {
@@ -346,11 +364,47 @@ async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
     }
 }
 
+async fn wait_unless_fetch_stalled(
+    inbox: &Mutex<Inbox>,
+    items: &MacroOrMessageDataItemNames<'static>,
+) {
+    wait_unless_stalled(inbox, Stall::Fetch).await;
+    if body_part(items).is_some() {
+        wait_unless_stalled(inbox, Stall::Part).await;
+    }
+
+    if whole_body(items) {
+        wait_unless_stalled(inbox, Stall::Whole).await;
+    }
+}
+
+/// Counts a connection in `Inbox::open` while it is served.
+struct Open {
+    inbox: Arc<Mutex<Inbox>>,
+    cut: u64,
+}
+
+impl Drop for Open {
+    fn drop(&mut self) {
+        let mut inbox = self.inbox.lock().unwrap();
+        if let Some(at) = inbox.open.iter().position(|&open| open == self.cut) {
+            inbox.open.remove(at);
+        }
+    }
+}
+
 async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     wait_unless_stalled(&inbox, Stall::Greeting).await;
     let (cut, outage) = {
-        let inbox = inbox.lock().unwrap();
-        (inbox.cut, inbox.outage)
+        let mut inbox = inbox.lock().unwrap();
+        let cut = inbox.cut;
+        inbox.open.push(cut);
+        (cut, inbox.outage)
+    };
+
+    let _open = Open {
+        inbox: Arc::clone(&inbox),
+        cut,
     };
 
     let bye = outage == Some(Outage::Bye);
@@ -394,14 +448,7 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                     ..
                 } = &command.body
                 {
-                    wait_unless_stalled(&inbox, Stall::Fetch).await;
-                    if body_part(macro_or_item_names).is_some() {
-                        wait_unless_stalled(&inbox, Stall::Part).await;
-                    }
-
-                    if whole_body(macro_or_item_names) {
-                        wait_unless_stalled(&inbox, Stall::Whole).await;
-                    }
+                    wait_unless_fetch_stalled(&inbox, macro_or_item_names).await;
                 }
 
                 respond(&mut server, command, &inbox.lock().unwrap());
