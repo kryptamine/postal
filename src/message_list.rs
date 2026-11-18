@@ -3,24 +3,25 @@ use std::fmt::Write;
 use chrono::{DateTime, FixedOffset};
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Rect},
+    layout::Rect,
     style::Style,
-    widgets::{Block, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    date_label::DateLabel, inbox_view::InboxView, message::Message, stack_str::StackStr,
-    theme::Theme, truncate,
+    centred::centred, date_label::DateLabel, inbox_view::InboxView, message::Message,
+    stack_str::StackStr, theme::Theme, truncate,
 };
 
 const MARKER: &str = "●";
 /// The marker column and its gap; the subject and Snippet lines indent by the same.
 const INDENT: u16 = 2;
 const CARD_HEIGHT: u16 = 3;
-/// Below this terminal width the date is dropped.
-const MIN_WIDTH_WITH_DATE: u16 = 40;
-const MIN_WIDTH: u16 = 20;
+/// Below this list width the date is dropped. The list beside the Preview
+/// is never narrower than this.
+const MIN_WIDTH_WITH_DATE: u16 = 29;
+pub const MIN_WIDTH: u16 = 20;
 
 /// How many cards fit a list `height` rows tall, its border included.
 pub fn capacity(height: u16) -> usize {
@@ -123,7 +124,7 @@ impl Cards<'_> {
         let text_width = card.width.saturating_sub(INDENT);
         let sender_width = (card.width / 4).clamp(12, 24).min(text_width);
         let sender = Rect::new(card.x + INDENT, card.y, sender_width, 1);
-        cell(buf, sender, &message.sender, strong);
+        truncate::draw(buf, sender, &message.sender, strong);
         if let Some(now) = &self.now {
             let label = DateLabel::new(&message.received, now);
             let date = label.as_str();
@@ -137,34 +138,12 @@ impl Cards<'_> {
 
         if card.height > 1 {
             let subject = Rect::new(card.x + INDENT, card.y + 1, text_width, 1);
-            cell(buf, subject, &message.subject, strong);
+            truncate::draw(buf, subject, &message.subject, strong);
         }
 
         if card.height > 2 {
             let snippet = Rect::new(card.x + INDENT, card.y + 2, text_width, 1);
-            cell(buf, snippet, &message.snippet, muted);
+            truncate::draw(buf, snippet, &message.snippet, muted);
         }
     }
-}
-
-/// Writes `text` cut to the area's width, ending in `…` when cut.
-fn cell(buf: &mut Buffer, area: Rect, text: &str, style: Style) {
-    let width = usize::from(area.width);
-    let (shown, cut) = truncate::fit(text, width);
-    let (end, _) = buf.set_stringn(area.x, area.y, shown, width, style);
-    if cut {
-        buf.set_string(end, area.y, "…", style);
-    }
-}
-
-fn centred(text: &str, area: Rect, buf: &mut Buffer) {
-    let middle = Rect::new(
-        area.x,
-        area.y + area.height / 2,
-        area.width,
-        1.min(area.height),
-    );
-    Paragraph::new(text)
-        .alignment(Alignment::Center)
-        .render(middle, buf);
 }

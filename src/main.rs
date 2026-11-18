@@ -1,5 +1,8 @@
 mod alloc_count;
+mod body_fetch;
+mod body_key;
 mod cache;
+mod centred;
 mod cli;
 mod config;
 mod credential;
@@ -10,11 +13,19 @@ mod imap;
 mod inbox;
 mod inbox_view;
 mod keymap;
+mod layout;
 mod logging;
 mod message;
 mod message_list;
+mod mime_part;
 mod new_message;
 mod panic_hook;
+mod preview;
+mod preview_pane;
+mod preview_render;
+mod previews;
+mod raw_body;
+mod rendered_previews;
 mod run;
 mod secret;
 mod snippet;
@@ -27,6 +38,8 @@ mod text_part;
 mod theme;
 mod transfer_encoding;
 mod truncate;
+mod update;
+mod wrap;
 mod xdg;
 
 use std::{
@@ -34,8 +47,18 @@ use std::{
     process::ExitCode,
 };
 
+use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
+
 use crate::{
-    cache::Cache, config::Config, credential::Credential, imap::ImapSession, theme::Theme,
+    body_fetch::BodyRequest,
+    cache::Cache,
+    config::Config,
+    credential::Credential,
+    imap::{ImapSession, MailServer},
+    previews::Previews,
+    run::Background,
+    theme::Theme,
+    update::Update,
 };
 
 fn main() -> ExitCode {
@@ -91,25 +114,49 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let (written, updates) = futures::channel::mpsc::unbounded();
-    let written = move || {
+    let (sender, updates) = futures::channel::mpsc::unbounded();
+    let (requests, requested) = futures::channel::mpsc::unbounded();
+    let mut previews = Previews::start(requests, sender.clone());
+    let send = move |update| {
         // The send fails only once the event loop has stopped listening.
-        let _ = written.unbounded_send(());
+        let _ = sender.unbounded_send(update);
     };
 
     runtime.block_on(async {
         let mut terminal = terminal_backend::init()?;
-        let result = run::run(
-            &mut terminal,
-            &theme,
-            &cache,
-            sync(&config, &password, &cache, written),
+        let work = futures::future::try_join(
+            sync(&config, &password, &cache, || send(Update::Inbox)),
+            bodies(&config, &password, &cache, requested, |uids| {
+                send(Update::Bodies(uids));
+            }),
+        );
+        let background = Background {
+            work: work.map_ok(|((), ())| ()),
             updates,
-        )
-        .await;
+        };
+
+        let result = run::run(&mut terminal, &theme, &cache, &mut previews, background).await;
         ratatui::restore();
         Ok(result?)
     })
+}
+
+/// The second connection, kept open for the bodies the Preview asks for:
+/// opening one per fetch would add TLS and login to the first Preview.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn bodies(
+    config: &Config,
+    password: &Credential,
+    cache: &Cache,
+    requests: UnboundedReceiver<BodyRequest>,
+    stored: impl Fn(Vec<u32>),
+) -> Result<(), sync::Error> {
+    let mut session = ImapSession::open(config, password).await?;
+    session.examine().await?;
+    body_fetch::serve(&mut session, cache, requests, stored).await
 }
 
 #[expect(

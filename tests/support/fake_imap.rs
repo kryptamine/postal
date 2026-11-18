@@ -10,31 +10,34 @@ use std::{
     time::Duration,
 };
 
-use imap_codec::{CommandCodec, encode::Encoder};
 use imap_next::{
     imap_types::{
         command::{Command, CommandBody, FetchModifier},
-        core::{IString, NString, Vec1},
+        core::{Atom, IString, NString, Tag, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
         flag::{Flag, FlagFetch},
-        response::{Code, Data, Greeting, Status},
+        response::{Capability, Code, Data, Greeting, Status},
         search::SearchKey,
         sequence::{SeqOrUid, Sequence, SequenceSet},
     },
     server::{Event, Options, Server},
     stream::Stream,
 };
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 
-use super::fake_body::FakeBody;
+use super::{fake_body::FakeBody, relay::relay};
 
 pub const EMAIL: &str = "me@example.com";
 pub const PASSWORD: &str = "abcd efgh ijkl mnop";
 
 /// The UID of the first Message given to `FakeImap::start`; the rest follow.
 pub const FIRST_UID: u32 = 101;
+
+/// The `X-GM-MSGID` of the first Message delivered; the rest follow. Past
+/// `u32`, as Gmail's are.
+pub const FIRST_MSGID: u64 = 1_800_000_000_000_000_001;
 
 #[derive(Clone)]
 pub struct FakeMessage {
@@ -97,10 +100,13 @@ pub enum Stall {
     Fetch,
     /// As `Fetch`, but only for a fetch of a body part.
     Part,
+    /// As `Fetch`, but only for a fetch of a whole Message, `BODY[]`.
+    Whole,
 }
 
 struct Stored {
     uid: u32,
+    msgid: u64,
     modseq: u64,
     message: FakeMessage,
 }
@@ -108,6 +114,9 @@ struct Stored {
 struct Inbox {
     uid_validity: u32,
     uid_next: u32,
+    next_msgid: u64,
+    /// Advertises `X-GM-EXT-1` and answers `X-GM-MSGID`.
+    gmail: bool,
     /// `None` serves the Inbox without CONDSTORE.
     highest_modseq: Option<u64>,
     messages: Vec<Stored>,
@@ -142,6 +151,8 @@ impl FakeImap {
         let inbox = Arc::new(Mutex::new(Inbox {
             uid_validity: 1,
             uid_next: FIRST_UID,
+            next_msgid: FIRST_MSGID,
+            gmail: true,
             highest_modseq: Some(1),
             messages: Vec::new(),
             stall: None,
@@ -163,14 +174,31 @@ impl FakeImap {
                 .unwrap();
             runtime.block_on(async move {
                 let listener = TcpListener::from_std(std_listener).unwrap();
+                let inner = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+                let inner_address = inner.local_addr().unwrap();
                 loop {
-                    let Ok((tcp, _)) = listener.accept().await else {
+                    let Ok((client, _)) = listener.accept().await else {
                         return;
                     };
 
+                    let (to_fake, accepted) =
+                        tokio::join!(TcpStream::connect(inner_address), inner.accept());
+                    let (to_fake, (fake_side, _)) = (to_fake.unwrap(), accepted.unwrap());
+                    tokio::spawn(serve(Stream::insecure(fake_side), Arc::clone(&inbox)));
                     let commands = Arc::clone(&commands);
                     let inbox = Arc::clone(&inbox);
-                    tokio::spawn(serve(Stream::insecure(tcp), inbox, commands));
+                    let gmail = inbox.lock().unwrap().gmail;
+                    let record = move |command| commands.lock().unwrap().push(command);
+                    let msgid = move |uid| {
+                        let inbox = inbox.lock().unwrap();
+                        inbox
+                            .messages
+                            .iter()
+                            .find(|m| m.uid == uid)
+                            .map(|m| m.msgid)
+                    };
+
+                    tokio::spawn(relay(client, to_fake, record, gmail.then_some(msgid)));
                 }
             });
         });
@@ -191,10 +219,13 @@ impl FakeImap {
     pub fn deliver(&self, message: FakeMessage) -> u32 {
         let mut inbox = self.inbox.lock().unwrap();
         let uid = inbox.uid_next;
+        let msgid = inbox.next_msgid;
         let modseq = inbox.bump();
         inbox.uid_next += 1;
+        inbox.next_msgid += 1;
         inbox.messages.push(Stored {
             uid,
+            msgid,
             modseq,
             message,
         });
@@ -214,6 +245,16 @@ impl FakeImap {
         stored.modseq = modseq;
         stored.message.seen = seen;
         drop(inbox);
+    }
+
+    /// The `X-GM-MSGID` of the Message with this UID.
+    pub fn msgid(&self, uid: u32) -> u64 {
+        self.inbox.lock().unwrap().stored(uid).msgid
+    }
+
+    /// Serves later connections as a server without Gmail's extensions.
+    pub fn without_gmail(&self) {
+        self.inbox.lock().unwrap().gmail = false;
     }
 
     /// Serves the Inbox as a server without CONDSTORE: no `HIGHESTMODSEQ`.
@@ -250,7 +291,7 @@ async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
     }
 }
 
-async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>, recorded: Arc<Mutex<Vec<String>>>) {
+async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     wait_unless_stalled(&inbox, Stall::Greeting).await;
     let greeting = Greeting::ok(None, "fake IMAP ready").unwrap();
     let mut server = Server::new(Options::default(), greeting);
@@ -262,7 +303,6 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>, recorded: Arc<Mutex
 
         match event {
             Event::CommandReceived { command } => {
-                recorded.lock().unwrap().push(untagged(&command));
                 logging_out = matches!(command.body, CommandBody::Logout);
                 if let CommandBody::Fetch {
                     macro_or_item_names,
@@ -272,6 +312,10 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>, recorded: Arc<Mutex
                     wait_unless_stalled(&inbox, Stall::Fetch).await;
                     if body_part(macro_or_item_names).is_some() {
                         wait_unless_stalled(&inbox, Stall::Part).await;
+                    }
+
+                    if whole_body(macro_or_item_names) {
+                        wait_unless_stalled(&inbox, Stall::Whole).await;
                     }
                 }
 
@@ -290,12 +334,23 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>, recorded: Arc<Mutex
     }
 }
 
-fn untagged(command: &Command<'_>) -> String {
-    let line = String::from_utf8(CommandCodec::default().encode(command).dump()).unwrap();
-    let line = line.trim_end_matches("\r\n");
-    line.split_once(' ')
-        .map_or(line, |(_, rest)| rest)
-        .to_owned()
+fn login(tag: Option<Tag<'static>>, ok: bool) -> Status<'static> {
+    let status = if ok {
+        Status::ok(tag, None, "LOGIN completed")
+    } else {
+        Status::no(tag, None, "Invalid credentials")
+    };
+
+    status.unwrap()
+}
+
+fn capabilities(inbox: &Inbox) -> Data<'static> {
+    let mut capabilities = vec![Capability::Imap4Rev1];
+    if inbox.gmail {
+        capabilities.push(Capability::from(Atom::try_from("X-GM-EXT-1").unwrap()));
+    }
+
+    Data::Capability(Vec1::try_from(capabilities).unwrap())
 }
 
 fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
@@ -304,13 +359,11 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
         CommandBody::Login { username, password } => {
             let ok = username.as_ref() == EMAIL.as_bytes()
                 && password.declassify().as_ref() == PASSWORD.as_bytes();
-            let status = if ok {
-                Status::ok(tag, None, "LOGIN completed")
-            } else {
-                Status::no(tag, None, "Invalid credentials")
-            };
-
-            server.enqueue_status(status.unwrap());
+            server.enqueue_status(login(tag, ok));
+        }
+        CommandBody::Capability => {
+            server.enqueue_data(capabilities(inbox));
+            server.enqueue_status(Status::ok(tag, None, "CAPABILITY completed").unwrap());
         }
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
             examine(server, inbox);
@@ -341,6 +394,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
             let asked = Asked {
                 from_header: header_fields(&macro_or_item_names),
                 part: body_part(&macro_or_item_names),
+                whole: whole_body(&macro_or_item_names),
             };
 
             let changed_since = modifiers.iter().find_map(|m| match m {
@@ -460,6 +514,25 @@ struct PartAsked {
 struct Asked {
     from_header: Option<Section<'static>>,
     part: Option<PartAsked>,
+    /// `BODY[]`, the whole Message.
+    whole: bool,
+}
+
+fn whole_body(items: &MacroOrMessageDataItemNames<'static>) -> bool {
+    let MacroOrMessageDataItemNames::MessageDataItemNames(names) = items else {
+        return false;
+    };
+
+    names.iter().any(|name| {
+        matches!(
+            name,
+            MessageDataItemName::BodyExt {
+                section: None,
+                partial: None,
+                ..
+            }
+        )
+    })
 }
 
 fn body_part(items: &MacroOrMessageDataItemNames<'static>) -> Option<PartAsked> {
@@ -493,6 +566,20 @@ fn body_part_item(body: &FakeBody, asked: &PartAsked) -> MessageDataItem<'static
         origin: asked.partial.map(|(start, _)| start),
         // A short part goes quoted, as a server may send it.
         data: NString(Some(IString::try_from(served.to_vec()).unwrap())),
+    }
+}
+
+fn whole_body_item(message: &FakeMessage) -> MessageDataItem<'static> {
+    let headers = format!(
+        "From: {}\r\nSubject: {}\r\n",
+        message.sender_header(),
+        message.subject
+    );
+    let whole = IString::try_from(message.body.message(&headers)).unwrap();
+    MessageDataItem::BodyExt {
+        section: None,
+        origin: None,
+        data: NString(Some(whole)),
     }
 }
 
@@ -543,6 +630,10 @@ fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
     ];
     if let Some(asked) = &asked.part {
         items.push(body_part_item(&message.body, asked));
+    }
+
+    if asked.whole {
+        items.push(whole_body_item(message));
     }
 
     if let Some(section) = &asked.from_header {

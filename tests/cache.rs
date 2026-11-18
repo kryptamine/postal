@@ -14,11 +14,11 @@ use support::{
 use termlens::{Key, Screen, Terminal};
 
 const ITEMS: &str =
-    "(UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
+    "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
 fn postal(home: &Home) -> Terminal {
     Terminal::builder()
-        .size(80, 20)
+        .size(80, 32)
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
@@ -305,7 +305,7 @@ fn a_newer_schema_exits_before_the_tui_and_is_left_alone() {
     let stderr = String::from_utf8(output.stderr).unwrap();
     let dir = home.xdg_cache_home().join("postal");
     let expected = format!(
-        "Cache was written by a newer Postal (schema 99 > 2). Upgrade Postal or delete {}.",
+        "Cache was written by a newer Postal (schema 99 > 3). Upgrade Postal or delete {}.",
         dir.display()
     );
     assert!(stderr.contains(&expected), "{stderr}");

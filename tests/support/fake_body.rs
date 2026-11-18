@@ -137,6 +137,60 @@ impl FakeBody {
         }
     }
 
+    /// The Message as `BODY[]` serves it: `headers`, each ending in CRLF,
+    /// then this body in MIME.
+    pub fn message(&self, headers: &str) -> Vec<u8> {
+        let mut message = format!("{headers}MIME-Version: 1.0\r\n").into_bytes();
+        self.entity(&mut message, "1");
+        message
+    }
+
+    /// Appends this part's own headers, a blank line, and its content;
+    /// `id` keeps the boundaries of nested multiparts apart.
+    fn entity(&self, out: &mut Vec<u8>, id: &str) {
+        match self {
+            Self::Part {
+                media_type,
+                subtype,
+                charset,
+                encoding,
+                content,
+                attachment,
+            } => {
+                let charset = charset
+                    .map(|c| format!("; charset={c}"))
+                    .unwrap_or_default();
+                let mut headers = format!(
+                    "Content-Type: {media_type}/{subtype}{charset}\r\nContent-Transfer-Encoding: {encoding}\r\n"
+                );
+                if *attachment {
+                    headers.push_str("Content-Disposition: attachment\r\n");
+                }
+
+                out.extend_from_slice(headers.as_bytes());
+                out.extend_from_slice(b"\r\n");
+                out.extend_from_slice(content);
+            }
+            Self::Multipart { subtype, parts } => {
+                let boundary = format!("=_boundary_{id}");
+                out.extend_from_slice(
+                    format!(
+                        "Content-Type: multipart/{subtype};\r\n boundary=\"{boundary}\"\r\n\r\n"
+                    )
+                    .as_bytes(),
+                );
+                out.extend_from_slice(b"This is a multi-part message in MIME format.\r\n");
+                for (index, part) in (1..).zip(parts) {
+                    out.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+                    part.entity(out, &format!("{id}.{index}"));
+                    out.extend_from_slice(b"\r\n");
+                }
+
+                out.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+            }
+        }
+    }
+
     /// The octets of part `path`, as in `BODY[1.2]`.
     pub fn part(&self, path: &[NonZeroU32]) -> Option<&[u8]> {
         match (self, path) {

@@ -101,9 +101,29 @@ fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
     // Reading the whole Cache allocates: proof the count is live.
     assert!(loading.iter().any(|&n| n > 0), "{loading:?}");
 
-    let down = vec![Key::Char('j'); usize::try_from(MESSAGES).unwrap()];
+    // Fetching and rendering a Preview allocates; showing one already
+    // rendered must not. The way down fetches every body, and the way back
+    // renders those that came after the selection had moved on.
+    let rows = usize::try_from(MESSAGES).unwrap();
+    let down = vec![Key::Char('j'); rows];
+    let up = vec![Key::Char('k'); rows];
+    for (keys, title) in [(&down, format!(" {MESSAGES}/")), (&up, " 1/".to_owned())] {
+        for &key in keys {
+            t.send(key).unwrap();
+        }
+
+        t.wait_until(|s| s.contains(&title) && s.contains("also cut"))
+            .unwrap();
+        settled_frames(&home);
+    }
+
+    let warm = frames(&home);
     let back = [
         Key::Char('k'),
+        Key::Ctrl('d'),
+        Key::PageDown,
+        Key::Ctrl('u'),
+        Key::PageUp,
         Key::Char('G'),
         Key::Char('g'),
         Key::Char('x'),
@@ -119,11 +139,11 @@ fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
     }
 
     let keys = down.len() + back.len();
-    wait_for(|| frames(&home).len() >= loading.len() + keys);
+    wait_for(|| frames(&home).len() >= warm.len() + keys);
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
     let all = frames(&home);
-    let steady = &all[loading.len()..];
+    let steady = &all[warm.len()..];
     assert_eq!(steady.len(), keys, "{all:?}");
     assert!(steady.iter().all(|&n| n == 0), "{steady:?}");
 }

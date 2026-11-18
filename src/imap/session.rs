@@ -9,13 +9,18 @@ use futures::TryStreamExt;
 
 use super::{Error, connect::Transport, text_part, traced::Traced, wire_trace};
 use crate::{
-    config::Config, credential::Credential, header, message::Message, new_message::NewMessage,
-    snippet, sync_state::SyncState,
+    body_key::body_key, config::Config, credential::Credential, header, message::Message,
+    new_message::NewMessage, snippet, sync_state::SyncState,
 };
 
 /// The raw `From` header rides along, for a `From` the server cannot parse.
 const ITEMS: &str =
     "(UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
+
+/// `ITEMS` with the Gmail ID a body is cached under, for a server that lists
+/// `X-GM-EXT-1`: anywhere else the item is `BAD`.
+const GMAIL_ITEMS: &str =
+    "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
 /// The Inbox as `EXAMINE` reports it.
 pub struct Examined {
@@ -58,10 +63,17 @@ pub trait MailServer {
         uids: &[u32],
         section: &str,
     ) -> Result<Vec<(u32, Vec<u8>)>, Error>;
+
+    /// Each of `uids` whole, as `BODY[]`; a UID the server did not answer
+    /// for is left out.
+    async fn bodies(&mut self, uids: &[u32]) -> Result<Vec<(u32, Vec<u8>)>, Error>;
 }
 
 pub struct ImapSession {
     session: Session<Box<dyn Transport>>,
+    items: &'static str,
+    /// As of the last `examine`, for the body key of a server without Gmail's.
+    uid_validity: u32,
 }
 
 impl ImapSession {
@@ -78,12 +90,17 @@ impl ImapSession {
             .await
             .map_err(|e| Error::Imap(e.into()))?
             .ok_or(Error::Closed)?;
-        let session = client
+        let mut session = client
             .login(&config.email, password.expose())
             .await
             .map_err(|(e, _)| e)?;
         tracing::info!("logged in");
-        Ok(Self { session })
+        let gmail = session.capabilities().await?.has_str("X-GM-EXT-1");
+        Ok(Self {
+            session,
+            items: if gmail { GMAIL_ITEMS } else { ITEMS },
+            uid_validity: 0,
+        })
     }
 
     pub async fn logout(mut self) -> Result<(), Error> {
@@ -101,10 +118,11 @@ impl MailServer for ImapSession {
         // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
         // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
         let mailbox = self.session.examine("INBOX").await?;
+        self.uid_validity = mailbox.uid_validity.unwrap_or_default();
         Ok(Examined {
             exists: mailbox.exists,
             state: SyncState {
-                uid_validity: mailbox.uid_validity.unwrap_or_default(),
+                uid_validity: self.uid_validity,
                 uid_next: mailbox.uid_next,
                 highest_modseq: mailbox.highest_modseq,
             },
@@ -113,9 +131,10 @@ impl MailServer for ImapSession {
 
     async fn newest(&mut self, exists: u32, count: u32) -> Result<Vec<NewMessage>, Error> {
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
-        let fetches = self.session.fetch(format!("{first}:*"), ITEMS).await?;
+        let fetches = self.session.fetch(format!("{first}:*"), self.items).await?;
+        let uid_validity = self.uid_validity;
         let messages: Vec<_> = fetches
-            .try_filter_map(|f| futures::future::ok(message(&f)))
+            .try_filter_map(|f| futures::future::ok(message(&f, uid_validity)))
             .try_collect()
             .await?;
         tracing::info!("fetched the newest {} Messages", messages.len());
@@ -123,11 +142,11 @@ impl MailServer for ImapSession {
     }
 
     async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error> {
-        let fetches = self.uid_fetch(format!("{first}:*"), ITEMS).await?;
+        let fetches = self.uid_fetch(format!("{first}:*"), self.items).await?;
         // `first:*` always matches the last Message, even below `first`.
         let messages: Vec<_> = fetches
             .iter()
-            .filter_map(message)
+            .filter_map(|f| message(f, self.uid_validity))
             .filter(|m| m.row.uid >= first)
             .collect();
         tracing::info!("fetched {} new Messages", messages.len());
@@ -185,19 +204,29 @@ impl MailServer for ImapSession {
             section.split('.').filter_map(|n| n.parse().ok()).collect(),
             None,
         );
-        let set = uids
-            .iter()
-            .map(u32::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
         // PEEK, or the server would mark every Message seen.
         let items = format!("(BODY.PEEK[{section}]<0.{}>)", snippet::FETCHED);
-        let fetches = self.uid_fetch(set, &items).await?;
+        let fetches = self.uid_fetch(uid_set(uids), &items).await?;
         Ok(fetches
             .iter()
             .filter_map(|f| Some((f.uid?, f.section(&path)?.to_vec())))
             .collect())
     }
+
+    async fn bodies(&mut self, uids: &[u32]) -> Result<Vec<(u32, Vec<u8>)>, Error> {
+        let fetches = self.uid_fetch(uid_set(uids), "(UID BODY.PEEK[])").await?;
+        Ok(fetches
+            .iter()
+            .filter_map(|f| Some((f.uid?, f.body()?.to_vec())))
+            .collect())
+    }
+}
+
+fn uid_set(uids: &[u32]) -> String {
+    uids.iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn unread(fetch: &Fetch) -> bool {
@@ -205,7 +234,8 @@ fn unread(fetch: &Fetch) -> bool {
 }
 
 /// `None` when the server left out the UID.
-fn message(fetch: &Fetch) -> Option<NewMessage> {
+fn message(fetch: &Fetch, uid_validity: u32) -> Option<NewMessage> {
+    let uid = fetch.uid?;
     let envelope = fetch.envelope();
     let subject = envelope
         .and_then(|e| e.subject.as_deref())
@@ -213,7 +243,8 @@ fn message(fetch: &Fetch) -> Option<NewMessage> {
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "(no subject)".to_owned());
     let row = Message {
-        uid: fetch.uid?,
+        uid,
+        body_key: body_key(fetch.gmail_msg_id().copied(), uid_validity, uid),
         received: fetch.internal_date().unwrap_or_default(),
         unread: unread(fetch),
         sender: envelope.and_then(sender).unwrap_or_else(|| raw_from(fetch)),

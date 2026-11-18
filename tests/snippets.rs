@@ -16,7 +16,7 @@ use termlens::{Key, Screen, Terminal};
 
 fn postal(home: &Home, args: &[&str]) -> Terminal {
     Terminal::builder()
-        .size(100, 26)
+        .size(80, 45)
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
@@ -166,7 +166,7 @@ fn shows_a_snippet_for_each_kind_of_text_part() {
     assert!(screen.cell(row, 3).unwrap().style().dim, "{screen}");
     quit(t);
 
-    // Reading a part must leave the Message Unread, and only its start is needed.
+    // Reading must leave the Message Unread; a Snippet needs only a part's start.
     let commands = server.commands();
     let parts: Vec<_> = commands.iter().filter(|c| c.contains("BODY")).collect();
     assert!(
@@ -179,7 +179,8 @@ fn shows_a_snippet_for_each_kind_of_text_part() {
         let peeks = command.matches("BODY.PEEK[").count();
         let partial = command.matches("]<0.2048>").count();
         let header = command.matches("BODY.PEEK[HEADER.FIELDS").count();
-        assert_eq!(peeks, partial + header, "{command}");
+        let whole = command.matches("BODY.PEEK[]").count();
+        assert_eq!(peeks, partial + header + whole, "{command}");
     }
 }
 

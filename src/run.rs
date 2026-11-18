@@ -2,17 +2,21 @@ use std::io;
 
 use crossterm::event::{Event, EventStream};
 use futures::{Stream, StreamExt};
-use ratatui::Terminal;
+use ratatui::{Terminal, layout::Rect};
 
 use crate::{
     alloc_count,
     cache::{self, Cache},
     inbox_view::InboxView,
     keymap::{self, Action},
+    layout,
     message_list::{self, MessageList},
+    preview_pane::{self, PreviewPane},
+    previews::Previews,
     sync,
     terminal_backend::TerminalBackend,
     theme::Theme,
+    update::Update,
 };
 
 #[derive(Debug)]
@@ -34,9 +38,15 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// The one event loop: input, and `updates` once per Cache write the sync
-/// makes, redrawn after each. The first frame reads only the rows it shows
-/// from the Cache, before any network; the rest follows right after it.
+/// The network work behind the screen, and what it reports as it goes.
+pub struct Background<W, U> {
+    pub work: W,
+    pub updates: U,
+}
+
+/// The one event loop: input, and each `Update` from the background work,
+/// redrawn after each. The first frame reads only the rows it shows from the
+/// Cache, before any network; the rest follows right after it.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -45,26 +55,36 @@ pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
     theme: &Theme,
     cache: &Cache,
-    sync: impl Future<Output = Result<(), sync::Error>>,
-    mut updates: impl Stream<Item = ()> + Unpin,
+    previews: &mut Previews,
+    background: Background<
+        impl Future<Output = Result<(), sync::Error>>,
+        impl Stream<Item = Update> + Unpin,
+    >,
 ) -> Result<(), Error> {
     let mut events = EventStream::new();
     let mut view = InboxView::loading();
     let height = terminal.size().map_err(Error::Terminal)?.height;
     show(&mut view, cache, Some(message_list::capacity(height)))?;
-    let mut sync = std::pin::pin!(sync);
+    let Background { work, mut updates } = background;
+    let mut work = std::pin::pin!(work);
     let mut whole = false;
-    let mut syncing = true;
+    let mut working = true;
     let mut listening = true;
     // A frame's allocations count from what triggered it, the input or the
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
     loop {
-        terminal
-            .draw(|frame| {
-                frame.render_stateful_widget(MessageList { theme }, frame.area(), &mut view);
-            })
-            .map_err(Error::Terminal)?;
+        let size = terminal.size().map_err(Error::Terminal)?;
+        let text = layout::split(Rect::new(0, 0, size.width, size.height))
+            .preview
+            .map(preview_pane::text_area);
+        if whole && let Some(text) = text {
+            previews
+                .want(cache, &view, text.width)
+                .map_err(Error::Cache)?;
+        }
+
+        draw(terminal, theme, &mut view, previews)?;
         alloc_count::report(frame_start);
         if !whole {
             whole = true;
@@ -74,32 +94,83 @@ pub async fn run(
         }
 
         tokio::select! {
-            result = &mut sync, if syncing => {
+            result = &mut work, if working => {
                 frame_start = alloc_count::count();
-                syncing = false;
+                working = false;
                 result.map_err(Error::Sync)?;
             }
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
                 match update {
-                    Some(()) => show(&mut view, cache, None)?,
+                    Some(update) => apply(update, &mut view, cache, previews)?,
                     None => listening = false,
                 }
             }
             event = events.next() => {
                 frame_start = alloc_count::count();
-                match event {
-                    None => return Ok(()),
-                    Some(Err(source)) => return Err(Error::Terminal(source)),
-                    Some(Ok(Event::Key(key))) => match keymap::action(key) {
-                        Some(Action::Quit) => return Ok(()),
-                        Some(Action::Move(movement)) => view.apply(movement),
-                        None => {}
-                    },
-                    Some(Ok(_)) => {}
+                let half_page = text.map_or(1, |t| usize::from(t.height / 2).max(1));
+                if !handle(event, &mut view, half_page)? {
+                    return Ok(());
                 }
             }
         }
+    }
+}
+
+fn draw(
+    terminal: &mut Terminal<TerminalBackend>,
+    theme: &Theme,
+    view: &mut InboxView,
+    previews: &Previews,
+) -> Result<(), Error> {
+    terminal
+        .draw(|frame| {
+            let panes = layout::split(frame.area());
+            frame.render_stateful_widget(MessageList { theme }, panes.list, view);
+            if let Some(pane) = panes.preview {
+                let preview = previews.get(view, preview_pane::text_area(pane).width);
+                frame.render_stateful_widget(PreviewPane { theme, preview }, pane, view);
+            }
+        })
+        .map_err(Error::Terminal)?;
+    Ok(())
+}
+
+fn apply(
+    update: Update,
+    view: &mut InboxView,
+    cache: &Cache,
+    previews: &mut Previews,
+) -> Result<(), Error> {
+    match update {
+        Update::Inbox => show(view, cache, None)?,
+        Update::Bodies(uids) => previews.stored(&uids),
+        Update::Rendered(key, preview) => previews.rendered(key, preview),
+    }
+
+    Ok(())
+}
+
+/// Acts on one input event; `false` once Postal should quit.
+fn handle(
+    event: Option<io::Result<Event>>,
+    view: &mut InboxView,
+    half_page: usize,
+) -> Result<bool, Error> {
+    match event {
+        None => Ok(false),
+        Some(Err(source)) => Err(Error::Terminal(source)),
+        Some(Ok(Event::Key(key))) => {
+            match keymap::action(key) {
+                Some(Action::Quit) => return Ok(false),
+                Some(Action::Move(movement)) => view.apply(movement),
+                Some(Action::Scroll(scroll)) => view.scroll(scroll, half_page),
+                None => {}
+            }
+
+            Ok(true)
+        }
+        Some(Ok(_)) => Ok(true),
     }
 }
 

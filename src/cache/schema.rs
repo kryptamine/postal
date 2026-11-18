@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 2;
+pub const VERSION: i64 = 3;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -19,6 +19,8 @@ CREATE TABLE mailbox (
 );
 CREATE TABLE message (
     uid INTEGER PRIMARY KEY,
+    -- The `body` row of this Message, once fetched: see docs/adr/0005-body-cache-key.md.
+    body_key INTEGER NOT NULL,
     received INTEGER NOT NULL,
     received_offset INTEGER NOT NULL,
     unread INTEGER NOT NULL,
@@ -26,13 +28,22 @@ CREATE TABLE message (
     subject TEXT NOT NULL,
     -- NULL until the second fetch phase writes it.
     snippet TEXT,
-    -- Where the Snippet is cut from; NULL with no text part.
+    -- The part the Snippet and the Preview show; NULL with no text part.
     text_section TEXT,
     text_encoding TEXT,
     text_charset TEXT,
     text_html INTEGER
 );
 CREATE INDEX message_by_arrival ON message (received DESC, uid DESC);
+-- Not dropped with the rows on a UIDVALIDITY change; a byte-bounded LRU.
+CREATE TABLE body (
+    key INTEGER PRIMARY KEY,
+    raw BLOB NOT NULL,
+    size INTEGER NOT NULL,
+    -- Bumped on every write and read; the lowest goes first.
+    used INTEGER NOT NULL
+);
+CREATE INDEX body_by_use ON body (used);
 ";
 
 /// Why an existing Cache file cannot be used as it is.

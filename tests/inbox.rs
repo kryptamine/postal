@@ -10,11 +10,10 @@ use support::{
 };
 use termlens::{Key, Screen, Terminal};
 
-const FETCH: &str =
-    "FETCH 1:* (UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
+const FETCH: &str = "FETCH 1:* (UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
 fn postal(home: &Home) -> Terminal {
-    postal_with(home, (80, 12), &[])
+    postal_with(home, (80, 25), &[])
 }
 
 fn postal_with(home: &Home, (cols, rows): (u16, u16), env: &[(&str, &str)]) -> Terminal {
@@ -137,7 +136,7 @@ fn reads_the_inbox_without_changing_it() {
     quit(t);
 
     let commands = server.commands();
-    for expected in ["EXAMINE INBOX", "UID SEARCH UNSEEN", FETCH] {
+    for expected in ["EXAMINE \"INBOX\"", "UID SEARCH UNSEEN", FETCH] {
         assert!(commands.contains(&expected.to_owned()), "{commands:#?}");
     }
 
@@ -209,8 +208,8 @@ fn counts_unread_over_the_whole_inbox() {
 fn draws_cards_at_each_width() {
     let server = FakeImap::start(varied_messages());
     let home = Home::for_server(&server);
-    for (name, cols) in [("width_100", 100), ("width_39", 39)] {
-        let mut t = postal_with(&home, (cols, 14), &[]);
+    for (name, cols) in [("width_100", 100), ("width_28", 28)] {
+        let mut t = postal_with(&home, (cols, 32), &[]);
         let screen = t.snapshot_after(loaded).unwrap();
         insta::assert_snapshot!(name, screen);
         quit(t);
@@ -277,7 +276,7 @@ fn colours_unless_no_color_is_set() {
     let mut t = postal(&home);
     let coloured = t.snapshot_after(loaded).unwrap();
     quit(t);
-    let mut t = postal_with(&home, (80, 12), &[("NO_COLOR", "1")]);
+    let mut t = postal_with(&home, (80, 25), &[("NO_COLOR", "1")]);
     let plain = t.snapshot_after(loaded).unwrap();
     quit(t);
 

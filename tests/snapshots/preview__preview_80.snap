@@ -1,0 +1,35 @@
+---
+source: tests/preview.rs
+expression: screen
+---
+size: 80x30  cursor: hidden
+┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
+│  Ada Lovelace                                                      2024-11-17│
+│  Weekly notes                                                                │
+│  Hi all, Here are this week's notes. The analytical engine prototype now run…│
+│  Newsletter                                                        2024-11-16│
+│  Html only                                                                   │
+│  Only markup here                                                            │
+│  Charles                                                           2024-11-15│
+│  Only attachments                                                            │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌ 1/3 ─────────────────────────────────────────────────────────────────────────┐
+│ From    Ada Lovelace                                                         │
+│ Subject Weekly notes                                                         │
+│ Date    Sun, 17 Nov 2024 09:00                                               │
+│                                                                              │
+│ Hi all,                                                                      │
+│                                                                              │
+│ Here are this week's notes. The analytical engine prototype now runs the     │
+│ full Bernoulli program without a single jam, which is a first.               │
+│                                                                              │
+│ > > Can it also print the table it computes, or only show it on the dials? A │
+│ > > printed copy would save a great deal of copying by hand.                 │
+│ > Yes: the printer arrived on Tuesday.                                       │
+│                                                                              │
+│ Thanks,                                                                      │
+│ Ada                                                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
