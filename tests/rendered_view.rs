@@ -198,3 +198,30 @@ fn a_mail_too_wide_for_the_pane_falls_back_to_text() {
     let screen = preview(fixture("statement"), &run, "Coffee");
     insta::assert_snapshot!(screen.text());
 }
+
+/// The screen row and column where `text` starts, in the Preview pane.
+fn at(screen: &Screen, text: &str) -> (u16, u16) {
+    (4..39)
+        .find_map(|row| {
+            let line: Vec<char> = screen.row_text(row).chars().collect();
+            let needle: Vec<char> = text.chars().collect();
+            let col = (44..line.len()).find(|&c| line[c..].starts_with(&needle))?;
+            Some((row, u16::try_from(col).unwrap()))
+        })
+        .unwrap_or_else(|| panic!("no {text:?} in\n{}", screen.text()))
+}
+
+// litehtml split an inline around a block inside it even through an
+// inline-block, which cut a link-wrapped button's box in two empty halves.
+#[test]
+fn a_link_around_an_inline_block_button_keeps_it_whole() {
+    let body = html(
+        "<p>x</p><a href=\"https://shop.example\"><span style=\"border:2px solid #888;\
+         display:inline-block\"><span style=\"display:block\">Shop now</span></span></a>",
+    );
+    let screen = preview(body, &DEFAULT, "Shop now");
+    let (row, _) = at(&screen, "Shop now");
+    assert!(screen.row_text(row - 1).contains('┌'), "{}", screen.text());
+    assert!(screen.row_text(row).contains('│'), "{}", screen.text());
+    assert!(screen.row_text(row + 1).contains('└'), "{}", screen.text());
+}

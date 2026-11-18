@@ -29,10 +29,11 @@ a flat buffer of cells:
 - Images are never fetched: remote ones are a tracking risk and add little to
   reading. An image keeps the box its size gives, and shows its `alt`.
 
-One change to litehtml makes `document::rebuild_render_tree` public: the
-boxes are built from the computed styles inside `createFromString`, before
-the snap, and must be built again after it. `vendor/litehtml/VENDORED.md`
-records it.
+Two changes to litehtml, both recorded in `vendor/litehtml/VENDORED.md`.
+`document::rebuild_render_tree` is public: the boxes are built from the
+computed styles inside `createFromString`, before the snap, and must be built
+again after it. And a block inside an inline-block no longer splits the
+inline around it, a litehtml bug that cut link-wrapped buttons in two.
 
 ### A process of its own
 

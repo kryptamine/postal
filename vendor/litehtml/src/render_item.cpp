@@ -358,7 +358,9 @@ litehtml::render_item::split_inlines()
             }
             break;
         }
-        if(!child->children().empty())
+        // Postal: only an inline is split around a block; an inline-block
+        // holds its blocks inside its own box.
+        if(child->src_el()->css().get_display() == display_inline && !child->children().empty())
         {
             auto child_split = child->split_inlines();
             if(std::get<0>(child_split))
