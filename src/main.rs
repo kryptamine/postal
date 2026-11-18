@@ -38,6 +38,7 @@ mod matched;
 mod message;
 mod message_list;
 mod mode;
+mod modified_utf7;
 mod new_message;
 mod oauth;
 mod older_pages;

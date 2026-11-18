@@ -121,7 +121,7 @@ impl FolderPicker {
 /// A special-use Folder answers to its label as well as to its path.
 fn haystack(folder: &Folder) -> Utf32String {
     match folder.role {
-        Some(_) => Utf32String::from(format!("{}\n{}", folder.label(), folder.name)),
-        None => Utf32String::from(&*folder.name),
+        Some(_) => Utf32String::from(format!("{}\n{}", folder.label(), folder.path)),
+        None => Utf32String::from(&*folder.path),
     }
 }

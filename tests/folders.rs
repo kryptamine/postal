@@ -403,3 +403,34 @@ fn offline_the_picker_and_a_cached_folder_come_from_the_cache() {
     assert!(!screen.contains("Thrown away"), "{screen}");
     quit(t);
 }
+
+#[test]
+fn a_folder_named_in_modified_utf7_shows_decoded_and_opens_by_its_server_name() {
+    let server = gmail();
+    server.add_folder(
+        "&BBAEQARFBDgEMg-",
+        &[],
+        vec![message("Ivan", "Old letter", "2023-05-01T09:00:00Z")],
+    );
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home);
+
+    t.send(Key::Char('f')).unwrap();
+    t.send_str("архив").unwrap();
+    t.wait_until(|s| picked(s).first().is_some_and(|f| f == "Архив"))
+        .unwrap();
+    t.send(Key::Enter).unwrap();
+    let screen = t
+        .snapshot_after(|s| title(s).contains("Архив") && s.contains("Old letter"))
+        .unwrap();
+    assert!(!screen.contains("&BBAE"), "{screen}");
+    assert!(
+        server
+            .commands()
+            .iter()
+            .any(|c| c == "EXAMINE \"&BBAEQARFBDgEMg-\""),
+        "{:?}",
+        server.commands()
+    );
+    quit(t);
+}

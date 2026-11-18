@@ -50,6 +50,8 @@ impl Role {
 pub struct Folder {
     /// As the server names it, in every command; nested labels in full.
     pub name: Arc<str>,
+    /// `name` decoded from modified UTF-7, for people to read.
+    pub path: Arc<str>,
     pub role: Option<Role>,
     /// `None` until a resync or a `STATUS` counts it.
     pub unread: Option<usize>,
@@ -63,8 +65,10 @@ impl Folder {
     /// The Inbox is known by its name alone (RFC 3501).
     pub fn new(name: &str, role: Option<Role>) -> Self {
         let inbox = name.eq_ignore_ascii_case(INBOX);
+        let name: Arc<str> = if inbox { INBOX.into() } else { name.into() };
         Self {
-            name: if inbox { INBOX.into() } else { name.into() },
+            path: crate::modified_utf7::decode(&name).into(),
+            name,
             role: if inbox { Some(Role::Inbox) } else { role },
             unread: None,
         }
@@ -73,7 +77,7 @@ impl Folder {
     pub fn label(&self) -> &str {
         match self.role {
             Some(role) => role.label(),
-            None => &self.name,
+            None => &self.path,
         }
     }
 
@@ -81,7 +85,7 @@ impl Folder {
     pub fn order(&self, other: &Self) -> Ordering {
         let rank = |folder: &Self| (folder.role.is_none(), folder.role);
         rank(self).cmp(&rank(other)).then_with(|| {
-            let lower = |folder: &Self| folder.name.to_lowercase();
+            let lower = |folder: &Self| folder.path.to_lowercase();
             lower(self).cmp(&lower(other))
         })
     }
