@@ -191,3 +191,43 @@ fn idle_removes_an_expunged_backfilled_row() {
     assert_eq!(cached(&home, "SELECT count(*) FROM message"), 699);
     quit(t);
 }
+
+fn snippet_fetches(server: &FakeImap) -> usize {
+    let commands = server.commands();
+    commands
+        .iter()
+        .filter(|c| c.contains("BODY.PEEK[1]<"))
+        .count()
+}
+
+// The selection's body goes between a page's batches of Snippets, so its
+// Preview never waits on the whole page.
+#[test]
+fn a_preview_does_not_wait_for_a_pages_snippets() {
+    let server = FakeImap::start(messages(700));
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    place(&mut t, "1/500");
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+
+    let before = snippet_fetches(&server);
+    server.stall(Stall::Part);
+    t.send(Key::Char('G')).unwrap();
+    place(&mut t, "500/700");
+    wait_for(|| snippet_fetches(&server) > before);
+    t.send(Key::Char('G')).unwrap();
+    place(&mut t, "700/700");
+    server.release();
+    t.wait_until(|s| s.contains("Body of message 1\u{20}"))
+        .unwrap();
+    wait_for(|| cached(&home, "SELECT count(*) FROM message WHERE snippet IS NULL") == 0);
+    quit(t);
+
+    let commands = server.commands();
+    let body = format!("UID FETCH {FIRST_UID} ");
+    let body = commands
+        .iter()
+        .position(|c| c.starts_with(&body) && c.contains("BODY.PEEK[]"));
+    let last_snippet = commands.iter().rposition(|c| c.contains("BODY.PEEK[1]<"));
+    assert!(body.is_some() && body < last_snippet, "{commands:#?}");
+}

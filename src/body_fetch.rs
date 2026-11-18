@@ -1,6 +1,6 @@
 use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
 
-use crate::{backfill, cache::Cache, imap::MailServer, sync::Error, update::Update};
+use crate::{backfill, cache::Cache, imap::MailServer, snippets, sync::Error, update::Update};
 
 /// Work for the fetch connection.
 pub enum Request {
@@ -25,9 +25,9 @@ pub enum Fetched {
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each
-/// went: bodies first, then a page of older Messages if asked for. A
-/// refused batch of bodies leaves the connection alone; any other failure
-/// ends the serving.
+/// went: bodies first, then a page of older Messages if asked for, then one
+/// batch of a page's Snippets. A refused batch of bodies leaves the
+/// connection alone; any other failure ends the serving.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -40,8 +40,10 @@ pub async fn serve(
 ) -> Result<(), Error> {
     let mut waiting = Vec::new();
     let mut older = false;
+    // Rows below this UID still wait for their Snippets.
+    let mut snippets_below = None;
     loop {
-        if waiting.is_empty() && !older {
+        if waiting.is_empty() && !older && snippets_below.is_none() {
             let Some(first) = requests.next().await else {
                 return Ok(());
             };
@@ -76,7 +78,15 @@ pub async fn serve(
 
         if std::mem::take(&mut older) {
             let report = |backfill| send(Update::Backfill(backfill));
-            backfill::page(server, cache, report, || send(Update::Inbox)).await?;
+            let below = backfill::page(server, cache, report, || send(Update::Inbox)).await?;
+            // The higher bound keeps an earlier page's uncut rows in.
+            snippets_below = snippets_below.max(below);
+        } else if let Some(below) = snippets_below {
+            // One batch at a time, so a body asked for meanwhile goes next.
+            let written = || send(Update::Inbox);
+            if !snippets::batch(server, cache, Some(below), written).await? {
+                snippets_below = None;
+            }
         }
     }
 }
