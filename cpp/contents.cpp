@@ -32,7 +32,10 @@ void join(Holds& h, const Holds& child)
 {
     h.over     = h.over || child.over;
     h.labelled = h.labelled || child.labelled;
-    h.text     = h.over ? std::string() : loosely_squeezed(h.text + child.text);
+    h.anchored = h.anchored || child.anchored;
+    h.headed   = h.headed || child.headed;
+    h.length += child.length;
+    h.text = h.over ? std::string() : loosely_squeezed(h.text + child.text);
     if(child.blocks || (h.block && child.block && h.block != child.block)) h.blocks = true;
     else if(!h.block) h.block = child.block;
     cap(h);
@@ -58,7 +61,8 @@ Holds Contents::gather(const element::ptr& el)
     {
         std::string raw;
         el->get_text(raw);
-        h.text = loosely_squeezed(raw);
+        h.text   = loosely_squeezed(raw);
+        h.length = cells(h.words().c_str());
         if(!h.words().empty()) h.block = block_of(el);
         cap(h);
         return holds[el.get()] = h;
@@ -71,6 +75,8 @@ Holds Contents::gather(const element::ptr& el)
         children.emplace_back(child, gather(child));
         join(h, children.back().second);
     }
+    h.anchored = h.anchored || (tag_is(el, "a") && el->get_attr("href"));
+    h.headed   = h.headed || (tag_is(el, "h1") && h.length > 0);
 
     // The first child to show all the words carries them down.
     std::string words = h.words();

@@ -686,3 +686,31 @@ fn a_bare_picture_link_is_named_by_its_address() {
     );
     assert!(screen.contains("[bank.example]"), "{}", screen.text());
 }
+
+// A cover band whose logo and pictures went stood as one line of title in a
+// frame eight rows high; one in a colour the mail's cards share is a card.
+#[test]
+fn a_cover_band_left_with_its_title_is_a_title() {
+    let band = |colour: &str, title: &str| {
+        format!(
+            "<div style=\"background:{colour};color:#fff;padding:24px\">\
+             <img src=\"https://cdn.example/logo.png\" width=\"150\" height=\"25\" alt=\"\">\
+             <h1 style=\"margin:22px 0 0\">{title}</h1></div>"
+        )
+    };
+    let body = html(&format!(
+        "{}<p>Hi</p>{}<p>Between</p>{}<p>End</p>",
+        band("#141418", "Last call"),
+        band("#1e50f5", "Card one"),
+        band("#1e50f5", "Card two"),
+    ));
+    let screen = preview(body, &DEFAULT, "End");
+    let rows = pane(&screen);
+    let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
+    assert!(
+        !rows[..row("Hi")].iter().any(|r| r.contains('┌')),
+        "{}",
+        rows.join("\n")
+    );
+    assert_eq!(frames(&screen), 2, "{}", rows.join("\n"));
+}

@@ -14,10 +14,10 @@ Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 buffer of cells: `cell_grid.cpp` draws, `snap.cpp` snaps the styles before
 layout, `image_labels.cpp` decides each image and `link_names.cpp` names a
 bare picture link, `picture_boxes.cpp` fits or drops the boxes round
-pictures, `buttons.cpp` lays buttons out one row high with `collapse.cpp`,
-`contents.cpp` gathers what each element shows for those passes in one
-walk, and `colour.cpp`, `text.cpp` and `dom.cpp` hold the colour,
-cell-width and element helpers.
+pictures, `buttons.cpp` and `titles.cpp` collapse buttons and cover bands
+with `collapse.cpp`, `contents.cpp` gathers what each element shows for
+those passes in one walk, and `colour.cpp`, `text.cpp` and `dom.cpp` hold
+the colour, cell-width and element helpers.
 
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
   is one row high. A 600 px mail is 75 columns. `font-size` never changes the
@@ -93,6 +93,12 @@ cell-width and element helpers.
   padding, height and borders: padding was rows of fill, and a slab three
   rows high read as no button. A page-light button gives way to the
   terminal, and the frame round its rows (below) is its shape.
+- A filled box holding an `h1`, at most two lines of a 600 px mail (150
+  cells), no link and no shown picture, in a colour no other box outside it
+  fills, is a cover band its logo and pictures left: it loses its fill,
+  borders, vertical padding, height and the vertical margins inside it, and
+  its title stands as bold lines. A colour other boxes share is a section
+  built of many boxes, or one of the mail's cards.
 - An inline-block holding blocks is a column of a fluid layout and aligns
   to the top: on the baseline the columns' bottoms line up, which only
   images of one height kept level.
@@ -176,7 +182,8 @@ links, picture boxes, buttons, fluid columns and light cards then changed
 192. Dropping the boxes and columns a gone picture leaves empty then
 changed 247 of them, left 63 not fitting, and lost no word but the `Status`
 header of CI reports. Naming picture links by their address changed 93,
-and left 10 `[link]` labels, on links with no http address.
+and left 10 `[link]` labels, on links with no http address. Cover bands
+changed 7.
 
 Deciding a section by the size of the merged region, not of each box, was
 tried: it framed chart bars and footer gutters and improved nothing.

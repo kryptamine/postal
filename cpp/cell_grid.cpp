@@ -11,6 +11,7 @@
 #include "picture_boxes.h"
 #include "snap.h"
 #include "text.h"
+#include "titles.h"
 
 #include <litehtml.h>
 
@@ -419,6 +420,7 @@ extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
             Contents contents(doc->root());
             fit_picture_boxes(grid->container.images.pictures(), contents);
             flatten_buttons(doc->root(), contents);
+            unframe_titles(doc->root(), contents);
         }
         snap_tree(doc->root());
         // The boxes were built from the styles before the snap.

@@ -26,6 +26,11 @@ struct Holds
     bool filled = false;
     // An image inside it shows as a label.
     bool labelled = false;
+    // Cells of all its words, however many.
+    int length = 0;
+    // A link, an `h1` with words, inside it.
+    bool anchored = false;
+    bool headed   = false;
 
     std::string words() const;
     // Any text at all, a space even: whitespace between cells sizes a box.
