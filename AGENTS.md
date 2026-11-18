@@ -87,6 +87,8 @@ checks this.
   contents alike. It needs `fff-mcp` on `PATH`.
 - Non-trivial work starts from an issue, with scope settled there. Small fixes
   go straight to a commit: a typo, an obvious bug, a dependency bump.
+- The commit that finishes an issue closes it: `Closes #N` in the body, and
+  the push to `main` closes the issue. A commit for part of one says `Refs #N`.
 - Tests land with the behaviour they cover.
 - While working, run the single test file you touch. Run the full suite once,
   as the last step before the commit: after the code review and its fixes.
