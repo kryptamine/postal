@@ -56,20 +56,11 @@ const NOTES: &str = "Hi all,\r\n\r\nHere are this week's notes. The analytical e
     Thanks,\r\n\
     Ada\r\n\r\n\r\n";
 
-/// The newest has its plain part second, after an HTML twin, in part 1.2.
+/// The newest has a plain part and an attachment.
 fn kinds() -> Vec<FakeMessage> {
     let notes = FakeBody::multipart(
         "mixed",
-        vec![
-            FakeBody::multipart(
-                "alternative",
-                vec![
-                    FakeBody::text("html", "7bit", "<p>The HTML twin</p>"),
-                    FakeBody::plain(NOTES),
-                ],
-            ),
-            FakeBody::file("application", "pdf"),
-        ],
+        vec![FakeBody::plain(NOTES), FakeBody::file("application", "pdf")],
     );
     vec![
         message(
@@ -109,13 +100,14 @@ fn shows_the_preview_beside_or_below_the_list() {
 }
 
 #[test]
-fn a_message_without_a_plain_part_says_so() {
+fn an_html_only_message_shows_its_html_and_one_without_text_says_so() {
     let server = FakeImap::start(kinds());
     let home = Home::for_server(&server);
     let mut t = postal(&home, 120);
     t.wait_until(notes_shown).unwrap();
     t.send(Key::Char('j')).unwrap();
-    t.wait_until(|s| s.contains("only an HTML part")).unwrap();
+    t.wait_until(|s| s.row_text(5).contains("Only markup here"))
+        .unwrap();
     t.send(Key::Char('j')).unwrap();
     t.wait_until(|s| s.contains("no text")).unwrap();
     quit(t);

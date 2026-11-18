@@ -1,0 +1,31 @@
+---
+source: tests/html_preview.rs
+expression: screen.with_styles()
+---
+size: 120x12  cursor: hidden
+┌ Inbox  0 unread ───────────────────────┐┌ 1/1 ───────────────────────────────────────────────────────────────────────┐
+│  Sender                      2024-11-18││ From    Sender                                                             │
+│  Subject                               ││ Subject Subject                                                            │
+│  Red bold italic link code             ││ Date    Mon, 18 Nov 2024 09:00                                             │
+│                                        ││                                                                            │
+│                                        ││ Red bold italic link code                                                  │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+└────────────────────────────────────────┘└────────────────────────────────────────────────────────────────────────────┘
+
+styles:
+0: 0 dim; 1-17 bold; 18-42 dim; 43-47 bold; 48-119 dim
+1: 0 dim; 1-40 reverse; 41-42 dim; 44-51 dim; 119 dim
+2: 0 dim; 1-40 reverse; 41-42 dim; 44-51 dim; 52-58 bold; 119 dim
+3: 0 dim; 1-40 reverse; 41-42 dim; 44-51 dim; 119 dim
+4: 0 dim; 41-42 dim; 119 dim
+5: 0 dim; 41-42 dim; 48-51 bold; 53-58 italic; 60-63 underline; 119 dim
+6: 0 dim; 41-42 dim; 119 dim
+7: 0 dim; 41-42 dim; 119 dim
+8: 0 dim; 41-42 dim; 119 dim
+9: 0 dim; 41-42 dim; 119 dim
+10: 0 dim; 41-42 dim; 119 dim
+11: 0-119 dim

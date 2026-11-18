@@ -1,0 +1,107 @@
+---
+source: tests/html_preview.rs
+expression: screen.with_styles()
+---
+size: 60x50  cursor: hidden
+┌ Inbox  0 unread ─────────────────────────────────────────┐
+│  Sender                                        2024-11-18│
+│  Subject                                                 │
+│  Thanks for your order #4821. Item Qty Price Enamel camp…│
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+┌ 1/1 ─────────────────────────────────────────────────────┐
+│ From    Sender                                           │
+│ Subject Subject                                          │
+│ Date    Mon, 18 Nov 2024 09:00                           │
+│                                                          │
+│ Thanks for your order #4821.                             │
+│                                                          │
+│ Item: Enamel camping mug, forest green, 350 ml, set of   │
+│ two                                                      │
+│ Qty: 2                                                   │
+│ Price: €24.00                                            │
+│                                                          │
+│ Item: Folding lantern                                    │
+│ Qty: 1                                                   │
+│ Price: €39.50                                            │
+│                                                          │
+│ Item: Total                                              │
+│ Price: €63.50                                            │
+│                                                          │
+│ Track it on your orders page.                            │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+
+styles:
+0: 0 dim; 1-17 bold; 18-59 dim
+1: 0 dim; 1-58 fg=4 reverse; 59 dim
+2: 0 dim; 1-58 fg=4 reverse; 59 dim
+3: 0 dim; 1-58 fg=4 reverse; 59 dim
+4: 0 dim; 59 dim
+5: 0 dim; 59 dim
+6: 0 dim; 59 dim
+7: 0 dim; 59 dim
+8: 0 dim; 59 dim
+9: 0 dim; 59 dim
+10: 0 dim; 59 dim
+11: 0 dim; 59 dim
+12: 0 dim; 59 dim
+13: 0 dim; 59 dim
+14: 0 dim; 59 dim
+15: 0 dim; 59 dim
+16: 0 dim; 59 dim
+17: 0 dim; 59 dim
+18: 0 dim; 59 dim
+19: 0 dim; 59 dim
+20: 0 dim; 59 dim
+21: 0-59 dim
+22: 0 dim; 1-5 bold; 6-59 dim
+23: 0 dim; 2-9 dim; 59 dim
+24: 0 dim; 2-9 dim; 10-16 bold; 59 dim
+25: 0 dim; 2-9 dim; 59 dim
+26: 0 dim; 59 dim
+27: 0 dim; 59 dim
+28: 0 dim; 59 dim
+29: 0 dim; 2-7 bold; 59 dim
+30: 0 dim; 59 dim
+31: 0 dim; 2-6 bold; 59 dim
+32: 0 dim; 2-8 bold; 59 dim
+33: 0 dim; 59 dim
+34: 0 dim; 2-7 bold; 59 dim
+35: 0 dim; 2-6 bold; 59 dim
+36: 0 dim; 2-8 bold; 59 dim
+37: 0 dim; 59 dim
+38: 0 dim; 2-12 bold; 59 dim
+39: 0 dim; 2-14 bold; 59 dim
+40: 0 dim; 59 dim
+41: 0 dim; 14-29 fg=4 underline; 59 dim
+42: 0 dim; 59 dim
+43: 0 dim; 59 dim
+44: 0 dim; 59 dim
+45: 0 dim; 59 dim
+46: 0 dim; 59 dim
+47: 0 dim; 59 dim
+48: 0 dim; 59 dim
+49: 0-59 dim

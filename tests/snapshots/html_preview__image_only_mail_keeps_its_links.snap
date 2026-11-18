@@ -1,0 +1,87 @@
+---
+source: tests/html_preview.rs
+expression: screen.with_styles()
+---
+size: 120x40  cursor: hidden
+┌ Inbox  0 unread ───────────────────────┐┌ 1/1 ───────────────────────────────────────────────────────────────────────┐
+│  Sender                      2024-11-18││ From    Sender                                                             │
+│  Subject                               ││ Subject Subject                                                            │
+│                                        ││ Date    Mon, 18 Nov 2024 09:00                                             │
+│                                        ││                                                                            │
+│                                        ││ [link]                                                                     │
+│                                        ││ [Spring jackets] [link]                                                    │
+│                                        ││ [link]                                                                     │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+└────────────────────────────────────────┘└────────────────────────────────────────────────────────────────────────────┘
+
+styles:
+0: 0 dim; 1-17 bold; 18-42 dim; 43-47 bold; 48-119 dim
+1: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 dim; 119 dim
+2: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 dim; 52-58 bold; 119 dim
+3: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 dim; 119 dim
+4: 0 dim; 41-42 dim; 119 dim
+5: 0 dim; 41-42 dim; 44-49 fg=4 underline; 119 dim
+6: 0 dim; 41-42 dim; 44-59 fg=4 dim underline; 61-66 fg=4 underline; 119 dim
+7: 0 dim; 41-42 dim; 44-49 fg=4 underline; 119 dim
+8: 0 dim; 41-42 dim; 119 dim
+9: 0 dim; 41-42 dim; 119 dim
+10: 0 dim; 41-42 dim; 119 dim
+11: 0 dim; 41-42 dim; 119 dim
+12: 0 dim; 41-42 dim; 119 dim
+13: 0 dim; 41-42 dim; 119 dim
+14: 0 dim; 41-42 dim; 119 dim
+15: 0 dim; 41-42 dim; 119 dim
+16: 0 dim; 41-42 dim; 119 dim
+17: 0 dim; 41-42 dim; 119 dim
+18: 0 dim; 41-42 dim; 119 dim
+19: 0 dim; 41-42 dim; 119 dim
+20: 0 dim; 41-42 dim; 119 dim
+21: 0 dim; 41-42 dim; 119 dim
+22: 0 dim; 41-42 dim; 119 dim
+23: 0 dim; 41-42 dim; 119 dim
+24: 0 dim; 41-42 dim; 119 dim
+25: 0 dim; 41-42 dim; 119 dim
+26: 0 dim; 41-42 dim; 119 dim
+27: 0 dim; 41-42 dim; 119 dim
+28: 0 dim; 41-42 dim; 119 dim
+29: 0 dim; 41-42 dim; 119 dim
+30: 0 dim; 41-42 dim; 119 dim
+31: 0 dim; 41-42 dim; 119 dim
+32: 0 dim; 41-42 dim; 119 dim
+33: 0 dim; 41-42 dim; 119 dim
+34: 0 dim; 41-42 dim; 119 dim
+35: 0 dim; 41-42 dim; 119 dim
+36: 0 dim; 41-42 dim; 119 dim
+37: 0 dim; 41-42 dim; 119 dim
+38: 0 dim; 41-42 dim; 119 dim
+39: 0-119 dim

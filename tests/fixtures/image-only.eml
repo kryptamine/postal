@@ -1,0 +1,16 @@
+From: Northwind Style <hello@northwind.example>
+To: sam@example.com
+Subject: Spring is here
+Date: Thu, 14 Nov 2024 07:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+<html><body>
+<table role="presentation" width="600" align="center">
+<tr><td><a href="https://northwind.example/spring"><img src="https://cdn.northwind.example/hero.jpg" width="600"></a></td></tr>
+<tr><td><a href="https://northwind.example/jackets"><img src="https://cdn.northwind.example/jackets.jpg" alt="Spring jackets" width="300"></a> <a href="https://northwind.example/boots"><img src="https://cdn.northwind.example/boots.jpg" alt="" width="300"></a></td></tr>
+<tr><td><img src="https://cdn.northwind.example/footer.png" alt="Northwind Style, 1 Harbour Road"></td></tr>
+<tr><td><a href="https://northwind.example/unsubscribe"></a></td></tr>
+</table>
+</body></html>

@@ -8,8 +8,8 @@ use ratatui::{
 };
 
 use crate::{
-    centred::centred, inbox_view::InboxView, preview::Preview, stack_str::StackStr, theme::Theme,
-    truncate,
+    centred::centred, inbox_view::InboxView, preview::Preview, stack_str::StackStr,
+    styled_line::StyledLine, theme::Theme, truncate,
 };
 
 /// The header labels, padded so the values line up.
@@ -72,7 +72,7 @@ impl StatefulWidget for PreviewPane<'_> {
             if let Some(&(value, style)) = header.get(index) {
                 self.header(buf, row, LABELS[index], (value, style));
             } else if let Some(line) = preview.body.get(index.wrapping_sub(HEADER_ROWS)) {
-                buf.set_stringn(row.x, y, line, usize::from(row.width), Style::new());
+                self.line(buf, row, line);
             }
         }
     }
@@ -89,5 +89,19 @@ impl PreviewPane<'_> {
         };
 
         truncate::draw(buf, value_area, value, style);
+    }
+
+    fn line(&self, buf: &mut Buffer, row: Rect, line: &StyledLine) {
+        let mut x = row.x;
+        for (text, marks) in line.segments() {
+            let room = usize::from(row.right().saturating_sub(x));
+            if room == 0 {
+                return;
+            }
+
+            x = buf
+                .set_stringn(x, row.y, text, room, self.theme.marked(marks))
+                .0;
+        }
     }
 }

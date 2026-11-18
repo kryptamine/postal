@@ -5,7 +5,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::{Changes, Error, schema};
 use crate::{
-    inbox::Inbox, message::Message, raw_body::RawBody, sync_state::SyncState, text_part::TextPart,
+    inbox::Inbox, message::Message, sync_state::SyncState, text_part::TextPart,
     transfer_encoding::TransferEncoding,
 };
 
@@ -110,20 +110,13 @@ impl Cache {
 
     /// The cached body of the Message with this UID, marked as just used;
     /// `None` until it is fetched.
-    pub fn body(&self, uid: u32) -> Result<Option<RawBody>, Error> {
+    pub fn body(&self, uid: u32) -> Result<Option<Vec<u8>>, Error> {
         let mut statement = self.connection.prepare_cached(
-            "SELECT body.key, body.raw, text_section, text_encoding, text_charset, text_html
+            "SELECT body.key, body.raw
              FROM message JOIN body ON body.key = message.body_key WHERE uid = ?1",
         )?;
         let found = statement
-            .query_row([uid], |row| {
-                let body = RawBody {
-                    raw: row.get(1)?,
-                    part: text_part(row, 2)?,
-                };
-
-                Ok((row.get::<_, i64>(0)?, body))
-            })
+            .query_row([uid], |row| Ok((row.get::<_, i64>(0)?, row.get(1)?)))
             .optional()?;
         let Some((key, body)) = found else {
             return Ok(None);

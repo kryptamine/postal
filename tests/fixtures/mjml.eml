@@ -1,0 +1,82 @@
+From: Acme Cloud <news@acme.example>
+To: sam@example.com
+Subject: What changed in Acme Cloud this week
+Date: Mon, 11 Nov 2024 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="mjml-boundary"
+
+--mjml-boundary
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+PLAIN TWIN of the weekly digest.
+
+--mjml-boundary
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!doctype html>
+<html xmlns=3D"http://www.w3.org/1999/xhtml">
+<head>
+<title>Acme weekly</title>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DUTF-8">
+<style type=3D"text/css">
+  #outlook a { padding: 0; }
+  .mj-outlook-only { display: none; }
+  @media only screen and (min-width:480px) {
+    .mj-column-per-100 { width: 100% !important; max-width: 100%; }
+  }
+</style>
+</head>
+<body style=3D"word-spacing:normal;background-color:#f4f4f4;">
+<div style=3D"display:none;font-size:1px;color:#ffffff;line-height:1px;max-h=
+eight:0px;max-width:0px;opacity:0;overflow:hidden;mso-hide:all;">Your weekl=
+y digest is here &#8199;&#65279;&#847; &#8199;&#65279;&#847;</div>
+<div style=3D"background-color:#f4f4f4;">
+<div class=3D"mj-outlook-only">Open this in Outlook</div>
+<table align=3D"center" border=3D"0" cellpadding=3D"0" cellspacing=3D"0" r=
+ole=3D"presentation" style=3D"width:100%;">
+<tbody><tr><td style=3D"direction:ltr;font-size:0px;padding:20px 0;text-ali=
+gn:center;">
+<div class=3D"mj-column-per-100" style=3D"font-size:0px;text-align:left;dir=
+ection:ltr;display:inline-block;vertical-align:top;width:100%;">
+<table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" role=3D"presentatio=
+n" width=3D"100%">
+<tbody>
+<tr><td align=3D"center" style=3D"font-size:0px;padding:10px 25px;">
+<img alt=3D"Acme" src=3D"https://cdn.acme.example/logo.png" width=3D"120" s=
+tyle=3D"border:0;display:block;">
+</td></tr>
+<tr><td align=3D"left" style=3D"font-size:0px;padding:10px 25px;">
+<div style=3D"font-family:Helvetica,Arial;font-size:16px;line-height:24px;c=
+olor:#333333;"><b>Hello Sam,</b> here is what changed this week in <i>Acme =
+Cloud</i>. Run <code>acme update</code> to get it.</div>
+</td></tr>
+<tr><td align=3D"center" style=3D"font-size:0px;padding:10px 25px;">
+<a href=3D"https://acme.example/sale" style=3D"color:#ff0000;"><img alt=3D"=
+Shop the sale" src=3D"https://cdn.acme.example/sale.png" width=3D"300"></a>
+</td></tr>
+<tr><td align=3D"left" style=3D"font-size:0px;padding:10px 25px;">
+<div style=3D"font-size:14px;color:#777777;">Read <a href=3D"https://acme.e=
+xample/notes" style=3D"color:#ff6600;">the release notes</a> before you upg=
+rade.</div>
+</td></tr>
+<tr><td align=3D"center" style=3D"font-size:0px;">
+<a href=3D"https://acme.example/banner"><img alt=3D"" src=3D"https://cdn.ac=
+me.example/banner.png" width=3D"600"></a>
+</td></tr>
+<tr><td style=3D"font-size:0px;padding:0;">
+<div style=3D"font-size:0;line-height:0;">Spacer text no one sees</div>
+</td></tr>
+</tbody>
+</table>
+</div>
+</td></tr></tbody>
+</table>
+<img src=3D"https://track.acme.example/open.gif" width=3D"1" height=3D"1" a=
+lt=3D"" style=3D"display:block;">
+</div>
+</body>
+</html>
+
+--mjml-boundary--

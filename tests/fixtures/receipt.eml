@@ -1,0 +1,22 @@
+From: Trailhead Outfitters <orders@trailhead.example>
+To: sam@example.com
+Subject: Your order #4821
+Date: Tue, 12 Nov 2024 18:20:00 +0000
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<html><body>
+<table role="presentation" width="100%"><tr><td>
+<p>Thanks for your order #4821.</p>
+<table cellpadding="4">
+<thead><tr><th></th><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
+<tbody>
+<tr><td><img src="https://cdn.trailhead.example/mug.png" alt="mug" width="32"></td><td>Enamel camping mug, forest green, 350 ml, set of two</td><td>2</td><td>€24.00</td></tr>
+<tr><td><img src="https://cdn.trailhead.example/lantern.png" alt="lantern" width="32"></td><td>Folding lantern</td><td>1</td><td>€39.50</td></tr>
+<tr><td></td><td><b>Total</b></td><td></td><td><b>€63.50</b></td></tr>
+</tbody>
+</table>
+<p>Track it on <a href="https://trailhead.example/orders/4821">your orders page</a>.</p>
+</td></tr></table>
+</body></html>

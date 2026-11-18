@@ -9,6 +9,7 @@ use imap_next::imap_types::{
     },
     core::{IString, NString, Vec1},
 };
+use mail_parser::{ContentType, Message, MessageParser, MimeHeaders, PartType};
 
 #[derive(Clone)]
 pub enum FakeBody {
@@ -78,6 +79,41 @@ impl FakeBody {
 
     pub const fn multipart(subtype: &'static str, parts: Vec<Self>) -> Self {
         Self::Multipart { subtype, parts }
+    }
+
+    /// The body of an `.eml` file, part by part, with each part's content
+    /// kept in its transfer encoding.
+    pub fn eml(raw: &[u8]) -> Self {
+        let message = MessageParser::default().parse(raw).unwrap();
+        Self::from_part(&message, 0)
+    }
+
+    fn from_part(message: &Message<'_>, id: u32) -> Self {
+        let leak = |s: &str| -> &'static str { s.to_ascii_lowercase().leak() };
+        let part = &message.parts[usize::try_from(id).unwrap()];
+        let content_type = part.content_type();
+        let media_type = content_type.map_or("text", |t| leak(t.ctype()));
+        let subtype = content_type.and_then(|t| t.subtype()).map_or("plain", leak);
+        if let PartType::Multipart(children) = &part.body {
+            let parts = children
+                .iter()
+                .map(|&child| Self::from_part(message, child))
+                .collect();
+            return Self::Multipart { subtype, parts };
+        }
+
+        let raw = message.raw_message();
+        let content = &raw[part.raw_body_offset() as usize..part.raw_end_offset() as usize];
+        Self::Part {
+            media_type,
+            subtype,
+            charset: content_type.and_then(|t| t.attribute("charset")).map(leak),
+            encoding: part.content_transfer_encoding().map_or("7bit", leak),
+            content: content.to_vec(),
+            attachment: part
+                .content_disposition()
+                .is_some_and(ContentType::is_attachment),
+        }
     }
 
     pub fn structure(&self) -> BodyStructure<'static> {
