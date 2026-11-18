@@ -18,6 +18,7 @@ html5ever = "0.40.1"
 keyring = "4.2.0"
 libc = "0.2.191"
 mail-parser = { version = "0.11", features = ["full_encoding"] }
+nucleo-matcher = "0.3.1"
 quoted_printable = "0.5.2"
 ratatui = "0.30"
 rfc2047-decoder = "1.1.2"
