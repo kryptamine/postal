@@ -48,8 +48,19 @@ pub async fn serve(
         while let Some(request) = waiting.pop() {
             let selected = Vec::from_iter(request.selected);
             for uids in [selected, request.neighbours] {
-                if !uids.is_empty() {
-                    fetched(fetch(server, cache, uids).await?);
+                if uids.is_empty() {
+                    continue;
+                }
+
+                // A `NO` names no UID: ask again one by one, so a single
+                // body the server refuses does not take its batch with it.
+                match fetch(server, cache, uids).await? {
+                    Fetched::Refused { uids, .. } if uids.len() > 1 => {
+                        for uid in uids {
+                            fetched(fetch(server, cache, vec![uid]).await?);
+                        }
+                    }
+                    done => fetched(done),
                 }
             }
         }

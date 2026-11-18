@@ -353,3 +353,25 @@ fn a_refused_body_says_why_and_keeps_the_connection() {
         "{log}"
     );
 }
+
+// One refused body among the neighbours costs only that one: the others
+// asked for in the same command still come.
+#[test]
+fn a_refused_neighbour_leaves_the_rest_of_its_batch_loadable() {
+    let server = FakeImap::start(six());
+    server.refuse_body(FIRST_UID + 2);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| previewed(s, 6)).unwrap();
+    wait_for(|| bodies(&home) == 3);
+
+    t.send(Key::Char('G')).unwrap();
+    t.wait_until(|s| previewed(s, 1)).unwrap();
+    t.send(Key::Char('k')).unwrap();
+    t.wait_until(|s| s.contains(" 5/6 ") && previewed(s, 2))
+        .unwrap();
+    t.send(Key::Char('k')).unwrap();
+    t.wait_until(|s| s.contains(" 4/6 ") && s.contains("Couldn't load: Some messages"))
+        .unwrap();
+    quit(t);
+}
