@@ -4,14 +4,14 @@ use chrono::{DateTime, FixedOffset};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Style,
+    style::{Modifier, Style},
     widgets::{Block, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
     centred::centred, date_label::DateLabel, inbox_view::InboxView, layout::PADDING,
-    message::Message, stack_str::StackStr, theme::Theme, truncate,
+    matched::Matched, message::Message, stack_str::StackStr, theme::Theme, truncate,
 };
 
 const MARKER: &str = "●";
@@ -69,6 +69,11 @@ impl StatefulWidget for MessageList<'_> {
             return centred("Inbox is empty", inner, buf);
         }
 
+        let rows = view.rows();
+        if rows == 0 {
+            return centred("no matches", inner, buf);
+        }
+
         let fitting = capacity(area.height);
         if view.selected < view.offset {
             view.offset = view.selected;
@@ -81,10 +86,19 @@ impl StatefulWidget for MessageList<'_> {
             now: (area.width >= MIN_WIDTH_WITH_DATE).then(|| view.now()),
         };
 
-        let visible = messages.iter().enumerate().skip(view.offset).take(fitting);
-        for (y, (index, message)) in (inner.y..).step_by(CARD_HEIGHT.into()).zip(visible) {
+        let visible = (view.offset..rows).take(fitting);
+        for (y, row) in (inner.y..).step_by(CARD_HEIGHT.into()).zip(visible) {
+            let index = view.search.as_ref().map_or(Some(row), |s| s.row(row));
+            let Some(message) = index.and_then(|i| messages.get(i)) else {
+                continue;
+            };
+
+            let matched = view.search.as_mut().zip(index).map(|(s, i)| s.matched(i));
             let card = Rect::new(inner.x, y, inner.width, CARD_HEIGHT).intersection(inner);
-            cards.draw(message, index == view.selected, card, buf);
+            cards.draw(message, row == view.selected, card, buf);
+            if let Some(matched) = &matched {
+                cards.highlight((message, matched), row == view.selected, card, buf);
+            }
         }
     }
 }
@@ -114,20 +128,13 @@ impl Cards<'_> {
 
         // The selection fills the whole card; only its text is padded.
         buf.set_style(card, base);
-        let text = Rect {
-            x: card.x + PADDING,
-            width: card.width.saturating_sub(2 * PADDING),
-            ..card
-        };
-
+        let text = text_area(card);
         if message.unread {
             let style = strong.patch(tone(self.theme.marker));
             buf.set_string(text.x, text.y, MARKER, style);
         }
 
-        let text_width = text.width.saturating_sub(INDENT);
-        let sender_width = (text.width / 4).clamp(12, 24).min(text_width);
-        let sender = Rect::new(text.x + INDENT, text.y, sender_width, 1);
+        let [sender, subject, snippet] = fields(card);
         let style = strong.patch(tone(self.theme.sender));
         truncate::draw(buf, sender, &message.sender, style);
         if let Some(now) = &self.now {
@@ -141,14 +148,59 @@ impl Cards<'_> {
             buf.set_string(date_x, text.y, date, tone(self.theme.date));
         }
 
-        if text.height > 1 {
-            let subject = Rect::new(text.x + INDENT, text.y + 1, text_width, 1);
+        if !subject.is_empty() {
             truncate::draw(buf, subject, &message.subject, strong);
         }
 
-        if text.height > 2 {
-            let snippet = Rect::new(text.x + INDENT, text.y + 2, text_width, 1);
+        if !snippet.is_empty() {
             truncate::draw(buf, snippet, &message.snippet, tone(self.theme.muted));
         }
     }
+
+    /// Restyles the characters a Query matched on a drawn card.
+    fn highlight(
+        &self,
+        (message, matched): (&Message, &Matched<'_>),
+        selected: bool,
+        card: Rect,
+        buf: &mut Buffer,
+    ) {
+        let style = if selected {
+            self.theme.selected.add_modifier(Modifier::UNDERLINED)
+        } else {
+            self.theme.matched
+        };
+
+        let texts = [&*message.sender, &*message.subject, &*message.snippet];
+        let starts = matched.starts(texts);
+        for ((text, start), area) in texts.into_iter().zip(starts).zip(fields(card)) {
+            if !area.is_empty() {
+                matched.draw(buf, area, (text, start), style);
+            }
+        }
+    }
+}
+
+/// A card's text, padded inside the selection's fill.
+const fn text_area(card: Rect) -> Rect {
+    Rect {
+        x: card.x + PADDING,
+        width: card.width.saturating_sub(2 * PADDING),
+        ..card
+    }
+}
+
+/// Where a card's sender, subject and Snippet go; a row past the card is
+/// empty.
+fn fields(card: Rect) -> [Rect; 3] {
+    let text = text_area(card);
+    let text_width = text.width.saturating_sub(INDENT);
+    let sender_width = (text.width / 4).clamp(12, 24).min(text_width);
+    let x = text.x + INDENT;
+    [
+        Rect::new(x, text.y, sender_width, 1),
+        Rect::new(x, text.y + 1, text_width, 1),
+        Rect::new(x, text.y + 2, text_width, 1),
+    ]
+    .map(|field| field.intersection(card))
 }

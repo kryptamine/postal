@@ -101,7 +101,13 @@ fn hint_keys_are_bold_and_descriptions_dim() {
 fn the_help_popup_lists_the_keymap_by_group() {
     let server = FakeImap::start(two_messages());
     let home = Home::for_server(&server);
-    for (name, size) in [("popup_80", (80, 24)), ("popup_44", (44, 18))] {
+    // The tall one has room for every group; the others cut the last.
+    let sizes = [
+        ("popup_80", (80, 24)),
+        ("popup_44", (44, 18)),
+        ("popup_tall", (80, 32)),
+    ];
+    for (name, size) in sizes {
         let mut t = postal(&home, size);
         t.wait_until(loaded).unwrap();
         t.send(Key::Char('?')).unwrap();

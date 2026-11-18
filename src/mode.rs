@@ -6,4 +6,6 @@ pub enum Mode {
     List,
     /// The selected Message's Preview fills the screen.
     Reading,
+    /// The Message List, while the Query is typed in the hint line.
+    Query,
 }

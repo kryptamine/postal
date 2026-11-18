@@ -51,7 +51,8 @@ impl StatefulWidget for PreviewPane<'_> {
         Block::bordered()
             .border_style(self.theme.border)
             .render(area, buf);
-        let Some(count) = view.messages.as_ref().map(Vec::len).filter(|&n| n > 0) else {
+        // No rows, as when a Search matches none, leave the pane empty.
+        let Some(count) = Some(view.rows()).filter(|&n| n > 0) else {
             return;
         };
 

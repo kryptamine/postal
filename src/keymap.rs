@@ -17,6 +17,18 @@ pub enum Action {
     /// The other View of HTML mail: rendered or text.
     SwitchView,
     Help,
+    /// Types the Query in the hint line: a new Search, or the one under way.
+    Search,
+    Type(char),
+    /// The Query's last character deleted.
+    Erase,
+    /// The narrowed list, with the Query kept.
+    KeepQuery,
+    /// The full list again: on the Message selected before the Search when
+    /// `restore`, else on the one selected now.
+    EndSearch {
+        restore: bool,
+    },
     /// The login flow again, while signed out.
     SignIn,
     Suspend,
@@ -74,7 +86,7 @@ const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 17] = [
+const BINDINGS: [Binding; 21] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -258,6 +270,45 @@ const BINDINGS: [Binding; 17] = [
         description: "suspend to the shell",
         hint: None,
     },
+    Binding {
+        group: "Search",
+        modes: LIST,
+        signed_out: false,
+        keys: "/",
+        aliases: "",
+        description: "search, or edit the Query",
+        hint: Some(Hint {
+            keys: "/",
+            description: "search",
+        }),
+    },
+    Binding {
+        group: "Search",
+        modes: LIST,
+        signed_out: false,
+        keys: "^j / ^k",
+        aliases: "↓ / ↑",
+        description: "move, while typing the Query",
+        hint: None,
+    },
+    Binding {
+        group: "Search",
+        modes: LIST,
+        signed_out: false,
+        keys: "Enter",
+        aliases: "",
+        description: "keep the Query",
+        hint: None,
+    },
+    Binding {
+        group: "Search",
+        modes: LIST,
+        signed_out: false,
+        keys: "Esc",
+        aliases: "",
+        description: "end the Search",
+        hint: None,
+    },
 ];
 
 /// The bindings listed in `mode` now, in `BINDINGS` order.
@@ -283,16 +334,24 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
     }
 
     if key.modifiers.contains(KeyModifiers::CONTROL) {
-        return match key.code {
-            KeyCode::Char('c') => Some(Action::Quit),
-            KeyCode::Char('d') => Some(scroll(Direction::Down, By::HalfPage)),
-            KeyCode::Char('u') => Some(scroll(Direction::Up, By::HalfPage)),
-            KeyCode::Char('z') => Some(Action::Suspend),
+        // `^j` arrives as `\n`, which crossterm reads as `^j`, not Enter.
+        return match (mode, key.code) {
+            (_, KeyCode::Char('c')) => Some(Action::Quit),
+            (_, KeyCode::Char('d')) => Some(scroll(Direction::Down, By::HalfPage)),
+            (_, KeyCode::Char('u')) => Some(scroll(Direction::Up, By::HalfPage)),
+            (_, KeyCode::Char('z')) => Some(Action::Suspend),
+            (Mode::Query, KeyCode::Char('j')) => Some(Action::Move(Move::Down)),
+            (Mode::Query, KeyCode::Char('k')) => Some(Action::Move(Move::Up)),
             _ => None,
         };
     }
 
     match (mode, key.code) {
+        (Mode::Query, KeyCode::Enter) => Some(Action::KeepQuery),
+        (Mode::Query, KeyCode::Esc) => Some(Action::EndSearch { restore: true }),
+        (Mode::Query, KeyCode::Backspace) => Some(Action::Erase),
+        // Every character is the Query's, so these arms come first.
+        (Mode::Query, KeyCode::Char(c)) => Some(Action::Type(c)),
         (_, KeyCode::PageDown) => Some(scroll(Direction::Down, By::HalfPage)),
         (_, KeyCode::PageUp) => Some(scroll(Direction::Up, By::HalfPage)),
         (_, KeyCode::Char('o')) => Some(Action::Links),
@@ -300,12 +359,18 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (_, KeyCode::Char('|')) => Some(Action::Page),
         (_, KeyCode::Char('?')) => Some(Action::Help),
         (_, KeyCode::Char('L')) => Some(Action::SignIn),
-        (Mode::List, KeyCode::Char('j') | KeyCode::Down) => Some(Action::Move(Move::Down)),
-        (Mode::List, KeyCode::Char('k') | KeyCode::Up) => Some(Action::Move(Move::Up)),
+        (Mode::List | Mode::Query, KeyCode::Char('j') | KeyCode::Down) => {
+            Some(Action::Move(Move::Down))
+        }
+        (Mode::List | Mode::Query, KeyCode::Char('k') | KeyCode::Up) => {
+            Some(Action::Move(Move::Up))
+        }
         (Mode::List, KeyCode::Char('g') | KeyCode::Home) => Some(Action::Move(Move::First)),
         (Mode::List, KeyCode::Char('G') | KeyCode::End) => Some(Action::Move(Move::Last)),
         (Mode::List, KeyCode::Enter | KeyCode::Char('l')) => Some(Action::Read),
         (Mode::List, KeyCode::Char('q')) => Some(Action::Quit),
+        (Mode::List, KeyCode::Char('/')) => Some(Action::Search),
+        (Mode::List, KeyCode::Esc) => Some(Action::EndSearch { restore: false }),
         (Mode::Reading, KeyCode::Char('j') | KeyCode::Down) => {
             Some(scroll(Direction::Down, By::Line))
         }

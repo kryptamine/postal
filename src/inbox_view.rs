@@ -4,6 +4,7 @@ use crate::{
     inbox::Inbox,
     keymap::{By, Direction, Move, Scroll},
     message::Message,
+    search::Search,
     view::View,
 };
 
@@ -12,6 +13,8 @@ pub struct InboxView {
     /// `None` until the Cache or the server has rows to show. Their dates
     /// are local, each at the offset in force when it was received.
     pub messages: Option<Vec<Message>>,
+    /// Narrows the rows shown; `selected` and `offset` index those.
+    pub search: Option<Search>,
     /// The server's count over the whole Inbox.
     pub unread: usize,
     pub selected: usize,
@@ -31,6 +34,7 @@ impl InboxView {
     pub fn loading() -> Self {
         Self {
             messages: None,
+            search: None,
             unread: 0,
             selected: 0,
             offset: 0,
@@ -41,18 +45,22 @@ impl InboxView {
     }
 
     /// Shows rows already ordered newest first. The selection stays on the
-    /// same Message, or on the same index when that Message is gone.
+    /// same Message, or on the same row when that Message is gone.
     pub fn show(&mut self, mut inbox: Inbox) {
         let selected = self.selected_uid();
-        let last = inbox.messages.len().saturating_sub(1);
-        self.selected = selected
-            .and_then(|uid| inbox.messages.iter().position(|m| m.uid == uid))
-            .unwrap_or_else(|| self.selected.min(last));
         for message in &mut inbox.messages {
             message.received = message.received.with_timezone(&Local).fixed_offset();
         }
 
+        if let Some(search) = &mut self.search {
+            search.reload(&inbox.messages);
+        }
+
         self.messages = Some(inbox.messages);
+        let last = self.rows().saturating_sub(1);
+        self.selected = selected
+            .and_then(|uid| self.position(uid))
+            .unwrap_or_else(|| self.selected.min(last));
         if self.selected_uid() != selected {
             self.preview_scroll = 0;
         }
@@ -61,15 +69,55 @@ impl InboxView {
         self.zone = Local::now().offset().fix();
     }
 
+    /// Starts a Search, or resumes the one under way; false before any
+    /// rows. Either way, Esc while typing comes back to the selection now.
+    pub fn start_search(&mut self) -> bool {
+        let before = self.selected_uid();
+        let Some(messages) = self.messages.as_deref() else {
+            return false;
+        };
+
+        self.search
+            .get_or_insert_with(|| Search::new(messages))
+            .before = before;
+        true
+    }
+
+    /// Edits the Query and selects the best match.
+    pub fn edit_query(&mut self, edit: impl FnOnce(&mut Search)) {
+        let selected = self.selected_uid();
+        let Some(search) = &mut self.search else {
+            return;
+        };
+
+        edit(search);
+        self.selected = 0;
+        if self.selected_uid() != selected {
+            self.preview_scroll = 0;
+        }
+    }
+
+    /// Back to the full list, on the Message selected before the last `/`
+    /// when `restore`, else on the one selected now.
+    pub fn end_search(&mut self, restore: bool) {
+        let selected = self.selected_uid();
+        let Some(search) = self.search.take() else {
+            return;
+        };
+
+        let keep = if restore { search.before } else { selected };
+        self.selected = keep.and_then(|uid| self.position(uid)).unwrap_or(0);
+        if self.selected_uid() != selected {
+            self.preview_scroll = 0;
+        }
+    }
+
     pub fn now(&self) -> DateTime<FixedOffset> {
         Utc::now().with_timezone(&self.zone)
     }
 
     pub fn apply(&mut self, movement: Move) {
-        let last = self
-            .messages
-            .as_ref()
-            .map_or(0, |m| m.len().saturating_sub(1));
+        let last = self.rows().saturating_sub(1);
         let selected = match movement {
             Move::Down => (self.selected + 1).min(last),
             Move::Up => self.selected.saturating_sub(1),
@@ -98,9 +146,33 @@ impl InboxView {
     }
 
     pub fn selected_uid(&self) -> Option<u32> {
-        self.messages
+        self.selected_message().map(|m| m.uid)
+    }
+
+    pub fn selected_message(&self) -> Option<&Message> {
+        self.row(self.selected)
+    }
+
+    /// How many rows are shown: all, or those a Search narrowed them to.
+    pub fn rows(&self) -> usize {
+        let all = self.messages.as_ref().map_or(0, Vec::len);
+        self.search.as_ref().map_or(all, Search::rows)
+    }
+
+    pub fn row(&self, row: usize) -> Option<&Message> {
+        let index = match &self.search {
+            Some(search) => search.row(row)?,
+            None => row,
+        };
+
+        self.messages.as_ref()?.get(index)
+    }
+
+    /// The row that shows the Message `uid`.
+    fn position(&self, uid: u32) -> Option<usize> {
+        let index = self.messages.as_ref()?.iter().position(|m| m.uid == uid)?;
+        self.search
             .as_ref()
-            .and_then(|m| m.get(self.selected))
-            .map(|m| m.uid)
+            .map_or(Some(index), |search| search.position(index))
     }
 }

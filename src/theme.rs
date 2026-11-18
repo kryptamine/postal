@@ -23,6 +23,8 @@ pub struct Theme {
     pub label: Style,
     pub warning: Style,
     pub error: Style,
+    /// The characters a Query matched on a card; underlined under `NO_COLOR`.
+    pub matched: Style,
     strong: Style,
     emphasis: Style,
     link: Style,
@@ -64,6 +66,11 @@ impl Theme {
             label: fg(Color::Yellow).add_modifier(Modifier::REVERSED | Modifier::BOLD),
             warning: fg(Color::Yellow),
             error: fg(Color::Red),
+            matched: if coloured {
+                bold.fg(Color::Green)
+            } else {
+                bold.add_modifier(Modifier::UNDERLINED)
+            },
             strong: bold,
             emphasis: Style::new().add_modifier(Modifier::ITALIC),
             link: fg(Color::Blue).add_modifier(Modifier::UNDERLINED),

@@ -26,4 +26,4 @@ size: 80x24  cursor: hidden
 │           │ ^z                    suspend to the shell           │           │
 │           │                                                      │           │
 └───────────└──────────────────────────────────────────────────────┘───────────┘
- j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help
+ j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

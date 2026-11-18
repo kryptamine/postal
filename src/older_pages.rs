@@ -28,13 +28,15 @@ impl OlderPages {
     }
 
     /// Asks for a page when the selection is near the end and one may come.
-    /// Does not allocate unless it asks.
+    /// Does not allocate unless it asks. A Search never asks: it matches
+    /// only the Cache.
     pub fn want(&mut self, view: &InboxView) {
         let Some(messages) = view.messages.as_deref() else {
             return;
         };
 
-        if !self.live || self.asked || view.selected + NEAR_END < messages.len() {
+        let searching = view.search.is_some();
+        if !self.live || self.asked || searching || view.selected + NEAR_END < messages.len() {
             return;
         }
 

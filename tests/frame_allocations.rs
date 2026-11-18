@@ -164,3 +164,44 @@ fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
     assert_eq!(steady.len(), keys, "{all:?}");
     assert!(steady.iter().all(|&n| n == 0), "{steady:?}");
 }
+
+// ADR 0001 exempts typing a Query, not moving through what it matched:
+// the highlights are drawn from buffers kept between frames.
+#[test]
+fn scrolling_a_narrowed_list_allocates_nothing_per_frame() {
+    let server = FakeImap::start(messages());
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+    t.wait_until(|s| s.contains("also cut")).unwrap();
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("message 1").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.row_text(s.rows() - 1).contains("/message 1  "))
+        .unwrap();
+
+    let rows = usize::try_from(MESSAGES).unwrap();
+    let down = vec![Key::Char('j'); rows];
+    let up = vec![Key::Char('k'); rows];
+    for keys in [&down, &up] {
+        for &key in keys {
+            t.send(key).unwrap();
+        }
+
+        settled_frames(&home);
+    }
+
+    let warm = frames(&home);
+    for &key in down.iter().chain(&up) {
+        t.send(key).unwrap();
+    }
+
+    let keys = down.len() + up.len();
+    wait_for(|| frames(&home).len() >= warm.len() + keys);
+    t.send(Key::Char('q')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    let all = frames(&home);
+    let steady = &all[warm.len()..];
+    assert_eq!(steady.len(), keys, "{all:?}");
+    assert!(steady.iter().all(|&n| n == 0), "{steady:?}");
+}

@@ -27,6 +27,7 @@ use crate::{
     preview_render::{self, Job},
     previews::Previews,
     rendered_previews::PreviewKey,
+    search::Search,
     status::Status,
     suspend, sync,
     terminal_backend::{self, TerminalBackend},
@@ -235,8 +236,13 @@ fn draw(
                 toast: screen.toast.as_ref(),
                 status: screen.status(),
                 mode: screen.mode,
+                query: view.search.as_ref().map(Search::query),
                 now: Instant::now(),
             };
+
+            if let Some(cursor) = hint_line.cursor(panes.hint) {
+                frame.set_cursor_position(cursor);
+            }
 
             frame.render_widget(hint_line, panes.hint);
             if screen.help {
@@ -267,10 +273,12 @@ fn apply(
             let selected = view.selected_uid();
             show(view, cache, None)?;
             // The labels, and the full-screen Message, belong to the Message
-            // they were opened on.
+            // they were opened on; a Query being typed stays.
             if view.selected_uid() != selected {
                 screen.hints = None;
-                screen.mode = Mode::List;
+                if screen.mode == Mode::Reading {
+                    screen.mode = Mode::List;
+                }
             }
         }
         Update::Bodies(fetched) => previews.fetched(fetched),
@@ -394,50 +402,83 @@ fn handle(
                 Typed::Partial | Typed::Cancel => Step::Stay,
             })
         }
-        Some(Ok(Event::Key(key))) => Ok(match keymap::action(key, screen.mode) {
-            Some(Action::Quit) => Step::Quit,
-            Some(Action::Read) => {
-                if view.selected_uid().is_some() {
-                    screen.mode = Mode::Reading;
-                }
-
-                Step::Stay
-            }
-            Some(Action::Back) => {
-                screen.mode = Mode::List;
-                Step::Stay
-            }
-            Some(Action::Page) => Step::Page,
-            Some(Action::Suspend) => Step::Suspend,
-            Some(Action::SignIn) if screen.status == Status::SignedOut => Step::SignIn,
-            Some(Action::Links) => Step::Links,
-            Some(Action::SwitchView) => {
-                view.html = view.html.other();
-                view.preview_scroll = 0;
-                // The labels sit where the other View laid the links out.
-                screen.hints = None;
-                Step::Stay
-            }
-            Some(Action::Help) => {
-                screen.help = true;
-                Step::Stay
-            }
-            Some(Action::Move(movement)) => {
-                view.apply(movement);
-                Step::Stay
-            }
-            Some(Action::Scroll(scroll)) => {
-                view.scroll(scroll, half_page);
-                Step::Stay
-            }
-            Some(Action::SignIn) | None => Step::Stay,
-        }),
+        Some(Ok(Event::Key(key))) => Ok(act(
+            keymap::action(key, screen.mode),
+            view,
+            screen,
+            half_page,
+        )),
         // The labels sit where the old width laid the links out.
         Some(Ok(Event::Resize(..))) => {
             screen.hints = None;
             Ok(Step::Stay)
         }
         Some(Ok(_)) => Ok(Step::Stay),
+    }
+}
+
+fn act(
+    action: Option<Action>,
+    view: &mut InboxView,
+    screen: &mut Screen,
+    half_page: usize,
+) -> Step {
+    match action {
+        Some(Action::Quit) => Step::Quit,
+        Some(Action::Read) => {
+            if view.selected_uid().is_some() {
+                screen.mode = Mode::Reading;
+            }
+
+            Step::Stay
+        }
+        Some(Action::Back | Action::KeepQuery) => {
+            screen.mode = Mode::List;
+            Step::Stay
+        }
+        Some(Action::Page) => Step::Page,
+        Some(Action::Suspend) => Step::Suspend,
+        Some(Action::SignIn) if screen.status == Status::SignedOut => Step::SignIn,
+        Some(Action::Links) => Step::Links,
+        Some(Action::SwitchView) => {
+            view.html = view.html.other();
+            view.preview_scroll = 0;
+            // The labels sit where the other View laid the links out.
+            screen.hints = None;
+            Step::Stay
+        }
+        Some(Action::Help) => {
+            screen.help = true;
+            Step::Stay
+        }
+        Some(
+            action @ (Action::Search | Action::Type(_) | Action::Erase | Action::EndSearch { .. }),
+        ) => {
+            search(action, view, screen);
+            Step::Stay
+        }
+        Some(Action::Move(movement)) => {
+            view.apply(movement);
+            Step::Stay
+        }
+        Some(Action::Scroll(scroll)) => {
+            view.scroll(scroll, half_page);
+            Step::Stay
+        }
+        Some(Action::SignIn) | None => Step::Stay,
+    }
+}
+
+fn search(action: Action, view: &mut InboxView, screen: &mut Screen) {
+    match action {
+        Action::Search if view.start_search() => screen.mode = Mode::Query,
+        Action::Type(c) => view.edit_query(|search| search.push(c)),
+        Action::Erase => view.edit_query(Search::pop),
+        Action::EndSearch { restore } => {
+            view.end_search(restore);
+            screen.mode = Mode::List;
+        }
+        _ => {}
     }
 }
 
@@ -491,7 +532,7 @@ fn open(
     cache: &Cache,
     view: &InboxView,
 ) -> Result<Option<Toast>, Error> {
-    let Some(message) = view.messages.as_ref().and_then(|m| m.get(view.selected)) else {
+    let Some(message) = view.selected_message() else {
         return Ok(None);
     };
 

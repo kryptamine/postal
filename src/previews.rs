@@ -89,7 +89,7 @@ impl Previews {
 
     /// The selected Message's Preview at `width`, once rendered.
     pub fn get(&self, view: &InboxView, width: u16) -> Option<&Preview> {
-        let message = view.messages.as_ref()?.get(view.selected)?;
+        let message = view.selected_message()?;
         self.rendered.get(PreviewKey {
             body: message.body_key,
             width,
@@ -98,7 +98,7 @@ impl Previews {
     }
 
     pub fn shown(&self, view: &InboxView, width: u16) -> Shown<'_> {
-        let Some(message) = view.messages.as_ref().and_then(|m| m.get(view.selected)) else {
+        let Some(message) = view.selected_message() else {
             return Shown::Loading;
         };
 
@@ -126,10 +126,6 @@ impl Previews {
         view: &InboxView,
         width: u16,
     ) -> Result<(), cache::Error> {
-        let Some(messages) = view.messages.as_deref() else {
-            return Ok(());
-        };
-
         let selected = view.selected;
         let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
         let mut request = BodyRequest {
@@ -138,7 +134,7 @@ impl Previews {
         };
 
         for index in std::iter::once(selected).chain(around.filter(|&i| i != selected)) {
-            let Some(message) = messages.get(index) else {
+            let Some(message) = view.row(index) else {
                 continue;
             };
 
@@ -173,7 +169,7 @@ impl Previews {
             let _ = self.requests.unbounded_send(Request::Bodies(request));
         }
 
-        if let Some(message) = messages.get(selected) {
+        if let Some(message) = view.selected_message() {
             self.ready_header(message);
         }
 

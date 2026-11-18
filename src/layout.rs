@@ -35,7 +35,7 @@ pub fn split(area: Rect, mode: Mode) -> Panes {
     };
 
     let (list, preview) = match mode {
-        Mode::List => {
+        Mode::List | Mode::Query => {
             let (list, preview) = panes(body);
             (Some(list), preview)
         }
