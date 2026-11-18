@@ -259,11 +259,12 @@ impl Cards<'_> {
     }
 }
 
-/// ` (n)` after the senders of a Thread of `n` Messages; empty for one.
+/// ` (n)` after the senders of a Thread of `n` Messages, those in other
+/// Folders too; empty for one.
 fn count(thread: &Thread) -> StackStr<24> {
     let mut count = StackStr::new();
-    if thread.messages.len() > 1 {
-        let _ = write!(count, " ({})", thread.messages.len());
+    if thread.stack.len() > 1 {
+        let _ = write!(count, " ({})", thread.stack.len());
     }
 
     count

@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{cache::Cache, imap::MailServer, snippet, sync::Error};
+use crate::{cache::Cache, imap::MailServer, snippet, sync::Error, text_part::TextPart};
 
 /// Messages per batch: each batch is one Cache write and one redraw.
 const BATCH: usize = 50;
@@ -40,9 +40,22 @@ pub async fn batch(
         return Ok(false);
     }
 
+    let snippets = cut(server, &pending).await?;
+    cache.write_snippets(folder, &snippets)?;
+    tracing::info!("cut {} Snippets", snippets.len());
+    written();
+    Ok(true)
+}
+
+/// The Snippet of each `(uid, part)` of the examined Folder, empty when the
+/// server sends none.
+pub async fn cut(
+    server: &mut impl MailServer,
+    pending: &[(u32, TextPart)],
+) -> Result<Vec<(u32, String)>, Error> {
     // One FETCH asks for one section, so the batch splits by section.
     let mut by_section: BTreeMap<&str, Vec<u32>> = BTreeMap::new();
-    for (uid, part) in &pending {
+    for (uid, part) in pending {
         by_section.entry(&part.section).or_default().push(*uid);
     }
 
@@ -51,7 +64,7 @@ pub async fn batch(
         raw.extend(server.text_parts(&uids, section).await?);
     }
 
-    let snippets: Vec<_> = pending
+    Ok(pending
         .iter()
         .map(|(uid, part)| {
             let snippet = raw
@@ -60,9 +73,5 @@ pub async fn batch(
                 .unwrap_or_default();
             (*uid, snippet)
         })
-        .collect();
-    cache.write_snippets(folder, &snippets)?;
-    tracing::info!("cut {} Snippets", snippets.len());
-    written();
-    Ok(true)
+        .collect())
 }

@@ -98,6 +98,7 @@ fn message(
         snippet: String::new(),
         thread,
         from_me: envelope.is_some_and(|e| from(e, email)),
+        elsewhere: false,
     };
 
     let structure = attributes.iter().find_map(|a| match a {

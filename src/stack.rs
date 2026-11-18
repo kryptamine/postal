@@ -48,7 +48,7 @@ pub fn placed<'a>(
     let mut top = 0;
     view.stack().enumerate().map(move |(index, message)| {
         let body = reading
-            .unfolded(message.uid)
+            .unfolded(message.body_key)
             .then(|| previews.body(message, view.html, width));
         let height = match &body {
             None => 1,
@@ -72,7 +72,8 @@ pub fn placed<'a>(
 
 /// Brings the scroll position in range of `height` rows, and the cursor's
 /// Message into view after a jump or a fold. After a scroll, the cursor
-/// moves to the nearest Message still shown.
+/// moves to the nearest Message still shown. Messages joining the stack
+/// leave the top of the window on the Message it was on.
 pub fn settle(
     view: &InboxView,
     previews: &Previews,
@@ -80,26 +81,39 @@ pub fn settle(
     (width, height): (u16, usize),
 ) {
     let mut total = 0;
-    let (mut cursor, mut newest) = (None, None);
+    let (mut cursor, mut newest, mut held) = (None, None, None);
     for placed in placed(view, previews, reading, width) {
         total = placed.bottom();
         let rows = placed.top..placed.bottom();
-        if placed.message.uid == reading.cursor {
+        let key = placed.message.body_key;
+        if key == reading.cursor {
             cursor = Some(rows.clone());
         }
 
-        newest = Some((placed.message.uid, rows));
+        if let Some((top, into)) = reading.top
+            && top == key
+        {
+            held = Some(placed.top + into);
+        }
+
+        newest = Some((key, rows));
     }
 
     let cursor = match (cursor, newest) {
         (Some(cursor), _) => cursor,
         // The cursor's Message left the Thread: the newest takes it.
-        (None, Some((uid, rows))) => {
-            reading.cursor = uid;
+        (None, Some((key, rows))) => {
+            reading.cursor = key;
             rows
         }
         (None, None) => return,
     };
+
+    if std::mem::take(&mut reading.hold)
+        && let Some(held) = held
+    {
+        reading.scroll = held;
+    }
 
     if reading.reveal {
         if cursor.start < reading.scroll {
@@ -110,15 +124,30 @@ pub fn settle(
     }
 
     reading.scroll = reading.scroll.min(total.saturating_sub(height));
-    let window = reading.scroll..reading.scroll + height;
-    if reading.reveal {
-        return;
+    if !reading.reveal {
+        follow(view, previews, reading, (width, height), &cursor);
     }
 
+    let scroll = reading.scroll;
+    let top = placed(view, previews, reading, width)
+        .find(|p| p.bottom() + GAP > scroll)
+        .map(|p| (p.message.body_key, scroll - p.top));
+    reading.top = top;
+}
+
+/// Moves the cursor, at `cursor` rows, to the nearest Message the window shows.
+fn follow(
+    view: &InboxView,
+    previews: &Previews,
+    reading: &mut Reading,
+    (width, height): (u16, usize),
+    cursor: &Range<usize>,
+) {
+    let window = reading.scroll..reading.scroll + height;
     let shown = || {
         placed(view, previews, reading, width)
             .filter(|p| p.shown(&window))
-            .map(|p| p.message.uid)
+            .map(|p| p.message.body_key)
     };
 
     let nearest = if cursor.end <= window.start {
@@ -129,7 +158,7 @@ pub fn settle(
         None
     };
 
-    if let Some(uid) = nearest {
-        reading.cursor = uid;
+    if let Some(key) = nearest {
+        reading.cursor = key;
     }
 }

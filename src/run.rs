@@ -15,7 +15,7 @@ use crate::{
     body::Body,
     browser,
     cache::{self, Cache},
-    folder::Folder,
+    folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
@@ -40,6 +40,7 @@ use crate::{
     suspend, sync,
     terminal_backend::{self, TerminalBackend},
     theme::Theme,
+    thread::Key,
     thread_pane::ThreadPane,
     toast::Toast,
     update::Update,
@@ -166,7 +167,7 @@ pub async fn run(
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
-                    step @ (Step::Folders | Step::Show(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
+                    step @ (Step::Folders | Step::Show(_) | Step::Thread(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
@@ -208,7 +209,7 @@ fn want(
 
     match &screen.reading {
         Some(reading) => {
-            let stack = (|uid| reading.unfolded(uid), reading.cursor);
+            let stack = (|key| reading.unfolded(key), reading.cursor);
             previews.want_stack(cache, view, stack, text.width)
         }
         None => previews.want(cache, view, text.width),
@@ -312,8 +313,8 @@ fn apply(
     match update {
         Update::Inbox => {
             let (thread, selected) = (view.selected_key(), view.selected_uid());
-            let stack: Vec<u32> = match screen.reading {
-                Some(_) => view.stack().map(|m| m.uid).collect(),
+            let stack: Vec<i64> = match screen.reading {
+                Some(_) => view.stack().map(|m| m.body_key).collect(),
                 None => Vec::new(),
             };
 
@@ -327,8 +328,11 @@ fn apply(
             } else if view.selected_key() != thread {
                 screen.hints = None;
                 screen.list();
-            } else if !view.stack().map(|m| m.uid).eq(stack) {
+            } else if !view.stack().map(|m| m.body_key).eq(stack) {
                 screen.hints = None;
+                if let Some(reading) = &mut screen.reading {
+                    reading.hold = true;
+                }
             }
 
             relist(screen, view, cache)?;
@@ -442,6 +446,8 @@ enum Step {
     Links,
     Folders,
     Show(Folder),
+    /// The Messages of this Gmail Thread in other Folders are asked for.
+    Thread(u64),
     Browse(Arc<str>),
     Page,
     Suspend,
@@ -500,8 +506,7 @@ fn act(
     match action {
         Some(Action::Quit) => Step::Quit,
         Some(action @ (Action::Read | Action::Step(_) | Action::Fold)) => {
-            read(action, view, screen);
-            Step::Stay
+            read(action, view, screen).map_or(Step::Stay, Step::Thread)
         }
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
@@ -549,19 +554,28 @@ fn act(
     }
 }
 
-/// Opens the selected Thread in Reading, or moves through it there.
-fn read(action: Action, view: &InboxView, screen: &mut Screen) {
+/// Opens the selected Thread in Reading, or moves through it there. Returns
+/// the Gmail ID of a Thread just opened, for its other Folders to be read.
+fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Option<u64> {
     match (action, &mut screen.reading) {
         (Action::Read, _) => {
-            if let Some(reading) = Reading::open(view.stack()) {
-                screen.mode = Mode::Reading;
-                screen.reading = Some(reading);
+            let reading = Reading::open(view.stack())?;
+            screen.mode = Mode::Reading;
+            screen.reading = Some(reading);
+            // Gmail keeps Trash and Spam out of All Mail, and their Threads apart.
+            let apart = matches!(view.folder.role, Some(Role::Trash | Role::Spam));
+            if let Some(Key::Gmail(id)) = view.selected_key()
+                && !apart
+            {
+                return Some(id);
             }
         }
         (Action::Step(direction), Some(reading)) => reading.step(direction, view.stack()),
         (Action::Fold, Some(reading)) => reading.fold(),
         _ => {}
     }
+
+    None
 }
 
 /// Acts on one key in the Folder Picker, which takes them all.
@@ -631,6 +645,7 @@ fn steer(
 
             Ask::Show(view.folder.name.clone())
         }
+        Step::Thread(id) => Ask::Thread(id),
         _ => return Ok(()),
     };
 
@@ -736,15 +751,14 @@ fn open(
 ) -> Result<Option<Toast>, Error> {
     let message = reading.map_or_else(
         || view.selected_message(),
-        |reading| view.stack().find(|m| m.uid == reading.cursor),
+        |reading| view.stack().find(|m| m.body_key == reading.cursor),
     );
 
     let Some(message) = message else {
         return Ok(None);
     };
 
-    let folder = &view.folder.name;
-    let Some(body) = cache.body(folder, message.uid).map_err(Error::Cache)? else {
+    let Some(body) = cache.body(message.body_key).map_err(Error::Cache)? else {
         return Ok(Some(Toast::new("not downloaded")));
     };
 

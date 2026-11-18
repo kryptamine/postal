@@ -80,10 +80,77 @@ impl Cache {
         let messages = statement
             .query_map(params![folder, limit], message)?
             .collect::<Result<_, _>>()?;
+        // Only those whose body is cached: that body comes with the Thread alone.
+        let mut statement = connection.prepare_cached(
+            "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
+                    t.snippet, t.thread, t.from_me
+             FROM thread_message t JOIN body ON body.key = t.key
+             WHERE t.thread IN (SELECT thread FROM message WHERE mailbox = ?1)
+               AND t.key NOT IN (SELECT body_key FROM message WHERE mailbox = ?1)
+             ORDER BY t.received, t.key",
+        )?;
+        let elsewhere = statement
+            .query_map([folder], |row| {
+                Ok(Message {
+                    elsewhere: true,
+                    ..message(row)?
+                })
+            })?
+            .collect::<Result<_, _>>()?;
         Ok(Some(Inbox {
             messages,
+            elsewhere,
             unread: unread.unwrap_or_default(),
         }))
+    }
+
+    /// Replaces what is cached of Gmail's Thread `id` from other Folders
+    /// with `messages`, storing `bodies` by key first, in one transaction.
+    pub fn write_thread(
+        &self,
+        id: u64,
+        messages: &[Message],
+        bodies: &[(i64, Vec<u8>)],
+    ) -> Result<(), Error> {
+        self.write(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            store_bodies(&transaction, bodies)?;
+            let id = id.cast_signed();
+            transaction.execute("DELETE FROM thread_message WHERE thread = ?1", [id])?;
+            let mut insert = transaction.prepare_cached(
+                "INSERT OR REPLACE INTO thread_message
+                 (key, thread, received, received_offset, unread, sender, subject, from_me,
+                  snippet)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            )?;
+            for m in messages {
+                insert.execute(params![
+                    m.body_key,
+                    id,
+                    m.received.timestamp(),
+                    m.received.offset().local_minus_utc(),
+                    m.unread,
+                    m.sender,
+                    m.subject,
+                    m.from_me,
+                    m.snippet,
+                ])?;
+            }
+
+            drop(insert);
+            evict(&transaction)?;
+            transaction.commit()
+        })
+    }
+
+    pub fn has_body(&self, key: i64) -> Result<bool, Error> {
+        let found = self
+            .connection
+            .borrow()
+            .prepare_cached("SELECT 1 FROM body WHERE key = ?1")?
+            .query_row([key], |_| Ok(()))
+            .optional()?;
+        Ok(found.is_some())
     }
 
     /// Every Folder listed or shown so far, in the Folder Picker's order.
@@ -240,22 +307,16 @@ impl Cache {
         })
     }
 
-    /// The cached body of the Message with this UID in `folder`, marked as
-    /// just used; `None` until it is fetched.
-    pub fn body(&self, folder: &str, uid: u32) -> Result<Option<Vec<u8>>, Error> {
+    /// The body cached under `key`, marked as just used; `None` until it is
+    /// fetched.
+    pub fn body(&self, key: i64) -> Result<Option<Vec<u8>>, Error> {
         let found = self
             .connection
             .borrow()
-            .prepare_cached(
-                "SELECT body.key, body.raw
-                 FROM message JOIN body ON body.key = message.body_key
-                 WHERE mailbox = ?1 AND uid = ?2",
-            )?
-            .query_row(params![folder, uid], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get(1)?))
-            })
+            .prepare_cached("SELECT raw FROM body WHERE key = ?1")?
+            .query_row([key], |row| row.get(0))
             .optional()?;
-        let Some((key, body)) = found else {
+        let Some(body) = found else {
             return Ok(None);
         };
 
@@ -285,15 +346,8 @@ impl Cache {
                 insert.execute(params![uid, raw, raw.len(), folder])?;
             }
 
-            transaction.execute(
-                "DELETE FROM body WHERE key IN (
-                     SELECT key FROM (
-                         SELECT key, sum(size) OVER (ORDER BY used DESC) AS kept FROM body
-                     ) WHERE kept > ?1
-                 )",
-                [BODY_BYTES],
-            )?;
             drop(insert);
+            evict(&transaction)?;
             transaction.commit()
         })
     }
@@ -374,6 +428,31 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     transaction.commit()
 }
 
+fn store_bodies(connection: &Connection, bodies: &[(i64, Vec<u8>)]) -> rusqlite::Result<()> {
+    let mut insert = connection.prepare_cached(
+        "INSERT OR REPLACE INTO body (key, raw, size, used)
+         VALUES (?1, ?2, ?3, (SELECT coalesce(max(used), 0) + 1 FROM body))",
+    )?;
+    for (key, raw) in bodies {
+        insert.execute(params![key, raw, raw.len()])?;
+    }
+
+    Ok(())
+}
+
+/// Drops the least recently used bodies past `BODY_BYTES`.
+fn evict(connection: &Connection) -> rusqlite::Result<()> {
+    connection.execute(
+        "DELETE FROM body WHERE key IN (
+             SELECT key FROM (
+                 SELECT key, sum(size) OVER (ORDER BY used DESC) AS kept FROM body
+             ) WHERE kept > ?1
+         )",
+        [BODY_BYTES],
+    )?;
+    Ok(())
+}
+
 fn insert(connection: &Connection, folder: &str, rows: &[NewMessage]) -> rusqlite::Result<()> {
     let mut insert = connection.prepare_cached(
         "INSERT OR REPLACE INTO message
@@ -420,6 +499,7 @@ fn message(row: &Row<'_>) -> rusqlite::Result<Message> {
         snippet: row.get(7)?,
         thread: row.get::<_, Option<i64>>(8)?.map(i64::cast_unsigned),
         from_me: row.get(9)?,
+        elsewhere: false,
     })
 }
 

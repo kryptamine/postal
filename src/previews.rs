@@ -115,6 +115,11 @@ impl Previews {
             return Body::Rendered(preview);
         }
 
+        // A Message from elsewhere is never asked for: its UID is none of ours.
+        if message.elsewhere {
+            return Body::Loading;
+        }
+
         match self.refused.get(&message.uid) {
             Some(why) => Body::Unavailable(why),
             None if self.offline.contains(&message.uid) => Body::Unavailable(OFFLINE),
@@ -165,11 +170,11 @@ impl Previews {
         &mut self,
         cache: &Cache,
         view: &InboxView,
-        (unfolded, cursor): (impl Fn(u32) -> bool, u32),
+        (unfolded, cursor): (impl Fn(i64) -> bool, i64),
         width: u16,
     ) -> Result<(), cache::Error> {
-        let stack = view.stack().filter(|m| unfolded(m.uid));
-        let wanted = stack.map(|m| (m, m.uid == cursor));
+        let stack = view.stack().filter(|m| unfolded(m.body_key));
+        let wanted = stack.map(|m| (m, m.body_key == cursor));
         self.ready(cache, view, wanted, width)
     }
 
@@ -201,20 +206,22 @@ impl Previews {
 
             if self.rendered.touch(key)
                 || self.rendering.contains(&key)
-                || self.unavailable(message.uid)
+                || (!message.elsewhere && self.unavailable(message.uid))
             {
                 continue;
             }
 
             // A body on its way is not in the Cache yet.
-            let body = if self.fetching.contains(&message.uid) {
+            let body = if !message.elsewhere && self.fetching.contains(&message.uid) {
                 None
             } else {
-                cache.body(&self.folder, message.uid)?
+                cache.body(message.body_key)?
             };
 
             match body {
                 Some(body) => self.render(key, body, message),
+                // It came with the Thread, or does not come at all.
+                None if message.elsewhere => {}
                 None if self.link == Link::Live => {
                     if selected {
                         request.selected = Some(message.uid);

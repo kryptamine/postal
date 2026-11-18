@@ -10,6 +10,7 @@ use crate::{
     status::Status,
     steering::Steering,
     sync::{self, Error},
+    thread_fetch,
     update::Update,
 };
 
@@ -54,6 +55,13 @@ pub async fn listen<S: MailServer>(
             }
 
             pushed.extend(server.pushed());
+            continue;
+        }
+
+        if let Some(id) = asked.thread.take() {
+            thread_fetch::fetch(&mut server, cache, id, send).await?;
+            // All Mail is examined now, so the shown Folder is examined again.
+            asked.switched = true;
             continue;
         }
 

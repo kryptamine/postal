@@ -6,7 +6,7 @@ use crate::{
     keymap::{By, Direction, Move, Scroll},
     message::Message,
     search::Search,
-    thread::{self, Key, Thread},
+    thread::{self, Key, Place, Thread},
     view::View,
 };
 
@@ -17,6 +17,8 @@ pub struct InboxView {
     /// `None` until the Cache or the server has rows to show. Their dates
     /// are local, each at the offset in force when it was received.
     pub messages: Option<Vec<Message>>,
+    /// Messages of the shown Threads found in other Folders, oldest first.
+    pub elsewhere: Vec<Message>,
     /// The rows of the full list, grouped from `messages`.
     pub threads: Vec<Thread>,
     /// Narrows the rows shown; `selected` and `offset` index those.
@@ -41,6 +43,7 @@ impl InboxView {
         Self {
             folder: Folder::inbox(),
             messages: None,
+            elsewhere: Vec::new(),
             threads: Vec::new(),
             search: None,
             unread: 0,
@@ -56,16 +59,17 @@ impl InboxView {
     /// the same Thread, or on the same row when that Thread is gone.
     pub fn show(&mut self, mut inbox: Inbox) {
         let (selected, uid) = (self.selected_key(), self.selected_uid());
-        for message in &mut inbox.messages {
+        for message in inbox.messages.iter_mut().chain(&mut inbox.elsewhere) {
             message.received = message.received.with_timezone(&Local).fixed_offset();
         }
 
-        self.threads = thread::threads(&inbox.messages);
+        self.threads = thread::threads(&inbox.messages, &inbox.elsewhere);
         if let Some(search) = &mut self.search {
             search.reload(&inbox.messages, &self.threads);
         }
 
         self.messages = Some(inbox.messages);
+        self.elsewhere = inbox.elsewhere;
         let last = self.rows().saturating_sub(1);
         self.selected = selected
             .and_then(|key| self.position(key))
@@ -83,6 +87,7 @@ impl InboxView {
     pub fn switch(&mut self, folder: Folder) {
         self.folder = folder;
         self.messages = None;
+        self.elsewhere.clear();
         self.threads.clear();
         self.search = None;
         self.unread = 0;
@@ -180,12 +185,16 @@ impl InboxView {
         self.thread_at(self.selected).map(|t| t.key)
     }
 
-    /// The selected Thread's Messages, oldest first.
+    /// The selected Thread's Messages, those found in other Folders too,
+    /// oldest first.
     pub fn stack(&self) -> impl DoubleEndedIterator<Item = &Message> + Clone {
         let messages = self.messages.as_deref().unwrap_or_default();
         let thread = self.thread_at(self.selected);
-        let indices = thread.map_or(&[][..], |t| t.messages.as_slice());
-        indices.iter().rev().filter_map(|&i| messages.get(i))
+        let places = thread.map_or(&[][..], |t| t.stack.as_slice());
+        places.iter().filter_map(|&place| match place {
+            Place::Here(i) => messages.get(i),
+            Place::Elsewhere(i) => self.elsewhere.get(i),
+        })
     }
 
     /// How many rows are shown: all, or those a Search narrowed them to.

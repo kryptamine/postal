@@ -156,6 +156,12 @@ struct Stored {
     message: FakeMessage,
 }
 
+impl Stored {
+    fn thrid(&self) -> u64 {
+        self.message.thread.map_or(self.msgid, |t| FIRST_THRID + t)
+    }
+}
+
 pub const INBOX: &str = "INBOX";
 
 /// One mailbox the server lists.
@@ -168,6 +174,8 @@ struct Folder {
     /// `None` serves the Folder without CONDSTORE.
     highest_modseq: Option<u64>,
     messages: Vec<Stored>,
+    /// Gmail's All Mail: every delivery but to Trash and Spam lands here too.
+    mirrors: bool,
 }
 
 impl Folder {
@@ -179,6 +187,7 @@ impl Folder {
             uid_next: FIRST_UID,
             highest_modseq: Some(1),
             messages: Vec::new(),
+            mirrors: false,
         }
     }
 
@@ -186,6 +195,25 @@ impl Folder {
         let next = self.highest_modseq.unwrap_or_default() + 1;
         self.highest_modseq = self.highest_modseq.map(|_| next);
         next
+    }
+
+    /// Appends `message` under the next UID and returns that UID.
+    fn push(&mut self, msgid: u64, message: FakeMessage) -> u32 {
+        let uid = self.uid_next;
+        let modseq = self.bump();
+        self.uid_next += 1;
+        self.messages.push(Stored {
+            uid,
+            msgid,
+            modseq,
+            message,
+        });
+        uid
+    }
+
+    /// Kept out of All Mail: Trash, Spam and All Mail itself.
+    fn apart(&self) -> bool {
+        self.mirrors || self.attributes.contains(&"\\Trash") || self.attributes.contains(&"\\Junk")
     }
 
     fn stored(&mut self, uid: u32) -> &mut Stored {
@@ -282,21 +310,19 @@ impl FakeImap {
         self.deliver_to(INBOX, message)
     }
 
-    /// As `deliver`, to the Folder named `folder`.
+    /// As `deliver`, to the Folder named `folder`, and a copy to All Mail if
+    /// listed, unless `folder` is Trash or Spam.
     pub fn deliver_to(&self, folder: &str, message: FakeMessage) -> u32 {
         let mut inbox = self.inbox.lock().unwrap();
         let msgid = inbox.next_msgid;
         inbox.next_msgid += 1;
-        let folder = inbox.folder_mut(folder);
-        let uid = folder.uid_next;
-        let modseq = folder.bump();
-        folder.uid_next += 1;
-        folder.messages.push(Stored {
-            uid,
-            msgid,
-            modseq,
-            message,
-        });
+        if !inbox.folder_mut(folder).apart() {
+            for all in inbox.folders.iter_mut().filter(|f| f.mirrors) {
+                all.push(msgid, message.clone());
+            }
+        }
+
+        let uid = inbox.folder_mut(folder).push(msgid, message);
         drop(inbox);
         uid
     }
@@ -312,6 +338,28 @@ impl FakeImap {
         for message in messages {
             self.deliver_to(name, message);
         }
+    }
+
+    /// Lists Gmail's All Mail as `name`: a copy of every Message delivered,
+    /// before or after, but those in Trash and Spam, under the same `X-GM-MSGID`.
+    pub fn add_all_mail(&self, name: &str) {
+        let mut inbox = self.inbox.lock().unwrap();
+        let mut all = Folder::new(name, &["\\All"]);
+        all.mirrors = true;
+        let mut copies: Vec<_> = inbox
+            .folders
+            .iter()
+            .filter(|f| !f.apart())
+            .flat_map(|f| &f.messages)
+            .map(|m| (m.msgid, m.message.clone()))
+            .collect();
+        copies.sort_by_key(|&(msgid, _)| msgid);
+        for (msgid, message) in copies {
+            all.push(msgid, message);
+        }
+
+        inbox.folders.push(all);
+        drop(inbox);
     }
 
     /// Deletes the Folder, as another client may.
@@ -451,12 +499,7 @@ async fn accept(
                 .messages
                 .iter()
                 .find(|m| m.uid == uid)
-                .map(|m| {
-                    (
-                        m.msgid,
-                        m.message.thread.map_or(m.msgid, |t| FIRST_THRID + t),
-                    )
-                })
+                .map(|m| (m.msgid, m.thrid()))
         };
 
         tokio::spawn(relay(client, to_fake, record, gmail.then_some(msgid)));
@@ -937,6 +980,10 @@ fn search(criteria: &[SearchKey<'_>], inbox: &Folder) -> Option<Vec<u32>> {
         let matches = match criteria {
             [SearchKey::Unseen] => !stored.message.seen,
             [SearchKey::Uid(set)] => contains(set, stored.uid, max),
+            // The relay's stand-in for `X-GM-THRID n`.
+            [SearchKey::Header(field, value)] if field.as_ref() == b"X-GM-THRID" => {
+                value.as_ref() == stored.thrid().to_string().as_bytes()
+            }
             _ => return None,
         };
 

@@ -1,7 +1,7 @@
 //! The bytes between the client and the fake server. imap-codec knows no
 //! Gmail extension, so `X-GM-MSGID` and `X-GM-THRID` are taken out of each
-//! command here and added to each `FETCH` answer, and commands are recorded
-//! as sent.
+//! command here, a search by `X-GM-THRID` passed on as a header search, and
+//! both added to each `FETCH` answer. Commands are recorded as sent.
 
 use std::sync::{Arc, Mutex};
 
@@ -51,7 +51,11 @@ async fn commands(
         }
 
         record(untagged.to_owned());
-        let forwarded = if gmail {
+        let thread_search = format!("UID SEARCH {THRID} ");
+        let forwarded = if gmail && untagged.starts_with(&thread_search) {
+            // Passed on as a header search the fake knows how to answer.
+            line.replacen(&thread_search, &format!("UID SEARCH HEADER {THRID} "), 1)
+        } else if gmail {
             [MSGID, THRID].iter().fold(line.clone(), |line, item| {
                 line.replace(&format!("{item} "), "")
                     .replace(&format!(" {item}"), "")

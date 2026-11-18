@@ -85,6 +85,7 @@ mod terminal_background;
 mod text_part;
 mod theme;
 mod thread;
+mod thread_fetch;
 mod thread_pane;
 mod toast;
 mod transfer_encoding;

@@ -54,7 +54,7 @@ impl StatefulWidget for ThreadPane<'_> {
         let mut cursor = 0;
         for placed in stack::placed(self.view, self.previews, reading, text.width) {
             // A Thread of one has nothing else to point at.
-            let at_cursor = placed.message.uid == reading.cursor && count > 1;
+            let at_cursor = placed.message.body_key == reading.cursor && count > 1;
             if at_cursor {
                 cursor = placed.index;
             }

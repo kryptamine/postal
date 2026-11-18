@@ -8,14 +8,20 @@ use crate::{
 /// Reading: the selected Thread as a stack of Messages, oldest first, each
 /// folded to a line or unfolded to its header and body.
 pub struct Reading {
-    unfolded: HashSet<u32>,
-    /// The UID of the Message at the cursor; one gone from the Thread
-    /// falls back to the newest as the stack is laid out.
-    pub cursor: u32,
+    unfolded: HashSet<i64>,
+    /// The body key of the Message at the cursor, which tells apart Messages
+    /// of different Folders; one gone from the Thread falls back to the
+    /// newest as the stack is laid out.
+    pub cursor: i64,
     /// The stack's first row shown, kept in range as it is laid out.
     pub scroll: usize,
     /// Until the next scroll, each frame brings the cursor's Message into view.
     pub reveal: bool,
+    /// The Message at the top of the window, by body key, and the rows into
+    /// it, as last laid out.
+    pub top: Option<(i64, usize)>,
+    /// Set when Messages joined the stack: the next layout puts `top` back.
+    pub hold: bool,
 }
 
 impl Reading {
@@ -25,29 +31,31 @@ impl Reading {
         let newest = stack.clone().last()?;
         let mut unread = stack.filter(|m| m.unread).peekable();
         Some(Self {
-            cursor: unread.peek().copied().unwrap_or(newest).uid,
-            unfolded: unread.chain([newest]).map(|m| m.uid).collect(),
+            cursor: unread.peek().copied().unwrap_or(newest).body_key,
+            unfolded: unread.chain([newest]).map(|m| m.body_key).collect(),
             scroll: 0,
             reveal: true,
+            top: None,
+            hold: false,
         })
     }
 
-    pub fn unfolded(&self, uid: u32) -> bool {
-        self.unfolded.contains(&uid)
+    pub fn unfolded(&self, key: i64) -> bool {
+        self.unfolded.contains(&key)
     }
 
     /// Moves the cursor to the next or the previous Message of `stack`.
     pub fn step<'a>(&mut self, direction: Direction, mut stack: impl Iterator<Item = &'a Message>) {
         let mut before = None;
         while let Some(message) = stack.next() {
-            if message.uid == self.cursor {
+            if message.body_key == self.cursor {
                 let target = match direction {
                     Direction::Down => stack.next(),
                     Direction::Up => before,
                 };
 
                 if let Some(target) = target {
-                    self.cursor = target.uid;
+                    self.cursor = target.body_key;
                 }
 
                 break;

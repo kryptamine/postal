@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 5;
+pub const VERSION: i64 = 6;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -45,6 +45,21 @@ CREATE TABLE message (
     PRIMARY KEY (mailbox, uid)
 );
 CREATE INDEX message_by_arrival ON message (mailbox, received DESC, uid DESC);
+-- A Thread's Messages as `[Gmail]/All Mail` held them when it was last read;
+-- see docs/adr/0009-threads-from-gmail-thread-id.md.
+CREATE TABLE thread_message (
+    -- Its `X-GM-MSGID`, the key its body is cached under.
+    key INTEGER PRIMARY KEY,
+    thread INTEGER NOT NULL,
+    received INTEGER NOT NULL,
+    received_offset INTEGER NOT NULL,
+    unread INTEGER NOT NULL,
+    sender TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    from_me INTEGER NOT NULL,
+    snippet TEXT NOT NULL
+);
+CREATE INDEX thread_message_by_thread ON thread_message (thread);
 -- Shared by every Folder, and not dropped with the rows on a UIDVALIDITY
 -- change; a byte-bounded LRU.
 CREATE TABLE body (

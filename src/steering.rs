@@ -10,6 +10,8 @@ pub enum Ask {
     Show(Arc<str>),
     /// `LIST` and `STATUS (UNSEEN)`, for the Folder Picker.
     ListFolders,
+    /// The Messages of Gmail's Thread with this ID in other Folders.
+    Thread(u64),
 }
 
 /// What the asks waiting came to.
@@ -17,6 +19,8 @@ pub enum Ask {
 pub struct Asked {
     pub switched: bool,
     pub list: bool,
+    /// The Thread last asked for, when the Messages of one were.
+    pub thread: Option<u64>,
 }
 
 /// The Folder the sync connection follows, and the screen's asks of it.
@@ -47,6 +51,7 @@ impl Steering {
                     self.folder = folder;
                 }
                 Some(Some(Ask::ListFolders)) => asked.list = true,
+                Some(Some(Ask::Thread(id))) => asked.thread = Some(id),
             }
         }
     }

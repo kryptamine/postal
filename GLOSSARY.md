@@ -29,7 +29,7 @@ The ordered rows of the shown Folder, one row per Thread, by its newest arrival 
 _Avoid_: index, table, thread list
 
 **Thread**:
-The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, each Message is a Thread of its own. In the Message List, only those in the shown Folder and the Cache. Unread while any of its Messages is.
+The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, each Message is a Thread of its own. In the Message List, those in the shown Folder and the Cache, joined in its count by those found in other Folders once it has been read. Unread while any of its Messages in the shown Folder is.
 _Avoid_: conversation, chain
 
 **Unread**:
@@ -73,7 +73,7 @@ Entered with `o`: each distinct URL the Preview window shows, or every unfolded 
 _Avoid_: link mode, follow mode, footnotes
 
 **Reading**:
-The selected Thread filling the screen in place of the Message List, entered with `Enter`: its Messages in the Cache for the shown Folder, oldest first, each folded to one line (sender, Snippet, date) or unfolded to its header and body as the Preview shows it. On entry the newest and every Unread Message are unfolded, and the cursor sits on the first Unread, else the newest. `q` or `Esc` goes back to the list.
+The selected Thread filling the screen in place of the Message List, entered with `Enter`: its Messages in the Cache for the shown Folder at once, then on Gmail those All Mail holds in other Folders (never Trash or Spam) as the server answers, oldest first, each folded to one line (sender, Snippet, date) or unfolded to its header and body as the Preview shows it. On entry the newest and every Unread Message are unfolded, and the cursor sits on the first Unread, else the newest. `q` or `Esc` goes back to the list.
 _Avoid_: reader, zoom, full view
 
 **Search**:

@@ -18,4 +18,7 @@ pub struct Message {
     pub thread: Option<u64>,
     /// Sent from the Account's address: the Message List names its sender `me`.
     pub from_me: bool,
+    /// Found in another Folder as part of its Thread: `uid` names no Message
+    /// of the shown one, and its body comes only with the Thread.
+    pub elsewhere: bool,
 }

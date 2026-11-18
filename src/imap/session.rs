@@ -70,6 +70,12 @@ pub trait MailServer {
     /// The Messages whose UID is at least `first`.
     async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
 
+    /// The Messages with these UIDs; a UID gone is left out.
+    async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error>;
+
+    /// The UIDs of the examined Folder's Messages in Gmail's Thread `id`.
+    async fn thread(&mut self, id: u64) -> Result<Vec<u32>, Error>;
+
     /// `None` when no Message has this UID any more.
     async fn sequence_number(&mut self, uid: u32) -> Result<Option<u32>, Error>;
 
@@ -282,6 +288,20 @@ impl MailServer for ImapSession {
         messages.retain(|m| m.row.uid >= first);
         tracing::info!("fetched {} new Messages", messages.len());
         Ok(messages)
+    }
+
+    async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error> {
+        let command = format!("UID FETCH {} {}", uid_set(uids), self.items);
+        let messages = self.rows(command, |_| {}).await?;
+        tracing::info!("fetched {} Messages by UID", messages.len());
+        Ok(messages)
+    }
+
+    async fn thread(&mut self, id: u64) -> Result<Vec<u32>, Error> {
+        let found = self.session.uid_search(format!("X-GM-THRID {id}")).await?;
+        let mut uids: Vec<_> = found.into_iter().collect();
+        uids.sort_unstable();
+        Ok(uids)
     }
 
     async fn sequence_number(&mut self, uid: u32) -> Result<Option<u32>, Error> {
