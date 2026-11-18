@@ -11,6 +11,7 @@ use toml::Spanned;
 pub struct Config {
     pub email: String,
     pub imap: Imap,
+    pub secrets: SecretStore,
 }
 
 pub struct Imap {
@@ -26,6 +27,7 @@ struct RawConfig {
     auth: Auth,
     #[serde(default)]
     imap: RawImap,
+    #[serde(default)]
     secrets: Secrets,
 }
 
@@ -37,15 +39,18 @@ enum Auth {
     AppPassword,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct Secrets {
+    #[serde(default)]
     store: SecretStore,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
-enum SecretStore {
+pub enum SecretStore {
+    #[default]
+    Keychain,
     File,
 }
 
@@ -115,8 +120,8 @@ impl Config {
 
         let raw: RawConfig =
             toml::from_str(&text).map_err(|e| invalid(e.span().unwrap_or(0..0), e.message()))?;
-        match (raw.auth, raw.secrets.store) {
-            (Auth::AppPassword, SecretStore::File) => {}
+        match raw.auth {
+            Auth::AppPassword => {}
         }
 
         let tls = *raw.imap.tls.get_ref();
@@ -134,6 +139,7 @@ impl Config {
                 port: raw.imap.port,
                 tls,
             },
+            secrets: raw.secrets.store,
         })
     }
 }

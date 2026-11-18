@@ -12,6 +12,11 @@ way, at the HTTP level: the config carries undocumented `[oauth]` overrides for
 the authorization and token URLs, and the browser is replaced by a command that
 calls the loopback redirect.
 
+The OS keychain is not faked. Tests force `[secrets] store = "file"`, and the
+undocumented `POSTAL_KEYCHAIN_FAIL` variable makes the keychain refuse access,
+with its value as the reason, to cover the error path. Reading a real keychain
+entry is checked by hand.
+
 ## Considered options
 
 - **A fake behind Postal's IMAP trait.** Faster to write, but it skips the

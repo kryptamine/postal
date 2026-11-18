@@ -20,6 +20,7 @@ mod idle;
 mod imap;
 mod inbox;
 mod inbox_view;
+mod keychain;
 mod keymap;
 mod layout;
 mod link_hints;
@@ -72,7 +73,7 @@ use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
 use crate::{
     body_fetch::Request,
     cache::Cache,
-    config::Config,
+    config::{Config, SecretStore},
     credential::Credential,
     imap::{ImapSession, MailServer},
     older_pages::OlderPages,
@@ -129,8 +130,12 @@ fn logged(log: &Path) -> ExitCode {
 
 fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = xdg::config_dir()?;
-    let config = Config::load(&dir.join("config.toml"))?;
-    let password = secret::read(&dir.join("secret"))?;
+    let config_path = dir.join("config.toml");
+    let config = Config::load(&config_path)?;
+    let password = match config.secrets {
+        SecretStore::Keychain => keychain::read(&config.email, &config_path)?,
+        SecretStore::File => secret::read(&dir.join("secret"))?,
+    };
     let cache = Cache::open(&xdg::cache_dir()?)?;
     let theme = Theme::from_env();
     let runtime = tokio::runtime::Builder::new_current_thread()
