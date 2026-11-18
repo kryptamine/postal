@@ -9,15 +9,12 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, connect::Transport, pushed::Pushed, text_part, traced::Traced, whole_bodies, wire_trace,
-    xoauth2::XOAuth2,
+    Error, connect::Transport, new_messages, pushed::Pushed, traced::Traced, whole_bodies,
+    wire_trace, xoauth2::XOAuth2,
 };
 use crate::{
-    body_key::body_key,
     config::Config,
     folder::{Folder, Role},
-    header,
-    message::Message,
     new_message::NewMessage,
     sign_in::SignIn,
     snippet,
@@ -32,9 +29,6 @@ const ITEMS: &str =
 /// `X-GM-EXT-1`: anywhere else the item is `BAD`.
 const GMAIL_ITEMS: &str =
     "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
-
-/// Messages between two progress reports of the first fetch, each a redraw.
-const PROGRESS_EVERY: u32 = 50;
 
 /// A Folder as `EXAMINE` reports it.
 pub struct Examined {
@@ -123,6 +117,9 @@ pub struct ImapSession {
     items: &'static str,
     /// As of the last `examine`, for the body key of a server without Gmail's.
     uid_validity: u32,
+    /// What the server announced during a command read by hand, not yet
+    /// taken by `pushed`.
+    pending: Vec<Pushed>,
 }
 
 impl ImapSession {
@@ -168,27 +165,25 @@ impl ImapSession {
             session,
             items: if gmail { GMAIL_ITEMS } else { ITEMS },
             uid_validity: 0,
+            pending: Vec::new(),
         })
     }
 
-    async fn by_sequence(
+    /// `command`, a `FETCH` of `self.items`, read by hand.
+    #[expect(
+        clippy::future_not_send,
+        reason = "Postal runs on a current-thread runtime"
+    )]
+    async fn rows(
         &mut self,
-        range: String,
+        command: String,
         progress: impl Fn(u32),
     ) -> Result<Vec<NewMessage>, Error> {
-        let uid_validity = self.uid_validity;
-        let fetches = self.session.fetch(range, self.items).await?;
-        let mut fetches = std::pin::pin!(fetches);
-        let (mut messages, mut received) = (Vec::new(), 0);
-        while let Some(fetch) = fetches.try_next().await? {
-            messages.extend(message(&fetch, uid_validity));
-            received += 1;
-            if received % PROGRESS_EVERY == 0 {
-                progress(received);
-            }
-        }
-
-        Ok(messages)
+        // What came before stays ahead of what comes during the fetch.
+        let earlier = self.pushed();
+        self.pending = earlier;
+        let pushed = (&mut self.pending, progress);
+        new_messages::fetch(&mut self.session, command, self.uid_validity, pushed).await
     }
 
     async fn uid_fetch(&mut self, uids: String, items: &str) -> Result<Vec<Fetch>, Error> {
@@ -230,6 +225,10 @@ impl MailServer for ImapSession {
         Ok(status.unseen.map_or(0, |n| n as usize))
     }
 
+    #[expect(
+        clippy::future_not_send,
+        reason = "Postal runs on a current-thread runtime"
+    )]
     async fn newest(
         &mut self,
         exists: u32,
@@ -237,11 +236,16 @@ impl MailServer for ImapSession {
         progress: impl Fn(u32),
     ) -> Result<Vec<NewMessage>, Error> {
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
-        let messages = self.by_sequence(format!("{first}:*"), progress).await?;
+        let command = format!("FETCH {first}:* {}", self.items);
+        let messages = self.rows(command, progress).await?;
         tracing::info!("fetched the newest {} Messages", messages.len());
         Ok(messages)
     }
 
+    #[expect(
+        clippy::future_not_send,
+        reason = "Postal runs on a current-thread runtime"
+    )]
     async fn older(
         &mut self,
         before: u32,
@@ -254,21 +258,17 @@ impl MailServer for ImapSession {
         }
 
         let first = before.saturating_sub(count).max(1);
-        let messages = self
-            .by_sequence(format!("{first}:{last}"), progress)
-            .await?;
+        let command = format!("FETCH {first}:{last} {}", self.items);
+        let messages = self.rows(command, progress).await?;
         tracing::info!("fetched {} older Messages", messages.len());
         Ok(messages)
     }
 
     async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error> {
-        let fetches = self.uid_fetch(format!("{first}:*"), self.items).await?;
+        let command = format!("UID FETCH {first}:* {}", self.items);
+        let mut messages = self.rows(command, |_| {}).await?;
         // `first:*` always matches the last Message, even below `first`.
-        let messages: Vec<_> = fetches
-            .iter()
-            .filter_map(|f| message(f, self.uid_validity))
-            .filter(|m| m.row.uid >= first)
-            .collect();
+        messages.retain(|m| m.row.uid >= first);
         tracing::info!("fetched {} new Messages", messages.len());
         Ok(messages)
     }
@@ -338,7 +338,7 @@ impl MailServer for ImapSession {
     }
 
     fn pushed(&mut self) -> Vec<Pushed> {
-        let mut pushed = Vec::new();
+        let mut pushed = std::mem::take(&mut self.pending);
         // async-imap drops what comes once its queue of 100 is full.
         let lost = self.session.unsolicited_responses.is_full();
         while let Ok(response) = self.session.unsolicited_responses.try_recv() {
@@ -361,6 +361,7 @@ impl MailServer for ImapSession {
             session,
             items,
             uid_validity,
+            pending,
         } = self;
         let mut handle = session.idle();
         handle.init().await?;
@@ -378,9 +379,10 @@ impl MailServer for ImapSession {
             session: handle.done().await?,
             items,
             uid_validity,
+            pending: Vec::new(),
         };
 
-        let mut pushed = Vec::new();
+        let mut pushed = pending;
         if let IdleResponse::NewData(response) = &first {
             if let Some(text) = bye(response.parsed()) {
                 return Err(Error::Bye(text));
@@ -434,58 +436,4 @@ fn uid_set(uids: &[u32]) -> String {
 
 fn unread(fetch: &Fetch) -> bool {
     !fetch.flags().any(|flag| flag == Flag::Seen)
-}
-
-/// `None` when the server left out the UID.
-fn message(fetch: &Fetch, uid_validity: u32) -> Option<NewMessage> {
-    let uid = fetch.uid?;
-    let envelope = fetch.envelope();
-    let subject = envelope
-        .and_then(|e| e.subject.as_deref())
-        .map(header::decode)
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "(no subject)".to_owned());
-    let row = Message {
-        uid,
-        body_key: body_key(fetch.gmail_msg_id().copied(), uid_validity, uid),
-        received: fetch.internal_date().unwrap_or_default(),
-        unread: unread(fetch),
-        sender: envelope.and_then(sender).unwrap_or_else(|| raw_from(fetch)),
-        subject,
-        snippet: String::new(),
-    };
-
-    Some(NewMessage {
-        row,
-        text_part: fetch.bodystructure().and_then(text_part::find),
-    })
-}
-
-/// The `From` display name, else the full address; `None` when the server
-/// found no address in the header.
-fn sender(envelope: &async_imap::imap_proto::Envelope<'_>) -> Option<String> {
-    let from = envelope.from.as_ref()?.first()?;
-    let mailbox = from.mailbox.as_deref().filter(|m| !m.is_empty())?;
-    let host = from.host.as_deref().filter(|h| !h.is_empty())?;
-    if let Some(name) = from.name.as_deref().map(header::decode)
-        && !name.trim().is_empty()
-    {
-        return Some(name);
-    }
-
-    Some(format!(
-        "{}@{}",
-        String::from_utf8_lossy(mailbox),
-        String::from_utf8_lossy(host)
-    ))
-}
-
-/// The `From` header's value as sent, decoded to one line.
-fn raw_from(fetch: &Fetch) -> String {
-    let header = fetch.header().unwrap_or_default();
-    let value = header
-        .iter()
-        .position(|&b| b == b':')
-        .map_or(&[][..], |colon| &header[colon + 1..]);
-    header::decode(value).trim().to_owned()
 }

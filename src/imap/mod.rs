@@ -3,8 +3,10 @@
 
 mod connect;
 mod error;
+mod new_messages;
 mod pushed;
 mod session;
+mod tagged;
 mod text_part;
 mod traced;
 mod whole_bodies;
