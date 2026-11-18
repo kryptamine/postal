@@ -136,6 +136,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
         SecretStore::Keychain => keychain::read(&config.email, &config_path)?,
         SecretStore::File => secret::read(&dir.join("secret"))?,
     };
+
     let cache = Cache::open(&xdg::cache_dir()?)?;
     let theme = Theme::from_env();
     let runtime = tokio::runtime::Builder::new_current_thread()
