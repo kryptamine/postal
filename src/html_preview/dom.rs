@@ -82,17 +82,25 @@ pub fn text(node: &Handle) -> String {
 /// The columns `node` takes on one line: its words, and `[alt]` for each
 /// image left inside it.
 pub fn width(node: &Handle) -> usize {
-    let mut images = 0;
+    let images: usize = alts(node).iter().map(|alt| alt.trim().width() + 3).sum();
+    text(node).width() + images
+}
+
+/// The `alt` of every image below `node` that has one, in document order.
+pub fn alts(node: &Handle) -> Vec<String> {
+    let mut alts = Vec::new();
     let mut stack = vec![node.clone()];
     while let Some(next) = stack.pop() {
-        if name(&next) == Some("img") {
-            images += attr(&next, "alt").map_or(0, |alt| alt.trim().width() + 3);
+        if name(&next) == Some("img")
+            && let Some(alt) = attr(&next, "alt")
+        {
+            alts.push(alt);
         }
 
-        stack.extend(children(&next));
+        stack.extend(children(&next).into_iter().rev());
     }
 
-    text(node).width() + images
+    alts
 }
 
 pub fn has_image(node: &Handle) -> bool {

@@ -83,6 +83,26 @@ fn image_only_mail_keeps_its_links() {
     insta::assert_snapshot!(screen.with_styles());
 }
 
+// A card captions its linked picture with the same title, so the picture
+// goes; a picture whose alt says something else stays.
+#[test]
+fn a_card_shows_its_title_once() {
+    let body = FakeBody::text(
+        "html",
+        "7bit",
+        "<table><tr><td><a href=\"https://a.example/1\"><img src=\"c.jpg\" \
+         alt=\"AI for App Building &amp; Deployment\"></a></td></tr></table>\n\
+         <table><tr><td><a href=\"https://a.example/2\">AI for App Building \
+         &amp; Deployment</a></td></tr></table>\n\
+         <p><a href=\"https://a.example/3\"><img src=\"d.jpg\" alt=\"Sale\"></a></p>\
+         <p>Rust in Action</p>",
+    );
+    let screen = preview(body, (120, 20), "Rust in Action");
+    let text = screen.rect_text(43.., ..);
+    assert_eq!(text.matches("AI for App Building").count(), 1, "{text}");
+    assert!(text.contains("[Sale]"), "{text}");
+}
+
 // Columns stay while every cell fits on one line, and the icon column,
 // empty once its images go, takes no room.
 #[test]

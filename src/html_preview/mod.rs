@@ -6,6 +6,7 @@ mod decorator;
 mod dom;
 mod hidden;
 mod lines;
+mod repeats;
 mod tables;
 
 use html2text::config::{self, ImageRenderMode};
@@ -32,6 +33,7 @@ pub fn render(html: &str, width: usize, links: Links) -> Result<Vec<StyledLine>,
         .empty_img_mode(ImageRenderMode::IgnoreEmpty);
     let dom = config.parse_html(html.as_bytes())?;
     clean::clean(&dom, width);
+    repeats::drop_repeated_images(&dom);
     let tree = config.dom_to_render_tree(&dom)?;
     Ok(lines::styled(config.render_to_lines(tree, width)?))
 }
