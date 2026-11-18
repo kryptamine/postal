@@ -25,10 +25,12 @@ use crate::{
 const ITEMS: &str =
     "(UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
-/// `ITEMS` with the Gmail ID a body is cached under, for a server that lists
-/// `X-GM-EXT-1`: anywhere else the item is `BAD`.
-const GMAIL_ITEMS: &str =
-    "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
+/// `ITEMS` with the Gmail IDs a body is cached under and a Thread is grouped
+/// by, for a server that lists `X-GM-EXT-1`: anywhere else they are `BAD`.
+const GMAIL_ITEMS: &str = concat!(
+    "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID X-GM-THRID ",
+    "BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])"
+);
 
 /// A Folder as `EXAMINE` reports it.
 pub struct Examined {
@@ -120,6 +122,8 @@ pub struct ImapSession {
     /// What the server announced during a command read by hand, not yet
     /// taken by `pushed`.
     pending: Vec<Pushed>,
+    /// The Account's, to tell its own Messages.
+    email: String,
 }
 
 impl ImapSession {
@@ -166,6 +170,7 @@ impl ImapSession {
             items: if gmail { GMAIL_ITEMS } else { ITEMS },
             uid_validity: 0,
             pending: Vec::new(),
+            email: config.email.clone(),
         })
     }
 
@@ -183,7 +188,13 @@ impl ImapSession {
         let earlier = self.pushed();
         self.pending = earlier;
         let pushed = (&mut self.pending, progress);
-        new_messages::fetch(&mut self.session, command, self.uid_validity, pushed).await
+        new_messages::fetch(
+            &mut self.session,
+            command,
+            (self.uid_validity, &self.email),
+            pushed,
+        )
+        .await
     }
 
     async fn uid_fetch(&mut self, uids: String, items: &str) -> Result<Vec<Fetch>, Error> {
@@ -362,6 +373,7 @@ impl MailServer for ImapSession {
             items,
             uid_validity,
             pending,
+            email,
         } = self;
         let mut handle = session.idle();
         handle.init().await?;
@@ -380,6 +392,7 @@ impl MailServer for ImapSession {
             items,
             uid_validity,
             pending: Vec::new(),
+            email,
         };
 
         let mut pushed = pending;

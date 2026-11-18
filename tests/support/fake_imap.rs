@@ -49,6 +49,9 @@ pub const FIRST_UID: u32 = 101;
 /// `u32`, as Gmail's are.
 pub const FIRST_MSGID: u64 = 1_800_000_000_000_000_001;
 
+/// The `X-GM-THRID` of `FakeMessage::in_thread(0)`; the rest follow.
+pub const FIRST_THRID: u64 = 1_700_000_000_000_000_001;
+
 #[derive(Clone)]
 pub struct FakeMessage {
     pub from_name: Option<&'static str>,
@@ -61,6 +64,8 @@ pub struct FakeMessage {
     pub internal_date: String,
     pub seen: bool,
     pub body: FakeBody,
+    /// Messages sharing it share an `X-GM-THRID`; `None` starts a Thread of its own.
+    pub thread: Option<u64>,
 }
 
 impl FakeMessage {
@@ -73,6 +78,7 @@ impl FakeMessage {
             internal_date: internal_date.to_owned(),
             seen: true,
             body: FakeBody::plain(""),
+            thread: None,
         }
     }
 
@@ -83,6 +89,17 @@ impl FakeMessage {
 
     pub const fn unread(mut self) -> Self {
         self.seen = false;
+        self
+    }
+
+    pub const fn in_thread(mut self, thread: u64) -> Self {
+        self.thread = Some(thread);
+        self
+    }
+
+    /// Sent from the Account's own address.
+    pub const fn sent_by_me(mut self) -> Self {
+        self.from_address = EMAIL;
         self
     }
 
@@ -180,7 +197,7 @@ struct Inbox {
     /// The Inbox first.
     folders: Vec<Folder>,
     next_msgid: u64,
-    /// Advertises `X-GM-EXT-1` and answers `X-GM-MSGID`.
+    /// Advertises `X-GM-EXT-1` and answers `X-GM-MSGID` and `X-GM-THRID`.
     gmail: bool,
     stall: Option<Stall>,
     /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
@@ -434,7 +451,12 @@ async fn accept(
                 .messages
                 .iter()
                 .find(|m| m.uid == uid)
-                .map(|m| m.msgid)
+                .map(|m| {
+                    (
+                        m.msgid,
+                        m.message.thread.map_or(m.msgid, |t| FIRST_THRID + t),
+                    )
+                })
         };
 
         tokio::spawn(relay(client, to_fake, record, gmail.then_some(msgid)));

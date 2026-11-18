@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 4;
+pub const VERSION: i64 = 5;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -32,6 +32,9 @@ CREATE TABLE message (
     unread INTEGER NOT NULL,
     sender TEXT NOT NULL,
     subject TEXT NOT NULL,
+    -- Gmail's `X-GM-THRID`; NULL on another server.
+    thread INTEGER,
+    from_me INTEGER NOT NULL,
     -- NULL until the second fetch phase writes it.
     snippet TEXT,
     -- The part the Snippet and the Preview show; NULL with no text part.

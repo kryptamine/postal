@@ -23,7 +23,7 @@ const INTERNAL_DATE: &str = "%d-%b-%Y %H:%M:%S %z";
 pub async fn fetch(
     session: &mut Session<Box<dyn Transport>>,
     command: String,
-    uid_validity: u32,
+    (uid_validity, email): (u32, &str),
     (pushed, progress): (&mut Vec<Pushed>, impl Fn(u32)),
 ) -> Result<Vec<NewMessage>, Error> {
     let mut messages = Vec::new();
@@ -31,7 +31,7 @@ pub async fn fetch(
     tagged::run(session, command, |response| {
         let row = match response {
             Response::Fetch(_, attributes) if envelope(attributes).is_some() => {
-                message(attributes, uid_validity)
+                message(attributes, (uid_validity, email))
             }
             _ => {
                 pushed.extend(Pushed::from_response(response));
@@ -49,14 +49,21 @@ pub async fn fetch(
     Ok(messages)
 }
 
-/// `None` when the server left out the UID.
-fn message(attributes: &[AttributeValue<'_>], uid_validity: u32) -> Option<NewMessage> {
+/// `None` when the server left out the UID; `email` is the Account's.
+fn message(
+    attributes: &[AttributeValue<'_>],
+    (uid_validity, email): (u32, &str),
+) -> Option<NewMessage> {
     let uid = attributes.iter().find_map(|a| match a {
         AttributeValue::Uid(uid) => Some(*uid),
         _ => None,
     })?;
     let gmail_id = attributes.iter().find_map(|a| match a {
         AttributeValue::GmailMsgId(id) => Some(*id),
+        _ => None,
+    });
+    let thread = attributes.iter().find_map(|a| match a {
+        AttributeValue::GmailThrId(id) => Some(*id),
         _ => None,
     });
     let received = attributes
@@ -89,6 +96,8 @@ fn message(attributes: &[AttributeValue<'_>], uid_validity: u32) -> Option<NewMe
             .unwrap_or_else(|| raw_from(attributes)),
         subject,
         snippet: String::new(),
+        thread,
+        from_me: envelope.is_some_and(|e| from(e, email)),
     };
 
     let structure = attributes.iter().find_map(|a| match a {
@@ -99,6 +108,21 @@ fn message(attributes: &[AttributeValue<'_>], uid_validity: u32) -> Option<NewMe
         row,
         text_part: structure.and_then(text_part::find),
     })
+}
+
+/// Whether the first `From` address is `email`; addresses compare without case.
+fn from(envelope: &Envelope<'_>, email: &str) -> bool {
+    let Some(from) = envelope.from.as_ref().and_then(|f| f.first()) else {
+        return false;
+    };
+
+    let part = |p: Option<&[u8]>| String::from_utf8_lossy(p.unwrap_or_default()).into_owned();
+    let address = format!(
+        "{}@{}",
+        part(from.mailbox.as_deref()),
+        part(from.host.as_deref())
+    );
+    address.eq_ignore_ascii_case(email)
 }
 
 fn envelope<'a>(attributes: &'a [AttributeValue<'_>]) -> Option<&'a Envelope<'a>> {

@@ -1,6 +1,7 @@
 //! The bytes between the client and the fake server. imap-codec knows no
-//! Gmail extension, so `X-GM-MSGID` is taken out of each command here and
-//! added to each `FETCH` answer, and commands are recorded as sent.
+//! Gmail extension, so `X-GM-MSGID` and `X-GM-THRID` are taken out of each
+//! command here and added to each `FETCH` answer, and commands are recorded
+//! as sent.
 
 use std::sync::{Arc, Mutex};
 
@@ -13,23 +14,24 @@ use tokio::{
 };
 
 const MSGID: &str = "X-GM-MSGID";
+const THRID: &str = "X-GM-THRID";
 
-/// `record` gets each command line without its tag; `msgid` maps a Folder
-/// and UID to its `X-GM-MSGID`, and is `None` for a server without Gmail's
-/// extensions.
+/// `record` gets each command line without its tag; `ids` maps a Folder and
+/// UID to its `X-GM-MSGID` and `X-GM-THRID`, and is `None` for a server
+/// without Gmail's extensions.
 pub async fn relay(
     client: TcpStream,
     server: TcpStream,
     record: impl Fn(String) + Send,
-    msgid: Option<impl Fn(&str, u32) -> Option<u64> + Send>,
+    ids: Option<impl Fn(&str, u32) -> Option<(u64, u64)> + Send>,
 ) {
     let (client_read, client_write) = client.into_split();
     let (server_read, server_write) = server.into_split();
-    let gmail = msgid.is_some();
+    let gmail = ids.is_some();
     let examined = Arc::new(Mutex::new(String::from("INBOX")));
     tokio::join!(
         commands(client_read, server_write, (record, &examined), gmail),
-        responses(server_read, client_write, (msgid, &examined)),
+        responses(server_read, client_write, (ids, &examined)),
     );
 }
 
@@ -50,8 +52,10 @@ async fn commands(
 
         record(untagged.to_owned());
         let forwarded = if gmail {
-            line.replace(&format!("{MSGID} "), "")
-                .replace(&format!(" {MSGID}"), "")
+            [MSGID, THRID].iter().fold(line.clone(), |line, item| {
+                line.replace(&format!("{item} "), "")
+                    .replace(&format!(" {item}"), "")
+            })
         } else {
             line.clone()
         };
@@ -69,7 +73,10 @@ async fn commands(
 async fn responses(
     from: OwnedReadHalf,
     mut to: OwnedWriteHalf,
-    (msgid, examined): (Option<impl Fn(&str, u32) -> Option<u64>>, &Mutex<String>),
+    (ids, examined): (
+        Option<impl Fn(&str, u32) -> Option<(u64, u64)>>,
+        &Mutex<String>,
+    ),
 ) {
     let mut reader = BufReader::new(from);
     let mut line = Vec::new();
@@ -78,12 +85,15 @@ async fn responses(
         .await
         .is_ok_and(|n| n > 0)
     {
-        let id = msgid
+        let found = ids
             .as_ref()
-            .and_then(|msgid| msgid(&examined.lock().unwrap(), fetched_uid(&line)?));
-        if let Some(id) = id {
+            .and_then(|ids| ids(&examined.lock().unwrap(), fetched_uid(&line)?));
+        if let Some((msgid, thrid)) = found {
             let at = line.windows(7).position(|w| w == b"FETCH (").unwrap() + 7;
-            line.splice(at..at, format!("{MSGID} {id} ").into_bytes());
+            line.splice(
+                at..at,
+                format!("{MSGID} {msgid} {THRID} {thrid} ").into_bytes(),
+            );
         }
 
         let literal = literal_len(&line);

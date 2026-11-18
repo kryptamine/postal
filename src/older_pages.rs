@@ -39,7 +39,7 @@ impl OlderPages {
         };
 
         let searching = view.search.is_some();
-        if !self.live || self.asked || searching || view.selected + NEAR_END < messages.len() {
+        if !self.live || self.asked || searching || view.selected + NEAR_END < view.rows() {
             return;
         }
 

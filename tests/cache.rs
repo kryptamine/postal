@@ -16,8 +16,7 @@ use support::{
 };
 use termlens::{Color, Key, Screen, Terminal};
 
-const ITEMS: &str =
-    "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
+const ITEMS: &str = "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID X-GM-THRID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
 fn postal(home: &Home) -> Terminal {
     Terminal::builder()
@@ -323,7 +322,7 @@ fn a_newer_schema_exits_before_the_tui_and_is_left_alone() {
     let stderr = String::from_utf8(output.stderr).unwrap();
     let dir = home.xdg_cache_home().join("postal");
     let expected = format!(
-        "Cache was written by a newer Postal (schema 99 > 4). Upgrade Postal or delete {}.",
+        "Cache was written by a newer Postal (schema 99 > 5). Upgrade Postal or delete {}.",
         dir.display()
     );
     assert!(stderr.contains(&expected), "{stderr}");

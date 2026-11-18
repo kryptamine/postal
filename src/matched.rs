@@ -49,7 +49,8 @@ impl<'a> Matched<'a> {
         }
     }
 
-    fn len(&self, text: &str) -> u32 {
+    /// How many units `text` spans.
+    pub fn len(&self, text: &str) -> u32 {
         text.graphemes(true).map(|g| self.step(g)).sum()
     }
 

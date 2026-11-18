@@ -6,6 +6,7 @@ use crate::{
     keymap::{By, Direction, Move, Scroll},
     message::Message,
     search::Search,
+    thread::{self, Key, Thread},
     view::View,
 };
 
@@ -16,6 +17,8 @@ pub struct InboxView {
     /// `None` until the Cache or the server has rows to show. Their dates
     /// are local, each at the offset in force when it was received.
     pub messages: Option<Vec<Message>>,
+    /// The rows of the full list, grouped from `messages`.
+    pub threads: Vec<Thread>,
     /// Narrows the rows shown; `selected` and `offset` index those.
     pub search: Option<Search>,
     /// The server's count over the whole Folder.
@@ -38,6 +41,7 @@ impl InboxView {
         Self {
             folder: Folder::inbox(),
             messages: None,
+            threads: Vec::new(),
             search: None,
             unread: 0,
             selected: 0,
@@ -48,24 +52,25 @@ impl InboxView {
         }
     }
 
-    /// Shows rows already ordered newest first. The selection stays on the
-    /// same Message, or on the same row when that Message is gone.
+    /// Shows Messages already ordered newest first. The selection stays on
+    /// the same Thread, or on the same row when that Thread is gone.
     pub fn show(&mut self, mut inbox: Inbox) {
-        let selected = self.selected_uid();
+        let (selected, uid) = (self.selected_key(), self.selected_uid());
         for message in &mut inbox.messages {
             message.received = message.received.with_timezone(&Local).fixed_offset();
         }
 
+        self.threads = thread::threads(&inbox.messages);
         if let Some(search) = &mut self.search {
-            search.reload(&inbox.messages);
+            search.reload(&inbox.messages, &self.threads);
         }
 
         self.messages = Some(inbox.messages);
         let last = self.rows().saturating_sub(1);
         self.selected = selected
-            .and_then(|uid| self.position(uid))
+            .and_then(|key| self.position(key))
             .unwrap_or_else(|| self.selected.min(last));
-        if self.selected_uid() != selected {
+        if self.selected_uid() != uid {
             self.preview_scroll = 0;
         }
 
@@ -78,6 +83,7 @@ impl InboxView {
     pub fn switch(&mut self, folder: Folder) {
         self.folder = folder;
         self.messages = None;
+        self.threads.clear();
         self.search = None;
         self.unread = 0;
         self.selected = 0;
@@ -88,13 +94,13 @@ impl InboxView {
     /// Starts a Search, or resumes the one under way; false before any
     /// rows. Either way, Esc while typing comes back to the selection now.
     pub fn start_search(&mut self) -> bool {
-        let before = self.selected_uid();
+        let before = self.selected_key();
         let Some(messages) = self.messages.as_deref() else {
             return false;
         };
 
         self.search
-            .get_or_insert_with(|| Search::new(messages))
+            .get_or_insert_with(|| Search::new(messages, &self.threads))
             .before = before;
         true
     }
@@ -113,17 +119,17 @@ impl InboxView {
         }
     }
 
-    /// Back to the full list, on the Message selected before the last `/`
+    /// Back to the full list, on the Thread selected before the last `/`
     /// when `restore`, else on the one selected now.
     pub fn end_search(&mut self, restore: bool) {
-        let selected = self.selected_uid();
+        let (selected, uid) = (self.selected_key(), self.selected_uid());
         let Some(search) = self.search.take() else {
             return;
         };
 
         let keep = if restore { search.before } else { selected };
-        self.selected = keep.and_then(|uid| self.position(uid)).unwrap_or(0);
-        if self.selected_uid() != selected {
+        self.selected = keep.and_then(|key| self.position(key)).unwrap_or(0);
+        if self.selected_uid() != uid {
             self.preview_scroll = 0;
         }
     }
@@ -165,28 +171,40 @@ impl InboxView {
         self.selected_message().map(|m| m.uid)
     }
 
+    /// The newest Message of the selected Thread.
     pub fn selected_message(&self) -> Option<&Message> {
         self.row(self.selected)
     }
 
+    fn selected_key(&self) -> Option<Key> {
+        self.thread_at(self.selected).map(|t| t.key)
+    }
+
     /// How many rows are shown: all, or those a Search narrowed them to.
     pub fn rows(&self) -> usize {
-        let all = self.messages.as_ref().map_or(0, Vec::len);
+        let all = self.threads.len();
         self.search.as_ref().map_or(all, Search::rows)
     }
 
+    /// The newest Message of the Thread shown at `row`.
     pub fn row(&self, row: usize) -> Option<&Message> {
+        let thread = self.thread_at(row)?;
+        self.messages.as_ref()?.get(thread.newest())
+    }
+
+    /// The Thread shown at `row`.
+    fn thread_at(&self, row: usize) -> Option<&Thread> {
         let index = match &self.search {
             Some(search) => search.row(row)?,
             None => row,
         };
 
-        self.messages.as_ref()?.get(index)
+        self.threads.get(index)
     }
 
-    /// The row that shows the Message `uid`.
-    fn position(&self, uid: u32) -> Option<usize> {
-        let index = self.messages.as_ref()?.iter().position(|m| m.uid == uid)?;
+    /// The row that shows the Thread `key`.
+    fn position(&self, key: Key) -> Option<usize> {
+        let index = self.threads.iter().position(|t| t.key == key)?;
         self.search
             .as_ref()
             .map_or(Some(index), |search| search.position(index))

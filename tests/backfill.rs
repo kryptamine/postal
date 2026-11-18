@@ -10,8 +10,7 @@ use support::{
 };
 use termlens::{Key, Screen, Terminal};
 
-const ITEMS: &str =
-    "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
+const ITEMS: &str = "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID X-GM-THRID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
 fn postal(home: &Home) -> Terminal {
     Terminal::builder()

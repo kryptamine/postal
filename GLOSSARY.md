@@ -25,15 +25,19 @@ One email as stored on the server.
 _Avoid_: mail, letter, email
 
 **Message List**:
-The ordered rows of Messages in the shown Folder, one row per Message, newest arrival first.
+The ordered rows of the shown Folder, one row per Thread, by its newest arrival first. A row names the senders in order of first appearance (the Account as `me`), counts the Messages when more than one, and shows the oldest subject with the newest Snippet and date.
 _Avoid_: index, table, thread list
+
+**Thread**:
+The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, each Message is a Thread of its own. In the Message List, only those in the shown Folder and the Cache. Unread while any of its Messages is.
+_Avoid_: conversation, chain
 
 **Unread**:
 A Message the server has not marked as seen. Postal shows this state and never changes it.
 _Avoid_: new, unseen
 
 **Preview**:
-The body of the selected Message as Postal shows it: plain text wrapped, HTML in the rendered or the text View.
+The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View.
 _Avoid_: reader, viewer, body pane
 
 **Rendered View**:
@@ -69,11 +73,11 @@ Entered with `o`: each distinct URL the Preview window shows gets a label of hom
 _Avoid_: link mode, follow mode, footnotes
 
 **Reading**:
-The selected Message's Preview filling the screen in place of the Message List, entered with `Enter`; `q` or `Esc` goes back to the list.
+The selected Thread's Preview filling the screen in place of the Message List, entered with `Enter`; `q` or `Esc` goes back to the list.
 _Avoid_: reader, zoom, full view
 
 **Search**:
-The Message List narrowed to the Messages whose sender, subject or Snippet fuzzy-match a typed Query, best match first; `/` starts it, `Esc` ends it.
+The Message List narrowed to the Threads holding a Message whose sender, subject or Snippet fuzzy-match a typed Query, each ranked by its best match; `/` starts it, `Esc` ends it.
 _Avoid_: filter, find, fzf, lookup
 
 **Query**:

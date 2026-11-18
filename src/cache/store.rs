@@ -73,7 +73,7 @@ impl Cache {
         let limit = limit.map_or(-1, |n| i64::try_from(n).unwrap_or(i64::MAX));
         let mut statement = connection.prepare_cached(
             "SELECT uid, body_key, received, received_offset, unread, sender, subject,
-                    coalesce(snippet, '')
+                    coalesce(snippet, ''), thread, from_me
              FROM message WHERE mailbox = ?1
              ORDER BY received DESC, uid DESC LIMIT ?2",
         )?;
@@ -378,8 +378,8 @@ fn insert(connection: &Connection, folder: &str, rows: &[NewMessage]) -> rusqlit
     let mut insert = connection.prepare_cached(
         "INSERT OR REPLACE INTO message
          (uid, body_key, received, received_offset, unread, sender, subject, snippet,
-          text_section, text_encoding, text_charset, text_html, mailbox)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+          text_section, text_encoding, text_charset, text_html, mailbox, thread, from_me)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
     )?;
     for new in rows {
         let (m, part) = (&new.row, new.text_part.as_ref());
@@ -397,6 +397,8 @@ fn insert(connection: &Connection, folder: &str, rows: &[NewMessage]) -> rusqlit
             part.map(|p| &p.charset),
             part.map(|p| p.html),
             folder,
+            m.thread.map(u64::cast_signed),
+            m.from_me,
         ])?;
     }
 
@@ -416,6 +418,8 @@ fn message(row: &Row<'_>) -> rusqlite::Result<Message> {
         sender: row.get(5)?,
         subject: row.get(6)?,
         snippet: row.get(7)?,
+        thread: row.get::<_, Option<i64>>(8)?.map(i64::cast_unsigned),
+        from_me: row.get(9)?,
     })
 }
 
