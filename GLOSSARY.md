@@ -40,6 +40,10 @@ _Avoid_: store, database, offline copy
 A short notice in the right slot of the hint line, shown for three seconds; a new one replaces the old.
 _Avoid_: notification, flash, alert
 
+**Status**:
+The connection state in the right slot of the hint line, silent while live: syncing, connecting, or a countdown to the next reconnect. A Toast covers it while shown.
+_Avoid_: indicator, banner, connection bar
+
 **Hint mode**:
 Entered with `o`: each distinct URL the Preview window shows gets a label of home-row letters, and typing one opens it.
 _Avoid_: link mode, follow mode, footnotes

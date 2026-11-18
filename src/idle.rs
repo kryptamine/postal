@@ -5,6 +5,7 @@ use crate::{
     imap::{MailServer, Pushed},
     sequence_numbers::SequenceNumbers,
     snippets,
+    status::Status,
     sync::{self, Error},
 };
 
@@ -14,7 +15,8 @@ use crate::{
 const PERIOD: Duration = Duration::from_secs(10 * 60);
 
 /// Resyncs, cuts the Snippets, then keeps the Cache live from the server's
-/// announcements, forever. `written` follows every Cache write.
+/// announcements, forever. `written` follows every Cache write, `report` the
+/// resyncs.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -23,8 +25,9 @@ pub async fn listen<S: MailServer>(
     mut server: S,
     cache: &Cache,
     written: impl Fn(),
+    report: &dyn Fn(Status),
 ) -> Result<(), Error> {
-    let mut sequence = resynced(&mut server, cache, &written).await?;
+    let mut sequence = resynced(&mut server, cache, &written, report).await?;
     // What came during the resync and the Snippets goes first.
     let mut pushed = server.pushed();
     loop {
@@ -35,7 +38,7 @@ pub async fn listen<S: MailServer>(
 
         if pushed.iter().any(|p| matches!(p, Pushed::Lost)) {
             tracing::info!("IDLE announcements were dropped: resyncing");
-            sequence = resynced(&mut server, cache, &written).await?;
+            sequence = resynced(&mut server, cache, &written, report).await?;
             pushed = server.pushed();
             continue;
         }
@@ -71,8 +74,9 @@ async fn resynced(
     server: &mut impl MailServer,
     cache: &Cache,
     written: &impl Fn(),
+    report: &dyn Fn(Status),
 ) -> Result<SequenceNumbers, Error> {
-    let examined = sync::resync(server, cache).await?;
+    let examined = sync::resync(server, cache, report).await?;
     written();
     snippets::fetch(server, cache, written).await?;
     let uids = cache.uids()?;

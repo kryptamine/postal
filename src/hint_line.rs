@@ -1,18 +1,23 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::Style, widgets::Widget};
+use tokio::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
     keymap::{BINDINGS, HELP_HINT, Hint},
+    status::Status,
     theme::Theme,
 };
 
 const GAP: u16 = 2;
 
-/// The bottom row: key hints on the left, a Toast on the right. Hints that
-/// do not fit drop from the right; `?: help` always stays.
+/// The bottom row: key hints on the left, a Toast or else the Status on the
+/// right. Hints that do not fit drop from the right; `?: help` always stays.
 pub struct HintLine<'a> {
     pub theme: &'a Theme,
     pub toast: Option<&'static str>,
+    pub status: Status,
+    /// What the Status's countdown counts from.
+    pub now: Instant,
 }
 
 impl Widget for HintLine<'_> {
@@ -28,8 +33,20 @@ impl Widget for HintLine<'_> {
             return;
         }
 
-        let toast = self.toast.map_or(0, |text| text.width() + usize::from(GAP));
-        let room = usize::from(row.width).saturating_sub(toast);
+        let status = self.status.text(self.now);
+        let (right, style) = match self.toast {
+            Some(text) => (text, Style::new()),
+            None if self.status.warns() => (status.as_str(), self.theme.warning),
+            None => (status.as_str(), self.theme.muted),
+        };
+
+        let reserved = if right.is_empty() {
+            0
+        } else {
+            right.width() + usize::from(GAP)
+        };
+
+        let room = usize::from(row.width).saturating_sub(reserved);
         let mut left = room.saturating_sub(width(&HELP_HINT));
         let mut x = row.x;
         for hint in BINDINGS.iter().filter_map(|b| b.hint.as_ref()) {
@@ -43,15 +60,15 @@ impl Widget for HintLine<'_> {
         }
 
         let end = self.hint(buf, x, row, &HELP_HINT);
-        if let Some(text) = self.toast {
-            let width = u16::try_from(text.width()).unwrap_or(u16::MAX);
+        if !right.is_empty() {
+            let width = u16::try_from(right.width()).unwrap_or(u16::MAX);
             let at = row
                 .right()
                 .saturating_sub(width)
                 .max(end.saturating_add(GAP))
                 .min(row.right());
             let room = usize::from(row.right() - at);
-            buf.set_stringn(at, row.y, text, room, Style::new());
+            buf.set_stringn(at, row.y, right, room, style);
         }
     }
 }

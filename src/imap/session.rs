@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Duration};
 use async_imap::{
     Client, Session,
     extensions::idle::IdleResponse,
-    imap_proto::SectionPath,
+    imap_proto::{Response, SectionPath, Status},
     types::{Fetch, Flag},
 };
 use futures::TryStreamExt;
@@ -23,6 +23,9 @@ const ITEMS: &str =
 const GMAIL_ITEMS: &str =
     "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
+/// Messages between two progress reports of the first fetch, each a redraw.
+const PROGRESS_EVERY: u32 = 50;
+
 /// The Inbox as `EXAMINE` reports it.
 pub struct Examined {
     pub exists: u32,
@@ -33,8 +36,14 @@ pub struct Examined {
 pub trait MailServer {
     async fn examine(&mut self) -> Result<Examined, Error>;
 
-    /// The newest `count` of the `exists` Messages, by sequence number.
-    async fn newest(&mut self, exists: u32, count: u32) -> Result<Vec<NewMessage>, Error>;
+    /// The newest `count` of the `exists` Messages, by sequence number;
+    /// `progress` gets how many have come so far, now and then.
+    async fn newest(
+        &mut self,
+        exists: u32,
+        count: u32,
+        progress: impl Fn(u32),
+    ) -> Result<Vec<NewMessage>, Error>;
 
     /// The Messages whose UID is at least `first`.
     async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
@@ -95,11 +104,15 @@ impl ImapSession {
         }
 
         let mut client = Client::new(transport);
-        client
+        let greeting = client
             .read_response()
             .await
             .map_err(|e| Error::Imap(e.into()))?
             .ok_or(Error::Closed)?;
+        if let Some(text) = bye(greeting.parsed()) {
+            return Err(Error::Bye(text));
+        }
+
         let mut session = client
             .login(&config.email, password.expose())
             .await
@@ -135,14 +148,25 @@ impl MailServer for ImapSession {
         })
     }
 
-    async fn newest(&mut self, exists: u32, count: u32) -> Result<Vec<NewMessage>, Error> {
+    async fn newest(
+        &mut self,
+        exists: u32,
+        count: u32,
+        progress: impl Fn(u32),
+    ) -> Result<Vec<NewMessage>, Error> {
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
-        let fetches = self.session.fetch(format!("{first}:*"), self.items).await?;
         let uid_validity = self.uid_validity;
-        let messages: Vec<_> = fetches
-            .try_filter_map(|f| futures::future::ok(message(&f, uid_validity)))
-            .try_collect()
-            .await?;
+        let fetches = self.session.fetch(format!("{first}:*"), self.items).await?;
+        let mut fetches = std::pin::pin!(fetches);
+        let (mut messages, mut received) = (Vec::new(), 0);
+        while let Some(fetch) = fetches.try_next().await? {
+            messages.extend(message(&fetch, uid_validity));
+            received += 1;
+            if received % PROGRESS_EVERY == 0 {
+                progress(received);
+            }
+        }
+
         tracing::info!("fetched the newest {} Messages", messages.len());
         Ok(messages)
     }
@@ -267,12 +291,33 @@ impl MailServer for ImapSession {
 
         let mut pushed = Vec::new();
         if let IdleResponse::NewData(response) = &first {
+            if let Some(text) = bye(response.parsed()) {
+                return Err(Error::Bye(text));
+            }
+
             pushed.extend(Pushed::from_response(response.parsed()));
         }
 
         // The rest of the burst came in before the server answered `DONE`.
         pushed.extend(server.pushed());
         Ok((server, pushed))
+    }
+}
+
+/// The text of a `BYE`; `None` for any other response.
+fn bye(response: &Response<'_>) -> Option<String> {
+    match response {
+        Response::Data {
+            status: Status::Bye,
+            outcome,
+        } => Some(
+            outcome
+                .information
+                .as_deref()
+                .unwrap_or_default()
+                .to_owned(),
+        ),
+        _ => None,
     }
 }
 

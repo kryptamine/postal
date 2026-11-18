@@ -3,6 +3,7 @@ use std::{io, sync::Arc};
 use crossterm::event::{Event, EventStream};
 use futures::{Stream, StreamExt};
 use ratatui::{Terminal, layout::Rect};
+use tokio::time::Instant;
 
 use crate::{
     alloc_count, browser,
@@ -19,6 +20,7 @@ use crate::{
     preview_render::{self, Job},
     previews::Previews,
     rendered_previews::PreviewKey,
+    status::Status,
     suspend, sync,
     terminal_backend::{self, TerminalBackend},
     theme::Theme,
@@ -98,7 +100,12 @@ pub async fn run(
             continue;
         }
 
+        let change = screen.changes_at(Instant::now());
         tokio::select! {
+            () = tokio::time::sleep_until(change.unwrap_or_else(Instant::now)), if change.is_some() => {
+                frame_start = alloc_count::count();
+                screen.expire(Instant::now());
+            }
             result = &mut work, if working => {
                 frame_start = alloc_count::count();
                 working = false;
@@ -110,10 +117,6 @@ pub async fn run(
                     Some(update) => apply(update, &mut view, &mut screen, cache, previews)?,
                     None => listening = false,
                 }
-            }
-            () = tokio::time::sleep_until(screen.toast_until()), if screen.toast.is_some() => {
-                frame_start = alloc_count::count();
-                screen.toast = None;
             }
             event = events.next() => {
                 frame_start = alloc_count::count();
@@ -159,8 +162,14 @@ fn draw(
                 frame.render_stateful_widget(widget, pane, view);
             }
 
-            let toast = screen.toast.as_ref().map(|toast| toast.text);
-            frame.render_widget(HintLine { theme, toast }, panes.hint);
+            let hint_line = HintLine {
+                theme,
+                toast: screen.toast.as_ref().map(|toast| toast.text),
+                status: screen.status,
+                now: Instant::now(),
+            };
+
+            frame.render_widget(hint_line, panes.hint);
             if screen.help {
                 frame.render_widget(HelpPopup { theme }, panes.body);
             }
@@ -187,6 +196,7 @@ fn apply(
         }
         Update::Bodies(uids) => previews.stored(&uids),
         Update::Rendered(key, preview) => previews.rendered(key, preview),
+        Update::Status(status) => screen.status = status,
     }
 
     Ok(())
@@ -197,15 +207,25 @@ fn apply(
 struct Screen {
     help: bool,
     toast: Option<Toast>,
+    status: Status,
     hints: Option<LinkHints>,
 }
 
 impl Screen {
-    /// When the Toast shown goes; any instant while none is.
-    fn toast_until(&self) -> tokio::time::Instant {
-        self.toast
-            .as_ref()
-            .map_or_else(tokio::time::Instant::now, |toast| toast.until)
+    /// When the Toast goes or the Status's countdown ticks, whichever is
+    /// first; `None` while neither will.
+    fn changes_at(&self, now: Instant) -> Option<Instant> {
+        let toast = self.toast.as_ref().map(|toast| toast.until);
+        [toast, self.status.ticks_at(now)]
+            .into_iter()
+            .flatten()
+            .min()
+    }
+
+    fn expire(&mut self, now: Instant) {
+        if self.toast.as_ref().is_some_and(|toast| toast.until <= now) {
+            self.toast = None;
+        }
     }
 }
 

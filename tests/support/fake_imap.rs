@@ -19,7 +19,9 @@ use imap_next::{
         envelope::{Address, Envelope},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
         flag::{Flag, FlagFetch},
-        response::{Capability, Code, CommandContinuationRequest, Data, Greeting, Status},
+        response::{
+            Capability, Code, CodeOther, CommandContinuationRequest, Data, Greeting, Status,
+        },
         search::SearchKey,
         sequence::{SeqOrUid, Sequence, SequenceSet},
     },
@@ -105,6 +107,18 @@ pub enum Stall {
     Whole,
 }
 
+/// How the server turns clients away until `FakeImap::recover`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Outage {
+    /// Each connection is closed before the greeting.
+    Offline,
+    /// Each connection is greeted with `BYE [UNAVAILABLE]`, as Gmail does
+    /// while a backend is down.
+    Bye,
+    /// `LOGIN` is answered `NO [THROTTLED]`.
+    Throttled,
+}
+
 struct Stored {
     uid: u32,
     msgid: u64,
@@ -122,6 +136,9 @@ struct Inbox {
     highest_modseq: Option<u64>,
     messages: Vec<Stored>,
     stall: Option<Stall>,
+    outage: Option<Outage>,
+    /// Bumped to drop every connection open before.
+    cut: u64,
 }
 
 impl Inbox {
@@ -157,6 +174,8 @@ impl FakeImap {
             highest_modseq: Some(1),
             messages: Vec::new(),
             stall: None,
+            outage: None,
+            cut: 0,
         }));
         let server = Self {
             port,
@@ -173,35 +192,7 @@ impl FakeImap {
                 .enable_all()
                 .build()
                 .unwrap();
-            runtime.block_on(async move {
-                let listener = TcpListener::from_std(std_listener).unwrap();
-                let inner = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
-                let inner_address = inner.local_addr().unwrap();
-                loop {
-                    let Ok((client, _)) = listener.accept().await else {
-                        return;
-                    };
-
-                    let (to_fake, accepted) =
-                        tokio::join!(TcpStream::connect(inner_address), inner.accept());
-                    let (to_fake, (fake_side, _)) = (to_fake.unwrap(), accepted.unwrap());
-                    tokio::spawn(serve(Stream::insecure(fake_side), Arc::clone(&inbox)));
-                    let commands = Arc::clone(&commands);
-                    let inbox = Arc::clone(&inbox);
-                    let gmail = inbox.lock().unwrap().gmail;
-                    let record = move |command| commands.lock().unwrap().push(command);
-                    let msgid = move |uid| {
-                        let inbox = inbox.lock().unwrap();
-                        inbox
-                            .messages
-                            .iter()
-                            .find(|m| m.uid == uid)
-                            .map(|m| m.msgid)
-                    };
-
-                    tokio::spawn(relay(client, to_fake, record, gmail.then_some(msgid)));
-                }
-            });
+            runtime.block_on(accept(std_listener, commands, inbox));
         });
 
         server
@@ -289,6 +280,56 @@ impl FakeImap {
     pub fn release(&self) {
         self.inbox.lock().unwrap().stall = None;
     }
+
+    /// Drops every open connection and turns new ones away as `outage` says.
+    pub fn fail(&self, outage: Outage) {
+        let mut inbox = self.inbox.lock().unwrap();
+        inbox.outage = Some(outage);
+        inbox.cut += 1;
+    }
+
+    pub fn recover(&self) {
+        self.inbox.lock().unwrap().outage = None;
+    }
+}
+
+/// Serves each client through a relay, until the listener fails.
+async fn accept(
+    std_listener: std::net::TcpListener,
+    commands: Arc<Mutex<Vec<String>>>,
+    inbox: Arc<Mutex<Inbox>>,
+) {
+    let listener = TcpListener::from_std(std_listener).unwrap();
+    let inner = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+    let inner_address = inner.local_addr().unwrap();
+    loop {
+        let Ok((client, _)) = listener.accept().await else {
+            return;
+        };
+
+        if inbox.lock().unwrap().outage == Some(Outage::Offline) {
+            drop(client);
+            continue;
+        }
+
+        let (to_fake, accepted) = tokio::join!(TcpStream::connect(inner_address), inner.accept());
+        let (to_fake, (fake_side, _)) = (to_fake.unwrap(), accepted.unwrap());
+        tokio::spawn(serve(Stream::insecure(fake_side), Arc::clone(&inbox)));
+        let commands = Arc::clone(&commands);
+        let inbox = Arc::clone(&inbox);
+        let gmail = inbox.lock().unwrap().gmail;
+        let record = move |command| commands.lock().unwrap().push(command);
+        let msgid = move |uid| {
+            let inbox = inbox.lock().unwrap();
+            inbox
+                .messages
+                .iter()
+                .find(|m| m.uid == uid)
+                .map(|m| m.msgid)
+        };
+
+        tokio::spawn(relay(client, to_fake, record, gmail.then_some(msgid)));
+    }
 }
 
 async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
@@ -299,21 +340,25 @@ async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
 
 async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     wait_unless_stalled(&inbox, Stall::Greeting).await;
-    let greeting = Greeting::ok(None, "fake IMAP ready").unwrap();
-    let mut server = Server::new(Options::default(), greeting);
+    let (cut, outage) = {
+        let inbox = inbox.lock().unwrap();
+        (inbox.cut, inbox.outage)
+    };
+
+    let bye = outage == Some(Outage::Bye);
+    let mut server = Server::new(Options::default(), greeting(bye));
     let mut view = Vec::new();
     let mut idling = None;
     loop {
-        let next = if idling.is_some() {
-            tokio::select! {
-                next = stream.next(&mut server) => next,
-                () = tokio::time::sleep(Duration::from_millis(10)) => {
-                    announce(&mut server, &mut view, &inbox.lock().unwrap());
-                    continue;
+        let next = tokio::select! {
+            next = stream.next(&mut server) => next,
+            () = tokio::time::sleep(Duration::from_millis(10)) => {
+                if !tick(&mut server, &mut view, &inbox, cut, idling.is_some()) {
+                    return;
                 }
+
+                continue;
             }
-        } else {
-            stream.next(&mut server).await
         };
 
         let Ok(event) = next else {
@@ -321,6 +366,7 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
         };
 
         match event {
+            Event::GreetingSent { .. } if bye => return,
             Event::IdleCommandReceived { tag } => {
                 let accept = CommandContinuationRequest::basic(None, "idling").unwrap();
                 server.idle_accept(accept).unwrap();
@@ -355,6 +401,38 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
             _ => {}
         }
     }
+}
+
+fn greeting(bye: bool) -> Greeting<'static> {
+    let greeting = if bye {
+        Greeting::bye(Some(code("UNAVAILABLE")), "Temporary System Error")
+    } else {
+        Greeting::ok(None, "fake IMAP ready")
+    };
+
+    greeting.unwrap()
+}
+
+/// Announces what changed to an idling client; `false` once the connection
+/// opened at `cut` is to be dropped.
+fn tick(
+    server: &mut Server,
+    view: &mut Vec<(u32, bool)>,
+    inbox: &Mutex<Inbox>,
+    cut: u64,
+    idling: bool,
+) -> bool {
+    let inbox = inbox.lock().unwrap();
+    if inbox.cut != cut {
+        return false;
+    }
+
+    if idling {
+        announce(server, view, &inbox);
+    }
+
+    drop(inbox);
+    true
 }
 
 /// Each Message's UID and `\Seen`, in sequence order.
@@ -411,6 +489,11 @@ fn flags(seen: bool) -> Vec<FlagFetch<'static>> {
     }
 }
 
+/// A response code imap-types has no variant for, such as Gmail's.
+fn code(atom: &'static str) -> Code<'static> {
+    Code::Other(CodeOther::unvalidated(atom.as_bytes()))
+}
+
 fn login(tag: Option<Tag<'static>>, ok: bool) -> Status<'static> {
     let status = if ok {
         Status::ok(tag, None, "LOGIN completed")
@@ -433,6 +516,10 @@ fn capabilities(inbox: &Inbox) -> Data<'static> {
 fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
     let tag = Some(command.tag);
     match command.body {
+        CommandBody::Login { .. } if inbox.outage == Some(Outage::Throttled) => {
+            let status = Status::no(tag, Some(code("THROTTLED")), "Too many logins");
+            server.enqueue_status(status.unwrap());
+        }
         CommandBody::Login { username, password } => {
             let ok = username.as_ref() == EMAIL.as_bytes()
                 && password.declassify().as_ref() == PASSWORD.as_bytes();

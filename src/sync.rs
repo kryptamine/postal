@@ -3,6 +3,8 @@ use std::fmt;
 use crate::{
     cache::{self, Cache, Changes},
     imap::{self, Examined, MailServer},
+    outage::Outage,
+    status::Status,
     sync_state::SyncState,
 };
 
@@ -25,6 +27,16 @@ impl fmt::Display for Error {
     }
 }
 
+impl Error {
+    /// `None` when retrying would fail the same way.
+    pub fn outage(&self) -> Option<Outage> {
+        match self {
+            Self::Imap(source) => source.outage(),
+            Self::Cache(_) => None,
+        }
+    }
+}
+
 impl std::error::Error for Error {}
 
 impl From<imap::Error> for Error {
@@ -41,12 +53,16 @@ impl From<cache::Error> for Error {
 
 /// Brings the Cache up to the server's Inbox and writes the result in one
 /// transaction, so the Message List never shows a half-applied resync. Returns
-/// what its `EXAMINE` saw.
+/// what its `EXAMINE` saw; `report` follows the first fetch, then says `Live`.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-pub async fn resync(server: &mut impl MailServer, cache: &Cache) -> Result<Examined, Error> {
+pub async fn resync(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    report: &dyn Fn(Status),
+) -> Result<Examined, Error> {
     let examined = server.examine().await?;
     let unread = server.unread_count().await?;
     let known = cache.state()?;
@@ -66,24 +82,33 @@ pub async fn resync(server: &mut impl MailServer, cache: &Cache) -> Result<Exami
                 );
             }
 
-            refetch(server, &examined, unread).await?
+            refetch(server, &examined, unread, report).await?
         }
     };
 
     cache.apply(&changes)?;
+    report(Status::Live);
     Ok(examined)
 }
 
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
 async fn refetch(
     server: &mut impl MailServer,
     examined: &Examined,
     unread: usize,
+    report: &dyn Fn(Status),
 ) -> Result<Changes, Error> {
     let new = if examined.exists == 0 {
         tracing::info!("the Inbox is empty");
         Vec::new()
     } else {
-        server.newest(examined.exists, WINDOW).await?
+        let total = examined.exists.min(WINDOW);
+        report(Status::Syncing { done: 0, total });
+        let progress = |done| report(Status::Syncing { done, total });
+        server.newest(examined.exists, WINDOW, progress).await?
     };
 
     Ok(Changes {

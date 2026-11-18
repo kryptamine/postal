@@ -1,5 +1,6 @@
 mod alloc_count;
 mod ansi;
+mod backoff;
 mod body_fetch;
 mod body_key;
 mod browser;
@@ -26,6 +27,7 @@ mod marks;
 mod message;
 mod message_list;
 mod new_message;
+mod outage;
 mod pager;
 mod pager_text;
 mod panic_hook;
@@ -33,6 +35,7 @@ mod preview;
 mod preview_pane;
 mod preview_render;
 mod previews;
+mod reconnect;
 mod rendered_previews;
 mod run;
 mod secret;
@@ -40,6 +43,7 @@ mod sequence_numbers;
 mod snippet;
 mod snippets;
 mod stack_str;
+mod status;
 mod styled_line;
 mod suspend;
 mod sync;
@@ -51,6 +55,7 @@ mod toast;
 mod transfer_encoding;
 mod truncate;
 mod update;
+mod wake;
 mod wrap;
 mod xdg;
 
@@ -69,6 +74,7 @@ use crate::{
     imap::{ImapSession, MailServer},
     previews::Previews,
     run::Background,
+    status::Status,
     theme::Theme,
     update::Update,
 };
@@ -137,7 +143,13 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     runtime.block_on(async {
         let mut terminal = terminal_backend::init()?;
         let work = futures::future::try_join(
-            sync(&config, &password, &cache, || send(Update::Inbox)),
+            sync(
+                &config,
+                &password,
+                &cache,
+                || send(Update::Inbox),
+                |status| send(Update::Status(status)),
+            ),
             bodies(&config, &password, &cache, requested, |uids| {
                 send(Update::Bodies(uids));
             }),
@@ -163,12 +175,19 @@ async fn bodies(
     config: &Config,
     password: &Credential,
     cache: &Cache,
-    requests: UnboundedReceiver<BodyRequest>,
+    mut requests: UnboundedReceiver<BodyRequest>,
     stored: impl Fn(Vec<u32>),
 ) -> Result<(), sync::Error> {
-    let mut session = ImapSession::open(config, password).await?;
-    session.examine().await?;
-    body_fetch::serve(&mut session, cache, requests, stored).await
+    let mut waiting = Vec::new();
+    let attempt = async |report: &dyn Fn(Status)| {
+        let mut session = ImapSession::open(config, password).await?;
+        session.examine().await?;
+        report(Status::Live);
+        body_fetch::serve(&mut session, cache, &mut requests, &mut waiting, &stored).await
+    };
+
+    // The status slot follows the sync connection alone.
+    reconnect::retry(attempt, |_| {}).await
 }
 
 #[expect(
@@ -176,13 +195,19 @@ async fn bodies(
     reason = "Postal runs on a current-thread runtime"
 )]
 /// Resyncs and IDLEs on one connection, as the sequence numbers IDLE sends
-/// count in its `EXAMINE`. `written` follows every Cache write.
+/// count in its `EXAMINE`. `written` follows every Cache write, `report` the
+/// connection.
 async fn sync(
     config: &Config,
     password: &Credential,
     cache: &Cache,
     written: impl Fn(),
+    report: impl Fn(Status),
 ) -> Result<(), sync::Error> {
-    let session = ImapSession::open(config, password).await?;
-    idle::listen(session, cache, written).await
+    let attempt = async |report: &dyn Fn(Status)| {
+        let session = ImapSession::open(config, password).await?;
+        idle::listen(session, cache, &written, report).await
+    };
+
+    reconnect::retry(attempt, report).await
 }
