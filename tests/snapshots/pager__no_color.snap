@@ -2,9 +2,9 @@
 source: tests/pager.rs
 expression: "paged(Key::Char('l'), true)"
 ---
-␛[2mFrom    ␛[0mAda Lovelace
-␛[2mSubject ␛[0m␛[1mWeekly notes␛[0m
-␛[2mDate    ␛[0mMon, 18 Nov 2024 09:00
+From    Ada Lovelace
+Subject ␛[1mWeekly notes␛[0m
+Date    Mon, 18 Nov 2024 09:00
 
 Read ␛[4mthe notes␛[0m[1] and ␛[1m␛[4mthe agenda␛[0m[2].
 

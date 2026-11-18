@@ -275,21 +275,30 @@ fn colours_unless_no_color_is_set() {
 
     let mut t = postal(&home);
     let coloured = t.snapshot_after(loaded).unwrap();
+    t.send(Key::Char('j')).unwrap();
+    let moved = t
+        .snapshot_after(|s| s.cell(1, 4).is_some_and(|c| !c.style().reverse))
+        .unwrap();
     quit(t);
     let mut t = postal_with(&home, (80, 25), &[("NO_COLOR", "1")]);
     let plain = t.snapshot_after(loaded).unwrap();
     quit(t);
 
     let style = |s: &Screen, row, col| *s.cell(row, col).unwrap().style();
-    assert_eq!(style(&coloured, 1, 4).fg, termlens::Color::Indexed(4));
+    let colour = |s: &Screen, row, col| style(s, row, col).fg;
+    assert_eq!(colour(&coloured, 1, 4), termlens::Color::Indexed(4));
+    // The selection keeps one colour; off it, the marker, sender, date and
+    // title take accents. The date ends a column of padding short of the border.
+    assert_eq!(colour(&coloured, 1, 2), termlens::Color::Indexed(4));
+    assert_eq!(colour(&moved, 1, 2), termlens::Color::Indexed(3));
+    assert_eq!(colour(&coloured, 4, 4), termlens::Color::Indexed(5));
+    assert_eq!(colour(&coloured, 4, 77), termlens::Color::Indexed(6));
+    assert_eq!(colour(&coloured, 0, 2), termlens::Color::Indexed(4));
     for screen in [&coloured, &plain] {
         let newest = style(screen, 1, 4);
         assert!(newest.reverse, "the selection survives NO_COLOR");
         assert!(newest.bold, "the Unread card stays bold");
         assert_eq!(screen.cell(1, 2).unwrap().contents(), "●");
-        // Card 2 is read and unselected; its date ends one column of padding
-        // short of the right border.
-        assert!(style(screen, 4, 77).dim, "the date is muted");
         assert!(style(screen, 0, 0).dim, "the border is muted");
         assert!(style(screen, 0, 2).bold, "the title is bold");
     }

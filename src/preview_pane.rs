@@ -72,9 +72,9 @@ impl StatefulWidget for PreviewPane<'_> {
         let last_top = rows.saturating_sub(usize::from(text.height));
         view.preview_scroll = view.preview_scroll.min(last_top);
         let header = [
-            (&preview.from, Style::new()),
-            (&preview.subject, self.theme.title),
-            (&preview.date, Style::new()),
+            (&preview.from, self.theme.sender),
+            (&preview.subject, self.theme.subject),
+            (&preview.date, self.theme.date),
         ];
 
         for (y, index) in (text.y..text.bottom()).zip(view.preview_scroll..rows) {
@@ -103,7 +103,7 @@ impl StatefulWidget for PreviewPane<'_> {
 impl PreviewPane<'_> {
     fn header(&self, buf: &mut Buffer, row: Rect, label: &str, (value, style): (&str, Style)) {
         let room = usize::from(row.width);
-        buf.set_stringn(row.x, row.y, label, room, self.theme.muted);
+        buf.set_stringn(row.x, row.y, label, room, self.theme.field);
         let value_area = Rect {
             x: row.x + LABEL_WIDTH.min(row.width),
             width: row.width.saturating_sub(LABEL_WIDTH),

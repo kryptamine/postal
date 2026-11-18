@@ -103,13 +103,9 @@ impl Cards<'_> {
             Style::new()
         };
 
-        // The selected card keeps one style throughout, so nothing on it is muted.
-        let muted = if selected {
-            base
-        } else {
-            base.patch(self.theme.muted)
-        };
-
+        // The selected card keeps one style throughout: nothing on it is
+        // muted or coloured, which would break the selection's colour.
+        let tone = |style: Style| if selected { base } else { base.patch(style) };
         let strong = if message.unread {
             base.patch(self.theme.unread)
         } else {
@@ -118,20 +114,22 @@ impl Cards<'_> {
 
         // The selection fills the whole card; only its text is padded.
         buf.set_style(card, base);
-        let card = Rect {
+        let text = Rect {
             x: card.x + PADDING,
             width: card.width.saturating_sub(2 * PADDING),
             ..card
         };
 
         if message.unread {
-            buf.set_string(card.x, card.y, MARKER, strong);
+            let style = strong.patch(tone(self.theme.marker));
+            buf.set_string(text.x, text.y, MARKER, style);
         }
 
-        let text_width = card.width.saturating_sub(INDENT);
-        let sender_width = (card.width / 4).clamp(12, 24).min(text_width);
-        let sender = Rect::new(card.x + INDENT, card.y, sender_width, 1);
-        truncate::draw(buf, sender, &message.sender, strong);
+        let text_width = text.width.saturating_sub(INDENT);
+        let sender_width = (text.width / 4).clamp(12, 24).min(text_width);
+        let sender = Rect::new(text.x + INDENT, text.y, sender_width, 1);
+        let style = strong.patch(tone(self.theme.sender));
+        truncate::draw(buf, sender, &message.sender, style);
         if let Some(now) = &self.now {
             let label = DateLabel::new(&message.received, now);
             let date = label.as_str();
@@ -139,18 +137,18 @@ impl Cards<'_> {
                 clippy::cast_possible_truncation,
                 reason = "a DateLabel is at most 10 columns"
             )]
-            let date_x = card.right() - date.width() as u16;
-            buf.set_string(date_x, card.y, date, muted);
+            let date_x = text.right() - date.width() as u16;
+            buf.set_string(date_x, text.y, date, tone(self.theme.date));
         }
 
-        if card.height > 1 {
-            let subject = Rect::new(card.x + INDENT, card.y + 1, text_width, 1);
+        if text.height > 1 {
+            let subject = Rect::new(text.x + INDENT, text.y + 1, text_width, 1);
             truncate::draw(buf, subject, &message.subject, strong);
         }
 
-        if card.height > 2 {
-            let snippet = Rect::new(card.x + INDENT, card.y + 2, text_width, 1);
-            truncate::draw(buf, snippet, &message.snippet, muted);
+        if text.height > 2 {
+            let snippet = Rect::new(text.x + INDENT, text.y + 2, text_width, 1);
+            truncate::draw(buf, snippet, &message.snippet, tone(self.theme.muted));
         }
     }
 }

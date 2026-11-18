@@ -1,7 +1,5 @@
 use std::io::{self, Write};
 
-use ratatui::style::Style;
-
 use crate::{ansi, preview::Preview, preview_pane::LABELS, theme::Theme};
 
 /// `preview` as the bytes piped to the pager: the header block, a blank
@@ -15,13 +13,13 @@ pub fn ansi(preview: &Preview, theme: &Theme) -> Vec<u8> {
 
 fn write(out: &mut Vec<u8>, preview: &Preview, theme: &Theme) -> io::Result<()> {
     let header = [
-        (&preview.from, Style::new()),
-        (&preview.subject, theme.title),
-        (&preview.date, Style::new()),
+        (&preview.from, theme.sender),
+        (&preview.subject, theme.subject),
+        (&preview.date, theme.date),
     ];
 
     for (label, (value, style)) in LABELS.into_iter().zip(header) {
-        ansi::styled(out, label, theme.muted)?;
+        ansi::styled(out, label, theme.field)?;
         ansi::styled(out, value, style)?;
         out.write_all(b"\n")?;
     }

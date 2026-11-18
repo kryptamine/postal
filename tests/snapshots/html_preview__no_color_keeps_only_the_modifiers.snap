@@ -18,9 +18,9 @@ size: 120x12  cursor: hidden
 
 styles:
 0: 0 dim; 1-17 bold; 18-42 dim; 43-47 bold; 48-119 dim
-1: 0 dim; 1-40 reverse; 41-42 dim; 44-51 dim; 119 dim
-2: 0 dim; 1-40 reverse; 41-42 dim; 44-51 dim; 52-58 bold; 119 dim
-3: 0 dim; 1-40 reverse; 41-42 dim; 44-51 dim; 119 dim
+1: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
+2: 0 dim; 1-40 reverse; 41-42 dim; 52-58 bold; 119 dim
+3: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
 4: 0 dim; 41-42 dim; 119 dim
 5: 0 dim; 41-42 dim; 48-51 bold; 53-58 italic; 60-63 underline; 119 dim
 6: 0 dim; 41-42 dim; 119 dim
