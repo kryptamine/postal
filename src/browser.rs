@@ -23,5 +23,6 @@ pub fn open(url: &str) -> io::Result<()> {
         Ok(_) => {}
         Err(error) => tracing::warn!("waiting on `{OPENER}` failed: {error}"),
     });
+
     Ok(())
 }

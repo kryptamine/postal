@@ -281,6 +281,7 @@ fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text:
         let lines = preview_pane::body_lines(view.preview_scroll, text);
         LinkHints::find(&preview.body, lines)
     });
+
     if screen.hints.is_none() {
         screen.toast = Some(Toast::new("no links"));
     }
