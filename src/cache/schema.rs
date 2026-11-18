@@ -55,21 +55,27 @@ enum Unusable {
 
 /// Opens the Cache in `dir`. A corrupt or older one is deleted and rebuilt;
 /// a newer one is left untouched, since rebuilding it would churn the Cache
-/// on every upgrade and downgrade.
-pub fn open(dir: &Path) -> Result<Connection, Error> {
+/// on every upgrade and downgrade. Says whether it replaced one.
+pub fn open(dir: &Path) -> Result<(Connection, bool), Error> {
     fs::create_dir_all(dir)?;
     let path = dir.join(FILE);
-    match existing(&path) {
-        Ok(connection) => return Ok(connection),
+    let rebuilt = match existing(&path) {
+        Ok(connection) => return Ok((connection, false)),
         Err(Unusable::Newer(found)) => {
             return Err(Error::NewerSchema {
                 found,
                 dir: dir.to_owned(),
             });
         }
-        Err(Unusable::Missing) => tracing::info!("creating the Cache at {}", path.display()),
-        Err(Unusable::Stale(reason)) => tracing::warn!("cache rebuilt: {reason}"),
-    }
+        Err(Unusable::Missing) => {
+            tracing::info!("creating the Cache at {}", path.display());
+            false
+        }
+        Err(Unusable::Stale(reason)) => {
+            tracing::warn!("cache rebuilt: {reason}");
+            true
+        }
+    };
 
     for suffix in ["", "-wal", "-shm"] {
         let mut file = path.clone().into_os_string();
@@ -84,7 +90,7 @@ pub fn open(dir: &Path) -> Result<Connection, Error> {
     configure(&connection)?;
     connection.execute_batch(TABLES)?;
     connection.pragma_update(None, "user_version", VERSION)?;
-    Ok(connection)
+    Ok((connection, rebuilt))
 }
 
 fn existing(path: &Path) -> Result<Connection, Unusable> {

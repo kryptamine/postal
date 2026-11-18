@@ -61,6 +61,10 @@ fn four_messages() -> Vec<FakeMessage> {
     ]
 }
 
+fn hint_line(screen: &Screen) -> String {
+    screen.row_text(screen.rows() - 1).trim_end().to_owned()
+}
+
 /// Whether the card naming `sender` shows the Unread marker; `None` when
 /// no card on screen names it.
 fn card(screen: &Screen, sender: &str) -> Option<bool> {
@@ -255,15 +259,26 @@ fn a_corrupt_cache_is_rebuilt() {
     let home = Home::for_server(&server);
     fs::create_dir_all(home.cache_path().parent().unwrap()).unwrap();
     fs::write(home.cache_path(), "not a database, just bytes ".repeat(100)).unwrap();
-    first_run(&home, &server);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains(" unread ") && hint_line(s).ends_with("cache rebuilt"))
+        .unwrap();
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+    quit(t);
+    let log = fs::read_to_string(home.log_path()).unwrap();
+    assert!(log.contains("cache rebuilt"), "{log}");
+
+    // A Cache that opens as it is says nothing.
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    let screen = t.wait_stable(Duration::from_millis(300)).unwrap();
+    assert!(!hint_line(&screen).contains("cache rebuilt"), "{screen}");
+    quit(t);
 
     let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
     let rows: i64 = cache
         .query_row("SELECT count(*) FROM message", [], |row| row.get(0))
         .unwrap();
     assert_eq!(rows, 4);
-    let log = fs::read_to_string(home.log_path()).unwrap();
-    assert!(log.contains("cache rebuilt"), "{log}");
 }
 
 #[test]

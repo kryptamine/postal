@@ -14,13 +14,21 @@ const BODY_BYTES: i64 = 200 * 1024 * 1024;
 
 pub struct Cache {
     connection: Connection,
+    rebuilt: bool,
 }
 
 impl Cache {
     pub fn open(dir: &Path) -> Result<Self, Error> {
+        let (connection, rebuilt) = schema::open(dir)?;
         Ok(Self {
-            connection: schema::open(dir)?,
+            connection,
+            rebuilt,
         })
+    }
+
+    /// Whether opening replaced a corrupt or outdated Cache.
+    pub const fn rebuilt(&self) -> bool {
+        self.rebuilt
     }
 
     /// The newest `limit` rows, all of them when `None`; `None` before the

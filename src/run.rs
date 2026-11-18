@@ -79,7 +79,8 @@ pub async fn run(
     let mut whole = false;
     let mut working = true;
     let mut listening = true;
-    let mut screen = Screen::default();
+    let mut screen = Screen::opening(cache);
+
     // A frame's allocations count from what triggered it, the input or the
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
@@ -212,6 +213,13 @@ struct Screen {
 }
 
 impl Screen {
+    fn opening(cache: &Cache) -> Self {
+        Self {
+            toast: cache.rebuilt().then(|| Toast::new("cache rebuilt")),
+            ..Self::default()
+        }
+    }
+
     /// When the Toast goes or the Status's countdown ticks, whichever is
     /// first; `None` while neither will.
     fn changes_at(&self, now: Instant) -> Option<Instant> {
