@@ -7,6 +7,7 @@ use std::{
 use futures::channel::mpsc::UnboundedSender;
 
 use crate::{
+    body::Body,
     body_fetch::{BodyRequest, Fetched, Request},
     cache::{self, Cache},
     folder,
@@ -18,6 +19,7 @@ use crate::{
     rendered_previews::{PreviewKey, RenderedPreviews},
     shown::Shown,
     update::Update,
+    view::View,
 };
 
 /// Rows on each side of the selection whose Preview is made ready too.
@@ -96,12 +98,28 @@ impl Previews {
 
     /// The selected Message's Preview at `width`, once rendered.
     pub fn get(&self, view: &InboxView, width: u16) -> Option<&Preview> {
-        let message = view.selected_message()?;
+        self.of(view.selected_message()?, view.html, width)
+    }
+
+    /// The Preview of `message` in `html` at `width`, once rendered.
+    pub fn of(&self, message: &Message, html: View, width: u16) -> Option<&Preview> {
         self.rendered.get(PreviewKey {
             body: message.body_key,
             width,
-            view: view.html,
+            view: html,
         })
+    }
+
+    pub fn body(&self, message: &Message, html: View, width: u16) -> Body<'_> {
+        if let Some(preview) = self.of(message, html, width) {
+            return Body::Rendered(preview);
+        }
+
+        match self.refused.get(&message.uid) {
+            Some(why) => Body::Unavailable(why),
+            None if self.offline.contains(&message.uid) => Body::Unavailable(OFFLINE),
+            None => Body::Loading,
+        }
     }
 
     pub fn shown(&self, view: &InboxView, width: u16) -> Shown<'_> {
@@ -109,14 +127,10 @@ impl Previews {
             return Shown::Loading;
         };
 
-        if let Some(preview) = self.get(view, width) {
-            return Shown::Rendered(preview);
-        }
-
-        let why = match self.refused.get(&message.uid) {
-            Some(why) => why.as_str(),
-            None if self.offline.contains(&message.uid) => OFFLINE,
-            None => return Shown::Loading,
+        let why = match self.body(message, view.html, width) {
+            Body::Rendered(preview) => return Shown::Rendered(preview),
+            Body::Loading => return Shown::Loading,
+            Body::Unavailable(why) => why,
         };
 
         match &self.header {
@@ -133,23 +147,52 @@ impl Previews {
         view: &InboxView,
         width: u16,
     ) -> Result<(), cache::Error> {
+        let selected = view.selected;
+        let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
+        let rows = std::iter::once(selected).chain(around.filter(|&i| i != selected));
+        let wanted = rows.filter_map(|index| Some((view.row(index)?, index == selected)));
+        self.ready(cache, view, wanted, width)?;
+        if let Some(message) = view.selected_message() {
+            self.ready_header(message);
+        }
+
+        Ok(())
+    }
+
+    /// Readies the Previews of the selected Thread's `unfolded` Messages at
+    /// `width`, the one at `cursor` asked for first.
+    pub fn want_stack(
+        &mut self,
+        cache: &Cache,
+        view: &InboxView,
+        (unfolded, cursor): (impl Fn(u32) -> bool, u32),
+        width: u16,
+    ) -> Result<(), cache::Error> {
+        let stack = view.stack().filter(|m| unfolded(m.uid));
+        let wanted = stack.map(|m| (m, m.uid == cursor));
+        self.ready(cache, view, wanted, width)
+    }
+
+    /// Renders each `(message, selected)` whose body is cached and asks the
+    /// server for the rest. When all are rendered already this does not allocate.
+    fn ready<'m>(
+        &mut self,
+        cache: &Cache,
+        view: &InboxView,
+        wanted: impl Iterator<Item = (&'m Message, bool)>,
+        width: u16,
+    ) -> Result<(), cache::Error> {
         if self.folder != view.folder.name {
             self.switch(&view.folder.name);
         }
 
-        let selected = view.selected;
-        let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
         let mut request = BodyRequest {
             folder: Arc::clone(&self.folder),
             selected: None,
             neighbours: Vec::new(),
         };
 
-        for index in std::iter::once(selected).chain(around.filter(|&i| i != selected)) {
-            let Some(message) = view.row(index) else {
-                continue;
-            };
-
+        for (message, selected) in wanted {
             let key = PreviewKey {
                 body: message.body_key,
                 width,
@@ -173,7 +216,7 @@ impl Previews {
             match body {
                 Some(body) => self.render(key, body, message),
                 None if self.link == Link::Live => {
-                    if index == selected {
+                    if selected {
                         request.selected = Some(message.uid);
                     } else {
                         request.neighbours.push(message.uid);
@@ -187,10 +230,6 @@ impl Previews {
         }
 
         self.ask(request);
-        if let Some(message) = view.selected_message() {
-            self.ready_header(message);
-        }
-
         Ok(())
     }
 

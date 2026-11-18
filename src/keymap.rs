@@ -6,11 +6,15 @@ use crate::mode::Mode;
 pub enum Action {
     Move(Move),
     Scroll(Scroll),
-    /// The selected Message full screen.
+    /// The selected Thread full screen.
     Read,
-    /// From the full-screen Message to the list.
+    /// From the full-screen Thread to the list.
     Back,
-    /// The selected Message in `$PAGER`.
+    /// The cursor to the next or previous Message of the Thread.
+    Step(Direction),
+    /// Folds or unfolds the Message at the cursor.
+    Fold,
+    /// The selected Message in `$PAGER`; in Reading, the one at the cursor.
     Page,
     /// Hint mode on the links in the Preview window.
     Links,
@@ -100,7 +104,7 @@ const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 23] = [
+const BINDINGS: [Binding; 25] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -140,7 +144,7 @@ const BINDINGS: [Binding; 23] = [
         signed_out: false,
         keys: "g / G",
         aliases: "Home / End",
-        description: "top / bottom of the Message",
+        description: "top / bottom of the Thread",
         hint: None,
     },
     Binding {
@@ -153,6 +157,30 @@ const BINDINGS: [Binding; 23] = [
         hint: Some(Hint {
             keys: "^d/^u",
             description: "page",
+        }),
+    },
+    Binding {
+        group: "Read",
+        modes: READING,
+        signed_out: false,
+        keys: "n / p",
+        aliases: "",
+        description: "next / previous Message",
+        hint: Some(Hint {
+            keys: "n/p",
+            description: "next",
+        }),
+    },
+    Binding {
+        group: "Read",
+        modes: READING,
+        signed_out: false,
+        keys: "Enter",
+        aliases: "Space",
+        description: "fold / unfold the Message",
+        hint: Some(Hint {
+            keys: "enter",
+            description: "fold",
         }),
     },
     Binding {
@@ -415,6 +443,9 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (Mode::Reading, KeyCode::Char('G') | KeyCode::End) => {
             Some(scroll(Direction::Down, By::End))
         }
+        (Mode::Reading, KeyCode::Char('n')) => Some(Action::Step(Direction::Down)),
+        (Mode::Reading, KeyCode::Char('p')) => Some(Action::Step(Direction::Up)),
+        (Mode::Reading, KeyCode::Enter | KeyCode::Char(' ')) => Some(Action::Fold),
         (Mode::Reading, KeyCode::Char('q' | 'h') | KeyCode::Esc | KeyCode::Left) => {
             Some(Action::Back)
         }

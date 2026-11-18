@@ -12,6 +12,7 @@ use tokio::time::Instant;
 use crate::{
     alloc_count,
     backfill::Backfill,
+    body::Body,
     browser,
     cache::{self, Cache},
     folder::Folder,
@@ -30,13 +31,16 @@ use crate::{
     preview_pane::{self, PreviewPane},
     preview_render::{self, Job},
     previews::Previews,
+    reading::Reading,
     rendered_previews::PreviewKey,
     search::Search,
+    stack,
     status::Status,
     steering::Ask,
     suspend, sync,
     terminal_backend::{self, TerminalBackend},
     theme::Theme,
+    thread_pane::ThreadPane,
     toast::Toast,
     update::Update,
 };
@@ -128,10 +132,10 @@ pub async fn run(
         let text = panes(terminal, screen.mode)?
             .preview
             .map(preview_pane::text_area);
-        want(previews, cache, &view, text.filter(|_| whole))?;
+        want(previews, cache, (&view, &screen), text.filter(|_| whole))?;
         whole.then(|| older.want(&view));
         screen.notice_write_failure(cache);
-        draw(terminal, theme, &mut view, previews, &screen)?;
+        draw(terminal, theme, &mut view, previews, &mut screen)?;
         alloc_count::report(frame_start);
         if !whole {
             whole = true;
@@ -164,7 +168,7 @@ pub async fn run(
                     Step::Links => label_links(&mut screen, previews, &view, text),
                     step @ (Step::Folders | Step::Show(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
-                    Step::Page => screen.toast = open(terminal, &mut events, theme, cache, &view)?,
+                    Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::SignIn => return Ok(Exit::SignIn),
                     Step::Quit => return Ok(Exit::Quit),
@@ -190,16 +194,26 @@ fn finished(result: Result<(), sync::Error>) -> Result<(), Error> {
     }
 }
 
-/// Readies the Previews around the selection, once `text` is laid out.
+/// Readies the Previews around the selection, or those unfolded while
+/// reading, once `text` is laid out.
 fn want(
     previews: &mut Previews,
     cache: &Cache,
-    view: &InboxView,
+    (view, screen): (&InboxView, &Screen),
     text: Option<Rect>,
 ) -> Result<(), Error> {
-    text.map_or(Ok(()), |text| {
-        previews.want(cache, view, text.width).map_err(Error::Cache)
-    })
+    let Some(text) = text else {
+        return Ok(());
+    };
+
+    match &screen.reading {
+        Some(reading) => {
+            let stack = (|uid| reading.unfolded(uid), reading.cursor);
+            previews.want_stack(cache, view, stack, text.width)
+        }
+        None => previews.want(cache, view, text.width),
+    }
+    .map_err(Error::Cache)
 }
 
 /// How many cards the list shows on the first frame.
@@ -221,7 +235,7 @@ fn draw(
     theme: &Theme,
     view: &mut InboxView,
     previews: &Previews,
-    screen: &Screen,
+    screen: &mut Screen,
 ) -> Result<(), Error> {
     terminal
         .draw(|frame| {
@@ -230,7 +244,17 @@ fn draw(
                 frame.render_stateful_widget(MessageList { theme }, list, view);
             }
 
-            if let Some(pane) = panes.preview {
+            if let (Some(pane), Some(reading)) = (panes.preview, screen.reading.as_mut()) {
+                let hints = screen.hints.as_ref();
+                let widget = ThreadPane {
+                    theme,
+                    view,
+                    previews,
+                    hints,
+                };
+
+                frame.render_stateful_widget(widget, pane, reading);
+            } else if let Some(pane) = panes.preview {
                 let preview = previews.shown(view, preview_pane::text_area(pane).width);
                 let hints = screen.hints.as_ref();
                 let widget = PreviewPane {
@@ -287,15 +311,24 @@ fn apply(
 ) -> Result<(), Error> {
     match update {
         Update::Inbox => {
-            let selected = view.selected_uid();
+            let (thread, selected) = (view.selected_key(), view.selected_uid());
+            let stack: Vec<u32> = match screen.reading {
+                Some(_) => view.stack().map(|m| m.uid).collect(),
+                None => Vec::new(),
+            };
+
             show(view, cache, None)?;
-            // The labels, and the full-screen Message, belong to the Message
-            // they were opened on; a Query being typed stays.
-            if view.selected_uid() != selected {
-                screen.hints = None;
-                if screen.mode == Mode::Reading {
-                    screen.mode = Mode::List;
+            // The labels belong to the Messages they were laid out on, and
+            // Reading to the Thread it was opened on; a Query being typed stays.
+            if screen.reading.is_none() {
+                if view.selected_uid() != selected {
+                    screen.hints = None;
                 }
+            } else if view.selected_key() != thread {
+                screen.hints = None;
+                screen.list();
+            } else if !view.stack().map(|m| m.uid).eq(stack) {
+                screen.hints = None;
             }
 
             relist(screen, view, cache)?;
@@ -345,6 +378,8 @@ struct Screen {
     backfill: Option<Status>,
     hints: Option<LinkHints>,
     mode: Mode,
+    /// While `mode` is `Reading`.
+    reading: Option<Reading>,
 }
 
 impl Screen {
@@ -362,6 +397,11 @@ impl Screen {
             toast: toast.or_else(|| cache.rebuilt().then(|| Toast::new("cache rebuilt"))),
             ..Self::default()
         }
+    }
+
+    fn list(&mut self) {
+        self.mode = Mode::List;
+        self.reading = None;
     }
 
     /// The sync connection's Status, or the backfill's while that one is live.
@@ -459,15 +499,12 @@ fn act(
 ) -> Step {
     match action {
         Some(Action::Quit) => Step::Quit,
-        Some(Action::Read) => {
-            if view.selected_uid().is_some() {
-                screen.mode = Mode::Reading;
-            }
-
+        Some(action @ (Action::Read | Action::Step(_) | Action::Fold)) => {
+            read(action, view, screen);
             Step::Stay
         }
         Some(Action::Back | Action::KeepQuery) => {
-            screen.mode = Mode::List;
+            screen.list();
             Step::Stay
         }
         Some(Action::Page) => Step::Page,
@@ -478,6 +515,10 @@ fn act(
         Some(Action::SwitchView) => {
             view.html = view.html.other();
             view.preview_scroll = 0;
+            if let Some(reading) = &mut screen.reading {
+                reading.reveal = true;
+            }
+
             // The labels sit where the other View laid the links out.
             screen.hints = None;
             Step::Stay
@@ -497,10 +538,29 @@ fn act(
             Step::Stay
         }
         Some(Action::Scroll(scroll)) => {
-            view.scroll(scroll, half_page);
+            match &mut screen.reading {
+                Some(reading) => reading.scroll(scroll, half_page),
+                None => view.scroll(scroll, half_page),
+            }
+
             Step::Stay
         }
         Some(Action::SignIn) | None => Step::Stay,
+    }
+}
+
+/// Opens the selected Thread in Reading, or moves through it there.
+fn read(action: Action, view: &InboxView, screen: &mut Screen) {
+    match (action, &mut screen.reading) {
+        (Action::Read, _) => {
+            if let Some(reading) = Reading::open(view.stack()) {
+                screen.mode = Mode::Reading;
+                screen.reading = Some(reading);
+            }
+        }
+        (Action::Step(direction), Some(reading)) => reading.step(direction, view.stack()),
+        (Action::Fold, Some(reading)) => reading.fold(),
+        _ => {}
     }
 }
 
@@ -542,7 +602,7 @@ fn switch(
         return Ok(false);
     }
 
-    screen.mode = Mode::List;
+    screen.list();
     screen.hints = None;
     view.switch(folder);
     show(view, cache, None)?;
@@ -595,7 +655,7 @@ fn search(action: Action, view: &mut InboxView, screen: &mut Screen) {
         Action::Erase => view.edit_query(Search::pop),
         Action::EndSearch { restore } => {
             view.end_search(restore);
-            screen.mode = Mode::List;
+            screen.list();
         }
         _ => {}
     }
@@ -605,14 +665,37 @@ fn search(action: Action, view: &mut InboxView, screen: &mut Screen) {
 /// are none. `text` is where the Preview's text goes, if it is shown.
 fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text: Option<Rect>) {
     screen.hints = text.and_then(|text| {
+        if let Some(reading) = &screen.reading {
+            return stack_links(view, previews, reading, text);
+        }
+
         let preview = previews.get(view, text.width)?;
         let lines = preview_pane::body_lines(view.preview_scroll, text);
-        LinkHints::find(&preview.body, lines)
+        LinkHints::find([(0, &preview.body[..], lines)])
     });
 
     if screen.hints.is_none() {
         screen.toast = Some(Toast::new("no links"));
     }
+}
+
+/// The links of every unfolded body of the stack that `text` shows.
+fn stack_links(
+    view: &InboxView,
+    previews: &Previews,
+    reading: &Reading,
+    text: Rect,
+) -> Option<LinkHints> {
+    let window = reading.scroll..reading.scroll + usize::from(text.height);
+    let bodies = stack::placed(view, previews, reading, text.width).filter_map(|placed| {
+        let Some(Body::Rendered(preview)) = placed.body else {
+            return None;
+        };
+
+        Some((placed.index, &preview.body[..], placed.body_lines(&window)))
+    });
+
+    LinkHints::find(bodies)
 }
 
 /// Opens `url`; returns the Toast to show when that fails.
@@ -649,9 +732,14 @@ fn open(
     events: &mut EventStream,
     theme: &Theme,
     cache: &Cache,
-    view: &InboxView,
+    (view, reading): (&InboxView, Option<&Reading>),
 ) -> Result<Option<Toast>, Error> {
-    let Some(message) = view.selected_message() else {
+    let message = reading.map_or_else(
+        || view.selected_message(),
+        |reading| view.stack().find(|m| m.uid == reading.cursor),
+    );
+
+    let Some(message) = message else {
         return Ok(None);
     };
 

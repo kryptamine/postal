@@ -1,5 +1,5 @@
-//! `Enter` reads the selected Message full screen, with keys of its own,
-//! until `q` or `Esc` goes back to the list.
+//! `Enter` reads the selected Thread full screen as a stack of Messages,
+//! with keys of its own, until `q` or `Esc` goes back to the list.
 
 #[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
@@ -7,6 +7,7 @@ mod support;
 use std::time::Duration;
 
 use support::{
+    browser::Browser,
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage},
     home::Home,
@@ -123,4 +124,258 @@ fn the_help_popup_lists_the_reading_keys() {
     t.send(Key::Esc).unwrap();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
+}
+
+fn quit(mut t: Terminal) {
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
+/// Postal at 30 rows, past its first frame: a key sent before it goes with
+/// the answer to the colour query.
+fn tall(home: &Home, browser: &Browser) -> Terminal {
+    let mut t = Terminal::builder()
+        .size(100, 30)
+        .env_clear()
+        .env("XDG_CONFIG_HOME", home.xdg_config_home())
+        .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
+        .env("PATH", browser.path())
+        .env("TZ", "UTC")
+        .timeout(Duration::from_secs(10))
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(|s| s.contains(" Inbox ")).unwrap();
+    t
+}
+
+fn reply(sender: &'static str, body: &str, day: u32) -> FakeMessage {
+    let date = format!("2024-03-{day:02}T09:00:00Z");
+    FakeMessage::new(sender, "Plans", &date)
+        .body(FakeBody::plain(body))
+        .in_thread(0)
+}
+
+/// One Thread: Ada asks, Bob answers, Unread when `bob_unread`, Cid agrees
+/// and Dee settles it.
+fn conversation(bob_unread: bool) -> Vec<FakeMessage> {
+    let bob = reply("Bob", "Bob answers", 2);
+    vec![
+        reply("Ada", "Ada asks", 1),
+        if bob_unread { bob.unread() } else { bob },
+        reply("Cid", "Cid agrees", 3),
+        reply("Dee", "Dee settles it", 4),
+    ]
+}
+
+/// Whether a row shows `sender` folded: its name, Snippet and date.
+fn folded(screen: &Screen, sender: &str, snippet: &str, date: &str) -> bool {
+    (0..screen.rows()).any(|row| {
+        let text = screen.row_text(row);
+        !text.contains("From")
+            && text.contains(sender)
+            && text.contains(snippet)
+            && text.contains(date)
+    })
+}
+
+/// Opens the Thread once the list shows it with the newest Snippet.
+fn read_thread(t: &mut Terminal) {
+    t.wait_until(|s| s.contains("Dee settles it")).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(reading).unwrap();
+}
+
+// On entry the newest and every Unread Message are open, the rest one line
+// each, and the cursor marks the first Unread.
+#[test]
+fn reading_unfolds_the_newest_and_the_unread_and_starts_on_the_first_unread() {
+    let server = FakeImap::start(conversation(true));
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    read_thread(&mut t);
+
+    let screen = t
+        .snapshot_after(|s| {
+            s.contains("Bob answers")
+                && s.contains("Dee settles it")
+                && folded(s, "Ada", "Ada asks", "2024-03-01")
+                && folded(s, "Cid", "Cid agrees", "2024-03-03")
+        })
+        .unwrap();
+    assert!(screen.contains(" 2/4 "), "{screen}");
+    assert!(screen.contains("│▎From    Bob"), "{screen}");
+    assert!(screen.contains("│ From    Dee"), "{screen}");
+    assert!(!screen.contains("From    Ada"), "{screen}");
+    assert!(!screen.contains("From    Cid"), "{screen}");
+    // Reading leaves Unread to the server.
+    assert!(!server.commands().iter().any(|c| c.contains("STORE")));
+    quit(t);
+}
+
+#[test]
+fn with_nothing_unread_only_the_newest_is_unfolded_and_has_the_cursor() {
+    let server = FakeImap::start(conversation(false));
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    read_thread(&mut t);
+
+    let screen = t
+        .snapshot_after(|s| {
+            s.contains("│▎From    Dee") && folded(s, "Bob", "Bob answers", "2024-03-02")
+        })
+        .unwrap();
+    assert!(screen.contains(" 4/4 "), "{screen}");
+    assert!(!screen.contains("From    Bob"), "{screen}");
+    quit(t);
+}
+
+// `n` and `p` move the cursor a Message at a time and stop at either end.
+#[test]
+fn n_and_p_move_the_cursor_through_the_thread() {
+    let server = FakeImap::start(conversation(true));
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    read_thread(&mut t);
+    t.wait_until(|s| s.contains(" 2/4 ")).unwrap();
+
+    for (key, title) in [
+        ('n', " 3/4 "),
+        ('n', " 4/4 "),
+        ('n', " 4/4 "),
+        ('p', " 3/4 "),
+        ('p', " 2/4 "),
+        ('p', " 1/4 "),
+        ('p', " 1/4 "),
+        ('n', " 2/4 "),
+    ] {
+        t.send(Key::Char(key)).unwrap();
+        t.wait_until(|s| s.contains(title)).unwrap();
+    }
+
+    quit(t);
+}
+
+// Enter and Space fold the Message at the cursor and unfold it again; a
+// folded one opens on its own body.
+#[test]
+fn enter_and_space_fold_and_unfold_the_message_at_the_cursor() {
+    let server = FakeImap::start(conversation(true));
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    read_thread(&mut t);
+    t.wait_until(|s| s.contains("From    Bob")).unwrap();
+
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| !s.contains("From    Bob") && folded(s, "Bob", "Bob answers", "2024-03-02"))
+        .unwrap();
+    t.send(Key::Char(' ')).unwrap();
+    t.wait_until(|s| s.contains("│▎From    Bob")).unwrap();
+
+    t.send(Key::Char('p')).unwrap();
+    t.send(Key::Char(' ')).unwrap();
+    let screen = t.snapshot_after(|s| s.contains("│▎Ada asks")).unwrap();
+    assert!(screen.contains("│▎From    Ada"), "{screen}");
+    assert!(screen.contains("From    Bob"), "{screen}");
+    quit(t);
+}
+
+/// Forty numbered lines, each led by `tag`.
+fn numbered(tag: &str) -> FakeBody {
+    let lines: Vec<String> = (1..=40).map(|n| format!("{tag} {n:02}")).collect();
+    FakeBody::plain(&lines.join("\r\n"))
+}
+
+// j/k, ^d/^u and g/G scroll the stack as one page, from the end of one
+// Message into the next, and the cursor follows to a Message still shown.
+#[test]
+fn scrolling_runs_across_messages_and_the_cursor_follows() {
+    let long = |sender: &'static str, day: u32| {
+        let date = format!("2024-03-{day:02}T09:00:00Z");
+        FakeMessage::new(sender, "Long", &date)
+            .body(numbered(sender))
+            .in_thread(0)
+            .unread()
+    };
+
+    let server = FakeImap::start(vec![long("Ada", 1), long("Bob", 2)]);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains("Bob 01")).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains(" 1/2 ") && s.contains("Ada 01"))
+        .unwrap();
+
+    t.send(Key::Char('G')).unwrap();
+    t.wait_until(|s| s.contains("Bob 40") && s.contains(" 2/2 "))
+        .unwrap();
+    t.send(Key::Char('g')).unwrap();
+    t.wait_until(|s| s.contains("From    Ada") && s.contains(" 1/2 "))
+        .unwrap();
+
+    // 13 rows shown, 6 to a half page: Ada's last lines over Bob's header.
+    for _ in 0..6 {
+        t.send(Key::Ctrl('d')).unwrap();
+    }
+
+    let screen = t
+        .snapshot_after(|s| s.contains("Ada 40") && s.contains("From    Bob"))
+        .unwrap();
+    assert!(screen.contains(" 1/2 "), "{screen}");
+    for key in [
+        Key::Char('j'),
+        Key::Char('k'),
+        Key::Ctrl('d'),
+        Key::Ctrl('d'),
+    ] {
+        t.send(key).unwrap();
+    }
+
+    t.wait_until(|s| !s.contains("Ada 40") && s.contains(" 2/2 "))
+        .unwrap();
+    t.send(Key::Ctrl('u')).unwrap();
+    t.send(Key::Ctrl('u')).unwrap();
+    t.wait_until(|s| s.contains("Ada 40") && s.contains(" 2/2 "))
+        .unwrap();
+    quit(t);
+}
+
+// `o` labels the links of every unfolded body on screen as one set, and
+// a label opens the URL of the Message it sits in.
+#[test]
+fn hint_mode_labels_links_across_two_unfolded_messages() {
+    let html = |sender: &'static str, day: u32| {
+        let date = format!("2024-03-{day:02}T09:00:00Z");
+        let url = format!("https://example.com/{sender}");
+        let body = format!("<p>See <a href=\"{url}\">the {sender} link</a>.</p>");
+        FakeMessage::new(sender, "Links", &date)
+            .body(FakeBody::text("html", "7bit", body))
+            .in_thread(0)
+            .unread()
+    };
+
+    let server = FakeImap::start(vec![html("Ada", 1), html("Bob", 2)]);
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    // The text View moves a link right of its label.
+    t.send(Key::Char('v')).unwrap();
+    t.wait_until(|s| s.contains("See the Bob link")).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| {
+        reading(s) && s.contains("See the Ada link") && s.contains("See the Bob link")
+    })
+    .unwrap();
+
+    t.send(Key::Char('o')).unwrap();
+    t.wait_until(|s| s.contains("See athe Ada link") && s.contains("See sthe Bob link"))
+        .unwrap();
+    t.send(Key::Char('s')).unwrap();
+    browser.wait_for(&["https://example.com/Bob"]);
+    t.wait_until(|s| s.contains("See the Bob link")).unwrap();
+    quit(t);
 }

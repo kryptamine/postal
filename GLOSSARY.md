@@ -69,11 +69,11 @@ The connection state in the right slot of the hint line, silent while live: sync
 _Avoid_: indicator, banner, connection bar
 
 **Hint mode**:
-Entered with `o`: each distinct URL the Preview window shows gets a label of home-row letters, and typing one opens it.
+Entered with `o`: each distinct URL the Preview window shows, or every unfolded body on screen in Reading, gets a label of home-row letters, and typing one opens it.
 _Avoid_: link mode, follow mode, footnotes
 
 **Reading**:
-The selected Thread's Preview filling the screen in place of the Message List, entered with `Enter`; `q` or `Esc` goes back to the list.
+The selected Thread filling the screen in place of the Message List, entered with `Enter`: its Messages in the Cache for the shown Folder, oldest first, each folded to one line (sender, Snippet, date) or unfolded to its header and body as the Preview shows it. On entry the newest and every Unread Message are unfolded, and the cursor sits on the first Unread, else the newest. `q` or `Esc` goes back to the list.
 _Avoid_: reader, zoom, full view
 
 **Search**:

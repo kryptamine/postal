@@ -176,8 +176,16 @@ impl InboxView {
         self.row(self.selected)
     }
 
-    fn selected_key(&self) -> Option<Key> {
+    pub fn selected_key(&self) -> Option<Key> {
         self.thread_at(self.selected).map(|t| t.key)
+    }
+
+    /// The selected Thread's Messages, oldest first.
+    pub fn stack(&self) -> impl DoubleEndedIterator<Item = &Message> + Clone {
+        let messages = self.messages.as_deref().unwrap_or_default();
+        let thread = self.thread_at(self.selected);
+        let indices = thread.map_or(&[][..], |t| t.messages.as_slice());
+        indices.iter().rev().filter_map(|&i| messages.get(i))
     }
 
     /// How many rows are shown: all, or those a Search narrowed them to.

@@ -12,6 +12,9 @@ use crate::{
     wrap::wrap,
 };
 
+/// How a Preview header shows the date.
+pub const DATE: &str = "%a, %-d %b %Y %H:%M";
+
 /// What rendering one Preview needs, sent to the thread that renders it.
 pub struct Job {
     pub key: PreviewKey,
@@ -48,7 +51,7 @@ pub fn header(sender: String, subject: String, received: DateTime<FixedOffset>) 
     Preview {
         from: sender,
         subject,
-        date: received.format("%a, %-d %b %Y %H:%M").to_string(),
+        date: received.format(DATE).to_string(),
         body: Vec::new(),
         laid_out: false,
     }

@@ -16,7 +16,7 @@ use crate::{
 pub const LABELS: [&str; 3] = ["From    ", "Subject ", "Date    "];
 const LABEL_WIDTH: u16 = 8;
 /// The header rows and the blank row under them.
-const HEADER_ROWS: usize = LABELS.len() + 1;
+pub const HEADER_ROWS: usize = LABELS.len() + 1;
 
 /// Where a Preview's text goes in `pane`: inside the border, padded each
 /// side and not on top.
@@ -72,7 +72,7 @@ impl StatefulWidget for PreviewPane<'_> {
         let rows = HEADER_ROWS + preview.body.len();
         let last_top = rows.saturating_sub(usize::from(text.height));
         view.preview_scroll = view.preview_scroll.min(last_top);
-        let header = [
+        let values = [
             (&preview.from, self.theme.sender),
             (&preview.subject, self.theme.subject),
             (&preview.date, self.theme.date),
@@ -80,10 +80,11 @@ impl StatefulWidget for PreviewPane<'_> {
 
         for (y, index) in (text.y..text.bottom()).zip(view.preview_scroll..rows) {
             let row = Rect::new(text.x, y, text.width, 1);
-            if let Some(&(value, style)) = header.get(index) {
-                self.header(buf, row, LABELS[index], (value, style));
-            } else if let Some(line) = index.checked_sub(HEADER_ROWS) {
-                self.line(buf, row, preview, line);
+            if let Some(&(value, style)) = values.get(index) {
+                header(self.theme, buf, row, LABELS[index], (value, style));
+            } else if let Some(index) = index.checked_sub(HEADER_ROWS) {
+                let hints = self.hints.map(|hints| (hints, 0));
+                line(self.theme, hints, buf, row, (preview, index));
             }
         }
 
@@ -101,46 +102,58 @@ impl StatefulWidget for PreviewPane<'_> {
     }
 }
 
-impl PreviewPane<'_> {
-    fn header(&self, buf: &mut Buffer, row: Rect, label: &str, (value, style): (&str, Style)) {
-        let room = usize::from(row.width);
-        buf.set_stringn(row.x, row.y, label, room, self.theme.field);
-        let value_area = Rect {
-            x: row.x + LABEL_WIDTH.min(row.width),
-            width: row.width.saturating_sub(LABEL_WIDTH),
-            ..row
-        };
+/// One header row: `label`, then `value` cut to fit.
+pub fn header(
+    theme: &Theme,
+    buf: &mut Buffer,
+    row: Rect,
+    label: &str,
+    (value, style): (&str, Style),
+) {
+    let room = usize::from(row.width);
+    buf.set_stringn(row.x, row.y, label, room, theme.field);
+    let value_area = Rect {
+        x: row.x + LABEL_WIDTH.min(row.width),
+        width: row.width.saturating_sub(LABEL_WIDTH),
+        ..row
+    };
 
-        truncate::draw(buf, value_area, value, style);
-    }
+    truncate::draw(buf, value_area, value, style);
+}
 
-    fn line(&self, buf: &mut Buffer, row: Rect, preview: &Preview, index: usize) {
-        let Some(line) = preview.body.get(index) else {
+/// Body line `index` of `preview`, with the labels `hints` give body `part`.
+pub fn line(
+    theme: &Theme,
+    hints: Option<(&LinkHints, usize)>,
+    buf: &mut Buffer,
+    row: Rect,
+    (preview, index): (&Preview, usize),
+) {
+    let Some(line) = preview.body.get(index) else {
+        return;
+    };
+
+    let room = |x: u16| usize::from(row.right().saturating_sub(x));
+    let mut x = row.x;
+    for (run, segment) in line.segments().enumerate() {
+        let label = hints.and_then(|(hints, part)| hints.label(part, index, run));
+        // Text moves right to make room for a label; a laid out mail
+        // keeps its columns, and the label covers the link's start.
+        if let Some(label) = label.as_ref().filter(|_| !preview.laid_out) {
+            x = buf
+                .set_stringn(x, row.y, label.as_str(), room(x), theme.label)
+                .0;
+        }
+
+        if room(x) == 0 {
             return;
-        };
+        }
 
-        let room = |x: u16| usize::from(row.right().saturating_sub(x));
-        let mut x = row.x;
-        for (run, segment) in line.segments().enumerate() {
-            let label = self.hints.and_then(|hints| hints.label(index, run));
-            // Text moves right to make room for a label; a laid out mail
-            // keeps its columns, and the label covers the link's start.
-            if let Some(label) = label.as_ref().filter(|_| !preview.laid_out) {
-                x = buf
-                    .set_stringn(x, row.y, label.as_str(), room(x), self.theme.label)
-                    .0;
-            }
-
-            if room(x) == 0 {
-                return;
-            }
-
-            let start = x;
-            let style = self.theme.painted(segment.marks, segment.paint);
-            x = buf.set_stringn(x, row.y, segment.text, room(x), style).0;
-            if let Some(label) = label.filter(|_| preview.laid_out) {
-                buf.set_stringn(start, row.y, label.as_str(), room(start), self.theme.label);
-            }
+        let start = x;
+        let style = theme.painted(segment.marks, segment.paint);
+        x = buf.set_stringn(x, row.y, segment.text, room(x), style).0;
+        if let Some(label) = label.filter(|_| preview.laid_out) {
+            buf.set_stringn(start, row.y, label.as_str(), room(start), theme.label);
         }
     }
 }

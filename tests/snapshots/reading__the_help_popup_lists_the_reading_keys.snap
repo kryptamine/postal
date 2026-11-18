@@ -3,27 +3,27 @@ source: tests/reading.rs
 expression: screen
 ---
 size: 80x24  cursor: hidden
-┌ 1/2 ──────┌ Help ────────────────────────────────────────────────┐───────────┐
+┌ 1/1 ──────┌ Help ────────────────────────────────────────────────┐───────────┐
 │ From    Bo│                                                      │           │
 │ Subject Ne│ Read                                                 │           │
 │ Date    Mo│ j / k    ↓ / ↑        scroll a line                  │           │
-│           │ g / G    Home / End   top / bottom of the Message    │           │
+│           │ g / G    Home / End   top / bottom of the Thread     │           │
 │ Line 01   │ ^d / ^u  PgDn / PgUp  scroll half a page             │           │
-│ Line 02   │ |                     open the Message in $PAGER     │           │
-│ Line 03   │ q / Esc  h / ←        back to the list               │           │
-│ Line 04   │                                                      │           │
-│ Line 05   │ Links                                                │           │
-│ Line 06   │ o                     label the links in the Preview │           │
-│ Line 07   │                                                      │           │
-│ Line 08   │ View                                                 │           │
-│ Line 09   │ v                     rendered / text view of HTML   │           │
-│ Line 10   │                                                      │           │
-│ Line 11   │ App                                                  │           │
-│ Line 12   │ ?                     this help                      │           │
-│ Line 13   │ ^c                    quit                           │           │
-│ Line 14   │ ^z                    suspend to the shell           │           │
-│ Line 15   │ f                     pick the Folder to show        │           │
-│ Line 16   │                                                      │           │
-│ Line 17   └──────────────────────────────────────────────────────┘           │
-└──────────────────────────────────────────────────────────────────────────────┘
- j/k scroll  ^d/^u page  | pager  q back  o links  ?: help
+│ Line 02   │ n / p                 next / previous Message        │           │
+│ Line 03   │ Enter    Space        fold / unfold the Message      │           │
+│ Line 04   │ |                     open the Message in $PAGER     │           │
+│ Line 05   │ q / Esc  h / ←        back to the list               │           │
+│ Line 06   │                                                      │           │
+│ Line 07   │ Links                                                │           │
+│ Line 08   │ o                     label the links in the Preview │           │
+│ Line 09   │                                                      │           │
+│ Line 10   │ View                                                 │           │
+│ Line 11   │ v                     rendered / text view of HTML   │           │
+│ Line 12   │                                                      │           │
+│ Line 13   │ App                                                  │           │
+│ Line 14   │ ?                     this help                      │           │
+│ Line 15   │ ^c                    quit                           │           │
+│ Line 16   │ ^z                    suspend to the shell           │           │
+│ Line 17   │                                                      │           │
+└───────────└──────────────────────────────────────────────────────┘───────────┘
+ j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

@@ -9,7 +9,7 @@ const ALPHABET: [char; 9] = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
 /// Every two-letter label; links past this many get none.
 const MOST: usize = ALPHABET.len() * ALPHABET.len();
 
-/// Hint mode: each distinct URL in the Preview window, in reading order,
+/// Hint mode: each distinct URL in the bodies on screen, in reading order,
 /// labelled before the first run of it shown. Labels are all one length.
 pub struct LinkHints {
     targets: Vec<Target>,
@@ -18,7 +18,8 @@ pub struct LinkHints {
 }
 
 struct Target {
-    /// The body line and the run in it the label goes before.
+    /// The body, the line in it and the run in that the label goes before.
+    part: usize,
     line: usize,
     run: usize,
     url: Arc<str>,
@@ -33,11 +34,17 @@ pub enum Typed {
 }
 
 impl LinkHints {
-    /// The links on `body` lines `lines`; `None` when there is none.
-    pub fn find(body: &[StyledLine], lines: Range<usize>) -> Option<Self> {
+    /// The links on each `(part, body, lines)` shown, in that order; `None`
+    /// when there is none.
+    pub fn find<'a>(
+        bodies: impl IntoIterator<Item = (usize, &'a [StyledLine], Range<usize>)>,
+    ) -> Option<Self> {
         let mut targets: Vec<Target> = Vec::new();
-        let shown = body.iter().enumerate().take(lines.end).skip(lines.start);
-        for (line, styled) in shown {
+        let shown = bodies.into_iter().flat_map(|(part, body, lines)| {
+            let lines = body.iter().enumerate().take(lines.end).skip(lines.start);
+            lines.map(move |(line, styled)| (part, line, styled))
+        });
+        for (part, line, styled) in shown {
             for (run, segment) in styled.segments().enumerate() {
                 let Some(url) = segment.link.filter(|url| browser::safe(url)) else {
                     continue;
@@ -45,6 +52,7 @@ impl LinkHints {
 
                 if targets.len() < MOST && targets.iter().all(|t| t.url != *url) {
                     targets.push(Target {
+                        part,
                         line,
                         run,
                         url: Arc::clone(url),
@@ -59,12 +67,12 @@ impl LinkHints {
         })
     }
 
-    /// The label drawn before run `run` of body line `line`, if any.
-    pub fn label(&self, line: usize, run: usize) -> Option<StackStr<2>> {
+    /// The label drawn before run `run` of line `line` of body `part`, if any.
+    pub fn label(&self, part: usize, line: usize, run: usize) -> Option<StackStr<2>> {
         let index = self
             .targets
             .iter()
-            .position(|t| t.line == line && t.run == run)?;
+            .position(|t| t.part == part && t.line == line && t.run == run)?;
         let mut label = StackStr::new();
         if self.two_letters() {
             let _ = label.write_char(ALPHABET[index / ALPHABET.len()]);
