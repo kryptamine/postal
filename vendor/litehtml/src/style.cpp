@@ -1765,7 +1765,8 @@ namespace litehtml
             if(token.type == IDENT)
             {
                 auto idx = css_values(style_text_decoration_line_strings).value_index(token.ident());
-                if(idx.has_value())
+                // Postal: `none` is index 0 and sets no bit; it shifted by -1.
+                if(idx.has_value() && idx.value() > 0)
                 {
                     val |= 1 << (idx.value() - 1);
                 }

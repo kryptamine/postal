@@ -5,7 +5,7 @@ Vendored from https://github.com/litehtml/litehtml at commit
 (with the bundled gumbo in `src/gumbo/`) and `LICENSE`. Built by `build.rs`.
 See `docs/adr/0006-rendered-view-engine.md`.
 
-Three changes, marked `Postal:` in the source:
+Four changes, marked `Postal:` in the source:
 
 - `document::rebuild_render_tree` is public in
   `include/litehtml/document.h`, so `cpp/cell_grid.cpp` can rebuild the boxes
@@ -18,6 +18,9 @@ Three changes, marked `Postal:` in the source:
   `rowspan` to 1..65534, as HTML parses them. A `colspan="0"` made the cell
   span to the column before the first, a read outside the grid's columns
   that laid the table out differently from run to run.
+- `style::parse_text_decoration_line` in `src/style.cpp` skips `none`, the
+  value at index 0, which shifted 1 by -1: undefined behaviour on nearly
+  every mail.
 
 To update, replace these directories from a newer commit, apply the changes
 again and update the hash.
