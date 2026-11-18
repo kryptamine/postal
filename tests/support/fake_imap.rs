@@ -393,6 +393,25 @@ struct Open {
     cut: u64,
 }
 
+impl Open {
+    /// Counts a new connection open, with the outage it opened under.
+    fn register(inbox: &Arc<Mutex<Inbox>>) -> (Self, Option<Outage>) {
+        let (cut, outage) = {
+            let mut inbox = inbox.lock().unwrap();
+            let cut = inbox.cut;
+            inbox.open.push(cut);
+            (cut, inbox.outage)
+        };
+
+        let open = Self {
+            inbox: Arc::clone(inbox),
+            cut,
+        };
+
+        (open, outage)
+    }
+}
+
 impl Drop for Open {
     fn drop(&mut self) {
         let mut inbox = self.inbox.lock().unwrap();
@@ -404,18 +423,8 @@ impl Drop for Open {
 
 async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     wait_unless_stalled(&inbox, Stall::Greeting).await;
-    let (cut, outage) = {
-        let mut inbox = inbox.lock().unwrap();
-        let cut = inbox.cut;
-        inbox.open.push(cut);
-        (cut, inbox.outage)
-    };
-
-    let _open = Open {
-        inbox: Arc::clone(&inbox),
-        cut,
-    };
-
+    let (open, outage) = Open::register(&inbox);
+    let cut = open.cut;
     let bye = outage == Some(Outage::Bye);
     let mut server = Server::new(Options::default(), greeting(bye));
     let mut view = Vec::new();
