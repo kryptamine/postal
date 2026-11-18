@@ -3,10 +3,12 @@
 
 mod connect;
 mod error;
+mod pushed;
 mod session;
 mod text_part;
 mod traced;
 mod wire_trace;
 
 pub use error::Error;
+pub use pushed::Pushed;
 pub use session::{Examined, ImapSession, MailServer};

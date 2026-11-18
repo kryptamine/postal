@@ -90,13 +90,13 @@ fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
     let home = Home::for_server(&server);
     let mut t = postal(&home);
     t.wait_until(|s| s.contains(" unread ")).unwrap();
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 
     server.clear_commands();
     let mut t = postal(&home);
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     let loading = settled_frames(&home);
     // Reading the whole Cache allocates: proof the count is live.
     assert!(loading.iter().any(|&n| n > 0), "{loading:?}");

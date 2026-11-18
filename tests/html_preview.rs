@@ -53,7 +53,7 @@ fn preview_in(body: FakeBody, size: (u16, u16), shown: &str, no_color: bool) -> 
     let home = Home::for_server(&server);
     let mut t = postal(&home, size, no_color);
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !server.commands().iter().any(|c| c == "LOGOUT") {
+    while !server.commands().iter().any(|c| c == "IDLE") {
         assert!(Instant::now() < deadline, "timed out");
         std::thread::sleep(Duration::from_millis(10));
     }

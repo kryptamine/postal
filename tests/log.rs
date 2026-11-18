@@ -41,7 +41,7 @@ fn spawn(home: &Home, args: &[&str], env: &[(&str, &str)]) -> Terminal {
     builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
 }
 
-/// Loads the Inbox, waits for the sync to log out, presses `keys`, quits,
+/// Loads the Inbox, waits for the sync to idle, presses `keys`, quits,
 /// and returns the run's log.
 fn run(
     server: &FakeImap,
@@ -50,11 +50,11 @@ fn run(
     env: &[(&str, &str)],
     keys: &[Key],
 ) -> String {
-    let logouts = || server.commands().iter().filter(|c| *c == "LOGOUT").count();
-    let before = logouts();
+    let idles = || server.commands().iter().filter(|c| *c == "IDLE").count();
+    let before = idles();
     let mut t = spawn(home, args, env);
     t.wait_until(|s| s.contains(" unread ")).unwrap();
-    wait_for(|| logouts() > before);
+    wait_for(|| idles() > before);
     for &key in keys {
         t.send(key).unwrap();
     }

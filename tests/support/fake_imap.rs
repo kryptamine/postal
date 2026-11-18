@@ -3,6 +3,7 @@
 //! command the client sends.
 
 use std::{
+    collections::HashMap,
     net::Ipv4Addr,
     num::{NonZeroU32, NonZeroU64},
     sync::{Arc, Mutex},
@@ -18,7 +19,7 @@ use imap_next::{
         envelope::{Address, Envelope},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
         flag::{Flag, FlagFetch},
-        response::{Capability, Code, Data, Greeting, Status},
+        response::{Capability, Code, CommandContinuationRequest, Data, Greeting, Status},
         search::SearchKey,
         sequence::{SeqOrUid, Sequence, SequenceSet},
     },
@@ -295,15 +296,40 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     wait_unless_stalled(&inbox, Stall::Greeting).await;
     let greeting = Greeting::ok(None, "fake IMAP ready").unwrap();
     let mut server = Server::new(Options::default(), greeting);
-    let mut logging_out = false;
+    let mut view = Vec::new();
+    let mut idling = None;
     loop {
-        let Ok(event) = stream.next(&mut server).await else {
+        let next = if idling.is_some() {
+            tokio::select! {
+                next = stream.next(&mut server) => next,
+                () = tokio::time::sleep(Duration::from_millis(10)) => {
+                    announce(&mut server, &mut view, &inbox.lock().unwrap());
+                    continue;
+                }
+            }
+        } else {
+            stream.next(&mut server).await
+        };
+
+        let Ok(event) = next else {
             return;
         };
 
         match event {
+            Event::IdleCommandReceived { tag } => {
+                let accept = CommandContinuationRequest::basic(None, "idling").unwrap();
+                server.idle_accept(accept).unwrap();
+                idling = Some(tag);
+            }
+            Event::IdleDoneReceived => {
+                let done = Status::ok(idling.take(), None, "IDLE terminated").unwrap();
+                server.enqueue_status(done);
+            }
             Event::CommandReceived { command } => {
-                logging_out = matches!(command.body, CommandBody::Logout);
+                if matches!(command.body, CommandBody::Examine { .. }) {
+                    view = seen(&inbox.lock().unwrap());
+                }
+
                 if let CommandBody::Fetch {
                     macro_or_item_names,
                     ..
@@ -321,16 +347,62 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
 
                 respond(&mut server, command, &inbox.lock().unwrap());
             }
-            Event::ResponseSent { response, .. } if logging_out => {
-                if matches!(
-                    response,
-                    imap_next::imap_types::response::Response::Status(Status::Tagged(_))
-                ) {
-                    return;
-                }
-            }
             _ => {}
         }
+    }
+}
+
+/// Each Message's UID and `\Seen`, in sequence order.
+fn seen(inbox: &Inbox) -> Vec<(u32, bool)> {
+    inbox
+        .messages
+        .iter()
+        .map(|m| (m.uid, m.message.seen))
+        .collect()
+}
+
+/// Tells an idling client what changed since its `view`, as a server does:
+/// expunges lowest first, each renumbering the rest, then flags without the
+/// UID, then the new count.
+fn announce(server: &mut Server, view: &mut Vec<(u32, bool)>, inbox: &Inbox) {
+    let now = seen(inbox);
+    let current: HashMap<_, _> = now.iter().copied().collect();
+    let mut index = 0;
+    while index < view.len() {
+        if current.contains_key(&view[index].0) {
+            index += 1;
+            continue;
+        }
+
+        view.remove(index);
+        let number = NonZeroU32::new(u32::try_from(index + 1).unwrap()).unwrap();
+        server.enqueue_data(Data::Expunge(number));
+    }
+
+    for (number, (uid, seen)) in (1..).zip(view.iter_mut()) {
+        let current = current[uid];
+        if current != *seen {
+            *seen = current;
+            server.enqueue_data(Data::Fetch {
+                seq: NonZeroU32::new(number).unwrap(),
+                items: Vec1::from(MessageDataItem::Flags(flags(current))),
+            });
+        }
+    }
+
+    let last = view.last().map_or(0, |&(uid, _)| uid);
+    let before = view.len();
+    view.extend(now.into_iter().filter(|&(uid, _)| uid > last));
+    if view.len() > before {
+        server.enqueue_data(Data::Exists(u32::try_from(view.len()).unwrap()));
+    }
+}
+
+fn flags(seen: bool) -> Vec<FlagFetch<'static>> {
+    if seen {
+        vec![FlagFetch::Flag(Flag::Seen)]
+    } else {
+        vec![]
     }
 }
 
@@ -406,10 +478,6 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
             }
 
             server.enqueue_status(Status::ok(tag, None, "FETCH completed").unwrap());
-        }
-        CommandBody::Logout => {
-            server.enqueue_status(Status::bye(None, "logging out").unwrap());
-            server.enqueue_status(Status::ok(tag, None, "LOGOUT completed").unwrap());
         }
         _ => {
             server.enqueue_status(Status::bad(tag, None, "not faked").unwrap());
@@ -614,15 +682,10 @@ fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
         message_id: NString(None),
     };
 
-    let flags = if message.seen {
-        vec![FlagFetch::Flag(Flag::Seen)]
-    } else {
-        vec![]
-    };
     let received = chrono::DateTime::parse_from_rfc3339(&message.internal_date).unwrap();
     let mut items = vec![
         MessageDataItem::Uid(NonZeroU32::new(stored.uid).unwrap()),
-        MessageDataItem::Flags(flags),
+        MessageDataItem::Flags(flags(message.seen)),
         MessageDataItem::InternalDate(DateTime::try_from(received).unwrap()),
         MessageDataItem::Envelope(envelope),
         MessageDataItem::ModSeq(NonZeroU64::new(stored.modseq).unwrap()),

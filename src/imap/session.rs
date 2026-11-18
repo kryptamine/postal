@@ -1,13 +1,14 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use async_imap::{
     Client, Session,
+    extensions::idle::IdleResponse,
     imap_proto::SectionPath,
     types::{Fetch, Flag},
 };
 use futures::TryStreamExt;
 
-use super::{Error, connect::Transport, text_part, traced::Traced, wire_trace};
+use super::{Error, connect::Transport, pushed::Pushed, text_part, traced::Traced, wire_trace};
 use crate::{
     body_key::body_key, config::Config, credential::Credential, header, message::Message,
     new_message::NewMessage, snippet, sync_state::SyncState,
@@ -67,6 +68,15 @@ pub trait MailServer {
     /// Each of `uids` whole, as `BODY[]`; a UID the server did not answer
     /// for is left out.
     async fn bodies(&mut self, uids: &[u32]) -> Result<Vec<(u32, Vec<u8>)>, Error>;
+
+    /// What the server announced during earlier commands, in order.
+    fn pushed(&mut self) -> Vec<Pushed>;
+
+    /// Waits in `IDLE` for the server to announce a change, at most `period`;
+    /// empty when none came.
+    async fn idle(self, period: Duration) -> Result<(Self, Vec<Pushed>), Error>
+    where
+        Self: Sized;
 }
 
 pub struct ImapSession {
@@ -101,10 +111,6 @@ impl ImapSession {
             items: if gmail { GMAIL_ITEMS } else { ITEMS },
             uid_validity: 0,
         })
-    }
-
-    pub async fn logout(mut self) -> Result<(), Error> {
-        Ok(self.session.logout().await?)
     }
 
     async fn uid_fetch(&mut self, uids: String, items: &str) -> Result<Vec<Fetch>, Error> {
@@ -219,6 +225,48 @@ impl MailServer for ImapSession {
             .iter()
             .filter_map(|f| Some((f.uid?, f.body()?.to_vec())))
             .collect())
+    }
+
+    fn pushed(&mut self) -> Vec<Pushed> {
+        let mut pushed = Vec::new();
+        while let Ok(response) = self.session.unsolicited_responses.try_recv() {
+            pushed.extend(Pushed::from_unsolicited(&response));
+        }
+
+        pushed
+    }
+
+    async fn idle(self, period: Duration) -> Result<(Self, Vec<Pushed>), Error> {
+        let Self {
+            session,
+            items,
+            uid_validity,
+        } = self;
+        let mut handle = session.idle();
+        handle.init().await?;
+        let first = {
+            let (wait, _stop) = handle.wait_with_timeout(period);
+            // The library's own timeout restarts on every keepalive line.
+            match tokio::time::timeout(period, wait).await {
+                Ok(response) => response?,
+                Err(_) => IdleResponse::Timeout,
+            }
+        };
+
+        let mut server = Self {
+            session: handle.done().await?,
+            items,
+            uid_validity,
+        };
+
+        let mut pushed = Vec::new();
+        if let IdleResponse::NewData(response) = &first {
+            pushed.extend(Pushed::from_response(response.parsed()));
+        }
+
+        // The rest of the burst came in before the server answered `DONE`.
+        pushed.extend(server.pushed());
+        Ok((server, pushed))
     }
 }
 

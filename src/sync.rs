@@ -40,12 +40,13 @@ impl From<cache::Error> for Error {
 }
 
 /// Brings the Cache up to the server's Inbox and writes the result in one
-/// transaction, so the Message List never shows a half-applied resync.
+/// transaction, so the Message List never shows a half-applied resync. Returns
+/// what its `EXAMINE` saw.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-pub async fn resync(server: &mut impl MailServer, cache: &Cache) -> Result<(), Error> {
+pub async fn resync(server: &mut impl MailServer, cache: &Cache) -> Result<Examined, Error> {
     let examined = server.examine().await?;
     let unread = server.unread_count().await?;
     let known = cache.state()?;
@@ -70,7 +71,7 @@ pub async fn resync(server: &mut impl MailServer, cache: &Cache) -> Result<(), E
     };
 
     cache.apply(&changes)?;
-    Ok(())
+    Ok(examined)
 }
 
 async fn refetch(

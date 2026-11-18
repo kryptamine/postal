@@ -204,7 +204,7 @@ fn a_long_part_is_cut_on_a_character_boundary() {
     ]);
     let home = Home::for_server(&server);
     let mut t = postal(&home, &[]);
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     t.wait_until(|s| s.contains("üüü")).unwrap();
     quit(t);
 
@@ -269,7 +269,7 @@ fn snippets_never_reach_the_log() {
         let home = Home::for_server(&server);
         let mut t = postal(&home, args);
         t.wait_until(all_shown).unwrap();
-        wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+        wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
         quit(t);
 
         let log = fs::read_to_string(home.log_path()).unwrap();

@@ -38,8 +38,8 @@ fn wait_for(condition: impl Fn() -> bool) {
     }
 }
 
-fn logged_out(server: &FakeImap) -> bool {
-    server.commands().iter().any(|c| c == "LOGOUT")
+fn idling(server: &FakeImap) -> bool {
+    server.commands().iter().any(|c| c == "IDLE")
 }
 
 fn message(sender: &'static str, subject: &str, day: u32, body: FakeBody) -> FakeMessage {
@@ -92,7 +92,7 @@ fn shows_the_preview_beside_or_below_the_list() {
     for (name, cols) in [("preview_120", 120), ("preview_80", 80)] {
         server.clear_commands();
         let mut t = postal(&home, cols);
-        wait_for(|| logged_out(&server));
+        wait_for(|| idling(&server));
         let screen = t.snapshot_after(notes_shown).unwrap();
         insta::assert_snapshot!(name, screen);
         quit(t);
@@ -181,7 +181,7 @@ fn selecting_a_row_fetches_it_and_its_neighbours() {
     server.clear_commands();
     let mut t = postal(&home, 120);
     t.wait_until(|s| previewed(s, 6)).unwrap();
-    wait_for(|| logged_out(&server));
+    wait_for(|| idling(&server));
     t.send(Key::Char('G')).unwrap();
     t.wait_until(|s| previewed(s, 1)).unwrap();
     quit(t);

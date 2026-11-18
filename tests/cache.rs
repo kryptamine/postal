@@ -38,7 +38,7 @@ fn quit(mut t: Terminal) {
 fn first_run(home: &Home, server: &FakeImap) {
     let mut t = postal(home);
     t.wait_until(|s| s.contains(" unread ")).unwrap();
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     quit(t);
     server.clear_commands();
 }
@@ -122,7 +122,7 @@ fn an_unchanged_inbox_is_checked_without_listing_it() {
     first_run(&home, &server);
 
     let t = postal(&home);
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     quit(t);
 
     let commands = server.commands();
@@ -159,7 +159,7 @@ fn an_expunge_older_than_the_cache_needs_no_search() {
     // The Cache holds UIDs 104 to 603; 101 to 103 are older than its window.
     server.expunge(FIRST_UID);
     let t = postal(&home);
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     quit(t);
     assert!(
         !server
@@ -173,7 +173,7 @@ fn an_expunge_older_than_the_cache_needs_no_search() {
     server.clear_commands();
     server.expunge(FIRST_UID + 4);
     let t = postal(&home);
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     quit(t);
     assert!(
         server
@@ -240,7 +240,7 @@ fn a_uidvalidity_change_keeps_the_old_rows_until_the_refetch() {
     // The next run resyncs against the new UIDVALIDITY rather than refetching.
     server.clear_commands();
     let t = postal(&home);
-    wait_for(|| server.commands().iter().any(|c| c == "LOGOUT"));
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     quit(t);
     assert!(
         !server.commands().contains(&fetch),

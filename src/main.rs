@@ -14,6 +14,7 @@ mod help_popup;
 mod hint_line;
 mod html_preview;
 mod html_text;
+mod idle;
 mod imap;
 mod inbox;
 mod inbox_view;
@@ -35,6 +36,7 @@ mod previews;
 mod rendered_previews;
 mod run;
 mod secret;
+mod sequence_numbers;
 mod snippet;
 mod snippets;
 mod stack_str;
@@ -173,7 +175,9 @@ async fn bodies(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-/// Resyncs, then cuts the Snippets; `written` follows every Cache write.
+/// Resyncs, cuts the Snippets, then stays in IDLE on the same connection, as
+/// the sequence numbers IDLE sends count in its view of the Inbox. `written`
+/// follows every Cache write.
 async fn sync(
     config: &Config,
     password: &Credential,
@@ -181,9 +185,8 @@ async fn sync(
     written: impl Fn(),
 ) -> Result<(), sync::Error> {
     let mut session = ImapSession::open(config, password).await?;
-    sync::resync(&mut session, cache).await?;
+    let examined = sync::resync(&mut session, cache).await?;
     written();
     snippets::fetch(&mut session, cache, &written).await?;
-    session.logout().await?;
-    Ok(())
+    idle::listen(session, cache, &examined, written).await
 }
