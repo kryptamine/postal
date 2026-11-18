@@ -647,3 +647,21 @@ fn a_column_every_picture_left_empty_goes() {
     );
     assert_eq!(at(&screen, "Job").1, at(&screen, "Lint passed").1);
 }
+
+// The page's colour beside a narrower card is the page, whatever its
+// shape: framed or filled, the margins boxed nothing but the card.
+#[test]
+fn the_page_colour_round_a_card_is_the_page() {
+    let lines = "<p>One</p><p>Two</p><p>Three</p><p>Four</p><p>Five</p>";
+    let body = html(&format!(
+        "<table width=\"100%\" bgcolor=\"#002d74\" cellpadding=\"16\"><tr><td>\
+         <div style=\"width:320px;margin:0 auto;background:#fff;color:#222\">{lines}</div>\
+         </td></tr></table>\
+         <table width=\"100%\" bgcolor=\"#1c2b53\" style=\"color:#fff\"><tr><td>\
+         {lines}<p>Footer end</p></td></tr></table>"
+    ));
+    let screen = preview(body, &DEFAULT, "Footer end");
+    let (row, _) = at(&screen, "Three");
+    assert_eq!(bg(&screen, row, 44), Color::Default, "{}", screen.text());
+    assert_eq!(frames(&screen), 2, "{}", screen.text());
+}

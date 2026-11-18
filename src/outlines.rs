@@ -31,8 +31,9 @@ pub fn of(grid: &CellGrid) -> Vec<Outline> {
         };
 
         let members = touching(&fills, grid.cols(), start, &mut seen);
-        let region = Region::new(grid, &members);
-        if !region.boxed() {
+        let region = Region::new(grid, &members, colour);
+        let is_page = region.page(page);
+        if !is_page && !region.boxed() {
             continue;
         }
 
@@ -40,7 +41,7 @@ pub fn of(grid: &CellGrid) -> Vec<Outline> {
             out[i] = Outline::Bare;
         }
 
-        if region.page() || region.bordered() {
+        if is_page || region.bordered() {
             continue;
         }
 

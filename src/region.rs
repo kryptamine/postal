@@ -61,11 +61,14 @@ pub struct Region<'a> {
     height: usize,
     width: usize,
     inside: Vec<bool>,
+    colour: Rgb,
+    boxed: bool,
 }
 
 impl<'a> Region<'a> {
-    /// `members` are indices into the cells of `grid`, at least one.
-    pub fn new(grid: &'a CellGrid, members: &[usize]) -> Self {
+    /// `members` are indices into the cells of `grid`, at least one, all
+    /// filled with `colour`.
+    pub fn new(grid: &'a CellGrid, members: &[usize], colour: Rgb) -> Self {
         let cols = usize::from(grid.cols().max(1));
         let row = |&i: &usize| i / cols;
         let col = |&i: &usize| i % cols;
@@ -79,7 +82,7 @@ impl<'a> Region<'a> {
             inside[(row(i) - top + RING) * width + col(i) - left + RING] = true;
         }
 
-        Self {
+        let mut region = Self {
             cells: grid.cells(),
             cols,
             top,
@@ -87,23 +90,38 @@ impl<'a> Region<'a> {
             height,
             width,
             inside,
-        }
+            colour,
+            boxed: false,
+        };
+        region.boxed = region.rectangle();
+        region
     }
 
     /// A rectangle with room for a frame. Any other shape is a drawing made
     /// of fills, as the bars of a chart are, and a frame would only break it.
-    pub fn boxed(&self) -> bool {
+    pub const fn boxed(&self) -> bool {
+        self.boxed
+    }
+
+    fn rectangle(&self) -> bool {
         let outside = self.outside();
         let (rows, cols) = (RING..self.height - RING, RING..self.width - RING);
         let filled = |row: usize| cols.clone().all(|col| !outside[row * self.width + col]);
         rows.len() >= LEAST && cols.len() >= LEAST && rows.into_iter().all(filled)
     }
 
-    /// As wide as the pane and four fifths of the mail high: the mail's own
-    /// page, which a frame would only box whole.
-    pub const fn page(&self) -> bool {
+    /// The mail's own page, which a frame would only box whole: as wide as
+    /// the pane and four fifths of the mail high, or in the `page` colour
+    /// round a narrower card. A rectangle that wide is a section.
+    pub fn page(&self, page: Rgb) -> bool {
         let rows = self.cells.len() / self.cols;
-        self.width - 2 * RING == self.cols && (self.height - 2 * RING) * 5 >= rows * 4
+        let in_page = self.colour == page;
+        let right = self.left + self.width - 2 * RING == self.cols;
+        match (self.left == 0, right) {
+            (true, true) => (self.height - 2 * RING) * 5 >= rows * 4 || (in_page && !self.boxed),
+            (true, false) | (false, true) => in_page,
+            (false, false) => false,
+        }
     }
 
     /// Most of its edge lies against a border the mail drew itself.
