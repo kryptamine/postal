@@ -351,24 +351,111 @@ fn a_box_background_stays_inside_its_border() {
     );
 }
 
-// A black header on a black terminal moved apart from it was a grey slab:
-// a grey section gives way to the terminal, while a small control and a
-// coloured section keep a fill.
+fn fg(screen: &Screen, row: u16, col: u16) -> Color {
+    screen.cell(row, col).unwrap().style().fg
+}
+
+/// How many frames the Preview draws, by their top left corners.
+fn frames(screen: &Screen) -> usize {
+    pane(screen).iter().map(|r| r.matches('┌').count()).sum()
+}
+
+// A slab of the mail's colour had its text moved against it, differently on
+// a light and a dark terminal: a section shows as a frame in its colour, with
+// its text on the terminal's own background. A small control keeps its fill.
 #[test]
-fn a_grey_section_near_the_terminal_takes_its_background() {
+fn a_section_fill_becomes_a_frame_in_its_colour() {
     let body = html(
-        "<div style=\"background:#000;color:#fff;padding:32px\">Header</div>\
-         <div style=\"background:#1e50f5;color:#fff;padding:32px\">Banner</div>\
+        "<div style=\"background:#1e50f5;color:#fff;padding:32px\">Banner</div>\
          <p><span style=\"background:#000;color:#fff\">Go</span></p>",
     );
     let screen = preview(body, &DEFAULT, "Go");
-    let fill = |text: &str| {
+    let (row, col) = at(&screen, "Banner");
+    assert_eq!(bg(&screen, row, col), Color::Default);
+    let corner = screen.row_text(row - 2).chars().position(|c| c == '┌');
+    let corner = u16::try_from(corner.expect("a frame")).unwrap();
+    assert!(matches!(fg(&screen, row - 2, corner), Color::Rgb(..)));
+    assert!(screen.row_text(row + 2).contains('└'), "{}", screen.text());
+    let (row, col) = at(&screen, "Go");
+    assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
+}
+
+// A frame drawn through a section's first and last lines would cut their
+// words: with text on its edge, the edge moves out into the blank row there.
+#[test]
+fn a_frame_steps_off_text_on_the_edge_of_its_section() {
+    let body = html(
+        "<p>Above</p><div style=\"background:#1e50f5;color:#fff\">First line<br>Second line\
+         <br>Third line</div><p>Below</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Below");
+    let (row, _) = at(&screen, "First line");
+    let corner = screen.row_text(row - 1).chars().position(|c| c == '┌');
+    let corner = u16::try_from(corner.expect("a frame")).unwrap();
+    // The moved edge keeps the fill's colour, on cells that never had it.
+    assert!(matches!(fg(&screen, row - 1, corner), Color::Rgb(..)));
+    assert!(screen.row_text(row + 3).contains('└'), "{}", screen.text());
+    for line in ["First line", "Second line", "Third line"] {
+        assert!(screen.contains(line), "{}", screen.text());
+    }
+}
+
+// Mail builds one coloured block out of many cells of the same colour; a
+// frame for each drew a lattice.
+#[test]
+fn sections_of_one_colour_that_touch_share_a_frame() {
+    let cell = "<td bgcolor=\"#1e50f5\" style=\"color:#fff;padding:32px\">";
+    let body = html(&format!(
+        "<table width=\"80%\" cellspacing=\"0\" cellpadding=\"0\"><tr>{cell}Left</td>\
+         {cell}Right</td></tr><tr>{cell}Under</td>{cell}Last</td></tr></table>"
+    ));
+    let screen = preview(body, &DEFAULT, "Last");
+    assert_eq!(frames(&screen), 1, "{}", screen.text());
+}
+
+// The mail's own border already gives the section its shape.
+#[test]
+fn a_section_with_a_border_of_its_own_gets_no_second_frame() {
+    let body = html(
+        "<div style=\"background:#1e50f5;color:#fff;border:1px solid #888;padding:32px\">\
+         Boxed</div>",
+    );
+    let screen = preview(body, &DEFAULT, "Boxed");
+    let (row, col) = at(&screen, "Boxed");
+    assert_eq!(bg(&screen, row, col), Color::Default);
+    assert_eq!(frames(&screen), 1, "{}", screen.text());
+}
+
+// A dark mail is dark all over: its page gives way to the terminal like a
+// white one, and a frame round the whole Preview would say nothing.
+#[test]
+fn a_dark_page_goes_without_a_frame() {
+    let body = html(
+        "<body style=\"background:#101418;color:#eee\"><p>One</p><p>Two</p><p>Three</p>\
+         <p>Four</p></body>",
+    );
+    let screen = preview(body, &DEFAULT, "Four");
+    let (row, col) = at(&screen, "One");
+    assert_eq!(bg(&screen, row, col), Color::Default);
+    assert_eq!(frames(&screen), 0, "{}", screen.text());
+}
+
+// The bars of a chart are fills of one colour that touch: a frame round
+// their outline drew a staircase with the labels caught in it.
+#[test]
+fn fills_that_make_no_rectangle_stay_fills() {
+    let bar = "background:#1e50f5;color:#fff;height:64px";
+    let body = html(&format!(
+        "<div style=\"{bar};width:400px\">Long bar</div>\
+         <div style=\"{bar};width:200px\">Short bar</div>"
+    ));
+    let screen = preview(body, &DEFAULT, "Short bar");
+    for text in ["Long bar", "Short bar"] {
         let (row, col) = at(&screen, text);
-        bg(&screen, row, col)
-    };
-    assert_eq!(fill("Header"), Color::Default);
-    assert!(matches!(fill("Banner"), Color::Rgb(..)));
-    assert!(matches!(fill("Go"), Color::Rgb(..)));
+        assert!(matches!(bg(&screen, row, col), Color::Rgb(..)), "{text}");
+    }
+
+    assert_eq!(frames(&screen), 0, "{}", screen.text());
 }
 
 // An icon that is all its link shows is named by its alt, which cut names

@@ -6,6 +6,7 @@ use crate::rgb::Rgb;
 pub const BOLD: u32 = 1;
 pub const ITALIC: u32 = 2;
 pub const UNDERLINE: u32 = 4;
+pub const TEXT: u32 = 8;
 /// The right half of a wide glyph, which prints nothing.
 pub const WIDE_TAIL: u32 = 16;
 pub const BORDER: u32 = 32;
@@ -101,6 +102,14 @@ impl CellGrid {
 
     pub const fn fits(&self) -> bool {
         self.fits
+    }
+
+    pub const fn cols(&self) -> u16 {
+        self.cols
+    }
+
+    pub fn cells(&self) -> &[Cell] {
+        &self.cells
     }
 
     pub fn rows(&self) -> impl Iterator<Item = &[Cell]> {

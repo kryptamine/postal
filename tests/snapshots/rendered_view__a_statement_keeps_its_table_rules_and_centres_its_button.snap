@@ -8,9 +8,9 @@ size: 120x40  cursor: hidden
 │   Subject                              ││ Subject Subject                                                            │
 │   Monthly statement Here is a summary… ││ Date    Mon, 18 Nov 2024 09:00                                             │
 │                                        ││                                                                            │
-│                                        ││                                                                            │
-│                                        ││    Monthly statement                                                       │
-│                                        ││                                                                            │
+│                                        ││ ┌────────────────────────────────────────────────────────────────────────┐ │
+│                                        ││ │  Monthly statement                                                     │ │
+│                                        ││ └────────────────────────────────────────────────────────────────────────┘ │
 │                                        ││                                                                            │
 │                                        ││    Here is a summary of your account activity for October.                 │
 │                                        ││                                                                            │
@@ -50,9 +50,9 @@ styles:
 2: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-58 bold; 119 dim
 3: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-73 fg=6; 119 dim
 4: 0 dim; 41-42 dim; 119 dim
-5: 0 dim; 41-42 dim; 44-117 bg=#1a73e8; 119 dim
-6: 0 dim; 41-42 dim; 44-46 bg=#1a73e8; 47-117 fg=#ffffff bg=#1a73e8 bold; 119 dim
-7: 0 dim; 41-42 dim; 44-117 bg=#1a73e8; 119 dim
+5: 0 dim; 41-42 dim; 44-117 fg=#1a73e8; 119 dim
+6: 0 dim; 41-42 dim; 44-46 fg=#1a73e8; 47-116 fg=#ffffff bold; 117 fg=#1a73e8; 119 dim
+7: 0 dim; 41-42 dim; 44-117 fg=#1a73e8; 119 dim
 8: 0 dim; 41-42 dim; 119 dim
 9: 0 dim; 41-42 dim; 119 dim
 10: 0 dim; 41-42 dim; 119 dim

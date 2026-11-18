@@ -97,6 +97,35 @@ thresholds too, so they are part of the grid's format in `cpp/cell_grid.h`
 and `src/cell_grid.rs`. `NO_COLOR` keeps the layout and drops every
 colour. No 256- or 16-colour fallback: the target is a 24-bit terminal.
 
+### Frames for section fills
+
+A section's fill is a slab of colour its text has to be moved against, and
+it reads differently on a light and a dark terminal. After layout, the fill
+of a section goes and a frame in its colour is drawn round it, so the text
+sits on the terminal's own background (`src/outlines.rs`, `src/region.rs`).
+The pass works on the grid, so the layout, and what fits the pane, does not
+change.
+
+- Section cells of one colour that touch are one region with one frame,
+  however many boxes made them: mail builds a block out of many cells.
+- The frame is drawn in the blank cells along the region's edge. An edge
+  with text on it moves one cell out, where every cell there is blank and
+  has no fill. Where it cannot, a level edge is not drawn, and an upright
+  one leaves a gap at the text.
+- A region as wide as the pane and four fifths of the mail high is the page
+  of a dark mail: its fill goes and it gets no frame.
+- A region with the mail's own border along most of its edge gets no
+  second one.
+- The fill stays on a control, on a region under three cells high or wide,
+  which has no room for a frame, and on a region that is not a rectangle:
+  that is a drawing made of fills, as the bars of a chart are.
+
+On 819 cached mails at 74 columns this changed 191, left the count that do
+not fit at 63, and cut the filled cells to a fifth.
+
+Deciding a section by the size of the merged region, not of each box, was
+tried: it framed chart bars and footer gutters and improved nothing.
+
 ## Measurements
 
 Release build, Apple M2 Max, 76 columns, median of 10, spawn included (about

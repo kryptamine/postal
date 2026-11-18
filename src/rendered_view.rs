@@ -4,6 +4,7 @@ use crate::{
     cell_grid::{self, Cell, CellGrid},
     mail_colours::MailColours,
     marks::Marks,
+    outlines::{self, Outline},
     paint::Paint,
     render_process,
     styled_line::StyledLine,
@@ -16,20 +17,31 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
     let grid = render_process::lay_out(html, width).filter(CellGrid::fits)?;
     let mut hrefs: HashMap<u32, Arc<str>> = HashMap::new();
     let mut lines: Vec<StyledLine> = Vec::new();
+    let outlines = outlines::of(&grid);
+    let mut outline = outlines.iter().copied();
     for row in grid.rows() {
         let mut line = StyledLine::new();
         let mut last = (Marks::default(), Paint::default());
-        for cell in row.iter().filter(|cell| !cell.has(cell_grid::WIDE_TAIL)) {
-            last = look(cell, colours, last);
+        for (cell, outline) in row.iter().zip(outline.by_ref()) {
+            if cell.has(cell_grid::WIDE_TAIL) {
+                continue;
+            }
+
+            last = look(cell, outline, colours, last);
             let (marks, paint) = last;
-            let target = match cell.link() {
-                0 => None,
-                id => grid
+            let target = match (outline, cell.link()) {
+                (Outline::Line(..), _) | (_, 0) => None,
+                (_, id) => grid
                     .href(id)
                     .map(|href| &*hrefs.entry(id).or_insert_with(|| Arc::from(href))),
             };
 
-            line.push(cell.glyph(), marks, paint, target);
+            let glyph = match outline {
+                Outline::Line(glyph, _) => glyph,
+                _ => cell.glyph(),
+            };
+
+            line.push(glyph, marks, paint, target);
         }
 
         line.trim_end();
@@ -49,8 +61,23 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
 
 /// A blank cell takes the look of the cell before it on the same
 /// background, so the words either side of it stay one run.
-fn look(cell: &Cell, colours: MailColours, before: (Marks, Paint)) -> (Marks, Paint) {
-    let bg = colours.background(cell.bg(), cell.panel());
+fn look(
+    cell: &Cell,
+    outline: Outline,
+    colours: MailColours,
+    before: (Marks, Paint),
+) -> (Marks, Paint) {
+    if let Outline::Line(_, colour) = outline {
+        let (fg, marks) = colours.line(Some(colour), None);
+        return (marks, Paint { fg, bg: None });
+    }
+
+    let bg = if outline == Outline::Fill {
+        colours.background(cell.bg(), cell.panel())
+    } else {
+        None
+    };
+
     if cell.has(cell_grid::BORDER) {
         let (fg, marks) = colours.line(cell.fg(), bg);
         return (marks, Paint { fg, bg });

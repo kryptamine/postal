@@ -8,9 +8,9 @@ size: 120x40  cursor: hidden
 │   Subject                              ││ Subject Subject                                                            │
 │   Monthly statement Here is a summary… ││ Date    Mon, 18 Nov 2024 09:00                                             │
 │                                        ││                                                                            │
-│                                        ││                                                                            │
-│                                        ││    Monthly statement                                                       │
-│                                        ││                                                                            │
+│                                        ││ ┌────────────────────────────────────────────────────────────────────────┐ │
+│                                        ││ │  Monthly statement                                                     │ │
+│                                        ││ └────────────────────────────────────────────────────────────────────────┘ │
 │                                        ││                                                                            │
 │                                        ││    Here is a summary of your account activity for October.                 │
 │                                        ││                                                                            │
@@ -51,7 +51,7 @@ styles:
 3: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
 4: 0 dim; 41-42 dim; 119 dim
 5: 0 dim; 41-42 dim; 119 dim
-6: 0 dim; 41-42 dim; 47-117 bold; 119 dim
+6: 0 dim; 41-42 dim; 47-116 bold; 119 dim
 7: 0 dim; 41-42 dim; 119 dim
 8: 0 dim; 41-42 dim; 119 dim
 9: 0 dim; 41-42 dim; 119 dim
