@@ -22,4 +22,11 @@ element::ptr link_of(const element::ptr& el)
             if(const char* href = p->get_attr("href"); href && *href) return p;
     return nullptr;
 }
+
+element::ptr table_of(const element::ptr& el)
+{
+    auto p = el->parent();
+    while(p && !tag_is(p, "table")) p = p->parent();
+    return p;
+}
 } // namespace cg

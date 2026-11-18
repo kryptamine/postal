@@ -27,7 +27,7 @@ struct Holds
 
     std::string words() const;
     // Any text at all, a space even: whitespace between cells sizes a box.
-    bool shows_text() const { return over || !text.empty(); }
+    bool sized_by_text() const { return over || !text.empty(); }
 };
 
 class Contents

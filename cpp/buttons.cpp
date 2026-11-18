@@ -1,5 +1,6 @@
 #include "buttons.h"
 
+#include "collapse.h"
 #include "colour.h"
 #include "dom.h"
 
@@ -19,32 +20,13 @@ bool button(const element::ptr& el, const Holds& h)
     if(h.over || h.words().empty() || h.blocks || h.filled) return false;
     return tag_is(el, "a") || link_of(el) || h.linked;
 }
-
-// A slab three rows high reads as no button, and a border a cell thick
-// only adds a row to the fill that is its shape.
-void flatten(const element::ptr& el)
-{
-    css_properties& css = el->css();
-    css_margins     p   = css.get_padding();
-    p.top.set_value(0, css_units_px);
-    p.bottom.set_value(0, css_units_px);
-    css.set_padding(p);
-    css_borders b = css.get_borders();
-    for(css_border* e : {&b.top, &b.bottom, &b.left, &b.right})
-    {
-        e->style = border_style_none;
-        e->width = css_length(0, css_units_px);
-    }
-    css.set_borders(b);
-    css.set_height(css_length::predef_value(sizing_auto));
-    css.set_min_height(css_length(0, css_units_px));
-    for(auto& child : el->children()) flatten(child);
-}
 } // namespace
 
 void flatten_buttons(const element::ptr& root, const Contents& contents)
 {
-    if(button(root, contents.of(root.get()))) return flatten(root);
+    // A slab three rows high reads as no button, and a border a cell thick
+    // only adds a row to the fill that is its shape.
+    if(button(root, contents.of(root.get()))) return collapse(root);
     for(auto& child : root->children()) flatten_buttons(child, contents);
 }
 } // namespace cg

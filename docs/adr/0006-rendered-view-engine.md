@@ -13,9 +13,9 @@ Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
 buffer of cells: `cell_grid.cpp` draws, `snap.cpp` snaps the styles before
 layout, `image_labels.cpp` decides each image, `buttons.cpp` lays buttons
-out one row high, `contents.cpp` gathers what each element shows for those
-passes in one walk, and `colour.cpp`, `text.cpp` and `dom.cpp` hold the
-colour, cell-width and element helpers.
+out one row high with `collapse.cpp`, `contents.cpp` gathers what each
+element shows for those passes in one walk, and `colour.cpp`, `text.cpp`
+and `dom.cpp` hold the colour, cell-width and element helpers.
 
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
   is one row high. A 600 px mail is 75 columns. `font-size` never changes the

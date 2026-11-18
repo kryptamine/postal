@@ -88,13 +88,6 @@ std::set<const element*> redundant_links(const element::ptr& root)
     return s.followed;
 }
 
-element::ptr table_of(const element::ptr& el)
-{
-    auto p = el->parent();
-    while(p && !tag_is(p, "table")) p = p->parent();
-    return p;
-}
-
 // The nearest text around `el` already says `alt`, as a caption or a
 // name beside an avatar or a status icon does.
 bool repeats_nearby(const element::ptr& el, const std::string& alt)
@@ -152,7 +145,7 @@ void ImageLabels::fit_boxes(const Contents& contents)
     for(auto& el : pictures)
         for(auto box = el->parent(); box && box->css().get_display() != display_none; box = box->parent())
         {
-            if(contents.of(box.get()).shows_text()) break;
+            if(contents.of(box.get()).sized_by_text()) break;
             box->css().set_height(css_length::predef_value(sizing_auto));
             box->css().set_min_height(css_length(0, css_units_px));
         }

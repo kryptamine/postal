@@ -14,6 +14,8 @@ bool tag_is(const litehtml::element::ptr& el, const char* tag);
 void shown_text(const litehtml::element::ptr& el, std::string& out);
 // The nearest link around `el`, not `el` itself; null outside one.
 litehtml::element::ptr link_of(const litehtml::element::ptr& el);
+// The nearest table around `el`; null outside one.
+litehtml::element::ptr table_of(const litehtml::element::ptr& el);
 } // namespace cg
 
 #endif
