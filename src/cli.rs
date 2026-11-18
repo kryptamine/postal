@@ -12,14 +12,13 @@ pub struct Args {
 pub enum Command {
     /// The TUI.
     Run,
+    Login,
     LoginAppPassword,
 }
 
 #[derive(Debug)]
 pub enum Error {
     Unknown(OsString),
-    /// Sign-in through the browser is not built, so the flag is required.
-    LoginWithoutAppPassword,
 }
 
 impl fmt::Display for Error {
@@ -30,9 +29,6 @@ impl fmt::Display for Error {
                 "unknown argument `{}`; see `postal --help`",
                 arg.display()
             ),
-            Self::LoginWithoutAppPassword => {
-                f.write_str("sign in with `postal login --app-password`; see `postal --help`")
-            }
         }
     }
 }
@@ -60,12 +56,10 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Args, Error> {
         }
     }
 
-    if login {
-        if !app_password && !parsed.help {
-            return Err(Error::LoginWithoutAppPassword);
-        }
-
+    if app_password {
         parsed.command = Command::LoginAppPassword;
+    } else if login {
+        parsed.command = Command::Login;
     }
 
     Ok(parsed)
@@ -80,9 +74,10 @@ pub fn help(log: &Path) -> String {
         "A keyboard-driven terminal mail client that reads one IMAP mailbox
 
 Usage: postal [-v | -vv]
-       postal login --app-password [-v | -vv]
+       postal login [--app-password] [-v | -vv]
 
 Commands:
+  login                 sign in to Gmail in the browser
   login --app-password  sign in to Gmail with an app password;
                         needs 2-Step Verification on the Google Account
 

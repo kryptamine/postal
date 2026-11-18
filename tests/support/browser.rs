@@ -1,5 +1,7 @@
 use std::{
     fs,
+    io::{Read, Write},
+    net::TcpStream,
     os::unix::fs::PermissionsExt,
     path::PathBuf,
     time::{Duration, Instant},
@@ -52,4 +54,19 @@ impl Browser {
             std::thread::sleep(Duration::from_millis(10));
         }
     }
+}
+
+/// Plays the browser after Google's consent screen: requests Postal's
+/// `redirect_uri` with `query`, and returns the status line.
+pub fn follow_redirect(redirect_uri: &str, query: &str) -> String {
+    let host = redirect_uri.strip_prefix("http://").unwrap();
+    let mut stream = TcpStream::connect(host).unwrap();
+    write!(
+        stream,
+        "GET /?{query} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
+    )
+    .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    response.lines().next().unwrap_or_default().to_owned()
 }

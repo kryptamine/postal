@@ -9,6 +9,7 @@ mod text_part;
 mod traced;
 mod whole_bodies;
 mod wire_trace;
+mod xoauth2;
 
 pub use error::Error;
 pub use pushed::Pushed;

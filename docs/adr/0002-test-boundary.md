@@ -9,8 +9,9 @@ a test assert the client stays read-only (`BODY.PEEK` only, never `STORE`,
 
 Google's OAuth server counts as part of the mail provider and is faked the same
 way, at the HTTP level: the config carries undocumented `[oauth]` overrides for
-the authorization and token URLs, and the browser is replaced by a command that
-calls the loopback redirect.
+the authorization and token URLs and the redirect timeout. The browser is the
+recording `open` stand-in ahead on `PATH`; the test reads the consent URL it was
+given and calls the loopback redirect itself, as Google would.
 
 Login reads an existing `config.toml` and keeps its `[imap]` and `[secrets]`,
 so a test seeds a config without `email` that points at the fake server and

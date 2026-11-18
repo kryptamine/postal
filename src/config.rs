@@ -4,15 +4,27 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::partial_config::PartialConfig;
+use crate::{oauth::Endpoints, partial_config::PartialConfig};
 
 /// The Account settings read from `config.toml`.
 pub struct Config {
     pub email: String,
+    pub auth: Auth,
     pub imap: Imap,
     pub secrets: SecretStore,
+    pub oauth: Endpoints,
+}
+
+/// What the secret store holds for the Account.
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Auth {
+    AppPassword,
+    /// A refresh token.
+    #[serde(rename = "oauth")]
+    OAuth,
 }
 
 #[derive(PartialEq, Eq)]
@@ -93,8 +105,10 @@ impl Config {
 
     /// The file `load` reads back as this Config; the defaults are left out.
     pub fn to_toml(&self) -> String {
+        // Serializing a unit variant cannot fail.
+        let auth = toml::Value::try_from(self.auth).unwrap_or_else(|_| unreachable!());
         let mut text = format!(
-            "email = {}\nauth = \"app-password\"\n",
+            "email = {}\nauth = {auth}\n",
             toml::Value::from(self.email.as_str())
         );
         if self.imap != Imap::gmail() {
@@ -109,6 +123,22 @@ impl Config {
 
         if matches!(self.secrets, SecretStore::File) {
             text += "\n[secrets]\nstore = \"file\"\n";
+        }
+
+        if self.oauth != Endpoints::google() {
+            let Endpoints {
+                authorization_url,
+                token_url,
+                redirect_timeout,
+            } = &self.oauth;
+
+            let _ = write!(
+                text,
+                "\n[oauth]\nauthorization-url = {}\ntoken-url = {}\nredirect-timeout = {}\n",
+                toml::Value::from(authorization_url.as_str()),
+                toml::Value::from(token_url.as_str()),
+                redirect_timeout.as_secs()
+            );
         }
 
         text

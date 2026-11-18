@@ -10,10 +10,11 @@ use futures::TryStreamExt;
 
 use super::{
     Error, connect::Transport, pushed::Pushed, text_part, traced::Traced, whole_bodies, wire_trace,
+    xoauth2::XOAuth2,
 };
 use crate::{
-    body_key::body_key, config::Config, credential::Credential, header, message::Message,
-    new_message::NewMessage, snippet, sync_state::SyncState,
+    body_key::body_key, config::Config, header, message::Message, new_message::NewMessage,
+    sign_in::SignIn, snippet, sync_state::SyncState,
 };
 
 /// The raw `From` header rides along, for a `From` the server cannot parse.
@@ -107,7 +108,11 @@ pub struct ImapSession {
 }
 
 impl ImapSession {
-    pub async fn open(config: &Config, password: &Credential) -> Result<Self, Error> {
+    #[expect(
+        clippy::future_not_send,
+        reason = "Postal runs on a current-thread runtime"
+    )]
+    pub async fn open(config: &Config, sign_in: &SignIn) -> Result<Self, Error> {
         tracing::info!("connecting to {}:{}", config.imap.host, config.imap.port);
         let mut transport = super::connect::connect(&config.imap).await?;
         if wire_trace::enabled() {
@@ -124,10 +129,21 @@ impl ImapSession {
             return Err(Error::Bye(text));
         }
 
-        let mut session = client
-            .login(&config.email, password.expose())
-            .await
-            .map_err(|(e, _)| e)?;
+        let mut session = match sign_in {
+            SignIn::Password(password) => client.login(&config.email, password.expose()).await,
+            SignIn::OAuth(tokens) => {
+                let token = tokens.access().await.map_err(Error::Token)?;
+                let xoauth2 = XOAuth2 {
+                    email: &config.email,
+                    token: token.expose(),
+                    sent: false,
+                };
+
+                client.authenticate("XOAUTH2", xoauth2).await
+            }
+        }
+        .map_err(|(e, _)| e)?;
+
         tracing::info!("logged in");
         let gmail = session.capabilities().await?.has_str("X-GM-EXT-1");
         Ok(Self {

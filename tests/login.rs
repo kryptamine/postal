@@ -226,18 +226,3 @@ fn a_locked_keychain_hints_at_the_file_store_and_writes_no_config() {
     assert_eq!(secret(&home), None);
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
 }
-
-#[test]
-fn login_without_a_method_names_the_app_password_flag() {
-    let home = Home::new("");
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_postal"))
-        .arg("login")
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains("postal login --app-password"), "{stderr}");
-}

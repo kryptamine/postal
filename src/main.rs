@@ -31,6 +31,7 @@ mod marks;
 mod message;
 mod message_list;
 mod new_message;
+mod oauth;
 mod older_pages;
 mod outage;
 mod pager;
@@ -48,6 +49,7 @@ mod run;
 mod secret;
 mod sequence_numbers;
 mod shown;
+mod sign_in;
 mod snippet;
 mod snippets;
 mod stack_str;
@@ -78,12 +80,13 @@ use crate::{
     body_fetch::Request,
     cache::Cache,
     cli::Command,
-    config::{Config, SecretStore},
-    credential::Credential,
+    config::{Auth, Config, SecretStore},
     imap::{ImapSession, MailServer},
+    oauth::Tokens,
     older_pages::OlderPages,
     previews::Previews,
     run::Background,
+    sign_in::SignIn,
     status::Status,
     theme::Theme,
     update::Update,
@@ -122,6 +125,9 @@ fn logged(log: &Path, command: Command) -> ExitCode {
     tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
     let result = match command {
         Command::Run => try_main(),
+        Command::Login => xdg::config_dir()
+            .map_err(Into::into)
+            .and_then(|dir| login::oauth(&dir)),
         Command::LoginAppPassword => xdg::config_dir()
             .map_err(Into::into)
             .and_then(|dir| login::app_password(&dir)),
@@ -144,9 +150,14 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = xdg::config_dir()?;
     let config_path = dir.join("config.toml");
     let config = Config::load(&config_path)?;
-    let password = match config.secrets {
+    let secret = match config.secrets {
         SecretStore::Keychain => keychain::read(&config.email, &config_path)?,
         SecretStore::File => secret::read(&dir.join("secret"))?,
+    };
+
+    let sign_in = match config.auth {
+        Auth::AppPassword => SignIn::Password(secret),
+        Auth::OAuth => SignIn::OAuth(Tokens::refreshed(secret, config.oauth.token_url.clone())?),
     };
 
     let cache = Cache::open(&xdg::cache_dir()?)?;
@@ -168,12 +179,12 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
         let work = futures::future::try_join(
             sync(
                 &config,
-                &password,
+                &sign_in,
                 &cache,
                 || send(Update::Inbox),
                 |status| send(Update::Status(status)),
             ),
-            bodies(&config, &password, &cache, requested, &send),
+            bodies(&config, &sign_in, &cache, requested, &send),
         );
         let background = Background {
             work: work.map_ok(|((), ())| ()),
@@ -195,13 +206,13 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
 )]
 async fn bodies(
     config: &Config,
-    password: &Credential,
+    sign_in: &SignIn,
     cache: &Cache,
     mut requests: UnboundedReceiver<Request>,
     send: impl Fn(Update),
 ) -> Result<(), sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
-        let mut session = ImapSession::open(config, password).await?;
+        let mut session = ImapSession::open(config, sign_in).await?;
         session.examine().await?;
         // Asked for before an outage: the Preview asks again once told Live.
         while requests.try_recv().is_ok() {}
@@ -227,13 +238,13 @@ async fn bodies(
 /// connection.
 async fn sync(
     config: &Config,
-    password: &Credential,
+    sign_in: &SignIn,
     cache: &Cache,
     written: impl Fn(),
     report: impl Fn(Status),
 ) -> Result<(), sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
-        let session = ImapSession::open(config, password).await?;
+        let session = ImapSession::open(config, sign_in).await?;
         idle::listen(session, cache, &written, report).await
     };
 

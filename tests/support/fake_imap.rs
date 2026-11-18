@@ -13,6 +13,7 @@ use std::{
 
 use imap_next::{
     imap_types::{
+        auth::{AuthMechanism, AuthenticateData},
         command::{Command, CommandBody, FetchModifier},
         core::{Atom, IString, NString, Tag, Vec1},
         datetime::DateTime,
@@ -27,6 +28,7 @@ use imap_next::{
     },
     server::{Event, Options, Server},
     stream::Stream,
+    types::CommandAuthenticate,
 };
 use tokio::net::{TcpListener, TcpStream};
 
@@ -35,6 +37,8 @@ use super::{fake_body::FakeBody, relay::relay};
 pub const EMAIL: &str = "me@example.com";
 /// As Gmail stores an app password; its page shows it in groups of four.
 pub const PASSWORD: &str = "abcdefghijklmnop";
+/// The OAuth access token `AUTHENTICATE XOAUTH2` accepts.
+pub const ACCESS_TOKEN: &str = "ya29.fakeAccessToken";
 
 /// The UID of the first Message given to `FakeImap::start`; the rest follow.
 pub const FIRST_UID: u32 = 101;
@@ -429,6 +433,7 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     let mut server = Server::new(Options::default(), greeting(bye));
     let mut view = Vec::new();
     let mut idling = None;
+    let mut authenticating = None;
     loop {
         let next = tokio::select! {
             next = stream.next(&mut server) => next,
@@ -447,6 +452,12 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
 
         match event {
             Event::GreetingSent { .. } if bye => return,
+            Event::CommandAuthenticateReceived {
+                command_authenticate,
+            } => authenticating = start_authenticate(&mut server, command_authenticate),
+            Event::AuthenticateDataReceived { authenticate_data } => {
+                finish_authenticate(&mut server, authenticating.take(), &authenticate_data);
+            }
             Event::IdleCommandReceived { tag } => {
                 let accept = CommandContinuationRequest::basic(None, "idling").unwrap();
                 server.idle_accept(accept).unwrap();
@@ -580,6 +591,32 @@ fn login(tag: Option<Tag<'static>>, ok: bool) -> Status<'static> {
     };
 
     status.unwrap()
+}
+
+/// Asks for the XOAUTH2 response and returns the tag to answer it under;
+/// any other mechanism is refused at once.
+fn start_authenticate(server: &mut Server, command: CommandAuthenticate) -> Option<Tag<'static>> {
+    let tag = Some(command.tag);
+    if command.mechanism != AuthMechanism::XOAuth2 {
+        let refused = Status::no(tag, None, "mechanism not faked").unwrap();
+        server.authenticate_finish(refused).unwrap();
+        return None;
+    }
+
+    let ready = CommandContinuationRequest::base64(Vec::new());
+    server.authenticate_continue(ready).unwrap();
+    tag
+}
+
+fn finish_authenticate(server: &mut Server, tag: Option<Tag<'static>>, data: &AuthenticateData) {
+    let ok = matches!(data, AuthenticateData::Continue(data)
+        if data.declassify().as_ref() == xoauth2().as_bytes());
+    server.authenticate_finish(login(tag, ok)).unwrap();
+}
+
+/// The SASL XOAUTH2 response of the Account with `ACCESS_TOKEN`.
+pub fn xoauth2() -> String {
+    format!("user={EMAIL}\x01auth=Bearer {ACCESS_TOKEN}\x01\x01")
 }
 
 fn capabilities(inbox: &Inbox) -> Data<'static> {

@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use super::{Error, verify};
+use super::{Error, save, unchanged, verify};
 use crate::{
-    atomic_file, browser, config::SecretStore, credential::Credential, keychain,
-    partial_config::PartialConfig, prompt, secret,
+    browser, config::Auth, credential::Credential, partial_config::PartialConfig, prompt,
+    sign_in::SignIn,
 };
 
 const APP_PASSWORDS: &str = "https://myaccount.google.com/apppasswords";
@@ -11,18 +11,9 @@ const APP_PASSWORDS: &str = "https://myaccount.google.com/apppasswords";
 /// The Onboarding with an app password: asks until the server accepts one,
 /// and writes nothing before it does.
 pub fn app_password(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let config_path = dir.join("config.toml");
-    let partial = PartialConfig::load(&config_path)?;
+    let partial = PartialConfig::load(&dir.join("config.toml"))?;
     let email = ask("Email:", true)?;
-    let known = match partial.email.as_deref() {
-        Some(current) if current.eq_ignore_ascii_case(&email) => true,
-        Some(current) => {
-            let current = current.to_owned();
-            return Err(Error::OtherAccount { current }.into());
-        }
-        None => false,
-    };
-
+    let unchanged = unchanged(&partial, &email, Auth::AppPassword)?;
     println!(
         "Google gives app passwords only to an Account with 2-Step Verification.\n\
          Create one for Postal at {APP_PASSWORDS}"
@@ -31,15 +22,15 @@ pub fn app_password(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("cannot open the browser: {error}");
     }
 
-    let config = partial.with_email(email);
+    let config = partial.account(email, Auth::AppPassword);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let password = loop {
+    let sign_in = loop {
         let pasted = ask("App password:", false)?;
-        let password = Credential::new(pasted.split_whitespace().collect());
-        match runtime.block_on(verify(&config, &password)) {
-            Ok(()) => break password,
+        let sign_in = SignIn::Password(Credential::new(pasted.split_whitespace().collect()));
+        match runtime.block_on(verify(&config, &sign_in)) {
+            Ok(()) => break sign_in,
             Err(Error::Imap(error)) if error.bad_credentials() => {
                 println!("The server refused this app password; paste it again.");
             }
@@ -47,18 +38,7 @@ pub fn app_password(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // The secret goes first, so a config never names an Account without one.
-    match config.secrets {
-        SecretStore::Keychain => keychain::write(&config.email, &password, &config_path)?,
-        SecretStore::File => secret::write(&dir.join("secret"), &password)?,
-    }
-
-    if !known {
-        atomic_file::write(&config_path, config.to_toml().as_bytes(), 0o644)?;
-    }
-
-    println!("Signed in as {}.", config.email);
-    Ok(())
+    save(dir, &config, &sign_in, unchanged)
 }
 
 /// Prompts until the answer holds more than whitespace.

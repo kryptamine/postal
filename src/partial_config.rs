@@ -1,17 +1,21 @@
-use std::{io, net::IpAddr, ops::Range, path::Path};
+use std::{io, net::IpAddr, ops::Range, path::Path, time::Duration};
 
 use serde::Deserialize;
 use toml::Spanned;
 
-use crate::config::{Config, Error, Imap, SecretStore};
+use crate::{
+    config::{Auth, Config, Error, Imap, SecretStore},
+    oauth::Endpoints,
+};
 
 /// `config.toml` as login reads it: everything but the Account may be set
 /// already, and a missing file is the Gmail defaults.
 pub struct PartialConfig {
     pub email: Option<String>,
-    auth: Option<Auth>,
+    pub auth: Option<Auth>,
     pub imap: Imap,
     pub secrets: SecretStore,
+    pub oauth: Endpoints,
 }
 
 #[derive(Deserialize)]
@@ -23,14 +27,8 @@ struct RawConfig {
     imap: RawImap,
     #[serde(default)]
     secrets: Secrets,
-}
-
-// Only the hand-written variants exist so far; any other value is rejected
-// with its line by serde.
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum Auth {
-    AppPassword,
+    #[serde(default)]
+    oauth: RawOAuth,
 }
 
 #[derive(Deserialize, Default)]
@@ -46,6 +44,27 @@ struct RawImap {
     host: String,
     port: u16,
     tls: Spanned<bool>,
+}
+
+/// Undocumented: only a test points Postal at a fake Google.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, default, rename_all = "kebab-case")]
+struct RawOAuth {
+    authorization_url: String,
+    token_url: String,
+    /// Seconds.
+    redirect_timeout: u64,
+}
+
+impl Default for RawOAuth {
+    fn default() -> Self {
+        let google = Endpoints::google();
+        Self {
+            authorization_url: google.authorization_url,
+            token_url: google.token_url,
+            redirect_timeout: google.redirect_timeout.as_secs(),
+        }
+    }
 }
 
 impl Default for RawImap {
@@ -68,6 +87,7 @@ impl PartialConfig {
                 auth: None,
                 imap: Imap::gmail(),
                 secrets: SecretStore::default(),
+                oauth: Endpoints::google(),
             }),
             Err(source) => Err(Error::Read {
                 path: path.to_owned(),
@@ -106,25 +126,29 @@ impl PartialConfig {
                 tls,
             },
             secrets: raw.secrets.store,
+            oauth: Endpoints {
+                authorization_url: raw.oauth.authorization_url,
+                token_url: raw.oauth.token_url,
+                redirect_timeout: Duration::from_secs(raw.oauth.redirect_timeout),
+            },
         })
     }
 
     /// The error names the field the Account still lacks.
     pub fn config(mut self) -> Result<Config, &'static str> {
         let email = self.email.take().ok_or("email")?;
-        match self.auth.take().ok_or("auth")? {
-            Auth::AppPassword => {}
-        }
-
-        Ok(self.with_email(email))
+        let auth = self.auth.ok_or("auth")?;
+        Ok(self.account(email, auth))
     }
 
-    /// The Config of `email`, whatever Account the file named.
-    pub fn with_email(self, email: String) -> Config {
+    /// The Config of this Account, whatever Account the file named.
+    pub fn account(self, email: String, auth: Auth) -> Config {
         Config {
             email,
+            auth,
             imap: self.imap,
             secrets: self.secrets,
+            oauth: self.oauth,
         }
     }
 }
