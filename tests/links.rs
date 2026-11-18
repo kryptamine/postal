@@ -125,7 +125,7 @@ fn style_at(screen: &Screen, needle: &str) -> termlens::Style {
 fn a_one_letter_label_opens_its_url() {
     let (_server, home, browser) = start(vec![html("Two links", 18, &two_links())]);
     let mut t = postal(&home, &browser);
-    t.wait_until(|s| s.contains("Read the notes and the agenda"))
+    t.wait_until(|s| s.contains("│ Read the notes and the agenda"))
         .unwrap();
 
     t.send(Key::Char('o')).unwrap();
@@ -181,7 +181,7 @@ fn links_scrolled_out_of_view_get_no_label() {
     );
     let (_server, home, browser) = start(vec![html("Long", 18, &body)]);
     let mut t = postal(&home, &browser);
-    t.wait_until(|s| s.contains("top link")).unwrap();
+    t.wait_until(|s| s.contains("│ top link")).unwrap();
 
     t.send(Key::Char('o')).unwrap();
     t.wait_until(|s| s.contains("atop link")).unwrap();
@@ -212,7 +212,7 @@ fn a_key_that_is_no_label_cancels_and_is_consumed() {
     let (_server, home, browser) = start(messages);
     let mut t = postal(&home, &browser);
     let labelled = |s: &Screen| s.contains("athe notes");
-    let unlabelled = |s: &Screen| s.contains(" 1/2 ") && s.contains("Read the notes");
+    let unlabelled = |s: &Screen| s.contains(" 1/2 ") && s.contains("│ Read the notes");
     t.wait_until(unlabelled).unwrap();
 
     // `j` is in the label alphabet, but no label here is `j`.
@@ -243,12 +243,12 @@ fn hint_mode_ends_when_the_selected_message_goes() {
     ];
     let (server, home, browser) = start(messages);
     let mut t = postal(&home, &browser);
-    t.wait_until(|s| s.contains("Read the notes")).unwrap();
+    t.wait_until(|s| s.contains("│ Read the notes")).unwrap();
     quit(t);
 
     server.stall(Stall::Greeting);
     let mut t = postal(&home, &browser);
-    t.wait_until(|s| s.contains("Read the notes")).unwrap();
+    t.wait_until(|s| s.contains("│ Read the notes")).unwrap();
     t.send(Key::Char('o')).unwrap();
     t.wait_until(|s| s.contains("athe notes")).unwrap();
     server.expunge(FIRST_UID + 1);
