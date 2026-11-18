@@ -80,18 +80,13 @@ pub async fn run(
     let mut working = true;
     let mut listening = true;
     let mut screen = Screen::opening(cache);
-
     // A frame's allocations count from what triggered it, the input or the
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
     loop {
         let text = panes(terminal)?.preview.map(preview_pane::text_area);
-        if whole && let Some(text) = text {
-            previews
-                .want(cache, &view, text.width)
-                .map_err(Error::Cache)?;
-        }
-
+        want(previews, cache, &view, text.filter(|_| whole))?;
+        screen.notice_write_failure(cache);
         draw(terminal, theme, &mut view, previews, &screen)?;
         alloc_count::report(frame_start);
         if !whole {
@@ -135,6 +130,18 @@ pub async fn run(
     }
 }
 
+/// Readies the Previews around the selection, once `text` is laid out.
+fn want(
+    previews: &mut Previews,
+    cache: &Cache,
+    view: &InboxView,
+    text: Option<Rect>,
+) -> Result<(), Error> {
+    text.map_or(Ok(()), |text| {
+        previews.want(cache, view, text.width).map_err(Error::Cache)
+    })
+}
+
 fn panes(terminal: &Terminal<TerminalBackend>) -> Result<layout::Panes, Error> {
     let size = terminal.size().map_err(Error::Terminal)?;
     Ok(layout::split(Rect::new(0, 0, size.width, size.height)))
@@ -165,7 +172,7 @@ fn draw(
 
             let hint_line = HintLine {
                 theme,
-                toast: screen.toast.as_ref().map(|toast| toast.text),
+                toast: screen.toast.as_ref(),
                 status: screen.status,
                 now: Instant::now(),
             };
@@ -217,6 +224,13 @@ impl Screen {
         Self {
             toast: cache.rebuilt().then(|| Toast::new("cache rebuilt")),
             ..Self::default()
+        }
+    }
+
+    /// A failure is toasted once: the Cache stays in memory after it.
+    fn notice_write_failure(&mut self, cache: &Cache) {
+        if cache.take_write_failure() {
+            self.toast = Some(Toast::error("cache write failed"));
         }
     }
 

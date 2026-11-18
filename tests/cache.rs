@@ -3,15 +3,18 @@ mod support;
 
 use std::{
     fs,
+    os::unix::fs::PermissionsExt,
+    path::Path,
     process::Command,
     time::{Duration, Instant},
 };
 
 use support::{
+    fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
 };
-use termlens::{Key, Screen, Terminal};
+use termlens::{Color, Key, Screen, Terminal};
 
 const ITEMS: &str =
     "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
@@ -326,4 +329,104 @@ fn a_newer_schema_exits_before_the_tui_and_is_left_alone() {
     assert!(stderr.contains(&expected), "{stderr}");
     assert_eq!(fs::read(home.cache_path()).unwrap(), before);
     assert!(server.commands().is_empty(), "{:#?}", server.commands());
+}
+
+fn set_mode(dir: &Path, mode: u32) {
+    fs::set_permissions(dir, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+// Losing the Cache directory mid-session must not end Postal or freeze the
+// Message List: new mail and its body still show.
+#[test]
+fn a_read_only_cache_directory_mid_session_keeps_the_ui_working() {
+    let server = FakeImap::start(four_messages());
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains("Newest")).unwrap();
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+
+    let dir = home.cache_path().parent().unwrap().to_owned();
+    set_mode(&dir, 0o555);
+    server.deliver(
+        FakeMessage::new("Erin", "Brand new", "2024-06-01T00:00:00Z")
+            .body(FakeBody::plain("Fresh body")),
+    );
+    t.wait_until(|s| s.contains("Brand new")).unwrap();
+    t.send(Key::Char('k')).unwrap();
+    t.wait_until(|s| s.contains(" 1/5 ") && preview(s).contains("Fresh body"))
+        .unwrap();
+    set_mode(&dir, 0o755);
+    quit(t);
+}
+
+/// The Preview's text at 80 columns, 33 rows: the rows below the list.
+fn preview(screen: &Screen) -> String {
+    (15..screen.rows() - 1)
+        .map(|row| screen.row_text(row))
+        .collect()
+}
+
+fn toast_is_red(screen: &Screen, text: &str) -> bool {
+    let line = hint_line(screen);
+    let Some(at) = line.find(text) else {
+        return false;
+    };
+
+    let column = u16::try_from(line[..at].chars().count()).unwrap();
+    screen
+        .cell(screen.rows() - 1, column)
+        .is_some_and(|cell| cell.style().fg == Color::Indexed(1))
+}
+
+// A write the disk refuses moves the Cache into memory: the session goes on
+// with new mail and bodies, and the failure is told once, not on every write.
+#[test]
+fn a_failed_cache_write_keeps_the_session_in_memory_and_is_toasted_once() {
+    let server = FakeImap::start(four_messages());
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains("Newest")).unwrap();
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+
+    // Another writer holding the lock makes every write of Postal's fail.
+    let lock = rusqlite::Connection::open(home.cache_path()).unwrap();
+    lock.execute_batch("BEGIN EXCLUSIVE").unwrap();
+    server.deliver(
+        FakeMessage::new("Erin", "Brand new", "2024-06-01T00:00:00Z")
+            .body(FakeBody::plain("Fresh body")),
+    );
+    let screen = t
+        .snapshot_after(|s| s.contains("Brand new") && hint_line(s).ends_with("cache write failed"))
+        .unwrap();
+    assert!(toast_is_red(&screen, "cache write failed"), "{screen}");
+
+    t.send(Key::Char('k')).unwrap();
+    t.wait_until(|s| s.contains(" 1/5 ") && preview(s).contains("Fresh body"))
+        .unwrap();
+    t.wait_until(|s| !hint_line(s).contains("cache write failed"))
+        .unwrap();
+    server.deliver(FakeMessage::new(
+        "Finn",
+        "Newer still",
+        "2024-07-01T00:00:00Z",
+    ));
+    t.wait_until(|s| s.contains("Newer still")).unwrap();
+    let screen = t.wait_stable(Duration::from_millis(300)).unwrap();
+    assert!(
+        !hint_line(&screen).contains("cache write failed"),
+        "{screen}"
+    );
+    quit(t);
+
+    lock.execute_batch("ROLLBACK").unwrap();
+    let log = fs::read_to_string(home.log_path()).unwrap();
+    assert!(
+        log.lines()
+            .any(|l| l.contains("ERROR") && l.contains("cache write failed")),
+        "{log}"
+    );
+    let on_disk: i64 = lock
+        .query_row("SELECT count(*) FROM message", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(on_disk, 4);
 }

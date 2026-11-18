@@ -6,6 +6,7 @@ use crate::{
     keymap::{BINDINGS, HELP_HINT, Hint},
     status::Status,
     theme::Theme,
+    toast::Toast,
 };
 
 const GAP: u16 = 2;
@@ -14,7 +15,7 @@ const GAP: u16 = 2;
 /// right. Hints that do not fit drop from the right; `?: help` always stays.
 pub struct HintLine<'a> {
     pub theme: &'a Theme,
-    pub toast: Option<&'static str>,
+    pub toast: Option<&'a Toast>,
     pub status: Status,
     /// What the Status's countdown counts from.
     pub now: Instant,
@@ -35,7 +36,8 @@ impl Widget for HintLine<'_> {
 
         let status = self.status.text(self.now);
         let (right, style) = match self.toast {
-            Some(text) => (text, Style::new()),
+            Some(toast) if toast.error => (toast.text, self.theme.error),
+            Some(toast) => (toast.text, Style::new()),
             None if self.status.warns() => (status.as_str(), self.theme.warning),
             None => (status.as_str(), self.theme.muted),
         };

@@ -20,7 +20,7 @@ mail-parser = { version = "0.11", features = ["full_encoding"] }
 quoted_printable = "0.5.2"
 ratatui = "0.30"
 rfc2047-decoder = "1.1.2"
-rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
+rusqlite = { version = "0.40.2", features = ["backup", "bundled", "fallible_uint"] }
 serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.54.1", features = ["rt", "macros", "net", "time"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }

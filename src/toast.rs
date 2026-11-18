@@ -9,6 +9,8 @@ const SHOWN_FOR: Duration = Duration::from_secs(3);
 pub struct Toast {
     pub text: &'static str,
     pub until: Instant,
+    /// Drawn in the error colour rather than the default foreground.
+    pub error: bool,
 }
 
 impl Toast {
@@ -16,6 +18,14 @@ impl Toast {
         Self {
             text,
             until: Instant::now() + SHOWN_FOR,
+            error: false,
+        }
+    }
+
+    pub fn error(text: &'static str) -> Self {
+        Self {
+            error: true,
+            ..Self::new(text)
         }
     }
 }
