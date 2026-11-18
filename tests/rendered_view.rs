@@ -512,11 +512,9 @@ fn a_picture_link_whose_page_the_words_open_shows_no_label() {
         picture("https://elsewhere.example/"),
     ));
     let screen = preview(body, &DEFAULT, "End");
-    let labels: usize = pane(&screen)
-        .iter()
-        .map(|r| r.matches("[link]").count())
-        .sum();
+    let labels: usize = pane(&screen).iter().map(|r| r.matches('[').count()).sum();
     assert_eq!(labels, 1, "{}", screen.text());
+    assert!(screen.contains("[elsewhere.example]"), "{}", screen.text());
 }
 
 // A cell sized for a product photo stood twelve blank rows high once the
@@ -664,4 +662,27 @@ fn the_page_colour_round_a_card_is_the_page() {
     let (row, _) = at(&screen, "Three");
     assert_eq!(bg(&screen, row, 44), Color::Default, "{}", screen.text());
     assert_eq!(frames(&screen), 2, "{}", screen.text());
+}
+
+// A picture link names nothing, so `[link]` left the reader guessing; its
+// address does: the words of its page, or the site a redirect opens.
+#[test]
+fn a_bare_picture_link_is_named_by_its_address() {
+    let picture = |href: &str| {
+        format!(
+            "<p><a href=\"{href}\"><img src=\"https://cdn.example/p.png\" width=\"400\"></a></p>"
+        )
+    };
+    let body = html(&format!(
+        "{}{}<p>End</p>",
+        picture("https://www.events.example/e/ignite-watch-party-tickets-2004779926728?ref=mail"),
+        picture("https://click.bank.example/f/a/Yv9Qtu~~/AAD4-xA~/pEerNWDa"),
+    ));
+    let screen = preview(body, &DEFAULT, "End");
+    assert!(
+        screen.contains("[ignite watch party tickets]"),
+        "{}",
+        screen.text()
+    );
+    assert!(screen.contains("[bank.example]"), "{}", screen.text());
 }

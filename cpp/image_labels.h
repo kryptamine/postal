@@ -1,5 +1,5 @@
 // Images are never fetched, so each one goes, or shows as a label one row
-// high: its alt, or `[link]` for a link with nothing else to show. See
+// high: its alt, or the name of a link with nothing else to show. See
 // docs/adr/0006-rendered-view-engine.md.
 #ifndef CG_IMAGE_LABELS_H
 #define CG_IMAGE_LABELS_H
@@ -45,7 +45,7 @@ class ImageLabels
     std::string                         mail_text;
     std::set<const litehtml::element*>  redundant;
     std::vector<litehtml::element::ptr> pictured;
-    // Links that already show `[link]` once.
+    // Links that already show their name once.
     std::set<const litehtml::element*>  labelled_links;
 };
 } // namespace cg

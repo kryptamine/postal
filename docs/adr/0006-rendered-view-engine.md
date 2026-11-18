@@ -12,11 +12,12 @@ one key away.
 Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
 buffer of cells: `cell_grid.cpp` draws, `snap.cpp` snaps the styles before
-layout, `image_labels.cpp` decides each image, `picture_boxes.cpp` fits
-or drops the boxes round pictures, `buttons.cpp` lays buttons out one row
-high with `collapse.cpp`, `contents.cpp` gathers what each
-element shows for those passes in one walk, and `colour.cpp`, `text.cpp`
-and `dom.cpp` hold the colour, cell-width and element helpers.
+layout, `image_labels.cpp` decides each image and `link_names.cpp` names a
+bare picture link, `picture_boxes.cpp` fits or drops the boxes round
+pictures, `buttons.cpp` lays buttons out one row high with `collapse.cpp`,
+`contents.cpp` gathers what each element shows for those passes in one
+walk, and `colour.cpp`, `text.cpp` and `dom.cpp` hold the colour,
+cell-width and element helpers.
 
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
   is one row high. A 600 px mail is 75 columns. `font-size` never changes the
@@ -51,8 +52,11 @@ and `dom.cpp` hold the colour, cell-width and element helpers.
   An empty box would only push the text apart: a 600×300 banner was 19 blank
   rows, a 24 px status icon a second row per table row. An image goes when:
   - it is under one column wide or 2 px high (a tracking pixel or spacer);
-  - it has no `alt`, unless it is all a link shows, which keeps `[link]` so
-    Hint mode can still open it;
+  - it has no `alt`, unless it is all a link shows, which keeps a label so
+    Hint mode can still open it: the words of the last path segment made of
+    lowercase words (`/e/watch-party-tickets-2004` reads `[watch party
+    tickets]`), or else the host's domain without its subdomain, as a
+    tracking redirect's path names nothing (`[revolut.com]`);
   - it is an icon, no side over 64 px, beside other text: it decorates that
     text, and its `alt` rarely fits its box (`GitHub` in 32 px read `GitH`);
   - its `alt` is already in the nearest text around it, within its table row
@@ -171,7 +175,8 @@ links, picture boxes, buttons, fluid columns and light cards then changed
 504 of them, left 63 not fitting, and cut the `[link]` labels from 462 to
 192. Dropping the boxes and columns a gone picture leaves empty then
 changed 247 of them, left 63 not fitting, and lost no word but the `Status`
-header of CI reports.
+header of CI reports. Naming picture links by their address changed 93,
+and left 10 `[link]` labels, on links with no http address.
 
 Deciding a section by the size of the merged region, not of each box, was
 tried: it framed chart bars and footer gutters and improved nothing.

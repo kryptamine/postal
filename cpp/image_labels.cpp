@@ -2,6 +2,7 @@
 
 #include "dom.h"
 #include "geometry.h"
+#include "link_names.h"
 #include "text.h"
 
 #include <algorithm>
@@ -156,7 +157,7 @@ std::string ImageLabels::text_for(const element::ptr& el, bool icon, const eleme
     if(!label.empty() || !sole || icon) return label;
     if(labelled_links.count(link.get()) || redundant.count(link.get())) return "";
     labelled_links.insert(link.get());
-    return "[link]";
+    return "[" + link_name(link->get_attr("href")) + "]";
 }
 
 void ImageLabels::label_one(const element::ptr& el)
