@@ -9,7 +9,7 @@ use crate::{outage::Outage, stack_str::StackStr};
 pub enum Status {
     #[default]
     Live,
-    /// The first fetch: `done` of `total` Messages so far.
+    /// The first fetch or a Backfill: `done` of `total` Messages so far.
     Syncing {
         done: u32,
         total: u32,

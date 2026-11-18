@@ -7,7 +7,7 @@ use std::{
 use futures::channel::mpsc::UnboundedSender;
 
 use crate::{
-    body_fetch::{BodyRequest, Fetched},
+    body_fetch::{BodyRequest, Fetched, Request},
     cache::{self, Cache},
     inbox_view::InboxView,
     message::Message,
@@ -46,13 +46,13 @@ pub struct Previews {
     /// The header of the selected Message, while its body is unavailable.
     header: Option<(u32, Preview)>,
     link: Link,
-    requests: UnboundedSender<BodyRequest>,
+    requests: UnboundedSender<Request>,
     jobs: mpsc::Sender<Job>,
 }
 
 impl Previews {
     /// Starts the render thread, which sends each Preview back to `updates`.
-    pub fn start(requests: UnboundedSender<BodyRequest>, updates: UnboundedSender<Update>) -> Self {
+    pub fn start(requests: UnboundedSender<Request>, updates: UnboundedSender<Update>) -> Self {
         let (jobs, queue) = mpsc::channel::<Job>();
         thread::spawn(move || {
             for job in queue {
@@ -161,7 +161,7 @@ impl Previews {
         if request.selected.is_some() || !request.neighbours.is_empty() {
             request.neighbours.sort_unstable();
             // The send fails only once the body fetch has stopped.
-            let _ = self.requests.unbounded_send(request);
+            let _ = self.requests.unbounded_send(Request::Bodies(request));
         }
 
         if let Some(message) = messages.get(selected) {

@@ -36,12 +36,16 @@ _Avoid_: preview, excerpt, summary
 Messages kept on disk between runs, so the Message List shows before the server answers. After a write to disk fails, it lives in memory for the rest of the session.
 _Avoid_: store, database, offline copy
 
+**Backfill**:
+Fetching the next 500 Messages older than every cached one, as the selection nears the end of the Message List. Rows never leave the Cache to make room.
+_Avoid_: pagination, load more, infinite scroll
+
 **Toast**:
 A short notice in the right slot of the hint line, shown for three seconds; a new one replaces the old.
 _Avoid_: notification, flash, alert
 
 **Status**:
-The connection state in the right slot of the hint line, silent while live: syncing, connecting, or a countdown to the next reconnect. A Toast covers it while shown.
+The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), connecting, or a countdown to the next reconnect. A Toast covers it while shown.
 _Avoid_: indicator, banner, connection bar
 
 **Hint mode**:

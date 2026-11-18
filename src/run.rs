@@ -6,7 +6,9 @@ use ratatui::{Terminal, layout::Rect};
 use tokio::time::Instant;
 
 use crate::{
-    alloc_count, browser,
+    alloc_count,
+    backfill::Backfill,
+    browser,
     cache::{self, Cache},
     help_popup::HelpPopup,
     hint_line::HintLine,
@@ -15,6 +17,7 @@ use crate::{
     layout,
     link_hints::{LinkHints, Typed},
     message_list::{self, MessageList},
+    older_pages::OlderPages,
     pager, pager_text,
     preview_pane::{self, PreviewPane},
     preview_render::{self, Job},
@@ -47,10 +50,12 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// The network work behind the screen, and what it reports as it goes.
+/// The network work behind the screen, what it reports as it goes, and the
+/// pages of older Messages asked of it.
 pub struct Background<W, U> {
     pub work: W,
     pub updates: U,
+    pub older: OlderPages,
 }
 
 /// The one event loop: input, and each `Update` from the background work,
@@ -74,8 +79,8 @@ pub async fn run(
     let mut view = InboxView::loading();
     let rows = message_list::capacity(panes(terminal)?.list.height);
     show(&mut view, cache, Some(rows))?;
-    let Background { work, mut updates } = background;
-    let mut work = std::pin::pin!(work);
+    let (mut updates, mut older) = (background.updates, background.older);
+    let mut work = std::pin::pin!(background.work);
     let mut whole = false;
     let mut working = true;
     let mut listening = true;
@@ -86,6 +91,7 @@ pub async fn run(
     loop {
         let text = panes(terminal)?.preview.map(preview_pane::text_area);
         want(previews, cache, &view, text.filter(|_| whole))?;
+        whole.then(|| older.want(&view));
         screen.notice_write_failure(cache);
         draw(terminal, theme, &mut view, previews, &screen)?;
         alloc_count::report(frame_start);
@@ -110,7 +116,7 @@ pub async fn run(
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
                 match update {
-                    Some(update) => apply(update, &mut view, &mut screen, cache, previews)?,
+                    Some(update) => apply(older.notice(update), &mut view, &mut screen, cache, previews)?,
                     None => listening = false,
                 }
             }
@@ -173,7 +179,7 @@ fn draw(
             let hint_line = HintLine {
                 theme,
                 toast: screen.toast.as_ref(),
-                status: screen.status,
+                status: screen.status(),
                 now: Instant::now(),
             };
 
@@ -203,9 +209,16 @@ fn apply(
             }
         }
         Update::Bodies(fetched) => previews.fetched(fetched),
-        Update::BodyLink(live) => previews.link(live),
+        Update::BodyLink(live) => {
+            previews.link(live);
+            screen.backfill = None;
+        }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
         Update::Status(status) => screen.status = status,
+        Update::Backfill(Backfill::Fetching { done, total }) => {
+            screen.backfill = Some(Status::Syncing { done, total });
+        }
+        Update::Backfill(Backfill::Paged { .. }) => screen.backfill = None,
     }
 
     Ok(())
@@ -216,7 +229,10 @@ fn apply(
 struct Screen {
     help: bool,
     toast: Option<Toast>,
+    /// The sync connection's.
     status: Status,
+    /// A page of older Messages under way on the fetch connection.
+    backfill: Option<Status>,
     hints: Option<LinkHints>,
 }
 
@@ -225,6 +241,14 @@ impl Screen {
         Self {
             toast: cache.rebuilt().then(|| Toast::new("cache rebuilt")),
             ..Self::default()
+        }
+    }
+
+    /// The sync connection's Status, or the backfill's while that one is live.
+    const fn status(&self) -> Status {
+        match (self.status, self.backfill) {
+            (Status::Live, Some(backfill)) => backfill,
+            (status, _) => status,
         }
     }
 
@@ -239,7 +263,7 @@ impl Screen {
     /// first; `None` while neither will.
     fn changes_at(&self, now: Instant) -> Option<Instant> {
         let toast = self.toast.as_ref().map(|toast| toast.until);
-        [toast, self.status.ticks_at(now)]
+        [toast, self.status().ticks_at(now)]
             .into_iter()
             .flatten()
             .min()

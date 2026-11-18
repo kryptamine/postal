@@ -36,8 +36,8 @@ pub async fn listen<S: MailServer>(
             continue;
         }
 
-        if pushed.iter().any(|p| matches!(p, Pushed::Lost)) {
-            tracing::info!("IDLE announcements were dropped: resyncing");
+        if let Some(why) = resync_for(cache, &sequence, &pushed)? {
+            tracing::info!("{why}: resyncing");
             sequence = resynced(&mut server, cache, &written, report).await?;
             pushed = server.pushed();
             continue;
@@ -57,11 +57,30 @@ pub async fn listen<S: MailServer>(
         );
         written();
         if !changes.new.is_empty() {
-            snippets::fetch(&mut server, cache, &written).await?;
+            snippets::fetch(&mut server, cache, None, &written).await?;
         }
 
         pushed = server.pushed();
     }
+}
+
+/// Why `pushed` cannot be read against `sequence`; `None` when it can.
+fn resync_for(
+    cache: &Cache,
+    sequence: &SequenceNumbers,
+    pushed: &[Pushed],
+) -> Result<Option<&'static str>, Error> {
+    if pushed.iter().any(|p| matches!(p, Pushed::Lost)) {
+        return Ok(Some("IDLE announcements were dropped"));
+    }
+
+    // Rows the fetch connection added below the numbered ones take this
+    // connection's own EXAMINE to number.
+    let backfilled = matches!(
+        (cache.oldest_uid()?, sequence.oldest()),
+        (Some(cached), Some(numbered)) if cached < numbered
+    );
+    Ok(backfilled.then_some("older Messages were backfilled"))
 }
 
 /// Resyncs and cuts the Snippets; numbers the cached UIDs as the resync's
@@ -78,7 +97,7 @@ async fn resynced(
 ) -> Result<SequenceNumbers, Error> {
     let examined = sync::resync(server, cache, report).await?;
     written();
-    snippets::fetch(server, cache, written).await?;
+    snippets::fetch(server, cache, None, written).await?;
     let uids = cache.uids()?;
     Ok(SequenceNumbers::new(
         examined.exists,

@@ -1,5 +1,6 @@
 mod alloc_count;
 mod ansi;
+mod backfill;
 mod backoff;
 mod body_fetch;
 mod body_key;
@@ -27,6 +28,7 @@ mod marks;
 mod message;
 mod message_list;
 mod new_message;
+mod older_pages;
 mod outage;
 mod pager;
 mod pager_text;
@@ -68,11 +70,12 @@ use std::{
 use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
 
 use crate::{
-    body_fetch::BodyRequest,
+    body_fetch::Request,
     cache::Cache,
     config::Config,
     credential::Credential,
     imap::{ImapSession, MailServer},
+    older_pages::OlderPages,
     previews::Previews,
     run::Background,
     status::Status,
@@ -135,6 +138,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (requests, requested) = futures::channel::mpsc::unbounded();
+    let older = OlderPages::new(requests.clone());
     let mut previews = Previews::start(requests, sender.clone());
     let send = move |update| {
         // The send fails only once the event loop has stopped listening.
@@ -156,6 +160,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
         let background = Background {
             work: work.map_ok(|((), ())| ()),
             updates,
+            older,
         };
 
         let result = run::run(&mut terminal, &theme, &cache, &mut previews, background).await;
@@ -174,7 +179,7 @@ async fn bodies(
     config: &Config,
     password: &Credential,
     cache: &Cache,
-    mut requests: UnboundedReceiver<BodyRequest>,
+    mut requests: UnboundedReceiver<Request>,
     send: impl Fn(Update),
 ) -> Result<(), sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
@@ -183,8 +188,7 @@ async fn bodies(
         // Asked for before an outage: the Preview asks again once told Live.
         while requests.try_recv().is_ok() {}
         report(Status::Live);
-        let fetched = |fetched| send(Update::Bodies(fetched));
-        body_fetch::serve(&mut session, cache, &mut requests, fetched).await
+        body_fetch::serve(&mut session, cache, &mut requests, &send).await
     };
 
     // The status slot follows the sync connection alone.

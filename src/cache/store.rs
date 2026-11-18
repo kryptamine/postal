@@ -12,8 +12,8 @@ use rusqlite::{
 
 use super::{Changes, Error, schema};
 use crate::{
-    inbox::Inbox, message::Message, sync_state::SyncState, text_part::TextPart,
-    transfer_encoding::TransferEncoding,
+    inbox::Inbox, message::Message, new_message::NewMessage, sync_state::SyncState,
+    text_part::TextPart, transfer_encoding::TransferEncoding,
 };
 
 /// The raw bodies kept, in bytes; past it the least recently used go first.
@@ -104,18 +104,34 @@ impl Cache {
         Ok(uids)
     }
 
+    pub fn oldest_uid(&self) -> Result<Option<u32>, Error> {
+        let oldest =
+            self.connection
+                .borrow()
+                .query_row("SELECT min(uid) FROM message", [], |row| row.get(0))?;
+        Ok(oldest)
+    }
+
     /// Up to `limit` Messages still without a Snippet, newest first, and
-    /// the part each one's Snippet is cut from.
-    pub fn pending_snippets(&self, limit: usize) -> Result<Vec<(u32, TextPart)>, Error> {
+    /// the part each one's Snippet is cut from; only UIDs below `below`
+    /// when given.
+    pub fn pending_snippets(
+        &self,
+        limit: usize,
+        below: Option<u32>,
+    ) -> Result<Vec<(u32, TextPart)>, Error> {
         let limit = i64::try_from(limit).unwrap_or(i64::MAX);
         let connection = self.connection.borrow();
         let mut statement = connection.prepare_cached(
             "SELECT uid, text_section, text_encoding, text_charset, text_html FROM message
-             WHERE snippet IS NULL ORDER BY received DESC, uid DESC LIMIT ?1",
+             WHERE snippet IS NULL AND (?2 IS NULL OR uid < ?2)
+             ORDER BY received DESC, uid DESC LIMIT ?1",
         )?;
         // A Message with no text part was written with an empty Snippet.
         let pending = statement
-            .query_map([limit], |row| Ok((row.get(0)?, text_part(row, 1)?)))?
+            .query_map(params![limit, below], |row| {
+                Ok((row.get(0)?, text_part(row, 1)?))
+            })?
             .filter_map(|row| row.map(|(uid, part)| part.map(|p| (uid, p))).transpose())
             .collect::<Result<_, _>>()?;
         Ok(pending)
@@ -196,6 +212,16 @@ impl Cache {
         self.write(|connection| apply(connection, changes))
     }
 
+    /// Adds rows older than every cached one in one transaction, leaving
+    /// the Inbox's state as the last resync wrote it.
+    pub fn backfill(&self, older: &[NewMessage]) -> Result<(), Error> {
+        self.write(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            insert(&transaction, older)?;
+            transaction.commit()
+        })
+    }
+
     /// Runs `write` on disk; when that fails, copies what the disk holds
     /// into memory and runs it there. `write` must leave nothing behind
     /// when it fails, as a transaction does.
@@ -226,30 +252,7 @@ fn apply(connection: &Connection, changes: &Changes) -> rusqlite::Result<()> {
         transaction.execute("DELETE FROM message", [])?;
     }
 
-    let mut insert = transaction.prepare_cached(
-        "INSERT OR REPLACE INTO message
-         (uid, body_key, received, received_offset, unread, sender, subject, snippet,
-          text_section, text_encoding, text_charset, text_html)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-    )?;
-    for new in &changes.new {
-        let (m, part) = (&new.row, new.text_part.as_ref());
-        insert.execute(params![
-            m.uid,
-            m.body_key,
-            m.received.timestamp(),
-            m.received.offset().local_minus_utc(),
-            m.unread,
-            m.sender,
-            m.subject,
-            part.is_none().then_some(""),
-            part.map(|p| &p.section),
-            part.map(|p| p.encoding.label()),
-            part.map(|p| &p.charset),
-            part.map(|p| p.html),
-        ])?;
-    }
-
+    insert(&transaction, &changes.new)?;
     let mut delete = transaction.prepare_cached("DELETE FROM message WHERE uid = ?1")?;
     for uid in &changes.expunged {
         delete.execute([uid])?;
@@ -271,8 +274,36 @@ fn apply(connection: &Connection, changes: &Changes) -> rusqlite::Result<()> {
             changes.unread,
         ],
     )?;
-    drop((insert, delete, flag));
+    drop((delete, flag));
     transaction.commit()
+}
+
+fn insert(connection: &Connection, rows: &[NewMessage]) -> rusqlite::Result<()> {
+    let mut insert = connection.prepare_cached(
+        "INSERT OR REPLACE INTO message
+         (uid, body_key, received, received_offset, unread, sender, subject, snippet,
+          text_section, text_encoding, text_charset, text_html)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+    )?;
+    for new in rows {
+        let (m, part) = (&new.row, new.text_part.as_ref());
+        insert.execute(params![
+            m.uid,
+            m.body_key,
+            m.received.timestamp(),
+            m.received.offset().local_minus_utc(),
+            m.unread,
+            m.sender,
+            m.subject,
+            part.is_none().then_some(""),
+            part.map(|p| &p.section),
+            part.map(|p| p.encoding.label()),
+            part.map(|p| &p.charset),
+            part.map(|p| p.html),
+        ])?;
+    }
+
+    Ok(())
 }
 
 fn message(row: &Row<'_>) -> rusqlite::Result<Message> {

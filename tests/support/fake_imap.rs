@@ -105,6 +105,9 @@ pub enum Stall {
     Part,
     /// As `Fetch`, but only for a fetch of a whole Message, `BODY[]`.
     Whole,
+    /// As `Fetch`, but only for a `FETCH` by sequence number, as the first
+    /// fetch and a page of older Messages send.
+    Sequence,
 }
 
 /// How the server turns clients away until `FakeImap::recover`.
@@ -367,8 +370,13 @@ async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
 async fn wait_unless_fetch_stalled(
     inbox: &Mutex<Inbox>,
     items: &MacroOrMessageDataItemNames<'static>,
+    uid: bool,
 ) {
     wait_unless_stalled(inbox, Stall::Fetch).await;
+    if !uid {
+        wait_unless_stalled(inbox, Stall::Sequence).await;
+    }
+
     if body_part(items).is_some() {
         wait_unless_stalled(inbox, Stall::Part).await;
     }
@@ -445,10 +453,11 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
 
                 if let CommandBody::Fetch {
                     macro_or_item_names,
+                    uid,
                     ..
                 } = &command.body
                 {
-                    wait_unless_fetch_stalled(&inbox, macro_or_item_names).await;
+                    wait_unless_fetch_stalled(&inbox, macro_or_item_names, *uid).await;
                 }
 
                 respond(&mut server, command, &inbox.lock().unwrap());

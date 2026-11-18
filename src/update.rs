@@ -1,4 +1,7 @@
-use crate::{body_fetch::Fetched, preview::Preview, rendered_previews::PreviewKey, status::Status};
+use crate::{
+    backfill::Backfill, body_fetch::Fetched, preview::Preview, rendered_previews::PreviewKey,
+    status::Status,
+};
 
 /// Work done away from the event loop that changes what the screen shows.
 pub enum Update {
@@ -9,4 +12,5 @@ pub enum Update {
     BodyLink(bool),
     Rendered(PreviewKey, Preview),
     Status(Status),
+    Backfill(Backfill),
 }

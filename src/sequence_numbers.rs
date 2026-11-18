@@ -45,6 +45,10 @@ impl SequenceNumbers {
         (index < self.uids.len()).then(|| self.uids.remove(index))
     }
 
+    pub fn oldest(&self) -> Option<u32> {
+        self.uids.first().copied()
+    }
+
     /// The lowest UID a new Message can have.
     pub fn next_uid(&self) -> u32 {
         self.uids.last().map_or(1, |last| last + 1)

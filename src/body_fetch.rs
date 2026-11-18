@@ -1,6 +1,13 @@
 use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
 
-use crate::{cache::Cache, imap::MailServer, sync::Error};
+use crate::{backfill, cache::Cache, imap::MailServer, sync::Error, update::Update};
+
+/// Work for the fetch connection.
+pub enum Request {
+    Bodies(BodyRequest),
+    /// The page of Messages older than every cached one.
+    Backfill,
+}
 
 /// Bodies the Preview needs. The selected one comes alone, so it does not
 /// wait on its neighbours.
@@ -17,9 +24,10 @@ pub enum Fetched {
     Refused { uids: Vec<u32>, reason: String },
 }
 
-/// Fetches the bodies `requests` name into the Cache until the channel
-/// closes, telling `fetched` how each batch ended. A refused batch leaves
-/// the connection alone; any other failure ends the serving.
+/// Serves `requests` until the channel closes, telling `send` how each
+/// went: bodies first, then a page of older Messages if asked for. A
+/// refused batch of bodies leaves the connection alone; any other failure
+/// ends the serving.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -27,21 +35,22 @@ pub enum Fetched {
 pub async fn serve(
     server: &mut impl MailServer,
     cache: &Cache,
-    requests: &mut UnboundedReceiver<BodyRequest>,
-    fetched: impl Fn(Fetched),
+    requests: &mut UnboundedReceiver<Request>,
+    send: impl Fn(Update),
 ) -> Result<(), Error> {
     let mut waiting = Vec::new();
+    let mut older = false;
     loop {
-        if waiting.is_empty() {
+        if waiting.is_empty() && !older {
             let Some(first) = requests.next().await else {
                 return Ok(());
             };
 
-            waiting.push(first);
+            take(first, &mut waiting, &mut older);
         }
 
         while let Ok(more) = requests.try_recv() {
-            waiting.push(more);
+            take(more, &mut waiting, &mut older);
         }
 
         // The newest request is the selection on screen; the rest can wait.
@@ -57,13 +66,25 @@ pub async fn serve(
                 match fetch(server, cache, uids).await? {
                     Fetched::Refused { uids, .. } if uids.len() > 1 => {
                         for uid in uids {
-                            fetched(fetch(server, cache, vec![uid]).await?);
+                            send(Update::Bodies(fetch(server, cache, vec![uid]).await?));
                         }
                     }
-                    done => fetched(done),
+                    done => send(Update::Bodies(done)),
                 }
             }
         }
+
+        if std::mem::take(&mut older) {
+            let report = |backfill| send(Update::Backfill(backfill));
+            backfill::page(server, cache, report, || send(Update::Inbox)).await?;
+        }
+    }
+}
+
+fn take(request: Request, waiting: &mut Vec<BodyRequest>, older: &mut bool) {
+    match request {
+        Request::Bodies(bodies) => waiting.push(bodies),
+        Request::Backfill => *older = true,
     }
 }
 

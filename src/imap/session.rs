@@ -47,6 +47,15 @@ pub trait MailServer {
         progress: impl Fn(u32),
     ) -> Result<Vec<NewMessage>, Error>;
 
+    /// Up to `count` Messages just before sequence number `before`, by
+    /// sequence number; `progress` as for `newest`.
+    async fn older(
+        &mut self,
+        before: u32,
+        count: u32,
+        progress: impl Fn(u32),
+    ) -> Result<Vec<NewMessage>, Error>;
+
     /// The Messages whose UID is at least `first`.
     async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
 
@@ -128,6 +137,26 @@ impl ImapSession {
         })
     }
 
+    async fn by_sequence(
+        &mut self,
+        range: String,
+        progress: impl Fn(u32),
+    ) -> Result<Vec<NewMessage>, Error> {
+        let uid_validity = self.uid_validity;
+        let fetches = self.session.fetch(range, self.items).await?;
+        let mut fetches = std::pin::pin!(fetches);
+        let (mut messages, mut received) = (Vec::new(), 0);
+        while let Some(fetch) = fetches.try_next().await? {
+            messages.extend(message(&fetch, uid_validity));
+            received += 1;
+            if received % PROGRESS_EVERY == 0 {
+                progress(received);
+            }
+        }
+
+        Ok(messages)
+    }
+
     async fn uid_fetch(&mut self, uids: String, items: &str) -> Result<Vec<Fetch>, Error> {
         let fetches = self.session.uid_fetch(uids, items).await?;
         Ok(fetches.try_collect().await?)
@@ -157,19 +186,27 @@ impl MailServer for ImapSession {
         progress: impl Fn(u32),
     ) -> Result<Vec<NewMessage>, Error> {
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
-        let uid_validity = self.uid_validity;
-        let fetches = self.session.fetch(format!("{first}:*"), self.items).await?;
-        let mut fetches = std::pin::pin!(fetches);
-        let (mut messages, mut received) = (Vec::new(), 0);
-        while let Some(fetch) = fetches.try_next().await? {
-            messages.extend(message(&fetch, uid_validity));
-            received += 1;
-            if received % PROGRESS_EVERY == 0 {
-                progress(received);
-            }
+        let messages = self.by_sequence(format!("{first}:*"), progress).await?;
+        tracing::info!("fetched the newest {} Messages", messages.len());
+        Ok(messages)
+    }
+
+    async fn older(
+        &mut self,
+        before: u32,
+        count: u32,
+        progress: impl Fn(u32),
+    ) -> Result<Vec<NewMessage>, Error> {
+        let last = before.saturating_sub(1);
+        if last == 0 {
+            return Ok(Vec::new());
         }
 
-        tracing::info!("fetched the newest {} Messages", messages.len());
+        let first = before.saturating_sub(count).max(1);
+        let messages = self
+            .by_sequence(format!("{first}:{last}"), progress)
+            .await?;
+        tracing::info!("fetched {} older Messages", messages.len());
         Ok(messages)
     }
 

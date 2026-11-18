@@ -6,8 +6,9 @@ use crate::{cache::Cache, imap::MailServer, snippet, sync::Error};
 const BATCH: usize = 50;
 
 /// The second fetch phase: cuts a Snippet for every cached Message still
-/// without one, newest first, calling `written` after each batch. Every
-/// pending Message gets one, empty when the server sends nothing for it.
+/// without one, newest first, calling `written` after each batch; with
+/// `below`, only those with a lower UID. Every pending Message gets one,
+/// empty when the server sends nothing for it.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -15,10 +16,11 @@ const BATCH: usize = 50;
 pub async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
+    below: Option<u32>,
     written: impl Fn(),
 ) -> Result<(), Error> {
     loop {
-        let pending = cache.pending_snippets(BATCH)?;
+        let pending = cache.pending_snippets(BATCH, below)?;
         if pending.is_empty() {
             return Ok(());
         }
