@@ -8,16 +8,24 @@ A keyboard-driven terminal mail client that reads one IMAP mailbox.
 The single mailbox identity Postal reads: an email address and its credential.
 _Avoid_: user, profile, login
 
+**Folder**:
+One mailbox on the server, holding Messages; on Gmail, a label. Postal shows one Folder at a time.
+_Avoid_: mailbox, label, directory
+
 **Inbox**:
-The server's `INBOX` folder, the only folder Postal shows.
-_Avoid_: mailbox, feed
+The Folder named `INBOX`, the one every run starts in.
+_Avoid_: feed
+
+**Folder Picker**:
+A popup over the screen listing every Folder with its Unread count, opened with `f`; typing narrows it, `Enter` shows the chosen Folder.
+_Avoid_: folder list, switcher, sidebar
 
 **Message**:
 One email as stored on the server.
 _Avoid_: mail, letter, email
 
 **Message List**:
-The ordered rows of Messages in the Inbox, one row per Message, newest arrival first.
+The ordered rows of Messages in the shown Folder, one row per Message, newest arrival first.
 _Avoid_: index, table, thread list
 
 **Unread**:
