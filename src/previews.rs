@@ -42,6 +42,8 @@ pub struct Previews {
     rendering: HashSet<PreviewKey>,
     /// UIDs asked of the server; one it does not answer for stays here.
     fetching: HashSet<u32>,
+    /// The UID last asked for as the selection, which the server serves first.
+    asked: Option<u32>,
     /// UIDs found without a body while the link is down.
     offline: HashSet<u32>,
     /// The placeholder of each body the server refused, until a reconnect.
@@ -80,6 +82,7 @@ impl Previews {
             rendered: RenderedPreviews::default(),
             rendering: HashSet::new(),
             fetching: HashSet::new(),
+            asked: None,
             offline: HashSet::new(),
             refused: HashMap::new(),
             header: None,
@@ -152,7 +155,12 @@ impl Previews {
                 view: view.html,
             };
 
-            if self.rendered.touch(key) || self.rendering.contains(&key) || self.waits(message.uid)
+            // A selection asked for only as a neighbour is asked again: that
+            // request may be passed over, or come after the selection's own.
+            let again = index == selected && self.only_neighbour(message.uid);
+            if self.rendered.touch(key)
+                || self.rendering.contains(&key)
+                || (self.waits(message.uid) && !again)
             {
                 continue;
             }
@@ -162,6 +170,7 @@ impl Previews {
             } else if self.link == Link::Live {
                 self.fetching.insert(message.uid);
                 if index == selected {
+                    self.asked = Some(message.uid);
                     request.selected = Some(message.uid);
                 } else {
                     request.neighbours.push(message.uid);
@@ -189,6 +198,7 @@ impl Previews {
     fn switch(&mut self, folder: &Arc<str>) {
         self.folder = Arc::clone(folder);
         self.fetching.clear();
+        self.asked = None;
         self.offline.clear();
         self.refused.clear();
         self.header = None;
@@ -199,6 +209,10 @@ impl Previews {
         self.fetching.contains(&uid)
             || self.offline.contains(&uid)
             || self.refused.contains_key(&uid)
+    }
+
+    fn only_neighbour(&self, uid: u32) -> bool {
+        self.fetching.contains(&uid) && self.asked != Some(uid)
     }
 
     fn render(&mut self, key: PreviewKey, body: Vec<u8>, message: &Message) {
@@ -246,6 +260,11 @@ impl Previews {
                 for uid in uids {
                     self.fetching.remove(&uid);
                     self.offline.remove(&uid);
+                }
+            }
+            Fetched::Skipped(uids) => {
+                for uid in uids {
+                    self.fetching.remove(&uid);
                 }
             }
             Fetched::Refused { uids, reason } => {

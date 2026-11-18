@@ -233,6 +233,48 @@ fn a_preview_not_yet_fetched_shows_a_placeholder_and_never_blocks() {
     quit(t);
 }
 
+// Scrolling past rows whose bodies are not in yet must not queue them: the
+// selection comes next, and rows scrolled past are never fetched.
+#[test]
+fn scrolling_past_unfetched_rows_fetches_only_where_it_stops() {
+    let thirty = (1..=30)
+        .map(|day| {
+            let body = FakeBody::plain(&format!("Body number {day}"));
+            message("Sender", &format!("Subject {day}"), day, body)
+        })
+        .collect();
+    let server = FakeImap::start(thirty);
+    server.stall(Stall::Whole);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| s.contains("Loading…") && s.contains(" 1/30 "))
+        .unwrap();
+    for row in 2..=6 {
+        t.send(Key::Char('j')).unwrap();
+        t.wait_until(|s| s.contains(&format!(" {row}/30 ")))
+            .unwrap();
+    }
+
+    server.release();
+    t.wait_until(|s| previewed(s, 25)).unwrap();
+    wait_for(|| bodies(&home) == 6);
+    quit(t);
+
+    let commands = server.commands();
+    let wholes: Vec<_> = commands.iter().filter(|c| c.contains(WHOLE)).collect();
+    assert_eq!(
+        wholes[..2],
+        [&uid_fetch("130"), &uid_fetch("125")],
+        "{commands:#?}"
+    );
+    assert!(
+        !wholes
+            .iter()
+            .any(|c| c.contains("128") || c.contains("129")),
+        "{commands:#?}"
+    );
+}
+
 /// The first row of the Preview's text at 80 columns, 30 rows.
 fn top(screen: &Screen) -> String {
     screen.row_text(14).trim_matches(['│', ' ']).to_owned()

@@ -32,6 +32,8 @@ pub enum Fetched {
     Stored(Vec<u32>),
     /// The server answered `NO` for these UIDs, with this reason.
     Refused { uids: Vec<u32>, reason: String },
+    /// Not asked for: a newer selection came first.
+    Skipped(Vec<u32>),
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each went:
@@ -60,34 +62,28 @@ pub async fn serve(
             take(first, &mut waiting, &mut older);
         }
 
-        while let Ok(more) = requests.try_recv() {
-            take(more, &mut waiting, &mut older);
-        }
-
-        // The newest request is the selection on screen; the rest can wait.
-        while let Some(request) = waiting.pop() {
+        while let Some(request) = newest(requests, &mut waiting, &mut older, &send) {
             if !open(server, &mut examined, &request.folder).await? {
                 continue;
             }
 
-            let folder = &request.folder;
-            let selected = Vec::from_iter(request.selected);
-            for uids in [selected, request.neighbours] {
-                if uids.is_empty() {
-                    continue;
-                }
+            let BodyRequest {
+                folder,
+                selected,
+                neighbours,
+            } = request;
+            if let Some(uid) = selected {
+                fetch_each(server, cache, &folder, vec![uid], &send).await?;
+            }
 
-                // A `NO` names no UID: ask again one by one, so a single
-                // body the server refuses does not take its batch with it.
-                match fetch(server, cache, folder, uids).await? {
-                    Fetched::Refused { uids, .. } if uids.len() > 1 => {
-                        for uid in uids {
-                            let fetched = fetch(server, cache, folder, vec![uid]).await?;
-                            send(Update::Bodies(Arc::clone(folder), fetched));
-                        }
-                    }
-                    done => send(Update::Bodies(Arc::clone(folder), done)),
-                }
+            while let Ok(more) = requests.try_recv() {
+                take(more, &mut waiting, &mut older);
+            }
+
+            if !waiting.is_empty() {
+                send(Update::Bodies(folder, Fetched::Skipped(neighbours)));
+            } else if !neighbours.is_empty() {
+                fetch_each(server, cache, &folder, neighbours, &send).await?;
             }
         }
 
@@ -115,6 +111,53 @@ pub async fn serve(
             }
         }
     }
+}
+
+/// The newest request, the selection on screen. Older ones were passed over
+/// while scrolling: they are dropped, and asked for again if still wanted.
+fn newest(
+    requests: &mut UnboundedReceiver<Request>,
+    waiting: &mut Vec<BodyRequest>,
+    older: &mut Option<Arc<str>>,
+    send: &impl Fn(Update),
+) -> Option<BodyRequest> {
+    while let Ok(more) = requests.try_recv() {
+        take(more, waiting, older);
+    }
+
+    let newest = waiting.pop();
+    for stale in waiting.drain(..) {
+        let uids = stale.selected.into_iter().chain(stale.neighbours).collect();
+        send(Update::Bodies(stale.folder, Fetched::Skipped(uids)));
+    }
+
+    newest
+}
+
+/// Fetches `uids` and says how it went. A `NO` names no UID: they are asked
+/// again one by one, so a single refused body does not take its batch with it.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn fetch_each(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    folder: &Arc<str>,
+    uids: Vec<u32>,
+    send: &impl Fn(Update),
+) -> Result<(), Error> {
+    match fetch(server, cache, folder, uids).await? {
+        Fetched::Refused { uids, .. } if uids.len() > 1 => {
+            for uid in uids {
+                let fetched = fetch(server, cache, folder, vec![uid]).await?;
+                send(Update::Bodies(Arc::clone(folder), fetched));
+            }
+        }
+        done => send(Update::Bodies(Arc::clone(folder), done)),
+    }
+
+    Ok(())
 }
 
 fn take(request: Request, waiting: &mut Vec<BodyRequest>, older: &mut Option<Arc<str>>) {
