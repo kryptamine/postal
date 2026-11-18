@@ -86,7 +86,7 @@ impl InboxView {
         };
     }
 
-    fn selected_uid(&self) -> Option<u32> {
+    pub fn selected_uid(&self) -> Option<u32> {
         self.messages
             .as_ref()
             .and_then(|m| m.get(self.selected))

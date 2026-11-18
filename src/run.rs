@@ -107,7 +107,7 @@ pub async fn run(
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
                 match update {
-                    Some(update) => apply(update, &mut view, cache, previews)?,
+                    Some(update) => apply(update, &mut view, &mut screen, cache, previews)?,
                     None => listening = false,
                 }
             }
@@ -172,11 +172,19 @@ fn draw(
 fn apply(
     update: Update,
     view: &mut InboxView,
+    screen: &mut Screen,
     cache: &Cache,
     previews: &mut Previews,
 ) -> Result<(), Error> {
     match update {
-        Update::Inbox => show(view, cache, None)?,
+        Update::Inbox => {
+            let selected = view.selected_uid();
+            show(view, cache, None)?;
+            // The labels point into the Preview they were found in.
+            if view.selected_uid() != selected {
+                screen.hints = None;
+            }
+        }
         Update::Bodies(uids) => previews.stored(&uids),
         Update::Rendered(key, preview) => previews.rendered(key, preview),
     }

@@ -14,7 +14,7 @@ use std::{
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FakeImap, FakeMessage},
+    fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
 };
 use tempfile::TempDir;
@@ -227,6 +227,41 @@ fn a_key_that_is_no_label_cancels_and_is_consumed() {
     t.wait_until(|s| s.contains(" 2/2 ")).unwrap();
     quit(t);
     assert!(browser.opened().is_empty(), "{:?}", browser.opened());
+}
+
+// Labels belong to the Preview they were found in: once the selected
+// Message is expunged under them, typing one must not open its old URL.
+#[test]
+fn hint_mode_ends_when_the_selected_message_goes() {
+    let messages = vec![
+        html(
+            "Older",
+            17,
+            "<p><a href=\"https://example.com/older\">older</a></p>",
+        ),
+        html("Two links", 18, &two_links()),
+    ];
+    let (server, home, browser) = start(messages);
+    let mut t = postal(&home, &browser);
+    t.wait_until(|s| s.contains("Read the notes")).unwrap();
+    quit(t);
+
+    server.stall(Stall::Greeting);
+    let mut t = postal(&home, &browser);
+    t.wait_until(|s| s.contains("Read the notes")).unwrap();
+    t.send(Key::Char('o')).unwrap();
+    t.wait_until(|s| s.contains("athe notes")).unwrap();
+    server.expunge(FIRST_UID + 1);
+    server.release();
+    t.wait_until(|s| s.contains(" 1/1 ") && s.contains("│ older"))
+        .unwrap();
+
+    t.send(Key::Char('a')).unwrap();
+    t.send(Key::Char('o')).unwrap();
+    t.wait_until(|s| s.contains("aolder")).unwrap();
+    t.send(Key::Char('a')).unwrap();
+    browser.wait_for(&["https://example.com/older"]);
+    quit(t);
 }
 
 #[test]
