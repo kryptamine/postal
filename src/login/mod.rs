@@ -5,13 +5,14 @@ use std::{fmt, io, path::Path, time::Duration};
 
 pub use self::{app_password::app_password, oauth::oauth};
 use crate::{
-    atomic_file,
+    atomic_file, cache,
     config::{Auth, Config, SecretStore},
     imap::{self, ImapSession, MailServer},
     keychain,
     partial_config::PartialConfig,
-    secret,
+    prompt, secret,
     sign_in::SignIn,
+    xdg,
 };
 
 /// For connect, sign-in and `EXAMINE` together.
@@ -19,10 +20,6 @@ const VERIFY_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug)]
 pub enum Error {
-    /// The config already holds another Account.
-    OtherAccount {
-        current: String,
-    },
     Cancelled,
     Timeout,
     Imap(imap::Error),
@@ -38,10 +35,6 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::OtherAccount { current } => write!(
-                f,
-                "already signed in as {current}; signing in as another Account is not supported"
-            ),
             Self::Cancelled => f.write_str("login cancelled"),
             Self::Timeout => write!(
                 f,
@@ -75,15 +68,51 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Whether the config already names this Account with this `auth`, and is
-/// then left alone; naming another Account is an error.
-fn unchanged(partial: &PartialConfig, email: &str, auth: Auth) -> Result<bool, Error> {
+pub fn cancelled(error: &(dyn std::error::Error + 'static)) -> bool {
+    matches!(error.downcast_ref(), Some(Error::Cancelled))
+}
+
+/// The login flow by the `auth` of the Account `config` names, for it.
+pub fn sign_in_again(dir: &Path, config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    match config.auth {
+        Auth::OAuth => oauth(dir, Some(&config.email)),
+        Auth::AppPassword => app_password(dir, Some(&config.email)),
+    }
+}
+
+/// What a login writes besides the secret.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Writes {
+    /// The config names this Account with this `auth` already.
+    SecretOnly,
+    Config,
+    /// The config named another Account, whose Cache goes with it.
+    Account,
+}
+
+/// What a login as `email` writes; replacing another Account asks first.
+fn writes(
+    partial: &PartialConfig,
+    email: &str,
+    auth: Auth,
+) -> Result<Writes, Box<dyn std::error::Error>> {
     match partial.email.as_deref() {
-        Some(current) if current.eq_ignore_ascii_case(email) => Ok(partial.auth == Some(auth)),
-        Some(current) => Err(Error::OtherAccount {
-            current: current.to_owned(),
-        }),
-        None => Ok(false),
+        Some(current) if current.eq_ignore_ascii_case(email) && partial.auth == Some(auth) => {
+            Ok(Writes::SecretOnly)
+        }
+        Some(current) if !current.eq_ignore_ascii_case(email) => {
+            let question = format!(
+                "Signed in as {current}. Sign in as {email} instead and delete the Cache? [y/N]"
+            );
+            match prompt::read_line(&question, "", true)?
+                .as_deref()
+                .map(str::trim)
+            {
+                Some("y" | "Y" | "yes") => Ok(Writes::Account),
+                _ => Err(Error::Cancelled.into()),
+            }
+        }
+        _ => Ok(Writes::Config),
     }
 }
 
@@ -98,18 +127,21 @@ async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
         Ok(())
     };
 
-    tokio::time::timeout(VERIFY_TIMEOUT, verified)
-        .await
-        .map_err(|_| Error::Timeout)?
-        .map_err(Error::Imap)
+    // Without raw mode Ctrl-C is SIGINT, which would end the TUI too.
+    let verified = tokio::select! {
+        verified = tokio::time::timeout(VERIFY_TIMEOUT, verified) => verified,
+        _ = tokio::signal::ctrl_c() => return Err(Error::Cancelled),
+    };
+
+    verified.map_err(|_| Error::Timeout)?.map_err(Error::Imap)
 }
 
-/// Writes the secret, then the config unless it is `unchanged`.
+/// Writes the secret, then what else `writes` says.
 fn save(
     dir: &Path,
     config: &Config,
     sign_in: &SignIn,
-    unchanged: bool,
+    writes: Writes,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config_path = dir.join("config.toml");
     // The secret goes first, so a config never names an Account without one.
@@ -118,7 +150,12 @@ fn save(
         SecretStore::File => secret::write(&dir.join("secret"), sign_in.secret())?,
     }
 
-    if !unchanged {
+    // Before the config, so the new Account never opens the old one's Cache.
+    if writes == Writes::Account {
+        cache::delete(&xdg::cache_dir()?)?;
+    }
+
+    if writes != Writes::SecretOnly {
         atomic_file::write(&config_path, config.to_toml().as_bytes(), 0o644)?;
     }
 

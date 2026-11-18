@@ -186,23 +186,60 @@ fn ctrl_c_at_the_password_prompt_exits_and_writes_nothing() {
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
 }
 
-// Replacing the Account also needs the Cache cleared, which login does not do.
+/// An Account signed in before as someone else, with a Cache of its own.
+fn another_account(server: &FakeImap) -> (Home, String) {
+    let home = Home::for_server(server);
+    let config = fs::read_to_string(home.config_path())
+        .unwrap()
+        .replace(EMAIL, "old@example.com");
+    fs::write(home.config_path(), &config).unwrap();
+    fs::create_dir_all(home.cache_path().parent().unwrap()).unwrap();
+    fs::write(home.cache_path(), "old Account").unwrap();
+    (home, config)
+}
+
+fn give_other_email(t: &mut Terminal, answer: &str) {
+    t.wait_until(|s| s.contains("Email:")).unwrap();
+    t.send_str(EMAIL).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("old@example.com") && s.contains("[y/N]"))
+        .unwrap();
+    t.send_str(answer).unwrap();
+    t.send(Key::Enter).unwrap();
+}
+
 #[test]
-fn a_login_as_another_account_is_refused() {
+fn a_login_as_another_account_replaces_it_and_deletes_the_cache() {
     let server = FakeImap::start(Vec::new());
-    let home = Home::for_server(&server);
-    let config = fs::read_to_string(home.config_path()).unwrap();
+    let (home, _) = another_account(&server);
     let browser = Browser::new();
     let mut t = login(&home, &browser);
-    t.wait_until(|s| s.contains("Email:")).unwrap();
-    t.send_str("other@example.com").unwrap();
-    t.send(Key::Enter).unwrap();
+    give_other_email(&mut t, "y");
+    t.wait_until(|s| s.contains("App password:")).unwrap();
 
-    t.wait_until(|s| s.contains("already signed in as"))
+    give_password(&mut t, PASTED);
+    t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
         .unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(secret(&home).as_deref(), Some(PASSWORD));
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    assert!(config.contains(&format!("email = \"{EMAIL}\"")), "{config}");
+    assert!(!home.cache_path().exists());
+}
+
+#[test]
+fn a_declined_replacement_writes_nothing() {
+    let server = FakeImap::start(Vec::new());
+    let (home, config) = another_account(&server);
+    let browser = Browser::new();
+    let mut t = login(&home, &browser);
+    give_other_email(&mut t, "n");
+
+    t.wait_until(|s| s.contains("login cancelled")).unwrap();
     assert!(!t.wait_exit().unwrap().success());
     assert_eq!(secret(&home).as_deref(), Some(PASSWORD));
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), config);
+    assert!(home.cache_path().exists());
 }
 
 // The keychain is never swapped for the file without the user choosing it.

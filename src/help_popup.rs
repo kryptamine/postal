@@ -7,7 +7,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    keymap::{BINDINGS, Binding},
+    keymap::{self, Binding},
     theme::Theme,
 };
 
@@ -16,19 +16,21 @@ const GAP: u16 = 2;
 /// The border and one column or row of padding inside it, each side.
 const FRAME: u16 = 4;
 
-/// The keymap grouped as `BINDINGS` lists it, centred over `area`: a
-/// heading per group, then key, aliases and description per row.
+/// The keymap grouped as `keymap::bindings` lists it, centred over `area`:
+/// a heading per group, then key, aliases and description per row.
 pub struct HelpPopup<'a> {
     pub theme: &'a Theme,
+    pub signed_out: bool,
 }
 
 impl Widget for HelpPopup<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let keys = column(|b| b.keys);
-        let aliases = column(|b| b.aliases);
-        let descriptions = column(|b| b.description);
+        let bindings = keymap::bindings(self.signed_out);
+        let keys = column(bindings.clone(), |b| b.keys);
+        let aliases = column(bindings.clone(), |b| b.aliases);
+        let descriptions = column(bindings.clone(), |b| b.description);
         let width = keys + GAP + aliases + GAP + descriptions + FRAME;
-        let popup = centre(area, width, rows() + FRAME);
+        let popup = centre(area, width, rows(bindings.clone()) + FRAME);
         Clear.render(popup, buf);
         Block::bordered()
             .border_style(self.theme.border)
@@ -45,7 +47,7 @@ impl Widget for HelpPopup<'_> {
 
         let mut lines = inner.y..inner.bottom();
         let mut group = "";
-        for binding in &BINDINGS {
+        for binding in bindings {
             if binding.group != group {
                 if !group.is_empty() {
                     lines.next();
@@ -75,23 +77,26 @@ impl Widget for HelpPopup<'_> {
     }
 }
 
-/// The widest of one column over every binding.
-fn column(text: impl Fn(&Binding) -> &'static str) -> u16 {
-    BINDINGS
-        .iter()
+/// The widest of one column over `bindings`.
+fn column<'a>(
+    bindings: impl Iterator<Item = &'a Binding>,
+    text: impl Fn(&Binding) -> &'static str,
+) -> u16 {
+    bindings
         .map(|b| u16::try_from(text(b).width()).unwrap_or(u16::MAX))
         .max()
         .unwrap_or(0)
 }
 
 /// A row per binding and per group heading, and a blank row between groups.
-fn rows() -> u16 {
-    let groups = BINDINGS
-        .windows(2)
-        .filter(|pair| pair[0].group != pair[1].group)
+fn rows<'a>(bindings: impl Iterator<Item = &'a Binding> + Clone) -> u16 {
+    let groups = bindings
+        .clone()
+        .zip(bindings.clone().skip(1))
+        .filter(|(a, b)| a.group != b.group)
         .count()
         + 1;
-    u16::try_from(BINDINGS.len() + groups * 2 - 1).unwrap_or(u16::MAX)
+    u16::try_from(bindings.count() + groups * 2 - 1).unwrap_or(u16::MAX)
 }
 
 fn centre(area: Rect, width: u16, height: u16) -> Rect {

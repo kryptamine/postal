@@ -300,15 +300,3 @@ fn colours_unless_no_color_is_set() {
         assert_eq!(style.bg, termlens::Color::Default, "colour at {row},{col}");
     }
 }
-
-#[test]
-fn a_rejected_login_exits_with_the_reason() {
-    let server = FakeImap::start(four_messages());
-    let home = Home::for_server(&server);
-    std::fs::write(home.xdg_config_home().join("postal/secret"), "wrong").unwrap();
-    let mut t = postal(&home);
-    let status = t.wait_exit().unwrap();
-    assert!(!status.success());
-    let text = t.screen().logical_text();
-    assert!(text.contains("Invalid credentials"), "{text}");
-}

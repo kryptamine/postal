@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::{Error, save, unchanged, verify};
+use super::{Error, save, verify, writes};
 use crate::{
     browser,
     config::Auth,
@@ -15,9 +15,10 @@ use crate::{
     sign_in::SignIn,
 };
 
-/// The Onboarding through Google's consent page: the Account is whoever
-/// signs in there. Nothing is written before the IMAP server accepts it.
-pub fn oauth(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+/// The Onboarding through Google's consent page, which offers the Account
+/// `hint` first: the Account is whoever signs in there. Nothing is written
+/// before the IMAP server accepts it.
+pub fn oauth(dir: &Path, hint: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let partial = PartialConfig::load(&dir.join("config.toml"))?;
     let endpoints = partial.oauth.clone();
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -25,14 +26,15 @@ pub fn oauth(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     let pkce = Pkce::new()?;
     let state = pkce::random()?;
-    let (code, redirect_uri) = runtime.block_on(wait_for_consent(&endpoints, &pkce, &state))?;
+    let (code, redirect_uri) =
+        runtime.block_on(wait_for_consent(&endpoints, &pkce, &state, hint))?;
     let grant =
         token_endpoint::exchange(&endpoints.token_url, &code, &pkce.verifier, &redirect_uri)?;
     if !grant.includes_mail() {
         return Err(Error::NoMailScope.into());
     }
 
-    let unchanged = unchanged(&partial, &grant.email, Auth::OAuth)?;
+    let writes = writes(&partial, &grant.email, Auth::OAuth)?;
     let config = partial.account(grant.email, Auth::OAuth);
     let sign_in = SignIn::OAuth(Tokens::new(
         grant.refresh,
@@ -40,7 +42,7 @@ pub fn oauth(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
         grant.access,
     ));
     runtime.block_on(verify(&config, &sign_in))?;
-    save(dir, &config, &sign_in, unchanged)
+    save(dir, &config, &sign_in, writes)
 }
 
 /// Sends the user to the consent page and waits for the browser to come back;
@@ -49,6 +51,7 @@ async fn wait_for_consent(
     endpoints: &Endpoints,
     pkce: &Pkce,
     state: &str,
+    hint: Option<&str>,
 ) -> Result<(Credential, String), Error> {
     let loopback = Loopback::bind().await.map_err(Error::Loopback)?;
     let url = consent::url(
@@ -56,6 +59,7 @@ async fn wait_for_consent(
         &loopback.redirect_uri,
         pkce,
         state,
+        hint,
     );
     println!("Sign in to Google in the browser. If it did not open, visit:\n{url}");
     if let Err(error) = browser::open(&url) {
@@ -63,8 +67,13 @@ async fn wait_for_consent(
     }
 
     let waited = endpoints.redirect_timeout;
-    let outcome = tokio::time::timeout(waited, loopback.outcome(state))
-        .await
+    let outcome = tokio::select! {
+        outcome = tokio::time::timeout(waited, loopback.outcome(state)) => outcome,
+        // Without raw mode Ctrl-C is SIGINT, which would end the TUI too.
+        _ = tokio::signal::ctrl_c() => return Err(Error::Cancelled),
+    };
+
+    let outcome = outcome
         .map_err(|_| Error::NoRedirect(waited))?
         .map_err(Error::Loopback)?;
     match outcome {

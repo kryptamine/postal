@@ -90,17 +90,17 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl Config {
-    pub fn load(path: &Path) -> Result<Self, Error> {
-        let text = std::fs::read_to_string(path).map_err(|source| Error::Read {
+    /// `None` while the file is missing or names no Account yet.
+    pub fn load(path: &Path) -> Result<Option<Self>, Error> {
+        let partial = PartialConfig::load(path)?;
+        if partial.email.is_none() {
+            return Ok(None);
+        }
+
+        partial.config().map(Some).map_err(|field| Error::Missing {
             path: path.to_owned(),
-            source,
-        })?;
-        PartialConfig::parse(path, &text)?
-            .config()
-            .map_err(|field| Error::Missing {
-                path: path.to_owned(),
-                field,
-            })
+            field,
+        })
     }
 
     /// The file `load` reads back as this Config; the defaults are left out.

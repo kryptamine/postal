@@ -1,7 +1,10 @@
 use std::{io, sync::Arc};
 
 use crossterm::event::{Event, EventStream};
-use futures::{Stream, StreamExt};
+use futures::{
+    FutureExt, Stream, StreamExt,
+    future::{Fuse, FusedFuture},
+};
 use ratatui::{Terminal, layout::Rect};
 use tokio::time::Instant;
 
@@ -50,12 +53,37 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// How the TUI ended.
+pub enum Exit {
+    Quit,
+    /// `L` asked for the login flow, run with the terminal handed back.
+    SignIn,
+}
+
 /// The network work behind the screen, what it reports as it goes, and the
 /// pages of older Messages asked of it.
 pub struct Background<W, U> {
-    pub work: W,
+    pub work: Work<W>,
     pub updates: U,
     pub older: OlderPages,
+}
+
+pub enum Work<W> {
+    Running(W),
+    /// Nothing runs until `L` signs in again; `failed` when the last try did.
+    SignedOut {
+        failed: bool,
+    },
+}
+
+impl<W: Future> Work<W> {
+    /// Finished already while signed out.
+    fn fused(self) -> Fuse<W> {
+        match self {
+            Self::Running(work) => work.fuse(),
+            Self::SignedOut { .. } => Fuse::terminated(),
+        }
+    }
 }
 
 /// The one event loop: input, and each `Update` from the background work,
@@ -74,17 +102,17 @@ pub async fn run(
         impl Future<Output = Result<(), sync::Error>>,
         impl Stream<Item = Update> + Unpin,
     >,
-) -> Result<(), Error> {
+) -> Result<Exit, Error> {
     let mut events = EventStream::new();
     let mut view = InboxView::loading();
     let rows = message_list::capacity(panes(terminal)?.list.height);
     show(&mut view, cache, Some(rows))?;
     let (mut updates, mut older) = (background.updates, background.older);
-    let mut work = std::pin::pin!(background.work);
+    let mut screen = Screen::opening(cache, &background.work);
+    (screen.status == Status::SignedOut).then(|| previews.link(false));
+    let mut work = std::pin::pin!(background.work.fused());
     let mut whole = false;
-    let mut working = true;
     let mut listening = true;
-    let mut screen = Screen::opening(cache);
     // A frame's allocations count from what triggered it, the input or the
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
@@ -108,10 +136,9 @@ pub async fn run(
                 frame_start = alloc_count::count();
                 screen.expire(Instant::now());
             }
-            result = &mut work, if working => {
+            result = &mut work, if !work.is_terminated() => {
                 frame_start = alloc_count::count();
-                working = false;
-                result.map_err(Error::Sync)?;
+                finished(result)?;
             }
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
@@ -129,10 +156,22 @@ pub async fn run(
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, &view)?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
-                    Step::Quit => return Ok(()),
+                    Step::SignIn => return Ok(Exit::SignIn),
+                    Step::Quit => return Ok(Exit::Quit),
                 }
             }
         }
+    }
+}
+
+/// The background work's end; signed out, the screen stays usable.
+fn finished(result: Result<(), sync::Error>) -> Result<(), Error> {
+    match result {
+        Err(error) if error.signed_out() => {
+            tracing::warn!("{error}");
+            Ok(())
+        }
+        result => result.map_err(Error::Sync),
     }
 }
 
@@ -185,7 +224,8 @@ fn draw(
 
             frame.render_widget(hint_line, panes.hint);
             if screen.help {
-                frame.render_widget(HelpPopup { theme }, panes.body);
+                let signed_out = screen.status == Status::SignedOut;
+                frame.render_widget(HelpPopup { theme, signed_out }, panes.body);
             }
         })
         .map_err(Error::Terminal)?;
@@ -214,7 +254,13 @@ fn apply(
             screen.backfill = None;
         }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
-        Update::Status(status) => screen.status = status,
+        Update::Status(status) => {
+            if status == Status::SignedOut {
+                previews.link(false);
+            }
+
+            screen.status = status;
+        }
         Update::Backfill(Backfill::Fetching { done, total }) => {
             screen.backfill = Some(Status::Syncing { done, total });
         }
@@ -237,9 +283,18 @@ struct Screen {
 }
 
 impl Screen {
-    fn opening(cache: &Cache) -> Self {
+    fn opening<W>(cache: &Cache, work: &Work<W>) -> Self {
+        let (status, toast) = match work {
+            Work::Running(_) => (Status::Live, None),
+            Work::SignedOut { failed } => (
+                Status::SignedOut,
+                failed.then(|| Toast::error("sign-in failed")),
+            ),
+        };
+
         Self {
-            toast: cache.rebuilt().then(|| Toast::new("cache rebuilt")),
+            status,
+            toast: toast.or_else(|| cache.rebuilt().then(|| Toast::new("cache rebuilt"))),
             ..Self::default()
         }
     }
@@ -283,6 +338,7 @@ enum Step {
     Browse(Arc<str>),
     Page,
     Suspend,
+    SignIn,
     Quit,
 }
 
@@ -316,6 +372,7 @@ fn handle(
             Some(Action::Quit) => Step::Quit,
             Some(Action::Open) => Step::Page,
             Some(Action::Suspend) => Step::Suspend,
+            Some(Action::SignIn) if screen.status == Status::SignedOut => Step::SignIn,
             Some(Action::Links) => Step::Links,
             Some(Action::Help) => {
                 screen.help = true;
@@ -329,7 +386,7 @@ fn handle(
                 view.scroll(scroll, half_page);
                 Step::Stay
             }
-            None => Step::Stay,
+            Some(Action::SignIn) | None => Step::Stay,
         }),
         // The labels sit where the old width laid the links out.
         Some(Ok(Event::Resize(..))) => {

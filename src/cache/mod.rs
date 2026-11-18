@@ -8,4 +8,5 @@ mod store;
 
 pub use changes::Changes;
 pub use error::Error;
+pub use schema::delete;
 pub use store::Cache;

@@ -77,8 +77,23 @@ pub fn open(dir: &Path) -> Result<(Connection, bool), Error> {
         }
     };
 
+    remove(&path)?;
+    let connection = Connection::open(&path)?;
+    configure(&connection)?;
+    connection.execute_batch(TABLES)?;
+    connection.pragma_update(None, "user_version", VERSION)?;
+    Ok((connection, rebuilt))
+}
+
+/// Deletes the Cache in `dir`, if there is one.
+pub fn delete(dir: &Path) -> Result<(), Error> {
+    remove(&dir.join(FILE))
+}
+
+/// The database with its WAL files.
+fn remove(path: &Path) -> Result<(), Error> {
     for suffix in ["", "-wal", "-shm"] {
-        let mut file = path.clone().into_os_string();
+        let mut file = path.as_os_str().to_owned();
         file.push(suffix);
         match fs::remove_file(file) {
             Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error.into()),
@@ -86,11 +101,7 @@ pub fn open(dir: &Path) -> Result<(Connection, bool), Error> {
         }
     }
 
-    let connection = Connection::open(&path)?;
-    configure(&connection)?;
-    connection.execute_batch(TABLES)?;
-    connection.pragma_update(None, "user_version", VERSION)?;
-    Ok((connection, rebuilt))
+    Ok(())
 }
 
 fn existing(path: &Path) -> Result<Connection, Unusable> {

@@ -20,6 +20,8 @@ pub enum Status {
         outage: Outage,
         retry: Instant,
     },
+    /// The server no longer accepts the Account; nothing is retried.
+    SignedOut,
 }
 
 impl Status {
@@ -39,6 +41,7 @@ impl Status {
 
                 write!(text, "{label} · retry in {}s", seconds_left(retry, now))
             }
+            Self::SignedOut => text.write_str("signed out · L sign in"),
         };
 
         text

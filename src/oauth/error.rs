@@ -15,7 +15,7 @@ pub enum Error {
 
 impl Error {
     /// The refresh token was revoked or expired: only a new login helps.
-    fn signed_out(&self) -> bool {
+    pub fn signed_out(&self) -> bool {
         matches!(self, Self::Refused { error, .. } if error == "invalid_grant")
     }
 }

@@ -3,7 +3,7 @@ use tokio::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    keymap::{BINDINGS, HELP_HINT, Hint},
+    keymap::{self, HELP_HINT, Hint},
     status::Status,
     theme::Theme,
     toast::Toast,
@@ -38,6 +38,7 @@ impl Widget for HintLine<'_> {
         let (right, style) = match self.toast {
             Some(toast) if toast.error => (toast.text, self.theme.error),
             Some(toast) => (toast.text, Style::new()),
+            None if self.status == Status::SignedOut => (status.as_str(), self.theme.error),
             None if self.status.warns() => (status.as_str(), self.theme.warning),
             None => (status.as_str(), self.theme.muted),
         };
@@ -51,7 +52,8 @@ impl Widget for HintLine<'_> {
         let room = usize::from(row.width).saturating_sub(reserved);
         let mut left = room.saturating_sub(width(&HELP_HINT));
         let mut x = row.x;
-        for hint in BINDINGS.iter().filter_map(|b| b.hint.as_ref()) {
+        let signed_out = self.status == Status::SignedOut;
+        for hint in keymap::bindings(signed_out).filter_map(|b| b.hint.as_ref()) {
             let needed = width(hint) + usize::from(GAP);
             if needed > left {
                 break;

@@ -5,8 +5,9 @@ use tokio::time::Instant;
 use crate::{backoff::Backoff, status::Status, sync::Error, wake};
 
 /// Runs `attempt` on a fresh connection after every outage, waiting out the
-/// backoff first, until it fails for good. `attempt` reports `Live` once
-/// through, which restarts the backoff; a wake from sleep retries at once.
+/// backoff first, until it fails for good, reporting `SignedOut` for a
+/// refused Account. `attempt` reports `Live` once through, which restarts
+/// the backoff; a wake from sleep retries at once.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -41,6 +42,10 @@ pub async fn retry(
         }
 
         let Some(outage) = error.outage() else {
+            if error.signed_out() {
+                report(Status::SignedOut);
+            }
+
             return Err(error);
         };
 

@@ -96,7 +96,7 @@ impl PartialConfig {
         }
     }
 
-    pub fn parse(path: &Path, text: &str) -> Result<Self, Error> {
+    fn parse(path: &Path, text: &str) -> Result<Self, Error> {
         let invalid = |span: Range<usize>, message: &str| {
             let (line, column) = line_and_column(text, span.start);
             Error::Invalid {

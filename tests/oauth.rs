@@ -156,21 +156,22 @@ fn an_unreachable_token_endpoint_at_start_is_an_outage() {
 }
 
 #[test]
-fn a_revoked_refresh_token_at_start_asks_for_a_new_login() {
+fn a_revoked_refresh_token_at_start_signs_in_again_as_the_account() {
     let server = FakeImap::start(Vec::new());
     let oauth = FakeOAuth::start();
     let home = signed_in(&server, &oauth);
     fs::write(home.secret_path(), "1//revoked\n").unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &[]);
-    let screen = t.snapshot_after(|s| s.contains("postal:")).unwrap();
-    assert!(!t.wait_exit().unwrap().success());
-    let text = screen.logical_text();
-    assert!(
-        text.contains("invalid_grant") && text.contains("postal login"),
-        "{text}"
-    );
+    let consent = query::of_url(&consent_url(&browser));
+    assert_eq!(consent["login_hint"], EMAIL);
     assert!(server.commands().is_empty(), "{:?}", server.commands());
+
+    grant(&consent);
+    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
 }
 
 #[test]

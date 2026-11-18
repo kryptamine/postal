@@ -85,7 +85,7 @@ use crate::{
     oauth::Tokens,
     older_pages::OlderPages,
     previews::Previews,
-    run::Background,
+    run::{Background, Exit, Work},
     sign_in::SignIn,
     status::Status,
     theme::Theme,
@@ -127,10 +127,10 @@ fn logged(log: &Path, command: Command) -> ExitCode {
         Command::Run => try_main(),
         Command::Login => xdg::config_dir()
             .map_err(Into::into)
-            .and_then(|dir| login::oauth(&dir)),
+            .and_then(|dir| login::oauth(&dir, None)),
         Command::LoginAppPassword => xdg::config_dir()
             .map_err(Into::into)
-            .and_then(|dir| login::app_password(&dir)),
+            .and_then(|dir| login::app_password(&dir, None)),
     };
 
     match result {
@@ -146,20 +146,75 @@ fn logged(log: &Path, command: Command) -> ExitCode {
     }
 }
 
+/// The TUI, left for the login flow on `L` and opened again after it.
 fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     let dir = xdg::config_dir()?;
+    let (mut config, sign_in) = signed_in(&dir)?;
+    let mut sign_in = Some(sign_in);
+    let mut failed = false;
+    loop {
+        match session(&config, sign_in.as_ref(), failed)? {
+            Exit::Quit => return Ok(()),
+            Exit::SignIn => match login::sign_in_again(&dir, &config) {
+                Ok(()) => {
+                    let (signed_in_as, fresh) = signed_in(&dir)?;
+                    (config, sign_in, failed) = (signed_in_as, Some(fresh), false);
+                }
+                Err(error) => {
+                    sign_in = None;
+                    failed = !login::cancelled(&*error);
+                    if failed {
+                        tracing::error!("signing in again failed: {error}");
+                    }
+                }
+            },
+        }
+    }
+}
+
+/// The Account the TUI opens as; with none yet, the login flow runs first.
+fn signed_in(dir: &Path) -> Result<(Config, SignIn), Box<dyn std::error::Error>> {
     let config_path = dir.join("config.toml");
-    let config = Config::load(&config_path)?;
-    let secret = match config.secrets {
-        SecretStore::Keychain => keychain::read(&config.email, &config_path)?,
-        SecretStore::File => secret::read(&dir.join("secret"))?,
-    };
+    loop {
+        let Some(config) = Config::load(&config_path)? else {
+            login::oauth(dir, None)?;
+            continue;
+        };
 
-    let sign_in = match config.auth {
-        Auth::AppPassword => SignIn::Password(secret),
-        Auth::OAuth => SignIn::OAuth(Tokens::refreshed(secret, config.oauth.token_url.clone())?),
-    };
+        let secret = match config.secrets {
+            SecretStore::Keychain => keychain::read(&config.email, &config_path)?,
+            SecretStore::File => secret::read(&dir.join("secret"))?,
+        };
 
+        let Some(secret) = secret else {
+            login::sign_in_again(dir, &config)?;
+            continue;
+        };
+
+        let sign_in = match config.auth {
+            Auth::AppPassword => SignIn::Password(secret),
+            Auth::OAuth => match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
+                Ok(tokens) => SignIn::OAuth(tokens),
+                Err(error) if error.signed_out() => {
+                    tracing::warn!("{error}");
+                    login::sign_in_again(dir, &config)?;
+                    continue;
+                }
+                Err(error) => return Err(error.into()),
+            },
+        };
+
+        return Ok((config, sign_in));
+    }
+}
+
+/// The TUI until it exits, signed out without `sign_in`; `failed` when the
+/// last sign-in did.
+fn session(
+    config: &Config,
+    sign_in: Option<&SignIn>,
+    failed: bool,
+) -> Result<Exit, Box<dyn std::error::Error>> {
     let cache = Cache::open(&xdg::cache_dir()?)?;
     let theme = Theme::from_env();
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -176,18 +231,23 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
 
     runtime.block_on(async {
         let mut terminal = terminal_backend::init()?;
-        let work = futures::future::try_join(
-            sync(
-                &config,
-                &sign_in,
-                &cache,
-                || send(Update::Inbox),
-                |status| send(Update::Status(status)),
-            ),
-            bodies(&config, &sign_in, &cache, requested, &send),
-        );
+        let work = sign_in.map_or(Work::SignedOut { failed }, |sign_in| {
+            Work::Running(
+                futures::future::try_join(
+                    sync(
+                        config,
+                        sign_in,
+                        &cache,
+                        || send(Update::Inbox),
+                        |status| send(Update::Status(status)),
+                    ),
+                    bodies(config, sign_in, &cache, requested, &send),
+                )
+                .map_ok(|((), ())| ()),
+            )
+        });
         let background = Background {
-            work: work.map_ok(|((), ())| ()),
+            work,
             updates,
             older,
         };
@@ -220,10 +280,11 @@ async fn bodies(
         body_fetch::serve(&mut session, cache, &mut requests, &send).await
     };
 
-    // The status slot follows the sync connection alone.
+    // The status slot follows the sync connection alone, but for a refused Account.
     reconnect::retry(attempt, |status| match status {
         Status::Live => send(Update::BodyLink(true)),
         Status::Retrying { .. } => send(Update::BodyLink(false)),
+        Status::SignedOut => send(Update::Status(status)),
         Status::Syncing { .. } | Status::Connecting => {}
     })
     .await

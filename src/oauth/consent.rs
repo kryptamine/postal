@@ -1,10 +1,17 @@
 use super::{CLIENT_ID, MAIL_SCOPE, percent::encode, pkce::Pkce};
 
-/// The page where the user grants Postal the Gmail scope. `prompt=consent`
-/// makes Google issue a refresh token on every login, not only the first.
-pub fn url(authorization_url: &str, redirect_uri: &str, pkce: &Pkce, state: &str) -> String {
+/// The page where the user grants Postal the Gmail scope, with the email
+/// `hint` filled in. `prompt=consent` makes Google issue a refresh token on
+/// every login, not only the first.
+pub fn url(
+    authorization_url: &str,
+    redirect_uri: &str,
+    pkce: &Pkce,
+    state: &str,
+    hint: Option<&str>,
+) -> String {
     let scope = format!("{MAIL_SCOPE} openid email");
-    let params = [
+    let mut params = vec![
         ("client_id", CLIENT_ID),
         ("redirect_uri", redirect_uri),
         ("response_type", "code"),
@@ -15,6 +22,7 @@ pub fn url(authorization_url: &str, redirect_uri: &str, pkce: &Pkce, state: &str
         ("access_type", "offline"),
         ("prompt", "consent"),
     ];
+    params.extend(hint.map(|hint| ("login_hint", hint)));
     let query: Vec<String> = params
         .iter()
         .map(|(name, value)| format!("{name}={}", encode(value)))

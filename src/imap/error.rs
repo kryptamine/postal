@@ -48,6 +48,12 @@ impl Error {
             if text.to_ascii_lowercase().contains("[authenticationfailed]"))
     }
 
+    /// Only a new login helps: the server refused the credentials, or Google
+    /// the refresh token.
+    pub fn signed_out(&self) -> bool {
+        self.bad_credentials() || matches!(self, Self::Token(token) if token.signed_out())
+    }
+
     /// The server's own words when it answered `NO` to this command alone,
     /// leaving the connection usable; `None` for any other error.
     pub fn refusal(&self) -> Option<&str> {

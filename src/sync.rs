@@ -35,6 +35,10 @@ impl Error {
             Self::Cache(_) => None,
         }
     }
+
+    pub fn signed_out(&self) -> bool {
+        matches!(self, Self::Imap(source) if source.signed_out())
+    }
 }
 
 impl std::error::Error for Error {}

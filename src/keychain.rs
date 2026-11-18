@@ -9,9 +9,6 @@ const SERVICE: &str = "postal";
 
 #[derive(Debug)]
 pub enum Error {
-    NoEntry {
-        account: String,
-    },
     Unavailable {
         source: keyring::Error,
         config: PathBuf,
@@ -21,10 +18,6 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NoEntry { account } => write!(
-                f,
-                "the keychain has no entry for service `{SERVICE}`, account `{account}`"
-            ),
             Self::Unavailable { source, config } => write!(
                 f,
                 "keychain unavailable or locked: {source}\n\
@@ -38,24 +31,22 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Reads the credential of `account` from the OS keychain. It never falls back
-/// to the file store; `config` is named in the hint to switch to it.
-pub fn read(account: &str, config: &Path) -> Result<Credential, Error> {
-    let secret = forced_failure()
-        .map_or_else(
-            || keyring::Entry::new(SERVICE, account)?.get_password(),
-            Err,
-        )
-        .map_err(|source| match source {
-            keyring::Error::NoEntry => Error::NoEntry {
-                account: account.to_owned(),
-            },
-            source => Error::Unavailable {
-                source,
-                config: config.to_owned(),
-            },
-        })?;
-    Ok(Credential::new(secret))
+/// Reads the credential of `account` from the OS keychain, `None` without an
+/// entry. It never falls back to the file store; `config` is named in the
+/// hint to switch to it.
+pub fn read(account: &str, config: &Path) -> Result<Option<Credential>, Error> {
+    let secret = forced_failure().map_or_else(
+        || keyring::Entry::new(SERVICE, account)?.get_password(),
+        Err,
+    );
+    match secret {
+        Ok(secret) => Ok(Some(Credential::new(secret))),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(source) => Err(Error::Unavailable {
+            source,
+            config: config.to_owned(),
+        }),
+    }
 }
 
 /// Stores the credential of `account` in the OS keychain, replacing any.

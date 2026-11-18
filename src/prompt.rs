@@ -5,22 +5,25 @@ use crossterm::{
     terminal,
 };
 
-/// Reads one line after `label`, echoing it only when `echo` is set; `None`
-/// on Ctrl-C or Ctrl-D. Raw mode makes Ctrl-C a key, so the terminal is
-/// restored before Postal exits.
-pub fn read_line(label: &str, echo: bool) -> io::Result<Option<String>> {
+/// Reads one line after `label`, starting from `initial` and echoing it only
+/// when `echo` is set; `None` on Ctrl-C or Ctrl-D. Raw mode makes Ctrl-C a
+/// key, so the terminal is restored before Postal exits.
+pub fn read_line(label: &str, initial: &str, echo: bool) -> io::Result<Option<String>> {
     let mut out = io::stdout();
     write!(out, "{label} ")?;
+    if echo {
+        write!(out, "{initial}")?;
+    }
+
     out.flush()?;
     terminal::enable_raw_mode()?;
-    let line = edit(&mut out, echo);
+    let line = edit(&mut out, initial.to_owned(), echo);
     terminal::disable_raw_mode()?;
     writeln!(out)?;
     line
 }
 
-fn edit(out: &mut impl Write, echo: bool) -> io::Result<Option<String>> {
-    let mut line = String::new();
+fn edit(out: &mut impl Write, mut line: String, echo: bool) -> io::Result<Option<String>> {
     loop {
         let Event::Key(KeyEvent {
             code,

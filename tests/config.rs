@@ -58,15 +58,16 @@ fn an_unknown_field_names_the_path_and_line() {
     assert!(stderr.contains("colour"), "{stderr}");
 }
 
+// A config without `email` names no Account yet and starts the login flow.
 #[test]
 fn a_missing_field_names_the_path() {
-    let home = Home::new("auth = \"app-password\"\n[secrets]\nstore = \"file\"\n");
+    let home = Home::new("email = \"me@example.com\"\n[secrets]\nstore = \"file\"\n");
     let stderr = failure(&home);
     assert!(
         stderr.contains(&home.config_path().display().to_string()),
         "{stderr}"
     );
-    assert!(stderr.contains("email"), "{stderr}");
+    assert!(stderr.contains("auth"), "{stderr}");
 }
 
 #[test]
@@ -78,17 +79,6 @@ fn plaintext_is_refused_for_a_remote_host() {
     let at = format!("{}:5:7:", home.config_path().display());
     assert!(stderr.contains(&at), "{stderr}");
     assert!(stderr.contains("loopback"), "{stderr}");
-}
-
-#[test]
-fn a_missing_config_names_the_path() {
-    let home = Home::new("");
-    fs::remove_file(home.config_path()).unwrap();
-    let stderr = failure(&home);
-    assert!(
-        stderr.contains(&home.config_path().display().to_string()),
-        "{stderr}"
-    );
 }
 
 #[test]

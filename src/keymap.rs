@@ -10,6 +10,8 @@ pub enum Action {
     /// Hint mode on the links in the Preview window.
     Links,
     Help,
+    /// The login flow again, while signed out.
+    SignIn,
     Suspend,
     Quit,
 }
@@ -31,6 +33,8 @@ pub enum Scroll {
 /// One row of the `?` popup.
 pub struct Binding {
     pub group: &'static str,
+    /// Listed, and active, only while signed out.
+    pub signed_out: bool,
     pub keys: &'static str,
     pub aliases: &'static str,
     pub description: &'static str,
@@ -44,9 +48,10 @@ pub struct Hint {
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-pub const BINDINGS: [Binding; 8] = [
+const BINDINGS: [Binding; 9] = [
     Binding {
         group: "Navigate",
+        signed_out: false,
         keys: "j / k",
         aliases: "↓ / ↑",
         description: "next / previous Message",
@@ -57,6 +62,7 @@ pub const BINDINGS: [Binding; 8] = [
     },
     Binding {
         group: "Navigate",
+        signed_out: false,
         keys: "g / G",
         aliases: "Home / End",
         description: "first / last Message",
@@ -64,6 +70,7 @@ pub const BINDINGS: [Binding; 8] = [
     },
     Binding {
         group: "Message",
+        signed_out: false,
         keys: "^d / ^u",
         aliases: "PgDn / PgUp",
         description: "scroll the Preview half a page",
@@ -74,6 +81,7 @@ pub const BINDINGS: [Binding; 8] = [
     },
     Binding {
         group: "Message",
+        signed_out: false,
         keys: "Enter",
         aliases: "l",
         description: "open the Message in $PAGER",
@@ -84,6 +92,7 @@ pub const BINDINGS: [Binding; 8] = [
     },
     Binding {
         group: "Links",
+        signed_out: false,
         keys: "o",
         aliases: "",
         description: "label the links in the Preview",
@@ -94,6 +103,18 @@ pub const BINDINGS: [Binding; 8] = [
     },
     Binding {
         group: "App",
+        signed_out: true,
+        keys: "L",
+        aliases: "",
+        description: "sign in again",
+        hint: Some(Hint {
+            keys: "L",
+            description: "sign in",
+        }),
+    },
+    Binding {
+        group: "App",
+        signed_out: false,
         keys: "?",
         aliases: "",
         description: "this help",
@@ -101,6 +122,7 @@ pub const BINDINGS: [Binding; 8] = [
     },
     Binding {
         group: "App",
+        signed_out: false,
         keys: "q",
         aliases: "^c",
         description: "quit",
@@ -111,12 +133,18 @@ pub const BINDINGS: [Binding; 8] = [
     },
     Binding {
         group: "App",
+        signed_out: false,
         keys: "^z",
         aliases: "",
         description: "suspend to the shell",
         hint: None,
     },
 ];
+
+/// The bindings listed now, in `BINDINGS` order.
+pub fn bindings(signed_out: bool) -> impl Iterator<Item = &'static Binding> + Clone {
+    BINDINGS.iter().filter(move |b| signed_out || !b.signed_out)
+}
 
 /// The hint line's last entry, kept however narrow the terminal.
 pub const HELP_HINT: Hint = Hint {
@@ -149,6 +177,7 @@ pub const fn action(key: KeyEvent) -> Option<Action> {
         KeyCode::Enter | KeyCode::Char('l') => Some(Action::Open),
         KeyCode::Char('o') => Some(Action::Links),
         KeyCode::Char('?') => Some(Action::Help),
+        KeyCode::Char('L') => Some(Action::SignIn),
         KeyCode::Char('q') => Some(Action::Quit),
         _ => None,
     }

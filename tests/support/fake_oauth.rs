@@ -24,6 +24,8 @@ struct Grants {
     scope: String,
     /// Seconds, as each access token is granted.
     expires_in: u64,
+    /// The refresh token is refused with `invalid_grant`.
+    revoked: bool,
     requests: Vec<Form>,
 }
 
@@ -39,6 +41,7 @@ impl FakeOAuth {
         let grants = Arc::new(Mutex::new(Grants {
             scope: format!("{MAIL_SCOPE} openid https://www.googleapis.com/auth/userinfo.email"),
             expires_in: 3599,
+            revoked: false,
             requests: Vec::new(),
         }));
         let served = Arc::clone(&grants);
@@ -63,6 +66,10 @@ impl FakeOAuth {
 
     pub fn expire_in(&self, seconds: u64) {
         self.grants.lock().unwrap().expires_in = seconds;
+    }
+
+    pub fn revoke(&self) {
+        self.grants.lock().unwrap().revoked = true;
     }
 
     /// Each form posted to the token endpoint, in order.
@@ -105,9 +112,9 @@ fn answer(stream: TcpStream, grants: &Mutex<Grants>) {
 }
 
 fn grant(form: &Form, grants: &Mutex<Grants>) -> (&'static str, String) {
-    let (scope, expires_in) = {
+    let (scope, expires_in, revoked) = {
         let grants = grants.lock().unwrap();
-        (grants.scope.clone(), grants.expires_in)
+        (grants.scope.clone(), grants.expires_in, grants.revoked)
     };
 
     let field = |name: &str| form.get(name).map(String::as_str);
@@ -121,7 +128,7 @@ fn grant(form: &Form, grants: &Mutex<Grants>) -> (&'static str, String) {
                 ),
             )
         }
-        Some("refresh_token") if field("refresh_token") == Some(REFRESH_TOKEN) => (
+        Some("refresh_token") if !revoked && field("refresh_token") == Some(REFRESH_TOKEN) => (
             "200 OK",
             format!(
                 r#"{{"access_token":"{ACCESS_TOKEN}","expires_in":{expires_in},"scope":"{scope}","token_type":"Bearer"}}"#

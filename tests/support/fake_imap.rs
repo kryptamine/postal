@@ -125,6 +125,9 @@ pub enum Outage {
     Bye,
     /// `LOGIN` is answered `NO [THROTTLED]`.
     Throttled,
+    /// Every sign-in is answered `NO [AUTHENTICATIONFAILED]`, as for a
+    /// revoked app password or access token.
+    Revoked,
 }
 
 struct Stored {
@@ -456,7 +459,9 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                 command_authenticate,
             } => authenticating = start_authenticate(&mut server, command_authenticate),
             Event::AuthenticateDataReceived { authenticate_data } => {
-                finish_authenticate(&mut server, authenticating.take(), &authenticate_data);
+                let revoked = inbox.lock().unwrap().outage == Some(Outage::Revoked);
+                let tag = authenticating.take();
+                finish_authenticate(&mut server, tag, &authenticate_data, revoked);
             }
             Event::IdleCommandReceived { tag } => {
                 let accept = CommandContinuationRequest::basic(None, "idling").unwrap();
@@ -608,9 +613,15 @@ fn start_authenticate(server: &mut Server, command: CommandAuthenticate) -> Opti
     tag
 }
 
-fn finish_authenticate(server: &mut Server, tag: Option<Tag<'static>>, data: &AuthenticateData) {
-    let ok = matches!(data, AuthenticateData::Continue(data)
-        if data.declassify().as_ref() == xoauth2().as_bytes());
+fn finish_authenticate(
+    server: &mut Server,
+    tag: Option<Tag<'static>>,
+    data: &AuthenticateData,
+    revoked: bool,
+) {
+    let ok = !revoked
+        && matches!(data, AuthenticateData::Continue(data)
+            if data.declassify().as_ref() == xoauth2().as_bytes());
     server.authenticate_finish(login(tag, ok)).unwrap();
 }
 
@@ -636,7 +647,8 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
             server.enqueue_status(status.unwrap());
         }
         CommandBody::Login { username, password } => {
-            let ok = username.as_ref() == EMAIL.as_bytes()
+            let ok = inbox.outage != Some(Outage::Revoked)
+                && username.as_ref() == EMAIL.as_bytes()
                 && password.declassify().as_ref() == PASSWORD.as_bytes();
             server.enqueue_status(login(tag, ok));
         }

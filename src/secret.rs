@@ -30,18 +30,20 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Reads the credential from the file secret store, which must be `0600`.
-pub fn read(path: &Path) -> Result<Credential, Error> {
+/// Reads the credential from the file secret store, which must be `0600`;
+/// `None` while there is no file.
+pub fn read(path: &Path) -> Result<Option<Credential>, Error> {
     let read_error = |source| Error::Read {
         path: path.to_owned(),
         source,
     };
 
-    let mode = std::fs::metadata(path)
-        .map_err(read_error)?
-        .permissions()
-        .mode()
-        & 0o777;
+    let metadata = match std::fs::metadata(path) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        metadata => metadata.map_err(read_error)?,
+    };
+
+    let mode = metadata.permissions().mode() & 0o777;
     if mode & 0o077 != 0 {
         return Err(Error::Exposed {
             path: path.to_owned(),
@@ -50,7 +52,7 @@ pub fn read(path: &Path) -> Result<Credential, Error> {
     }
 
     let secret = std::fs::read_to_string(path).map_err(read_error)?;
-    Ok(Credential::new(secret.trim().to_owned()))
+    Ok(Some(Credential::new(secret.trim().to_owned())))
 }
 
 /// Stores the credential in the file secret store, readable by the owner only.
