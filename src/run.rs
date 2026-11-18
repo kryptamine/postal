@@ -11,10 +11,13 @@ use crate::{
     keymap::{self, Action},
     layout,
     message_list::{self, MessageList},
+    pager, pager_text,
     preview_pane::{self, PreviewPane},
+    preview_render::{self, Job},
     previews::Previews,
-    sync,
-    terminal_backend::TerminalBackend,
+    rendered_previews::PreviewKey,
+    suspend, sync,
+    terminal_backend::{self, TerminalBackend},
     theme::Theme,
     update::Update,
 };
@@ -109,8 +112,15 @@ pub async fn run(
             event = events.next() => {
                 frame_start = alloc_count::count();
                 let half_page = text.map_or(1, |t| usize::from(t.height / 2).max(1));
-                if !handle(event, &mut view, half_page)? {
-                    return Ok(());
+                match handle(event, &mut view, half_page)? {
+                    Step::Stay => {}
+                    Step::Page => {
+                        if let Some(text) = paged(terminal, theme, cache, &view)? {
+                            outside(terminal, &mut events, || pager::page(&text))?;
+                        }
+                    }
+                    Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
+                    Step::Quit => return Ok(()),
                 }
             }
         }
@@ -151,27 +161,90 @@ fn apply(
     Ok(())
 }
 
-/// Acts on one input event; `false` once Postal should quit.
+/// What the event loop does after one input event.
+enum Step {
+    Stay,
+    Page,
+    Suspend,
+    Quit,
+}
+
+/// Acts on one input event, where the view alone can take it.
 fn handle(
     event: Option<io::Result<Event>>,
     view: &mut InboxView,
     half_page: usize,
-) -> Result<bool, Error> {
+) -> Result<Step, Error> {
     match event {
-        None => Ok(false),
+        None => Ok(Step::Quit),
         Some(Err(source)) => Err(Error::Terminal(source)),
-        Some(Ok(Event::Key(key))) => {
-            match keymap::action(key) {
-                Some(Action::Quit) => return Ok(false),
-                Some(Action::Move(movement)) => view.apply(movement),
-                Some(Action::Scroll(scroll)) => view.scroll(scroll, half_page),
-                None => {}
+        Some(Ok(Event::Key(key))) => Ok(match keymap::action(key) {
+            Some(Action::Quit) => Step::Quit,
+            Some(Action::Open) => Step::Page,
+            Some(Action::Suspend) => Step::Suspend,
+            Some(Action::Move(movement)) => {
+                view.apply(movement);
+                Step::Stay
             }
-
-            Ok(true)
-        }
-        Some(Ok(_)) => Ok(true),
+            Some(Action::Scroll(scroll)) => {
+                view.scroll(scroll, half_page);
+                Step::Stay
+            }
+            None => Step::Stay,
+        }),
+        Some(Ok(_)) => Ok(Step::Stay),
     }
+}
+
+/// Runs `program` in the foreground with the terminal handed back, then
+/// takes the terminal again. A failure of `program` alone is only logged.
+fn outside(
+    terminal: &mut Terminal<TerminalBackend>,
+    events: &mut EventStream,
+    program: impl FnOnce() -> io::Result<()>,
+) -> Result<(), Error> {
+    // A live EventStream keeps reading the terminal, and would take the
+    // pager's keys; dropping it stops its reader thread.
+    *events = EventStream::new();
+    terminal_backend::leave(terminal).map_err(Error::Terminal)?;
+    let result = program();
+    terminal_backend::resume(terminal).map_err(Error::Terminal)?;
+    if let Err(error) = result {
+        tracing::error!("leaving the screen failed: {error}");
+    }
+
+    Ok(())
+}
+
+/// The selected Message as the pager shows it, at the terminal's width;
+/// `None` while its body is not in the Cache.
+fn paged(
+    terminal: &Terminal<TerminalBackend>,
+    theme: &Theme,
+    cache: &Cache,
+    view: &InboxView,
+) -> Result<Option<Vec<u8>>, Error> {
+    let Some(message) = view.messages.as_ref().and_then(|m| m.get(view.selected)) else {
+        return Ok(None);
+    };
+
+    let Some(body) = cache.body(message.uid).map_err(Error::Cache)? else {
+        return Ok(None);
+    };
+
+    let width = terminal.size().map_err(Error::Terminal)?.width;
+    let preview = preview_render::paged(Job {
+        key: PreviewKey {
+            body: message.body_key,
+            width,
+        },
+        body,
+        sender: message.sender.clone(),
+        subject: message.subject.clone(),
+        received: message.received,
+    });
+
+    Ok(Some(pager_text::ansi(&preview, theme)))
 }
 
 fn show(view: &mut InboxView, cache: &Cache, limit: Option<usize>) -> Result<(), Error> {

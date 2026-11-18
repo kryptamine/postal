@@ -13,8 +13,8 @@ pub enum Annotation {
     Alt,
 }
 
-/// Marks text by meaning and adds no markup of its own: links stay inline
-/// with no footnote, and an image is its alt text in brackets.
+/// Marks text by meaning and adds no markup of its own: an image is its alt
+/// text in brackets, and each footnoted URL is listed as `[n] url`.
 #[derive(Clone, Copy)]
 pub struct Decorator;
 
@@ -109,7 +109,12 @@ impl TextDecorator for Decorator {
         *self
     }
 
-    fn finalise(&mut self, _urls: Vec<String>) -> Vec<TaggedLine<Annotation>> {
-        Vec::new()
+    fn finalise(&mut self, urls: Vec<String>) -> Vec<TaggedLine<Annotation>> {
+        urls.iter()
+            .enumerate()
+            .map(|(i, url)| {
+                TaggedLine::from_string(format!("[{}] {url}", i + 1), &Annotation::Plain)
+            })
+            .collect()
     }
 }

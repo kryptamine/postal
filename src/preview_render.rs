@@ -2,7 +2,10 @@ use chrono::{DateTime, FixedOffset};
 use mail_parser::{MessageParser, PartType};
 
 use crate::{
-    html_preview, preview::Preview, rendered_previews::PreviewKey, styled_line::StyledLine,
+    html_preview::{self, Links},
+    preview::Preview,
+    rendered_previews::PreviewKey,
+    styled_line::StyledLine,
     wrap::wrap,
 };
 
@@ -18,8 +21,17 @@ pub struct Job {
 
 /// The Preview of `job` at the width in its key.
 pub fn render(job: Job) -> Preview {
+    rendered(job, Links::Inline)
+}
+
+/// `job` as the `$PAGER` shows it: the Preview with link footnotes.
+pub fn paged(job: Job) -> Preview {
+    rendered(job, Links::Footnotes)
+}
+
+fn rendered(job: Job, links: Links) -> Preview {
     Preview {
-        body: body(&job.body, usize::from(job.key.width)),
+        body: body(&job.body, usize::from(job.key.width), links),
         from: job.sender,
         subject: job.subject,
         date: job.received.format("%a, %-d %b %Y %H:%M").to_string(),
@@ -28,14 +40,14 @@ pub fn render(job: Job) -> Preview {
 
 /// The HTML part when there is one, else the `text/plain` part wrapped,
 /// else a note.
-fn body(raw: &[u8], width: usize) -> Vec<StyledLine> {
+fn body(raw: &[u8], width: usize, links: Links) -> Vec<StyledLine> {
     let message = MessageParser::default().parse(raw);
     let html = message
         .as_ref()
         .and_then(|m| m.html_part(0))
         .map(|p| &p.body);
     if let Some(PartType::Html(html)) = html {
-        return html_preview::render(html, width)
+        return html_preview::render(html, width, links)
             .unwrap_or_else(|_| note("(this Message could not be shown)", width));
     }
 

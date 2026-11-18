@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// The header labels, padded so the values line up.
-const LABELS: [&str; 3] = ["From    ", "Subject ", "Date    "];
+pub const LABELS: [&str; 3] = ["From    ", "Subject ", "Date    "];
 const LABEL_WIDTH: u16 = 8;
 /// The header rows and the blank row under them.
 const HEADER_ROWS: usize = LABELS.len() + 1;

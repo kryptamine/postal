@@ -8,25 +8,13 @@ use ratatui::{
         cursor::MoveTo,
         execute, queue,
         style::{Color as CrosstermColor, Colors, Print, SetColors, SetUnderlineColor},
-        terminal::{self, EnterAlternateScreen},
+        terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
     },
     layout::{Position, Size},
     style::{Color, Modifier},
 };
 
-/// SGR codes for the modifiers a cell can carry. Bold comes after dim:
-/// some terminals keep one intensity, where the last wins, as in ratatui.
-const MODIFIERS: [(Modifier, u8); 9] = [
-    (Modifier::DIM, 2),
-    (Modifier::BOLD, 1),
-    (Modifier::ITALIC, 3),
-    (Modifier::UNDERLINED, 4),
-    (Modifier::SLOW_BLINK, 5),
-    (Modifier::RAPID_BLINK, 6),
-    (Modifier::REVERSED, 7),
-    (Modifier::HIDDEN, 8),
-    (Modifier::CROSSED_OUT, 9),
-];
+use crate::ansi;
 
 /// The crossterm backend with a `draw` that does not allocate: crossterm's
 /// `SetAttribute` builds a `String` per call. ADR 0001 forbids that per frame.
@@ -44,6 +32,28 @@ pub fn init() -> io::Result<Terminal<TerminalBackend>> {
         inner: CrosstermBackend::new(io::stdout()),
         out: io::stdout(),
     })
+}
+
+/// Hands the terminal back as Postal found it, for a program run in the
+/// foreground; `resume` takes it again.
+pub fn leave(terminal: &mut Terminal<TerminalBackend>) -> io::Result<()> {
+    terminal.show_cursor()?;
+    execute!(io::stdout(), LeaveAlternateScreen)?;
+    terminal::disable_raw_mode()
+}
+
+/// Raw mode on the alternate screen again, cleared so the next draw
+/// repaints every cell.
+pub fn resume(terminal: &mut Terminal<TerminalBackend>) -> io::Result<()> {
+    terminal::enable_raw_mode()?;
+    execute!(io::stdout(), EnterAlternateScreen)?;
+    terminal.hide_cursor()?;
+    // Not `Terminal::clear`: it asks the terminal where the cursor is.
+    // Swapping twice blanks both buffers, so the next draw has no diff base.
+    terminal.backend_mut().clear()?;
+    terminal.swap_buffers();
+    terminal.swap_buffers();
+    Ok(())
 }
 
 impl Backend for TerminalBackend {
@@ -68,13 +78,7 @@ impl Backend for TerminalBackend {
             // A full reset then the new set is simpler than a diff, but it
             // also resets the colours, so they are set again below.
             if cell.modifier != modifier {
-                out.write_all(b"\x1b[0m")?;
-                for (flag, code) in MODIFIERS {
-                    if cell.modifier.contains(flag) {
-                        write!(out, "\x1b[{code}m")?;
-                    }
-                }
-
+                ansi::modifiers(&mut out, cell.modifier)?;
                 modifier = cell.modifier;
                 (fg, bg, underline) = (Color::Reset, Color::Reset, Color::Reset);
             }
@@ -102,7 +106,7 @@ impl Backend for TerminalBackend {
             SetColors(reset),
             SetUnderlineColor(CrosstermColor::Reset)
         )?;
-        out.write_all(b"\x1b[0m")
+        out.write_all(ansi::RESET)
     }
 
     fn append_lines(&mut self, n: u16) -> io::Result<()> {

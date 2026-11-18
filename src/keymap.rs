@@ -5,6 +5,9 @@ pub enum Action {
     Move(Move),
     /// Half a page of the Preview.
     Scroll(Scroll),
+    /// The selected Message in `$PAGER`.
+    Open,
+    Suspend,
     Quit,
 }
 
@@ -32,6 +35,7 @@ pub const fn action(key: KeyEvent) -> Option<Action> {
             KeyCode::Char('c') => Some(Action::Quit),
             KeyCode::Char('d') => Some(Action::Scroll(Scroll::Down)),
             KeyCode::Char('u') => Some(Action::Scroll(Scroll::Up)),
+            KeyCode::Char('z') => Some(Action::Suspend),
             _ => None,
         };
     }
@@ -43,6 +47,7 @@ pub const fn action(key: KeyEvent) -> Option<Action> {
         KeyCode::Char('G') | KeyCode::End => Some(Action::Move(Move::Last)),
         KeyCode::PageDown => Some(Action::Scroll(Scroll::Down)),
         KeyCode::PageUp => Some(Action::Scroll(Scroll::Up)),
+        KeyCode::Enter | KeyCode::Char('l') => Some(Action::Open),
         KeyCode::Char('q') => Some(Action::Quit),
         _ => None,
     }

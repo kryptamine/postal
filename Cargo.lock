@@ -1670,6 +1670,7 @@ dependencies = [
  "imap-codec",
  "imap-next",
  "insta",
+ "libc",
  "mail-parser",
  "quoted_printable",
  "ratatui",
