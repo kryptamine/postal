@@ -30,6 +30,7 @@ mod login;
 mod marks;
 mod message;
 mod message_list;
+mod mode;
 mod new_message;
 mod oauth;
 mod older_pages;

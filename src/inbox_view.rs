@@ -2,7 +2,7 @@ use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 use crate::{
     inbox::Inbox,
-    keymap::{Move, Scroll},
+    keymap::{By, Direction, Move, Scroll},
     message::Message,
 };
 
@@ -79,10 +79,17 @@ impl InboxView {
         }
     }
 
-    pub const fn scroll(&mut self, scroll: Scroll, rows: usize) {
-        self.preview_scroll = match scroll {
-            Scroll::Down => self.preview_scroll.saturating_add(rows),
-            Scroll::Up => self.preview_scroll.saturating_sub(rows),
+    /// Past the last page is fine: the Preview widget clamps it.
+    pub const fn scroll(&mut self, scroll: Scroll, half_page: usize) {
+        let rows = match scroll.by {
+            By::Line => 1,
+            By::HalfPage => half_page,
+            By::End => usize::MAX,
+        };
+
+        self.preview_scroll = match scroll.direction {
+            Direction::Down => self.preview_scroll.saturating_add(rows),
+            Direction::Up => self.preview_scroll.saturating_sub(rows),
         };
     }
 

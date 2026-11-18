@@ -310,7 +310,7 @@ fn a_body_missing_while_offline_says_so_and_comes_after_the_reconnect() {
     assert!(screen.contains("Subject Subject 1"), "{screen}");
     assert!(screen.contains("Date    Fri, 1 Nov 2024 09:00"), "{screen}");
 
-    t.send(Key::Enter).unwrap();
+    t.send(Key::Char('|')).unwrap();
     t.wait_until(|s| hint_line(s).contains("not downloaded"))
         .unwrap();
     server.recover();

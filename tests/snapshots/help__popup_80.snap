@@ -4,16 +4,16 @@ expression: screen
 ---
 size: 80x24  cursor: hidden
 ┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
-│   Bob                                                             2024-11-18 │
-│   Newer   ┌ Help ────────────────────────────────────────────────┐           │
-│   Newer bo│                                                      │           │
-│   Ada     │ Navigate                                             │2024-11-17 │
-│   Older   │ j / k    ↓ / ↑        next / previous Message        │           │
-│   Older bo│ g / G    Home / End   first / last Message           │           │
-│           │                                                      │           │
+│   Bob     ┌ Help ────────────────────────────────────────────────┐2024-11-18 │
+│   Newer   │                                                      │           │
+│   Newer bo│ Navigate                                             │           │
+│   Ada     │ j / k    ↓ / ↑        next / previous Message        │2024-11-17 │
+│   Older   │ g / G    Home / End   first / last Message           │           │
+│   Older bo│                                                      │           │
 │           │ Message                                              │           │
-└───────────│ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │───────────┘
-┌ 1/2 ──────│ Enter    l            open the Message in $PAGER     │───────────┐
+│           │ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │           │
+└───────────│ Enter    l            read the Message full screen   │───────────┘
+┌ 1/2 ──────│ |                     open the Message in $PAGER     │───────────┐
 │ From    Bo│                                                      │           │
 │ Subject Ne│ Links                                                │           │
 │ Date    Mo│ o                     label the links in the Preview │           │
@@ -26,4 +26,4 @@ size: 80x24  cursor: hidden
 │           └──────────────────────────────────────────────────────┘           │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
- j/k move  ^d/^u scroll  enter open  o links  q quit  ?: help
+ j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help

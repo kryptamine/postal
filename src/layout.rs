@@ -1,6 +1,6 @@
 use ratatui::layout::Rect;
 
-use crate::message_list;
+use crate::{message_list, mode::Mode};
 
 /// From this width the Preview sits right of the Message List, else below.
 const SIDE_BY_SIDE: u16 = 84;
@@ -13,16 +13,16 @@ pub const PADDING: u16 = 1;
 
 /// Where the main screen's parts go: the panes, and the hint line on the
 /// bottom row. Too narrow for a list, there is no Preview, so the list says
-/// so on its own.
+/// so on its own; while reading, the Preview takes the whole body.
 pub struct Panes {
-    pub list: Rect,
+    pub list: Option<Rect>,
     pub preview: Option<Rect>,
     pub hint: Rect,
     /// Everything above the hint line.
     pub body: Rect,
 }
 
-pub fn split(area: Rect) -> Panes {
+pub fn split(area: Rect, mode: Mode) -> Panes {
     let body = Rect {
         height: area.height.saturating_sub(1),
         ..area
@@ -34,7 +34,14 @@ pub fn split(area: Rect) -> Panes {
         ..area
     };
 
-    let (list, preview) = panes(body);
+    let (list, preview) = match mode {
+        Mode::List => {
+            let (list, preview) = panes(body);
+            (Some(list), preview)
+        }
+        Mode::Reading => (None, Some(body)),
+    };
+
     Panes {
         list,
         preview,

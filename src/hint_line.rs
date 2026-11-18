@@ -4,6 +4,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     keymap::{self, HELP_HINT, Hint},
+    mode::Mode,
     status::Status,
     theme::Theme,
     toast::Toast,
@@ -17,6 +18,7 @@ pub struct HintLine<'a> {
     pub theme: &'a Theme,
     pub toast: Option<&'a Toast>,
     pub status: Status,
+    pub mode: Mode,
     /// What the Status's countdown counts from.
     pub now: Instant,
 }
@@ -53,7 +55,7 @@ impl Widget for HintLine<'_> {
         let mut left = room.saturating_sub(width(&HELP_HINT));
         let mut x = row.x;
         let signed_out = self.status == Status::SignedOut;
-        for hint in keymap::bindings(signed_out).filter_map(|b| b.hint.as_ref()) {
+        for hint in keymap::bindings(self.mode, signed_out).filter_map(|b| b.hint.as_ref()) {
             let needed = width(hint) + usize::from(GAP);
             if needed > left {
                 break;

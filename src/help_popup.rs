@@ -8,6 +8,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     keymap::{self, Binding},
+    mode::Mode,
     theme::Theme,
 };
 
@@ -16,16 +17,17 @@ const GAP: u16 = 2;
 /// The border and one column or row of padding inside it, each side.
 const FRAME: u16 = 4;
 
-/// The keymap grouped as `keymap::bindings` lists it, centred over `area`:
+/// The keymap of `mode`, grouped as `keymap::bindings` lists it, centred over `area`:
 /// a heading per group, then key, aliases and description per row.
 pub struct HelpPopup<'a> {
     pub theme: &'a Theme,
+    pub mode: Mode,
     pub signed_out: bool,
 }
 
 impl Widget for HelpPopup<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let bindings = keymap::bindings(self.signed_out);
+        let bindings = keymap::bindings(self.mode, self.signed_out);
         let keys = column(bindings.clone(), |b| b.keys);
         let aliases = column(bindings.clone(), |b| b.aliases);
         let descriptions = column(bindings.clone(), |b| b.description);

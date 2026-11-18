@@ -27,4 +27,4 @@ size: 80x25  cursor: hidden
 │                                                                              │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
- j/k move  ^d/^u scroll  enter open  o links  q quit  ?: help
+ j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help

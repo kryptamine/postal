@@ -52,7 +52,7 @@ size: 60x50  cursor: hidden
 │                                                          │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
- j/k move  ^d/^u scroll  enter open  o links  ?: help
+ j/k move  ^d/^u scroll  enter read  o links  ?: help
 
 styles:
 0: 0 dim; 1-17 fg=4 bold; 18-59 dim

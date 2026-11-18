@@ -14,7 +14,7 @@ size: 120x12  cursor: hidden
 │                                        ││                                                                            │
 │                                        ││                                                                            │
 └────────────────────────────────────────┘└────────────────────────────────────────────────────────────────────────────┘
- j/k move  ^d/^u scroll  enter open  o links  q quit  ?: help
+ j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help
 
 styles:
 0: 0 dim; 1-17 bold; 18-42 dim; 43-47 bold; 48-119 dim

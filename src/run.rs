@@ -20,6 +20,7 @@ use crate::{
     layout,
     link_hints::{LinkHints, Typed},
     message_list::{self, MessageList},
+    mode::Mode,
     older_pages::OlderPages,
     pager, pager_text,
     preview_pane::{self, PreviewPane},
@@ -105,7 +106,7 @@ pub async fn run(
 ) -> Result<Exit, Error> {
     let mut events = EventStream::new();
     let mut view = InboxView::loading();
-    let rows = message_list::capacity(panes(terminal)?.list.height);
+    let rows = first_rows(terminal)?;
     show(&mut view, cache, Some(rows))?;
     let (mut updates, mut older) = (background.updates, background.older);
     let mut screen = Screen::opening(cache, &background.work);
@@ -117,7 +118,9 @@ pub async fn run(
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
     loop {
-        let text = panes(terminal)?.preview.map(preview_pane::text_area);
+        let text = panes(terminal, screen.mode)?
+            .preview
+            .map(preview_pane::text_area);
         want(previews, cache, &view, text.filter(|_| whole))?;
         whole.then(|| older.want(&view));
         screen.notice_write_failure(cache);
@@ -187,9 +190,18 @@ fn want(
     })
 }
 
-fn panes(terminal: &Terminal<TerminalBackend>) -> Result<layout::Panes, Error> {
+/// How many cards the list shows on the first frame.
+fn first_rows(terminal: &Terminal<TerminalBackend>) -> Result<usize, Error> {
+    let list = panes(terminal, Mode::List)?.list;
+    Ok(message_list::capacity(list.map_or(0, |list| list.height)))
+}
+
+fn panes(terminal: &Terminal<TerminalBackend>, mode: Mode) -> Result<layout::Panes, Error> {
     let size = terminal.size().map_err(Error::Terminal)?;
-    Ok(layout::split(Rect::new(0, 0, size.width, size.height)))
+    Ok(layout::split(
+        Rect::new(0, 0, size.width, size.height),
+        mode,
+    ))
 }
 
 fn draw(
@@ -201,8 +213,11 @@ fn draw(
 ) -> Result<(), Error> {
     terminal
         .draw(|frame| {
-            let panes = layout::split(frame.area());
-            frame.render_stateful_widget(MessageList { theme }, panes.list, view);
+            let panes = layout::split(frame.area(), screen.mode);
+            if let Some(list) = panes.list {
+                frame.render_stateful_widget(MessageList { theme }, list, view);
+            }
+
             if let Some(pane) = panes.preview {
                 let preview = previews.shown(view, preview_pane::text_area(pane).width);
                 let hints = screen.hints.as_ref();
@@ -219,13 +234,21 @@ fn draw(
                 theme,
                 toast: screen.toast.as_ref(),
                 status: screen.status(),
+                mode: screen.mode,
                 now: Instant::now(),
             };
 
             frame.render_widget(hint_line, panes.hint);
             if screen.help {
                 let signed_out = screen.status == Status::SignedOut;
-                frame.render_widget(HelpPopup { theme, signed_out }, panes.body);
+                let mode = screen.mode;
+                let popup = HelpPopup {
+                    theme,
+                    mode,
+                    signed_out,
+                };
+
+                frame.render_widget(popup, panes.body);
             }
         })
         .map_err(Error::Terminal)?;
@@ -243,9 +266,11 @@ fn apply(
         Update::Inbox => {
             let selected = view.selected_uid();
             show(view, cache, None)?;
-            // The labels point into the Preview they were found in.
+            // The labels, and the full-screen Message, belong to the Message
+            // they were opened on.
             if view.selected_uid() != selected {
                 screen.hints = None;
+                screen.mode = Mode::List;
             }
         }
         Update::Bodies(fetched) => previews.fetched(fetched),
@@ -280,6 +305,7 @@ struct Screen {
     /// A page of older Messages under way on the fetch connection.
     backfill: Option<Status>,
     hints: Option<LinkHints>,
+    mode: Mode,
 }
 
 impl Screen {
@@ -368,9 +394,20 @@ fn handle(
                 Typed::Partial | Typed::Cancel => Step::Stay,
             })
         }
-        Some(Ok(Event::Key(key))) => Ok(match keymap::action(key) {
+        Some(Ok(Event::Key(key))) => Ok(match keymap::action(key, screen.mode) {
             Some(Action::Quit) => Step::Quit,
-            Some(Action::Open) => Step::Page,
+            Some(Action::Read) => {
+                if view.selected_uid().is_some() {
+                    screen.mode = Mode::Reading;
+                }
+
+                Step::Stay
+            }
+            Some(Action::Back) => {
+                screen.mode = Mode::List;
+                Step::Stay
+            }
+            Some(Action::Page) => Step::Page,
             Some(Action::Suspend) => Step::Suspend,
             Some(Action::SignIn) if screen.status == Status::SignedOut => Step::SignIn,
             Some(Action::Links) => Step::Links,

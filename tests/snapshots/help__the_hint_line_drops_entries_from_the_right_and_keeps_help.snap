@@ -2,9 +2,9 @@
 source: tests/help.rs
 expression: lines
 ---
-100 | j/k move  ^d/^u scroll  enter open  o links  q quit  ?: help                                       |
- 62 | j/k move  ^d/^u scroll  enter open  o links  q quit  ?: help |
- 61 | j/k move  ^d/^u scroll  enter open  o links  ?: help        |
+100 | j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help                                       |
+ 62 | j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help |
+ 61 | j/k move  ^d/^u scroll  enter read  o links  ?: help        |
  40 | j/k move  ^d/^u scroll  ?: help        |
  20 | j/k move  ?: help  |
   9 | ?: help |

@@ -1,4 +1,4 @@
-//! `Enter` hands the Message to `$PAGER`, and `Ctrl-z` to the shell; the
+//! `|` hands the Message to `$PAGER`, and `Ctrl-z` to the shell; the
 //! screen comes back whole either way.
 
 #[allow(dead_code, reason = "each test binary uses part of the harness")]
@@ -44,7 +44,11 @@ fn postal(home: &Home, envs: &[(&str, &Path)], no_color: bool) -> Terminal {
 }
 
 fn server() -> FakeImap {
-    let body = FakeBody::text("html", "7bit", HTML);
+    server_with(HTML)
+}
+
+fn server_with(html: &str) -> FakeImap {
+    let body = FakeBody::text("html", "7bit", html);
     let message = FakeMessage::new("Ada Lovelace", "Weekly notes", "2024-11-18T09:00:00Z");
     FakeImap::start(vec![message.body(body)])
 }
@@ -60,9 +64,10 @@ fn visible(bytes: &[u8]) -> String {
         .replace('\x1b', "␛")
 }
 
-/// What a recording `$PAGER` read, once the TUI took the screen back.
-fn paged(key: Key, no_color: bool) -> String {
-    let server = server();
+/// What a recording `$PAGER` read of `html` after `keys`, once the TUI
+/// took the screen back.
+fn paged(html: &str, keys: &[Key], no_color: bool) -> String {
+    let server = server_with(html);
     let home = Home::for_server(&server);
     let dir = tempfile::tempdir().unwrap();
     let tmp = dir.path().join("tmp");
@@ -81,13 +86,16 @@ fn paged(key: Key, no_color: bool) -> String {
     );
     t.wait_until(main_screen).unwrap();
 
-    t.send(key).unwrap();
+    for key in keys {
+        t.send(*key).unwrap();
+    }
+
     t.wait_until(|s| !s.alternate_screen() && s.contains("pager done"))
         .unwrap();
     t.send(Key::Enter).unwrap();
     t.wait_until(main_screen).unwrap();
     // The TUI still takes keys after the pager.
-    t.send(Key::Char('q')).unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 
     let written: Vec<_> = std::fs::read_dir(&tmp).unwrap().collect();
@@ -98,13 +106,22 @@ fn paged(key: Key, no_color: bool) -> String {
 // The pager copy keeps the Preview's styling and lists every URL, since
 // the pager has no hint mode and URLs must stay copyable.
 #[test]
-fn enter_pipes_the_message_with_link_footnotes_to_the_pager() {
-    insta::assert_snapshot!("colour", paged(Key::Enter, false));
+fn pipe_hands_the_message_with_link_footnotes_to_the_pager() {
+    insta::assert_snapshot!("colour", paged(HTML, &[Key::Char('|')], false));
 }
 
 #[test]
 fn no_color_strips_the_colours_from_the_pager_copy() {
-    insta::assert_snapshot!("no_color", paged(Key::Char('l'), true));
+    insta::assert_snapshot!("no_color", paged(HTML, &[Key::Char('|')], true));
+}
+
+#[test]
+fn the_full_screen_message_goes_to_the_pager_too() {
+    let keys = [Key::Enter, Key::Char('|')];
+    assert_eq!(
+        paged(HTML, &keys, true),
+        paged(HTML, &[Key::Char('|')], true)
+    );
 }
 
 // Run straight under the terminal, Postal would lead an orphaned process

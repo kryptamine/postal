@@ -1,0 +1,29 @@
+---
+source: tests/reading.rs
+expression: screen
+---
+size: 80x24  cursor: hidden
+┌ 1/2 ─────────────────────────────────────────────────────────────────────────┐
+│ From    Bob                                                                  │
+│ Subject Ne┌ Help ────────────────────────────────────────────────┐           │
+│ Date    Mo│                                                      │           │
+│           │ Read                                                 │           │
+│ Line 01   │ j / k    ↓ / ↑        scroll a line                  │           │
+│ Line 02   │ g / G    Home / End   top / bottom of the Message    │           │
+│ Line 03   │ ^d / ^u  PgDn / PgUp  scroll half a page             │           │
+│ Line 04   │ |                     open the Message in $PAGER     │           │
+│ Line 05   │ q / Esc  h / ←        back to the list               │           │
+│ Line 06   │                                                      │           │
+│ Line 07   │ Links                                                │           │
+│ Line 08   │ o                     label the links in the Preview │           │
+│ Line 09   │                                                      │           │
+│ Line 10   │ App                                                  │           │
+│ Line 11   │ ?                     this help                      │           │
+│ Line 12   │ ^c                    quit                           │           │
+│ Line 13   │ ^z                    suspend to the shell           │           │
+│ Line 14   │                                                      │           │
+│ Line 15   └──────────────────────────────────────────────────────┘           │
+│ Line 16                                                                      │
+│ Line 17                                                                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+ j/k scroll  ^d/^u page  | pager  q back  o links  ?: help

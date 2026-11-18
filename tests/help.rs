@@ -91,7 +91,7 @@ fn hint_keys_are_bold_and_descriptions_dim() {
         assert!(!style(key).dim, "{key} is dim");
     }
 
-    for description in ["move", "scroll", "open", "help"] {
+    for description in ["move", "scroll", "read", "help"] {
         assert!(style(description).dim, "{description} is not dim");
         assert!(!style(description).bold, "{description} is bold");
     }
@@ -153,7 +153,7 @@ fn a_toast_takes_the_right_slot_for_three_seconds() {
     t.wait_until(|s| loaded(s) && s.contains("Loading…"))
         .unwrap();
 
-    t.send(Key::Enter).unwrap();
+    t.send(Key::Char('|')).unwrap();
     let screen = t
         .snapshot_after(|s| hint_line(s).contains("not downloaded"))
         .unwrap();
