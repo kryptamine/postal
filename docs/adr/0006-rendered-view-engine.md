@@ -41,6 +41,11 @@ the colour, cell-width and element helpers.
   (`background-clip: padding-box`), as a 1px border looks; a cell thick, it
   would ring the line in the fill. Borders are drawn as `─ │ ┌ ┐ └ ┘` after
   the text, on cells without text.
+- A box with all four borders round every glyph of the mail only frames the
+  page, a frame round every line of it, and prints as blank cells. It stays
+  in the grid (`CG_PAGE_BOX`), so a section against it still takes it as its
+  shape and gets no frame of its own; with it gone, a card's light fill and
+  a band at its top were framed apart, one frame cutting through the other.
 - An icon label that is all its link shows takes its whole `alt`, up to 16
   columns, and a column after it: cut, `Insta…` named nothing. After layout,
   a grown label that spills past a block around it or past the pane goes
@@ -183,7 +188,8 @@ links, picture boxes, buttons, fluid columns and light cards then changed
 changed 247 of them, left 63 not fitting, and lost no word but the `Status`
 header of CI reports. Naming picture links by their address changed 93,
 and left 10 `[link]` labels, on links with no http address. Cover bands
-changed 7.
+changed 7. Blanking the box round the whole mail changed 8 at 74 columns and
+10 at 120, and left the count that do not fit at 78 and 18.
 
 Deciding a section by the size of the merged region, not of each box, was
 tried: it framed chart bars and footer gutters and improved nothing.

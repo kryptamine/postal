@@ -436,13 +436,32 @@ fn sections_of_one_colour_that_touch_share_a_frame() {
 #[test]
 fn a_section_with_a_border_of_its_own_gets_no_second_frame() {
     let body = html(
-        "<div style=\"background:#1e50f5;color:#fff;border:1px solid #888;padding:32px\">\
-         Boxed</div>",
+        "<p>x</p><div style=\"background:#1e50f5;color:#fff;border:1px solid #888;\
+         padding:32px\">Boxed</div>",
     );
     let screen = preview(body, &DEFAULT, "Boxed");
     let (row, col) = at(&screen, "Boxed");
     assert_eq!(bg(&screen, row, col), Color::Default);
     assert_eq!(frames(&screen), 1, "{}", screen.text());
+}
+
+// A border round the whole mail only boxed the page, a frame round every
+// line of it; a band against it still takes it as its shape.
+#[test]
+fn a_border_round_the_whole_mail_is_not_drawn() {
+    let body = html(
+        "<div style=\"border:1px solid #888\"><div style=\"background:#1e50f5;color:#fff;\
+         padding:16px\">Band</div><p>Body</p></div>",
+    );
+    let screen = preview(body, &DEFAULT, "Body");
+    let (row, col) = at(&screen, "Band");
+    assert_eq!(bg(&screen, row, col), Color::Default);
+    assert_eq!(frames(&screen), 0, "{}", screen.text());
+    assert!(
+        !pane(&screen).iter().any(|r| r.contains('│')),
+        "{}",
+        screen.text()
+    );
 }
 
 // A dark mail is dark all over: its page gives way to the terminal like a

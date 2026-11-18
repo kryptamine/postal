@@ -12,6 +12,8 @@ pub const WIDE_TAIL: u32 = 16;
 pub const BORDER: u32 = 32;
 /// An image's alt text, drawn in its place.
 pub const ALT: u32 = 64;
+/// A border of the box round the whole mail, which only frames the page.
+pub const PAGE_BOX: u32 = 128;
 /// In `bg`: it comes from a section or the page, not from a control.
 const BG_PANEL: u32 = 0x0200_0000;
 /// A background this light is the mail's page, which becomes the terminal's:

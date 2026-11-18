@@ -64,6 +64,7 @@ class grid_container : public document_container
     std::vector<cg_cell>               grid;
     std::vector<position>              clips;
     std::vector<Frame>                 frames;
+    uint32_t                           border_flags = CG_BORDER;
     ImageLabels                        images;
     // A glyph fell past the last column, where the grid has no cell.
     bool                               lost_text = false;
@@ -256,7 +257,7 @@ class grid_container : public document_container
         if(corner && !is(*c, "─") && !is(*c, "│")) return;
         set_glyph(*c, glyph, std::strlen(glyph));
         c->fg    = rgb(b.color);
-        c->flags = CG_BORDER;
+        c->flags = border_flags;
     }
 
     bool row_has_text(int row, int c0, int c1) const
@@ -270,17 +271,36 @@ class grid_container : public document_container
         return false;
     }
 
+    // The rows and columns every glyph of the mail's lies within, before any
+    // border is drawn; r1 < r0 when there is none.
+    void content_box(int& r0, int& r1, int& c0, int& c1) const
+    {
+        r0 = c0 = INT32_MAX;
+        r1 = c1 = -1;
+        for(int i = 0; i < int(grid.size()); i++)
+            if(!is(grid[size_t(i)], " "))
+            {
+                r0 = std::min(r0, i / cols), r1 = std::max(r1, i / cols);
+                c0 = std::min(c0, i % cols), c1 = std::max(c1, i % cols);
+            }
+    }
+
     // A horizontal border on a row of text moves one row out, or is dropped
-    // when that row has text too.
+    // when that row has text too. A box round the whole mail is marked
+    // CG_PAGE_BOX.
     void apply_borders()
     {
         auto on = [](const border& e) {
             return float(e.width) > 0.f && e.style != border_style_none && e.style != border_style_hidden;
         };
+        int mr0, mr1, mc0, mc1;
+        content_box(mr0, mr1, mc0, mc1);
         for(auto& f : frames)
         {
             clips    = f.clips;
             bool top = on(f.b.top), bottom = on(f.b.bottom), left = on(f.b.left), right = on(f.b.right);
+            bool whole = mr0 <= mr1 && f.r0 <= mr0 && f.r1 >= mr1 && f.c0 <= mc0 && f.c1 >= mc1;
+            border_flags = top && bottom && left && right && whole ? CG_BORDER | CG_PAGE_BOX : CG_BORDER;
             int  tr = f.r0, br = f.r1;
             if(top && row_has_text(tr, f.c0 + left, f.c1 - right))
             {
@@ -306,6 +326,7 @@ class grid_container : public document_container
             if(bottom && right) line(br, f.c1, "┘", f.b.bottom, true);
         }
         clips.clear();
+        border_flags = CG_BORDER;
     }
 
     void set_clip(const position& pos, const border_radiuses&) override { clips.push_back(pos); }

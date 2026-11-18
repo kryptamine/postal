@@ -20,6 +20,8 @@ enum
     CG_BORDER    = 32,
     // An image's alt text, drawn in its place.
     CG_ALT       = 64,
+    // A border of the box round the whole mail, which only frames the page.
+    CG_PAGE_BOX  = 128,
 };
 
 // A colour is 0x01RRGGBB when set and 0 when not. A `bg` also carries
