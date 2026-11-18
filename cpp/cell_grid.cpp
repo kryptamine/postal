@@ -8,6 +8,7 @@
 #include "contents.h"
 #include "geometry.h"
 #include "image_labels.h"
+#include "picture_boxes.h"
 #include "snap.h"
 #include "text.h"
 
@@ -416,7 +417,7 @@ extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
         grid->container.images.label(doc->root(), cols);
         {
             Contents contents(doc->root());
-            grid->container.images.fit_boxes(contents);
+            fit_picture_boxes(grid->container.images.pictures(), contents);
             flatten_buttons(doc->root(), contents);
         }
         snap_tree(doc->root());

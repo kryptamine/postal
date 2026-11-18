@@ -30,8 +30,9 @@ void cap(Holds& h)
 
 void join(Holds& h, const Holds& child)
 {
-    h.over = h.over || child.over;
-    h.text = h.over ? std::string() : loosely_squeezed(h.text + child.text);
+    h.over     = h.over || child.over;
+    h.labelled = h.labelled || child.labelled;
+    h.text     = h.over ? std::string() : loosely_squeezed(h.text + child.text);
     if(child.blocks || (h.block && child.block && h.block != child.block)) h.blocks = true;
     else if(!h.block) h.block = child.block;
     cap(h);
@@ -62,6 +63,7 @@ Holds Contents::gather(const element::ptr& el)
         cap(h);
         return holds[el.get()] = h;
     }
+    h.labelled = tag_is(el, "img");
 
     std::vector<std::pair<element::ptr, Holds>> children;
     for(auto& child : el->children())

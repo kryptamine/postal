@@ -136,19 +136,8 @@ void ImageLabels::walk(const element::ptr& el)
 {
     for(auto& child : el->children()) walk(child);
     if(!tag_is(el, "img")) return;
-    if(picture(el)) pictures.push_back(el);
+    if(picture(el)) pictured.push_back(el);
     if(el->css().get_display() != display_none) label_one(el);
-}
-
-void ImageLabels::fit_boxes(const Contents& contents)
-{
-    for(auto& el : pictures)
-        for(auto box = el->parent(); box && box->css().get_display() != display_none; box = box->parent())
-        {
-            if(contents.of(box.get()).sized_by_text()) break;
-            box->css().set_height(css_length::predef_value(sizing_auto));
-            box->css().set_min_height(css_length(0, css_units_px));
-        }
 }
 
 // What an image shows, before any cut to its box; empty when it goes.

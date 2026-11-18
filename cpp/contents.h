@@ -24,10 +24,14 @@ struct Holds
     // A link inside it, or a filled box inside it, shows all its words.
     bool linked = false;
     bool filled = false;
+    // An image inside it shows as a label.
+    bool labelled = false;
 
     std::string words() const;
     // Any text at all, a space even: whitespace between cells sizes a box.
     bool sized_by_text() const { return over || !text.empty(); }
+    // Whitespace alone makes no line, so a box with only that stands empty.
+    bool shows_nothing() const { return !over && !labelled && words().empty(); }
 };
 
 class Contents

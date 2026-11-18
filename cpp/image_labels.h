@@ -4,8 +4,6 @@
 #ifndef CG_IMAGE_LABELS_H
 #define CG_IMAGE_LABELS_H
 
-#include "contents.h"
-
 #include <litehtml.h>
 
 #include <map>
@@ -20,13 +18,11 @@ class ImageLabels
   public:
     // Hides or sizes every image under `root` before layout, `cols` wide.
     void label(const litehtml::element::ptr& root, int cols);
-    // Lets each box holding pictures and no text shrink to them: they are a
-    // label one row high now, or gone, and its own height would stand empty.
-    // A spacer image's box keeps its gap.
-    void fit_boxes(const Contents& contents);
     // After a layout: shrinks icon labels grown past their own width that
     // spill, and their table's others. True when layout must run again.
     bool shrink_spilt();
+    // Images that say or open something, hidden or shown.
+    const std::vector<litehtml::element::ptr>& pictures() const { return pictured; }
     // The label of an image `label` kept, by the src it gave it.
     const std::string* of(const std::string& src) const;
 
@@ -48,7 +44,7 @@ class ImageLabels
     // All the text the mail shows, squeezed.
     std::string                         mail_text;
     std::set<const litehtml::element*>  redundant;
-    std::vector<litehtml::element::ptr> pictures;
+    std::vector<litehtml::element::ptr> pictured;
     // Links that already show `[link]` once.
     std::set<const litehtml::element*>  labelled_links;
 };

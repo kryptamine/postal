@@ -198,7 +198,7 @@ fn an_icon_or_an_alt_beside_the_same_text_is_dropped() {
     let body = html(
         "<table><tr>\
          <td><img src=\"https://cdn.example/ok.png\" width=\"24\" height=\"24\" alt=\"macOS\"></td>\
-         <td>CI / macOS</td>\
+         <td style=\"padding:16px\">CI / macOS</td>\
          <td><a href=\"https://ci.example/notes\"><img src=\"https://cdn.example/note.png\" \
          width=\"16\" height=\"16\" alt=\"annotations for CI / macOS\"> 3</a></td>\
          </tr></table>\
@@ -520,20 +520,19 @@ fn a_picture_link_whose_page_the_words_open_shows_no_label() {
 }
 
 // A cell sized for a product photo stood twelve blank rows high once the
-// photo was a label, or gone.
+// photo was a label one row high.
 #[test]
-fn a_box_sized_for_a_picture_shrinks_to_what_is_left() {
+fn a_box_sized_for_a_picture_shrinks_to_its_label() {
     let body = html(
         "<p>Above</p><table><tr><td style=\"height:200px;min-height:200px\">\
-         <a href=\"https://shop.example/kettle\"><img src=\"https://cdn.example/p.png\" \
-         width=\"240\" alt=\"\"></a></td></tr></table>\
-         <p><a href=\"https://shop.example/kettle\">Kettle</a></p>",
+         <img src=\"https://cdn.example/p.png\" width=\"240\" alt=\"Kettle photo\">\
+         </td></tr></table><p>Below</p>",
     );
-    let screen = preview(body, &DEFAULT, "Kettle");
+    let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
-    // The two paragraphs' margins, which a table between them keeps apart.
-    assert_eq!(row("Kettle") - row("Above"), 3, "{}", rows.join("\n"));
+    // The label's row and the paragraphs' margins round the table.
+    assert_eq!(row("Below") - row("Above"), 4, "{}", rows.join("\n"));
 }
 
 // Columns of a fluid layout stand on the baseline, which only images of one
@@ -605,4 +604,46 @@ fn a_cell_spanning_no_columns_spans_one() {
         "{}",
         screen.text()
     );
+}
+
+// A coloured section that held only a picture stood as an empty frame once
+// the picture went: its padding framed nothing.
+#[test]
+fn a_section_a_gone_picture_leaves_empty_goes() {
+    let body = html(
+        "<p><a href=\"https://shop.example/a\">Shop now</a></p>\
+         <table bgcolor=\"#6d28d2\" width=\"100%\"><tr><td style=\"padding:40px\">\
+         <a href=\"https://shop.example/a\"><img src=\"https://cdn.example/p.png\" width=\"400\">\
+         </a></td></tr></table><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    assert_eq!(frames(&screen), 0, "{}", screen.text());
+    let rows = pane(&screen);
+    let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
+    assert!(row("End") - row("Shop now") <= 3, "{}", rows.join("\n"));
+}
+
+// A CI report's status icons repeat each job's name and go: the column
+// stood empty under its header in every row.
+#[test]
+fn a_column_every_picture_left_empty_goes() {
+    let row = |job: &str| {
+        format!(
+            "<tr><td style=\"padding:16px\"><img src=\"https://cdn.example/ok.png\" \
+             width=\"24\" height=\"24\" alt=\"{job}\"></td><td>{job} passed</td></tr>"
+        )
+    };
+    let body = html(&format!(
+        "<table><thead><tr><th>Status</th><th>Job</th></tr></thead><tbody>{}{}</tbody></table>",
+        row("Lint"),
+        row("Tests")
+    ));
+    let screen = preview(body, &DEFAULT, "Tests passed");
+    let rows = pane(&screen);
+    assert!(
+        !rows.iter().any(|r| r.contains("Status")),
+        "{}",
+        rows.join("\n")
+    );
+    assert_eq!(at(&screen, "Job").1, at(&screen, "Lint passed").1);
 }

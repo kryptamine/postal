@@ -12,8 +12,9 @@ one key away.
 Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
 buffer of cells: `cell_grid.cpp` draws, `snap.cpp` snaps the styles before
-layout, `image_labels.cpp` decides each image, `buttons.cpp` lays buttons
-out one row high with `collapse.cpp`, `contents.cpp` gathers what each
+layout, `image_labels.cpp` decides each image, `picture_boxes.cpp` fits
+or drops the boxes round pictures, `buttons.cpp` lays buttons out one row
+high with `collapse.cpp`, `contents.cpp` gathers what each
 element shows for those passes in one walk, and `colour.cpp`, `text.cpp`
 and `dom.cpp` hold the colour, cell-width and element helpers.
 
@@ -68,6 +69,16 @@ and `dom.cpp` hold the colour, cell-width and element helpers.
   A box with pictures and no text, a space even, was sized for them: its
   height and min-height go, or a product photo's cell stood twelve rows
   high. A spacer image (no `alt`, no link) keeps its box's gap.
+
+  The outermost box round a gone picture that shows nothing else, no word
+  and no label, goes too: its padding and fill framed only the picture, and
+  a purple hero stood as an empty frame four rows high. A cell stays, or its
+  row's columns would shift, and so does a row of a table with `rowspan`.
+  A column whose cells below the header all show nothing goes whole, with
+  its header, in a table without spans: the status icons of a CI report
+  repeat each job's name. A text header over a single row may caption it
+  instead, so it needs two such rows; a border that ruled the column off
+  its neighbour at the table's edge goes with it.
 
   Each label gets a `src` of its own, since mail reuses one icon file under
   many `alt`s. A percentage width stays, so a long `alt` cannot widen its
@@ -155,7 +166,9 @@ On 819 cached mails at 74 columns this changed 191, left the count that do
 not fit at 63, and cut the filled cells to a fifth. The rules for picture
 links, picture boxes, buttons, fluid columns and light cards then changed
 504 of them, left 63 not fitting, and cut the `[link]` labels from 462 to
-192.
+192. Dropping the boxes and columns a gone picture leaves empty then
+changed 247 of them, left 63 not fitting, and lost no word but the `Status`
+header of CI reports.
 
 Deciding a section by the size of the merged region, not of each box, was
 tried: it framed chart bars and footer gutters and improved nothing.
