@@ -411,6 +411,13 @@ fn handle(
             Some(Action::Suspend) => Step::Suspend,
             Some(Action::SignIn) if screen.status == Status::SignedOut => Step::SignIn,
             Some(Action::Links) => Step::Links,
+            Some(Action::SwitchView) => {
+                view.html = view.html.other();
+                view.preview_scroll = 0;
+                // The labels sit where the other View laid the links out.
+                screen.hints = None;
+                Step::Stay
+            }
             Some(Action::Help) => {
                 screen.help = true;
                 Step::Stay
@@ -497,11 +504,13 @@ fn open(
         key: PreviewKey {
             body: message.body_key,
             width,
+            view: view.html,
         },
         body,
         sender: message.sender.clone(),
         subject: message.subject.clone(),
         received: message.received,
+        colours: theme.mail,
     });
 
     let text = pager_text::ansi(&preview, theme);

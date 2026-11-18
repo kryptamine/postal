@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::marks::Marks;
+use crate::{mail_colours::MailColours, marks::Marks, paint::Paint, rgb::Rgb};
 
 /// The terminal's own palette: named ANSI colours and modifiers, no explicit
 /// background. Muted text is `DIM`, since bright black vanishes in Solarized.
@@ -27,12 +27,17 @@ pub struct Theme {
     emphasis: Style,
     link: Style,
     code: Style,
+    underline: Style,
+    /// Whether the rendered View keeps the mail's colours.
+    coloured: bool,
+    /// Mail colours moved onto this terminal's background.
+    pub mail: MailColours,
 }
 
 impl Theme {
     /// A non-empty `NO_COLOR` drops every colour and keeps the modifiers,
     /// so the selection and Unread rows stay visible.
-    pub fn from_env() -> Self {
+    pub fn from_env(background: Rgb) -> Self {
         let coloured = std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty());
         let fg = |color| {
             if coloured {
@@ -63,6 +68,9 @@ impl Theme {
             emphasis: Style::new().add_modifier(Modifier::ITALIC),
             link: fg(Color::Blue).add_modifier(Modifier::UNDERLINED),
             code: fg(Color::Yellow),
+            underline: Style::new().add_modifier(Modifier::UNDERLINED),
+            coloured,
+            mail: MailColours::new(background),
         }
     }
 
@@ -74,9 +82,23 @@ impl Theme {
             (Marks::LINK, self.link),
             (Marks::CODE, self.code),
             (Marks::ALT, self.muted),
+            (Marks::UNDERLINE, self.underline),
+            (Marks::BORDER, self.border),
         ]
         .into_iter()
         .filter(|&(mark, _)| marks.has(mark))
         .fold(Style::new(), |style, (_, patch)| style.patch(patch))
+    }
+
+    /// `marked`, in the mail's colours too unless `NO_COLOR` is set.
+    pub fn painted(&self, marks: Marks, paint: Paint) -> Style {
+        let style = self.marked(marks);
+        if !self.coloured {
+            return style;
+        }
+
+        let rgb = |Rgb { r, g, b }| Color::Rgb(r, g, b);
+        let style = paint.fg.map_or(style, |fg| style.fg(rgb(fg)));
+        paint.bg.map_or(style, |bg| style.bg(rgb(bg)))
     }
 }

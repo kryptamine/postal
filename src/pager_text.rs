@@ -28,7 +28,7 @@ fn write(out: &mut Vec<u8>, preview: &Preview, theme: &Theme) -> io::Result<()> 
     out.write_all(b"\n")?;
     for line in &preview.body {
         for segment in line.segments() {
-            let style = theme.marked(segment.marks);
+            let style = theme.painted(segment.marks, segment.paint);
             match segment.link.filter(|url| browser::safe(url)) {
                 Some(url) => ansi::hyperlink(out, url, segment.text, style)?,
                 None => ansi::styled(out, segment.text, style)?,

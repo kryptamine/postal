@@ -23,7 +23,10 @@ times the first-run fetch).
 - A Preview not yet rendered shows a placeholder; it never blocks a frame.
 - Rendered Previews live in a byte-bounded LRU of about 8 MB. The converter's
   transient peak (up to ~14 MB on a 395 KB outlier) is outside the RSS budget
-  but must be released.
+  but must be released. The rendered View's engine runs in a process of its
+  own, so its memory is the system's again once the layout is back (ADR 0006).
+- Cold start includes asking the terminal for its background: one round trip,
+  or 100 ms where a terminal answers neither query.
 - IDLE latency is measured from the client receiving `EXISTS`; Gmail's own
   delay is not ours to control.
 

@@ -3,27 +3,27 @@ source: tests/help.rs
 expression: screen
 ---
 size: 80x24  cursor: hidden
-┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
-│   Bob     ┌ Help ────────────────────────────────────────────────┐2024-11-18 │
-│   Newer   │                                                      │           │
-│   Newer bo│ Navigate                                             │           │
-│   Ada     │ j / k    ↓ / ↑        next / previous Message        │2024-11-17 │
-│   Older   │ g / G    Home / End   first / last Message           │           │
-│   Older bo│                                                      │           │
-│           │ Message                                              │           │
+┌ Inbox  0 u┌ Help ────────────────────────────────────────────────┐───────────┐
+│   Bob     │                                                      │2024-11-18 │
+│   Newer   │ Navigate                                             │           │
+│   Newer bo│ j / k    ↓ / ↑        next / previous Message        │           │
+│   Ada     │ g / G    Home / End   first / last Message           │2024-11-17 │
+│   Older   │                                                      │           │
+│   Older bo│ Message                                              │           │
 │           │ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │           │
-└───────────│ Enter    l            read the Message full screen   │───────────┘
-┌ 1/2 ──────│ |                     open the Message in $PAGER     │───────────┐
-│ From    Bo│                                                      │           │
-│ Subject Ne│ Links                                                │           │
-│ Date    Mo│ o                     label the links in the Preview │           │
+│           │ Enter    l            read the Message full screen   │           │
+└───────────│ |                     open the Message in $PAGER     │───────────┘
+┌ 1/2 ──────│                                                      │───────────┐
+│ From    Bo│ Links                                                │           │
+│ Subject Ne│ o                     label the links in the Preview │           │
+│ Date    Mo│                                                      │           │
+│           │ View                                                 │           │
+│ Newer body│ v                     rendered / text view of HTML   │           │
 │           │                                                      │           │
-│ Newer body│ App                                                  │           │
+│           │ App                                                  │           │
 │           │ ?                     this help                      │           │
 │           │ q        ^c           quit                           │           │
 │           │ ^z                    suspend to the shell           │           │
 │           │                                                      │           │
-│           └──────────────────────────────────────────────────────┘           │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+└───────────└──────────────────────────────────────────────────────┘───────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help

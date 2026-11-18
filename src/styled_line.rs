@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::marks::Marks;
+use crate::{marks::Marks, paint::Paint};
 
 /// One line of a Preview body: its text, and the runs that cover it end to
-/// end, each with its marks and the URL of the link it is part of.
+/// end, each with its marks, its colours and the URL of the link it is in.
 pub struct StyledLine {
     pub text: String,
     runs: Vec<Run>,
@@ -13,13 +13,15 @@ struct Run {
     /// In bytes of `text`.
     len: usize,
     marks: Marks,
+    paint: Paint,
     link: Option<Arc<str>>,
 }
 
-/// A run of text with one set of marks, inside at most one link.
+/// A run of text with one set of marks and colours, inside at most one link.
 pub struct Segment<'a> {
     pub text: &'a str,
     pub marks: Marks,
+    pub paint: Paint,
     pub link: Option<&'a Arc<str>>,
 }
 
@@ -35,32 +37,43 @@ impl StyledLine {
         let runs = vec![Run {
             len: text.len(),
             marks: Marks::default(),
+            paint: Paint::default(),
             link: None,
         }];
 
         Self { text, runs }
     }
 
-    pub fn push(&mut self, text: &str, marks: Marks, link: Option<&Arc<str>>) {
+    pub fn push(&mut self, text: &str, marks: Marks, paint: Paint, link: Option<&Arc<str>>) {
         if text.is_empty() {
             return;
         }
 
         self.text.push_str(text);
         match self.runs.last_mut() {
-            Some(last) if last.marks == marks && last.link.as_ref() == link => {
+            Some(last)
+                if last.marks == marks && last.paint == paint && last.link.as_ref() == link =>
+            {
                 last.len += text.len();
             }
             _ => self.runs.push(Run {
                 len: text.len(),
                 marks,
+                paint,
                 link: link.cloned(),
             }),
         }
     }
 
+    /// Drops trailing whitespace, but not where a background colour shows it.
     pub fn trim_end(&mut self) {
-        let mut cut = self.text.len() - self.text.trim_end().len();
+        let painted = self
+            .runs
+            .iter()
+            .rposition(|run| run.paint.bg.is_some())
+            .map_or(0, |last| self.runs[..=last].iter().map(|run| run.len).sum());
+        let kept = self.text.trim_end().len().max(painted);
+        let mut cut = self.text.len() - kept;
         self.text.truncate(self.text.len() - cut);
         while cut > 0 {
             let Some(last) = self.runs.last_mut() else {
@@ -85,6 +98,7 @@ impl StyledLine {
             Segment {
                 text,
                 marks: run.marks,
+                paint: run.paint,
                 link: run.link.as_ref(),
             }
         })

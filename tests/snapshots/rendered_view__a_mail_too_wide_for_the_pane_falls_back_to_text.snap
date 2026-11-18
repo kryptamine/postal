@@ -1,0 +1,44 @@
+---
+source: tests/rendered_view.rs
+expression: screen.text()
+---
+┌ Inbox  0 unread ───────────────────────┐
+│   Sender                    2024-11-18 │
+│   Subject                              │
+│   Monthly statement Here is a summary… │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+│                                        │
+└────────────────────────────────────────┘
+┌ 1/1 ───────────────────────────────────┐
+│ From    Sender                         │
+│ Subject Subject                        │
+│ Date    Mon, 18 Nov 2024 09:00         │
+│                                        │
+│ Monthly statement                      │
+│ Here is a summary of your account      │
+│ activity for October.                  │
+│                                        │
+│ Date   Description     Amount          │
+│ Oct 02 Coffee Roasters -4.50           │
+│ Oct 05 Salary          +3,200.00       │
+│ Oct 11 Rent            -1,150.00       │
+│ Oct 19 Grocery Market  -86.12          │
+│ Total                  +1,959.38       │
+│ View statement                         │
+│ Never share your PIN. We will never    │
+│ ask for it by email.                   │
+│                                        │
+│                                        │
+│                                        │
+└────────────────────────────────────────┘
+ j/k move  ^d/^u scroll  ?: help

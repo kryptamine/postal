@@ -103,16 +103,24 @@ fn paged(html: &str, keys: &[Key], no_color: bool) -> String {
     visible(&std::fs::read(&record).unwrap())
 }
 
+const TEXT_VIEW: [Key; 2] = [Key::Char('v'), Key::Char('|')];
+
 // The pager copy keeps the Preview's styling, makes each link a hyperlink
 // a terminal opens on click, and lists every URL for terminals without.
 #[test]
 fn pipe_hands_the_message_with_hyperlinks_and_footnotes_to_the_pager() {
-    insta::assert_snapshot!("colour", paged(HTML, &[Key::Char('|')], false));
+    insta::assert_snapshot!("colour", paged(HTML, &TEXT_VIEW, false));
 }
 
 #[test]
 fn no_color_strips_the_colours_from_the_pager_copy() {
-    insta::assert_snapshot!("no_color", paged(HTML, &[Key::Char('|')], true));
+    insta::assert_snapshot!("no_color", paged(HTML, &TEXT_VIEW, true));
+}
+
+// The rendered View goes to the pager laid out, its links still hyperlinks.
+#[test]
+fn the_rendered_view_goes_to_the_pager_laid_out() {
+    insta::assert_snapshot!("rendered", paged(HTML, &[Key::Char('|')], false));
 }
 
 #[test]

@@ -7,6 +7,8 @@ pub struct Preview {
     pub subject: String,
     pub date: String,
     pub body: Vec<StyledLine>,
+    /// The body keeps the mail's layout, in the rendered View.
+    pub laid_out: bool,
 }
 
 impl Preview {

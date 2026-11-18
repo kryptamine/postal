@@ -10,6 +10,10 @@ impl Marks {
     pub const CODE: Self = Self(1 << 3);
     /// The alt text of an image inside a link.
     pub const ALT: Self = Self(1 << 4);
+    /// Underlined by the mail's own CSS, in the rendered View.
+    pub const UNDERLINE: Self = Self(1 << 5);
+    /// A grey border of the rendered View, drawn like Postal's own.
+    pub const BORDER: Self = Self(1 << 6);
 
     #[must_use]
     pub const fn with(self, other: Self) -> Self {

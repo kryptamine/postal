@@ -121,8 +121,10 @@ impl PreviewPane<'_> {
         let room = |x: u16| usize::from(row.right().saturating_sub(x));
         let mut x = row.x;
         for (run, segment) in line.segments().enumerate() {
-            // Drawn before the link text, which moves right to make room.
-            if let Some(label) = self.hints.and_then(|hints| hints.label(index, run)) {
+            let label = self.hints.and_then(|hints| hints.label(index, run));
+            // Text moves right to make room for a label; a laid out mail
+            // keeps its columns, and the label covers the link's start.
+            if let Some(label) = label.as_ref().filter(|_| !preview.laid_out) {
                 x = buf
                     .set_stringn(x, row.y, label.as_str(), room(x), self.theme.label)
                     .0;
@@ -132,8 +134,12 @@ impl PreviewPane<'_> {
                 return;
             }
 
-            let style = self.theme.marked(segment.marks);
+            let start = x;
+            let style = self.theme.painted(segment.marks, segment.paint);
             x = buf.set_stringn(x, row.y, segment.text, room(x), style).0;
+            if let Some(label) = label.filter(|_| preview.laid_out) {
+                buf.set_stringn(start, row.y, label.as_str(), room(start), self.theme.label);
+            }
         }
     }
 }

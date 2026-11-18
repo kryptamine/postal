@@ -7,6 +7,7 @@ mod body_fetch;
 mod body_key;
 mod browser;
 mod cache;
+mod cell_grid;
 mod centred;
 mod cli;
 mod config;
@@ -25,8 +26,10 @@ mod keychain;
 mod keymap;
 mod layout;
 mod link_hints;
+mod litehtml;
 mod logging;
 mod login;
+mod mail_colours;
 mod marks;
 mod message;
 mod message_list;
@@ -37,6 +40,7 @@ mod older_pages;
 mod outage;
 mod pager;
 mod pager_text;
+mod paint;
 mod panic_hook;
 mod partial_config;
 mod preview;
@@ -45,7 +49,10 @@ mod preview_render;
 mod previews;
 mod prompt;
 mod reconnect;
+mod render_process;
 mod rendered_previews;
+mod rendered_view;
+mod rgb;
 mod run;
 mod secret;
 mod sequence_numbers;
@@ -60,12 +67,14 @@ mod suspend;
 mod sync;
 mod sync_state;
 mod terminal_backend;
+mod terminal_background;
 mod text_part;
 mod theme;
 mod toast;
 mod transfer_encoding;
 mod truncate;
 mod update;
+mod view;
 mod wake;
 mod wrap;
 mod xdg;
@@ -94,6 +103,10 @@ use crate::{
 };
 
 fn main() -> ExitCode {
+    if let Some(code) = render_process::serve() {
+        return code;
+    }
+
     let (log, command) = match start() {
         Ok(Some(started)) => started,
         Ok(None) => return ExitCode::SUCCESS,
@@ -217,14 +230,13 @@ fn session(
     failed: bool,
 ) -> Result<Exit, Box<dyn std::error::Error>> {
     let cache = Cache::open(&xdg::cache_dir()?)?;
-    let theme = Theme::from_env();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (requests, requested) = futures::channel::mpsc::unbounded();
     let older = OlderPages::new(requests.clone());
-    let mut previews = Previews::start(requests, sender.clone());
+    let updates_to_previews = sender.clone();
     let send = move |update| {
         // The send fails only once the event loop has stopped listening.
         let _ = sender.unbounded_send(update);
@@ -232,6 +244,10 @@ fn session(
 
     runtime.block_on(async {
         let mut terminal = terminal_backend::init()?;
+        // A terminal that does not say is taken for a dark one.
+        let background = terminal_background::query().unwrap_or(rgb::BLACK);
+        let theme = Theme::from_env(background);
+        let mut previews = Previews::start(requests, updates_to_previews, theme.mail);
         let work = sign_in.map_or(Work::SignedOut { failed }, |sign_in| {
             Work::Running(
                 futures::future::try_join(

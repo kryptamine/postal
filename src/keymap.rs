@@ -14,6 +14,8 @@ pub enum Action {
     Page,
     /// Hint mode on the links in the Preview window.
     Links,
+    /// The other View of HTML mail: rendered or text.
+    SwitchView,
     Help,
     /// The login flow again, while signed out.
     SignIn,
@@ -72,7 +74,7 @@ const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 16] = [
+const BINDINGS: [Binding; 17] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -197,6 +199,15 @@ const BINDINGS: [Binding; 16] = [
         }),
     },
     Binding {
+        group: "View",
+        modes: BOTH,
+        signed_out: false,
+        keys: "v",
+        aliases: "",
+        description: "rendered / text view of HTML",
+        hint: None,
+    },
+    Binding {
         group: "App",
         modes: BOTH,
         signed_out: true,
@@ -285,6 +296,7 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (_, KeyCode::PageDown) => Some(scroll(Direction::Down, By::HalfPage)),
         (_, KeyCode::PageUp) => Some(scroll(Direction::Up, By::HalfPage)),
         (_, KeyCode::Char('o')) => Some(Action::Links),
+        (_, KeyCode::Char('v')) => Some(Action::SwitchView),
         (_, KeyCode::Char('|')) => Some(Action::Page),
         (_, KeyCode::Char('?')) => Some(Action::Help),
         (_, KeyCode::Char('L')) => Some(Action::SignIn),

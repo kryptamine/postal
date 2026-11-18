@@ -31,14 +31,28 @@ fn postal(home: &Home) -> Terminal {
         .unwrap()
 }
 
-/// Read and Unread Messages, with subjects and Snippets long enough to be cut.
+/// Read and Unread Messages, with subjects and Snippets long enough to be
+/// cut; every other one is HTML, drawn in the rendered View's colours.
 fn messages() -> Vec<FakeMessage> {
     (0..MESSAGES)
         .map(|i| {
             let date = chrono::DateTime::UNIX_EPOCH + chrono::Duration::days(19_000 + i);
             let subject =
                 format!("Message {i} about a topic that needs far more room than a card has");
-            let body = FakeBody::plain(&format!("The Snippet of {subject}, also cut"));
+            let snippet = format!("The Snippet of {subject}, also cut");
+            let body = if i % 2 == 0 {
+                FakeBody::plain(&snippet)
+            } else {
+                FakeBody::text(
+                    "html",
+                    "7bit",
+                    format!(
+                        "<table><tr><td style=\"background:#1a73e8;color:#fff;\
+                         border:1px solid #ccc;padding:10px\">{snippet}</td></tr></table>"
+                    ),
+                )
+            };
+
             let message = FakeMessage::new("Sender", &subject, &date.to_rfc3339()).body(body);
             if i % 3 == 0 {
                 message.unread()

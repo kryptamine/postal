@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 
-use crate::preview::Preview;
+use crate::{preview::Preview, view::View};
 
 /// The bytes of rendered Previews kept (ADR 0001); past it the least
 /// recently used go first.
 const BYTES: usize = 8 * 1024 * 1024;
 
-/// A Preview is rendered for one width: a resize renders it again.
+/// A Preview is rendered for one width and View: a resize, or a switch of
+/// View, renders it again.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PreviewKey {
     pub body: i64,
     pub width: u16,
+    pub view: View,
 }
 
 /// Rendered Previews in a byte-bounded LRU. Looking one up does not

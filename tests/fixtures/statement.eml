@@ -1,0 +1,27 @@
+From: Example Bank <statements@bank.example>
+To: sam@example.com
+Subject: Your October statement
+Date: Fri, 1 Nov 2024 08:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<!doctype html><html><body style="margin:0;background:#f4f5f7;font-family:Arial,sans-serif">
+<table width="600" align="center" cellpadding="0" cellspacing="0" style="background:#ffffff">
+<tr><td style="padding:20px 24px;background:#1a73e8;color:#ffffff;font-size:22px;font-weight:bold">Monthly statement</td></tr>
+<tr><td style="padding:16px 24px;color:#333333;font-size:14px">Here is a summary of your account activity for October.</td></tr>
+<tr><td style="padding:0 24px 16px">
+<table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-size:13px">
+<tr style="background:#e8eaed"><th align="left" style="border-bottom:1px solid #9aa0a6">Date</th><th align="left" style="border-bottom:1px solid #9aa0a6">Description</th><th align="right" style="border-bottom:1px solid #9aa0a6">Amount</th></tr>
+<tr><td style="border-bottom:1px solid #dadce0">Oct 02</td><td style="border-bottom:1px solid #dadce0">Coffee Roasters</td><td align="right" style="border-bottom:1px solid #dadce0">-4.50</td></tr>
+<tr><td style="border-bottom:1px solid #dadce0">Oct 05</td><td style="border-bottom:1px solid #dadce0">Salary</td><td align="right" style="border-bottom:1px solid #dadce0;color:#188038">+3,200.00</td></tr>
+<tr><td style="border-bottom:1px solid #dadce0">Oct 11</td><td style="border-bottom:1px solid #dadce0">Rent</td><td align="right" style="border-bottom:1px solid #dadce0">-1,150.00</td></tr>
+<tr><td style="border-bottom:1px solid #dadce0">Oct 19</td><td style="border-bottom:1px solid #dadce0">Grocery Market</td><td align="right" style="border-bottom:1px solid #dadce0">-86.12</td></tr>
+<tr><td><b>Total</b></td><td></td><td align="right"><b>+1,959.38</b></td></tr>
+</table></td></tr>
+<tr><td align="center" style="padding:8px 24px 24px">
+<table cellpadding="0" cellspacing="0"><tr><td style="background:#191c1f;border-radius:4px;padding:10px 20px"><a href="https://bank.example/statement" style="color:#ffffff;text-decoration:none;font-weight:bold">View statement</a></td></tr></table>
+</td></tr>
+<tr><td style="padding:12px 24px;border-left:4px solid #fbbc04;background:#fef7e0;color:#5f6368;font-size:12px">Never share your PIN. We will never ask for it by email.</td></tr>
+<tr><td><img src="https://track.example/pixel.gif" width="1" height="1" alt=""><img src="https://bank.example/logo.png" width="120" height="40" alt="Bank logo"></td></tr>
+</table></body></html>

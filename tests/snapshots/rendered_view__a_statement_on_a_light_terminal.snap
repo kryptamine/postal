@@ -1,0 +1,87 @@
+---
+source: tests/rendered_view.rs
+expression: screen.with_styles()
+---
+size: 120x40  cursor: hidden
+┌ Inbox  0 unread ───────────────────────┐┌ 1/1 ───────────────────────────────────────────────────────────────────────┐
+│   Sender                    2024-11-18 ││ From    Sender                                                             │
+│   Subject                              ││ Subject Subject                                                            │
+│   Monthly statement Here is a summary… ││ Date    Mon, 18 Nov 2024 09:00                                             │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││    Monthly statement                                                       │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││    Here is a summary of your account activity for October.                 │
+│                                        ││                                                                            │
+│                                        ││    Date          Description                                      Amount   │
+│                                        ││    ─────────────────────────────────────────────────────────────────────   │
+│                                        ││    Oct 02        Coffee Roasters                                   -4.50   │
+│                                        ││    ─────────────────────────────────────────────────────────────────────   │
+│                                        ││    Oct 05        Salary                                        +3,200.00   │
+│                                        ││    ─────────────────────────────────────────────────────────────────────   │
+│                                        ││    Oct 11        Rent                                          -1,150.00   │
+│                                        ││    ─────────────────────────────────────────────────────────────────────   │
+│                                        ││    Oct 19        Grocery Market                                   -86.12   │
+│                                        ││    ─────────────────────────────────────────────────────────────────────   │
+│                                        ││    Total                                                       +1,959.38   │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                               View statement                               │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││ │                                                                          │
+│                                        ││ │   Never share your PIN. We will never ask for it by email.               │
+│                                        ││ │                                                                          │
+│                                        ││                                                                            │
+│                                        ││    Bank logo                                                               │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
+└────────────────────────────────────────┘└────────────────────────────────────────────────────────────────────────────┘
+ j/k move  ^d/^u scroll  enter read  o links  q quit  ?: help
+
+styles:
+0: 0 dim; 1-17 fg=4 bold; 18-42 dim; 43-47 fg=4 bold; 48-119 dim
+1: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-57 fg=5; 119 dim
+2: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-58 bold; 119 dim
+3: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-73 fg=6; 119 dim
+4: 0 dim; 41-42 dim; 119 dim
+5: 0 dim; 41-42 dim; 44-117 bg=#1a73e8; 119 dim
+6: 0 dim; 41-42 dim; 44-46 bg=#1a73e8; 47-117 fg=#ffffff bg=#1a73e8 bold; 119 dim
+7: 0 dim; 41-42 dim; 44-117 bg=#1a73e8; 119 dim
+8: 0 dim; 41-42 dim; 119 dim
+9: 0 dim; 41-42 dim; 119 dim
+10: 0 dim; 41-42 dim; 119 dim
+11: 0 dim; 41-42 dim; 47-115 bold; 119 dim
+12: 0 dim; 41-42 dim; 47-115 dim; 119 dim
+13: 0 dim; 41-42 dim; 119 dim
+14: 0 dim; 41-42 dim; 47-115 dim; 119 dim
+15: 0 dim; 41-42 dim; 107-115 fg=#188038; 119 dim
+16: 0 dim; 41-42 dim; 47-115 dim; 119 dim
+17: 0 dim; 41-42 dim; 119 dim
+18: 0 dim; 41-42 dim; 47-115 dim; 119 dim
+19: 0 dim; 41-42 dim; 119 dim
+20: 0 dim; 41-42 dim; 47-115 dim; 119 dim
+21: 0 dim; 41-42 dim; 47-115 bold; 119 dim
+22: 0 dim; 41-42 dim; 119 dim
+23: 0 dim; 41-42 dim; 119 dim
+24: 0 dim; 41-42 dim; 71-90 bg=#191c1f; 119 dim
+25: 0 dim; 41-42 dim; 71-73 bg=#191c1f; 74-90 fg=#ffffff bg=#191c1f bold; 119 dim
+26: 0 dim; 41-42 dim; 71-90 bg=#191c1f; 119 dim
+27: 0 dim; 41-42 dim; 119 dim
+28: 0 dim; 41-42 dim; 44 fg=#b08403; 119 dim
+29: 0 dim; 41-42 dim; 44-47 fg=#b08403; 48-103 fg=#5f6368; 119 dim
+30: 0 dim; 41-42 dim; 44 fg=#b08403; 119 dim
+31: 0 dim; 41-42 dim; 119 dim
+32: 0 dim; 41-42 dim; 47-55 dim italic; 119 dim
+33: 0 dim; 41-42 dim; 119 dim
+34: 0 dim; 41-42 dim; 119 dim
+35: 0 dim; 41-42 dim; 119 dim
+36: 0 dim; 41-42 dim; 119 dim
+37: 0 dim; 41-42 dim; 119 dim
+38: 0-119 dim
+39: 1-3 fg=3 bold; 4-8 dim; 11-15 fg=3 bold; 16-22 dim; 25-29 fg=3 bold; 30-34 dim; 37 fg=3 bold; 38-43 dim; 46 fg=3 bold; 47-51 dim; 54-55 fg=3 bold; 56-60 dim

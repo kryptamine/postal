@@ -14,7 +14,17 @@ use support::{
 };
 use termlens::{Color, Key, Screen, Terminal};
 
+/// Postal in the text View, where a label moves the link text right.
 fn postal(home: &Home, browser: &Browser) -> Terminal {
+    let mut t = spawn(home, browser);
+    // Not sent before the first frame: the start reads the terminal's
+    // answer to its colour query, and would take the key with it.
+    t.wait_until(|s| s.contains(" Inbox ")).unwrap();
+    t.send(Key::Char('v')).unwrap();
+    t
+}
+
+fn spawn(home: &Home, browser: &Browser) -> Terminal {
     Terminal::builder()
         .size(120, 30)
         .env_clear()
@@ -218,5 +228,36 @@ fn no_visible_links_toasts_no_links() {
     t.wait_until(|s| s.contains("Nothing to see")).unwrap();
     t.send(Key::Char('o')).unwrap();
     t.wait_until(|s| s.contains("no links")).unwrap();
+    quit(t);
+}
+
+// In the rendered View a label covers the start of its link, so the mail
+// keeps its columns.
+#[test]
+fn a_label_covers_its_link_in_the_rendered_view() {
+    let body = format!(
+        "<table width=\"100%\"><tr><td><a href=\"{NOTES}\">the notes</a></td>\
+         <td align=\"right\">right column</td></tr></table>"
+    );
+    let (_server, home, browser) = start(vec![html("Columns", 18, &body)]);
+    let mut t = spawn(&home, &browser);
+    let row = |s: &Screen| {
+        s.rect_text(44..118, 4..29)
+            .lines()
+            .find(|text| text.contains("right column"))
+            .unwrap_or_default()
+            .to_owned()
+    };
+
+    t.wait_until(|s| row(s).contains("the notes")).unwrap();
+    let before = row(&t.screen());
+
+    t.send(Key::Char('o')).unwrap();
+    t.wait_until(|s| row(s).contains("ahe notes")).unwrap();
+    let labelled = row(&t.screen());
+    assert_eq!(labelled.find("right column"), before.find("right column"));
+
+    t.send(Key::Char('a')).unwrap();
+    browser.wait_for(&[NOTES]);
     quit(t);
 }

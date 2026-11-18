@@ -1,5 +1,5 @@
-//! The Preview of HTML mail, from anonymised `.eml` fixtures built on the
-//! patterns of a corpus of real Gmail Messages.
+//! The text View of HTML mail, from anonymised `.eml` fixtures built on the
+//! patterns of a corpus of real Gmail Messages. `v` switches to it.
 
 #[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
@@ -45,8 +45,8 @@ fn preview(body: FakeBody, size: (u16, u16), shown: &str) -> Screen {
     preview_in(body, size, shown, false)
 }
 
-/// The screen once the one Message in the Inbox, `body`, shows `shown` and
-/// sync is done.
+/// The screen once the one Message in the Inbox, `body`, shows `shown` in
+/// the text View and sync is done.
 fn preview_in(body: FakeBody, size: (u16, u16), shown: &str, no_color: bool) -> Screen {
     let message = FakeMessage::new("Sender", "Subject", "2024-11-18T09:00:00Z").body(body);
     let server = FakeImap::start(vec![message]);
@@ -58,6 +58,7 @@ fn preview_in(body: FakeBody, size: (u16, u16), shown: &str, no_color: bool) -> 
         std::thread::sleep(Duration::from_millis(10));
     }
 
+    t.send(Key::Char('v')).unwrap();
     let screen = t.snapshot_after(|s| s.contains(shown)).unwrap();
     quit(t);
     screen

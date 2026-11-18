@@ -4,6 +4,7 @@ use crate::{
     inbox::Inbox,
     keymap::{By, Direction, Move, Scroll},
     message::Message,
+    view::View,
 };
 
 /// The Message List's contents, selection and scroll position.
@@ -19,6 +20,8 @@ pub struct InboxView {
     /// The Preview's first row shown; back to 0 whenever the selection
     /// moves to another Message, and kept in range by the Preview widget.
     pub preview_scroll: usize,
+    /// How the Preview shows HTML mail, for every Message.
+    pub html: View,
     /// The local offset as of the last `show`: chrono's `Local` rereads the
     /// time zone every second, and that allocates inside a frame.
     zone: FixedOffset,
@@ -32,6 +35,7 @@ impl InboxView {
             selected: 0,
             offset: 0,
             preview_scroll: 0,
+            html: View::default(),
             zone: Utc.fix(),
         }
     }

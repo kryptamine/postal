@@ -1,0 +1,51 @@
+// The C ABI between the litehtml cell-grid container and Rust (src/cell_grid.rs).
+#ifndef CELL_GRID_H
+#define CELL_GRID_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+enum
+{
+    CG_BOLD      = 1,
+    CG_ITALIC    = 2,
+    CG_UNDERLINE = 4,
+    CG_TEXT      = 8,
+    // The right half of a wide glyph, which prints nothing.
+    CG_WIDE_TAIL = 16,
+    CG_BORDER    = 32,
+    // An image's alt text, drawn in its place.
+    CG_ALT       = 64,
+};
+
+// A colour is 0x01RRGGBB when set and 0 when not; `link` is 0 or a link id.
+typedef struct cg_cell
+{
+    char     glyph[16];
+    uint32_t fg;
+    uint32_t bg;
+    uint32_t flags;
+    uint32_t link;
+} cg_cell;
+
+typedef struct cg_grid cg_grid;
+
+// Lays `html` out `cols` cells wide and draws it; NULL when litehtml fails.
+cg_grid*       cg_render(const char* html, size_t len, int32_t cols);
+void           cg_free(cg_grid* grid);
+// `rows` rows of the `cols` given to cg_render, row by row.
+const cg_cell* cg_cells(const cg_grid* grid, size_t* rows);
+// Whether the layout fits the cols it was given, or loses what is past them.
+int32_t        cg_fits(const cg_grid* grid);
+// The href of link id `link`, or NULL past the last one.
+const char*    cg_href(const cg_grid* grid, uint32_t link);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

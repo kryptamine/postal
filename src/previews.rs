@@ -10,6 +10,7 @@ use crate::{
     body_fetch::{BodyRequest, Fetched, Request},
     cache::{self, Cache},
     inbox_view::InboxView,
+    mail_colours::MailColours,
     message::Message,
     preview::Preview,
     preview_render::{self, Job},
@@ -46,13 +47,18 @@ pub struct Previews {
     /// The header of the selected Message, while its body is unavailable.
     header: Option<(u32, Preview)>,
     link: Link,
+    colours: MailColours,
     requests: UnboundedSender<Request>,
     jobs: mpsc::Sender<Job>,
 }
 
 impl Previews {
     /// Starts the render thread, which sends each Preview back to `updates`.
-    pub fn start(requests: UnboundedSender<Request>, updates: UnboundedSender<Update>) -> Self {
+    pub fn start(
+        requests: UnboundedSender<Request>,
+        updates: UnboundedSender<Update>,
+        colours: MailColours,
+    ) -> Self {
         let (jobs, queue) = mpsc::channel::<Job>();
         thread::spawn(move || {
             for job in queue {
@@ -75,6 +81,7 @@ impl Previews {
             refused: HashMap::new(),
             header: None,
             link: Link::Starting,
+            colours,
             requests,
             jobs,
         }
@@ -86,6 +93,7 @@ impl Previews {
         self.rendered.get(PreviewKey {
             body: message.body_key,
             width,
+            view: view.html,
         })
     }
 
@@ -137,6 +145,7 @@ impl Previews {
             let key = PreviewKey {
                 body: message.body_key,
                 width,
+                view: view.html,
             };
 
             if self.rendered.touch(key) || self.rendering.contains(&key) || self.waits(message.uid)
@@ -186,6 +195,7 @@ impl Previews {
             sender: message.sender.clone(),
             subject: message.subject.clone(),
             received: message.received,
+            colours: self.colours,
         };
 
         // The send fails only once the render thread is gone.

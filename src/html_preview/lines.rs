@@ -1,7 +1,7 @@
 use html2text::render::{TaggedLine, TaggedLineElement};
 
 use super::decorator::{self, Annotation};
-use crate::styled_line::StyledLine;
+use crate::{paint::Paint, styled_line::StyledLine};
 
 /// Characters newsletters pad preheaders and spacing with, which show as
 /// nothing or as stray gaps.
@@ -30,7 +30,12 @@ pub fn styled(lines: Vec<TaggedLine<Vec<Annotation>>>) -> Vec<StyledLine> {
                     .map(|c| if c == '\u{a0}' { ' ' } else { c }),
             );
             let tag = &tagged.tag;
-            out.push(&piece, decorator::marks(tag), decorator::link(tag));
+            out.push(
+                &piece,
+                decorator::marks(tag),
+                Paint::default(),
+                decorator::link(tag),
+            );
         }
 
         out.trim_end();

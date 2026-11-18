@@ -25,8 +25,16 @@ A Message the server has not marked as seen. Postal shows this state and never c
 _Avoid_: new, unseen
 
 **Preview**:
-The rendered body of the selected Message, cleaned of markup.
+The body of the selected Message as Postal shows it: plain text wrapped, HTML in the rendered or the text View.
 _Avoid_: reader, viewer, body pane
+
+**Rendered View**:
+How the Preview shows HTML mail by default: laid out as a mail client does, on the terminal cell grid, in the mail's colours moved onto the terminal's background. Images are never fetched.
+_Avoid_: HTML mode, rich view, browser view
+
+**Text View**:
+How the Preview shows HTML mail after `v`: its text in reading order, wrapped to the pane, styled only by Postal's Theme.
+_Avoid_: plain mode, raw view
 
 **Snippet**:
 The first words of a Message's body, shown under its subject in the Message List.
