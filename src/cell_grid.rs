@@ -11,6 +11,13 @@ pub const WIDE_TAIL: u32 = 16;
 pub const BORDER: u32 = 32;
 /// An image's alt text, drawn in its place.
 pub const ALT: u32 = 64;
+/// In `bg`: it comes from a section or the page, not from a control.
+const BG_PANEL: u32 = 0x0200_0000;
+/// A background this light is the mail's page, which becomes the terminal's:
+/// about `#cccccc` and up, in WCAG's linear luminance. The layout reads it too.
+pub const PAGE_LUMINANCE: f32 = 0.6;
+/// A colour whose channels spread less than this is a grey.
+pub const GREY_SPREAD: u8 = 40;
 
 /// One cell as `cpp/cell_grid.h` lays it out.
 #[repr(C)]
@@ -39,6 +46,11 @@ impl Cell {
 
     pub const fn bg(&self) -> Option<Rgb> {
         colour(self.bg)
+    }
+
+    /// The background comes from a section or the page, not from a control.
+    pub const fn panel(&self) -> bool {
+        self.bg & BG_PANEL != 0
     }
 
     pub const fn has(&self, flag: u32) -> bool {

@@ -21,7 +21,7 @@ fn main() {
     cc::Build::new()
         .cpp(true)
         .std("c++17")
-        .file("cpp/cell_grid.cpp")
+        .files(sources(Path::new("cpp"), "cpp"))
         .include(litehtml.join("include"))
         .include("cpp")
         .opt_level(2)

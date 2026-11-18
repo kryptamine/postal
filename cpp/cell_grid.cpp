@@ -3,76 +3,29 @@
 // are never fetched. See docs/adr/0006-rendered-view-engine.md.
 #include "cell_grid.h"
 
+#include "colour.h"
+#include "geometry.h"
+#include "image_labels.h"
+#include "snap.h"
+#include "text.h"
+
 #include <litehtml.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <map>
 #include <string>
 #include <vector>
 
 using namespace litehtml;
+using namespace cg;
 
 namespace
 {
-const float CW = 8, CH = 16;
-
-uint32_t rgb(const web_color& c)
-{
-    return 0x01000000u | (uint32_t(c.red) << 16) | (uint32_t(c.green) << 8) | c.blue;
-}
-
-uint32_t blend(uint32_t under, uint32_t over, float a)
-{
-    // Mail colours assume a white page under them.
-    if(!under) under = 0x01FFFFFF;
-    auto mix = [a](uint32_t u, uint32_t o) {
-        return uint32_t(std::lround(float(u) + (float(o) - float(u)) * a));
-    };
-    uint32_t r = mix((under >> 16) & 255, (over >> 16) & 255);
-    uint32_t g = mix((under >> 8) & 255, (over >> 8) & 255);
-    uint32_t b = mix(under & 255, over & 255);
-    return 0x01000000u | (r << 16) | (g << 8) | b;
-}
-
 struct Font
 {
     bool zero = false, bold = false, italic = false, underline = false;
 };
-
-void utf8_next(const char*& s, uint32_t& cp)
-{
-    auto u = reinterpret_cast<const unsigned char*>(s);
-    if(u[0] < 0x80) { cp = u[0]; s += 1; }
-    else if((u[0] >> 5) == 6 && u[1]) { cp = ((u[0] & 31u) << 6) | (u[1] & 63u); s += 2; }
-    else if((u[0] >> 4) == 14 && u[1] && u[2]) { cp = ((u[0] & 15u) << 12) | ((u[1] & 63u) << 6) | (u[2] & 63u); s += 3; }
-    else if(u[1] && u[2] && u[3]) { cp = ((u[0] & 7u) << 18) | ((u[1] & 63u) << 12) | ((u[2] & 63u) << 6) | (u[3] & 63u); s += 4; }
-    else { cp = 0xFFFD; s += 1; }
-}
-
-int cp_width(uint32_t cp)
-{
-    if((cp >= 0x300 && cp <= 0x36F) || (cp >= 0x200B && cp <= 0x200F) || (cp >= 0xFE00 && cp <= 0xFE0F) ||
-       cp == 0xFEFF || cp == 0x34F || cp == 0xAD || (cp >= 0xE0000 && cp <= 0xE007F))
-        return 0;
-    if((cp >= 0x1100 && cp <= 0x115F) || (cp >= 0x2E80 && cp <= 0xA4CF) || (cp >= 0xAC00 && cp <= 0xD7A3) ||
-       (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF00 && cp <= 0xFF60) ||
-       (cp >= 0xFFE0 && cp <= 0xFFE6) || (cp >= 0x1F300 && cp <= 0x1F64F) || (cp >= 0x1F680 && cp <= 0x1F6FF) ||
-       (cp >= 0x1F900 && cp <= 0x1FAFF) || (cp >= 0x20000 && cp <= 0x3FFFD))
-        return 2;
-    return 1;
-}
-
-// The cells whose centre lies in [a, a + len). Text rows use it too, so a
-// line and the box around it round the same way.
-void span(float a, float len, float unit, int& first, int& last)
-{
-    first = int(std::ceil(a / unit - 0.5f));
-    last  = int(std::ceil((a + len) / unit - 0.5f)) - 1;
-}
-
-int first_cell(float a, float unit) { return int(std::ceil(a / unit - 0.5f)); }
 
 void set_glyph(cg_cell& c, const char* g, size_t n)
 {
@@ -93,86 +46,6 @@ void append_glyph(cg_cell& c, const char* g, size_t n)
 
 bool is(const cg_cell& c, const char* g) { return std::strcmp(c.glyph, g) == 0; }
 
-bool shown(const css_border& b)
-{
-    return b.width.val() > 0 && b.style != border_style_none && b.style != border_style_hidden;
-}
-
-// Whole rows. Half a row rounds up above a box and down below it, so the
-// 8px under one paragraph and the 8px over the next make one row together.
-float rows_above(float px)
-{
-    return std::copysign(std::floor(std::fabs(px) / CH + 0.5f) * CH, px);
-}
-
-float rows_below(float px)
-{
-    return std::copysign(std::ceil(std::fabs(px) / CH - 0.5f) * CH, px);
-}
-
-float columns(float px)
-{
-    float n = std::floor(std::fabs(px) / CW + 0.5f);
-    return std::copysign(n * CW, px);
-}
-
-void snap(css_length& l, float (*to)(float))
-{
-    if(!l.is_predefined() && l.units() == css_units_px) l.set_value(to(l.val()), css_units_px);
-}
-
-// Box edges snap to whole cells before layout, so a separator gets a row of
-// its own and a button's label sits in the middle of its block. A shown
-// border is one cell thick: a row above and below, a column at each side.
-void snap_tree(const element::ptr& el)
-{
-    css_properties& css = el->css();
-    css_margins     m   = css.get_margins();
-    snap(m.top, rows_above);
-    snap(m.bottom, rows_below);
-    snap(m.left, columns);
-    snap(m.right, columns);
-    css.set_margins(m);
-
-    css_margins p = css.get_padding();
-    snap(p.top, rows_above);
-    snap(p.bottom, rows_below);
-    snap(p.left, columns);
-    snap(p.right, columns);
-    css.set_padding(p);
-
-    css_borders b = css.get_borders();
-    if(shown(b.top)) b.top.width = CH;
-    if(shown(b.bottom)) b.bottom.width = CH;
-    if(shown(b.left)) b.left.width = CW;
-    if(shown(b.right)) b.right.width = CW;
-    css.set_borders(b);
-
-    css_length h = css.get_height();
-    snap(h, rows_above);
-    css.set_height(h);
-    css_length min_h = css.get_min_height();
-    snap(min_h, rows_above);
-    css.set_min_height(min_h);
-    // An image shown as its alt is one row high, whatever width scales it.
-    if(std::strcmp(el->get_tagName(), "img") == 0 && h.is_predefined())
-        if(const char* alt = el->get_attr("alt"); alt && *alt) css.set_height(css_length(CH, css_units_px));
-
-    css_length spacing = css.get_border_spacing_y();
-    snap(spacing, rows_above);
-    css.set_border_spacing_y(spacing);
-    // A collapsed border gives each cell half its width, which puts a rule
-    // between two rows; separate borders with no spacing look the same.
-    if(css.get_border_collapse() == border_collapse_collapse)
-    {
-        css.set_border_collapse(border_collapse_separate);
-        css.set_border_spacing_x(css_length(0, css_units_px));
-        css.set_border_spacing_y(css_length(0, css_units_px));
-    }
-
-    for(auto& child : el->children()) snap_tree(child);
-}
-
 struct Frame
 {
     int                   r0, r1, c0, c1;
@@ -187,8 +60,7 @@ class grid_container : public document_container
     std::vector<cg_cell>               grid;
     std::vector<position>              clips;
     std::vector<Frame>                 frames;
-    std::map<std::string, std::string> alts;
-    Font                               plain_font;
+    ImageLabels                        images;
     // A glyph fell past the last column, where the grid has no cell.
     bool                               lost_text = false;
 
@@ -249,15 +121,7 @@ class grid_container : public document_container
 
     pixel_t text_width(const char* text, uint_ptr font) override
     {
-        if(reinterpret_cast<Font*>(font)->zero) return 0;
-        int w = 0;
-        for(const char* s = text; *s;)
-        {
-            uint32_t cp;
-            utf8_next(s, cp);
-            w += cp_width(cp);
-        }
-        return float(w) * CW;
+        return reinterpret_cast<Font*>(font)->zero ? 0 : float(cells(text)) * CW;
     }
 
     void put(int row, int col, const char* text, uint32_t fg, uint32_t flags, const position* clip = nullptr,
@@ -316,29 +180,27 @@ class grid_container : public document_container
         put(row, first_cell(m.pos.x, CW), glyph, rgb(m.color), 0);
     }
 
-    // Images are never fetched. One with alt text claims a row, so its alt
-    // shows; one without keeps only the box its own size gives.
+    // Images are never fetched: each one left shows its label, in the box
+    // `ImageLabels` sized for it.
     void load_image(const char*, const char*, bool) override {}
 
     void get_image_size(const char* src, const char*, size& sz) override
     {
-        sz.width = sz.height = 0;
-        auto it = alts.find(src);
-        if(it == alts.end()) return;
-        sz.width  = text_width(it->second.c_str(), reinterpret_cast<uint_ptr>(&plain_font));
-        sz.height = CH;
+        const std::string* label = images.of(src);
+        sz.width                 = label ? float(cells(label->c_str())) * CW : 0;
+        sz.height                = label ? CH : 0;
     }
 
     void draw_image(uint_ptr, const background_layer& layer, const std::string& url, const std::string&) override
     {
-        auto it = alts.find(url);
-        if(it == alts.end()) return;
+        const std::string* label = images.of(url);
+        if(!label) return;
         int r0, r1, c0, c1;
         span(layer.border_box.y, layer.border_box.height, CH, r0, r1);
         span(layer.border_box.x, layer.border_box.width, CW, c0, c1);
         if(r1 < r0 || c1 < c0) return;
-        const std::string& alt = it->second;
-        int len = int(text_width(alt.c_str(), reinterpret_cast<uint_ptr>(&plain_font)) / CW);
+        std::string alt = fit(*label, c1 - c0 + 1);
+        int         len = cells(alt.c_str());
         put((r0 + r1) / 2, std::max(c0, (c0 + c1 + 1 - len) / 2), alt.c_str(), 0, CG_ALT, &layer.clip_box, c1);
     }
 
@@ -349,10 +211,12 @@ class grid_container : public document_container
         span(layer.border_box.y, layer.border_box.height, CH, r0, r1);
         span(layer.border_box.x, layer.border_box.width, CW, c0, c1);
         if(layer.is_root) { c0 = 0; c1 = cols - 1; }
+        // A button or a badge is short and narrow; a section is neither.
+        uint32_t panel = layer.is_root || r1 - r0 >= 3 || (c1 - c0 + 1) * 2 >= cols ? CG_BG_PANEL : 0;
         for(int r = r0; r <= r1; r++)
             for(int c = c0; c <= c1; c++)
                 if(cg_cell* cell = at(r, c); cell && (layer.is_root || visible(r, c, &layer.clip_box)))
-                    cell->bg = color.alpha == 255 ? rgb(color) : blend(cell->bg, rgb(color), float(color.alpha) / 255.f);
+                    cell->bg = (color.alpha == 255 ? rgb(color) : blend(cell->bg, rgb(color), float(color.alpha) / 255.f)) | panel;
     }
 
     // A gradient is filled with its first colour.
@@ -479,21 +343,11 @@ class grid_container : public document_container
     void         import_css(std::string&, const std::string&, std::string&) override {}
 };
 
-// One line of text is one row, so line-height can only be one row. litehtml
-// leaves a table under `align=center` or `<center>` on the left.
-const char* const user_css = "* { line-height: normal !important; } "
+// One line of text is one row, so line-height can only be one row. A border
+// is a whole cell, and a box's own background under it would show round the
+// line. litehtml leaves a table under `align=center` or `<center>` on the left.
+const char* const user_css = "* { line-height: normal !important; background-clip: padding-box !important; } "
                              "[align=center] > table, center > table { margin-left: auto; margin-right: auto; }";
-
-void collect_alts(const element::ptr& el, std::map<std::string, std::string>& alts)
-{
-    if(std::strcmp(el->get_tagName(), "img") == 0)
-    {
-        const char* src = el->get_attr("src");
-        const char* alt = el->get_attr("alt");
-        if(src && alt && *alt) alts.emplace(src, alt);
-    }
-    for(auto& child : el->children()) collect_alts(child, alts);
-}
 
 void leaf_boxes(const element::ptr& el, std::vector<position>& out)
 {
@@ -557,11 +411,16 @@ extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
             delete grid;
             return nullptr;
         }
-        collect_alts(doc->root(), grid->container.alts);
+        grid->container.images.label(doc->root(), cols);
         snap_tree(doc->root());
         // The boxes were built from the styles before the snap.
         doc->rebuild_render_tree();
         doc->render(float(cols) * CW);
+        if(grid->container.images.shrink_spilt())
+        {
+            doc->rebuild_render_tree();
+            doc->render(float(cols) * CW);
+        }
         position clip(0, 0, float(cols) * CW, doc->height());
         doc->draw(0, 0, 0, &clip);
         grid->container.apply_borders();

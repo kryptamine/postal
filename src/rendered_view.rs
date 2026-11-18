@@ -50,7 +50,7 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
 /// A blank cell takes the look of the cell before it on the same
 /// background, so the words either side of it stay one run.
 fn look(cell: &Cell, colours: MailColours, before: (Marks, Paint)) -> (Marks, Paint) {
-    let bg = colours.background(cell.bg());
+    let bg = colours.background(cell.bg(), cell.panel());
     if cell.has(cell_grid::BORDER) {
         let (fg, marks) = colours.line(cell.fg(), bg);
         return (marks, Paint { fg, bg });

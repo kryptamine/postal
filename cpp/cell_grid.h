@@ -22,7 +22,16 @@ enum
     CG_ALT       = 64,
 };
 
-// A colour is 0x01RRGGBB when set and 0 when not; `link` is 0 or a link id.
+// A colour is 0x01RRGGBB when set and 0 when not. A `bg` also carries
+// CG_BG_PANEL when it comes from a box too large to be a control: a section
+// or the page, which may give way to the terminal's own. `link` is 0 or an id.
+#define CG_BG_PANEL 0x02000000u
+
+// How src/mail_colours.rs moves mail colours, which the layout must know:
+// a background over this WCAG luminance is the page and gives way to the
+// terminal's, and a colour whose channels spread less than this is a grey.
+#define CG_PAGE_LUMINANCE 0.6f
+#define CG_GREY_SPREAD 40
 typedef struct cg_cell
 {
     char     glyph[16];

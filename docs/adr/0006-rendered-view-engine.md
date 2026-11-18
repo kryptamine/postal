@@ -10,24 +10,54 @@ one key away.
 
 [litehtml](https://github.com/litehtml/litehtml) (BSD-3-Clause, with gumbo,
 Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
-`cc`. A C++ container, `cpp/cell_grid.cpp`, supplies the metrics and draws into
-a flat buffer of cells:
+`cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
+buffer of cells: `cell_grid.cpp` draws, `snap.cpp` snaps the styles before
+layout, `image_labels.cpp` decides each image, `colour.cpp` and `text.cpp`
+hold the colour and cell-width helpers.
 
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
   is one row high. A 600 px mail is 75 columns. `font-size` never changes the
   cell: large text is bold, and under 4 px it takes no room, which keeps the
   `font-size:0` whitespace trick of MJML and Outlook layouts working.
 - Before layout, vertical margins, paddings and heights snap to whole rows,
-  horizontal ones to whole columns, and a shown border is one cell thick. Half
+  horizontal ones to whole columns, and a shown border is one cell thick;
+  an `<hr>` keeps only its top border, or four would box nothing in. Under a
+  shown border, vertical padding short of a row is dropped: the border is a
+  row of its own already, and a 12 px padding made a button five rows high. A
+  border the colour of the fill it sits on goes, as a browser cannot show it,
+  unless that fill is page-light or grey and may itself give way to the
+  terminal, when the border is the box's only shape. Half
   a row rounds up above a box and down below it, so the 8 px under a paragraph
   and the 8 px over the next make one row. Collapsed table borders become
   separate ones with no spacing: litehtml gives each cell half a collapsed
   border, which puts the rule between two rows.
 - Backgrounds fill the cells whose centre lies in the box; text rows use the
-  same rule. Borders are drawn as `─ │ ┌ ┐ └ ┘` after the text, on cells
-  without text.
+  same rule. A box's own background stops inside its border
+  (`background-clip: padding-box`), as a 1px border looks; a cell thick, it
+  would ring the line in the fill. Borders are drawn as `─ │ ┌ ┐ └ ┘` after
+  the text, on cells without text.
+- An icon label that is all its link shows takes its whole `alt`, up to 16
+  columns, and a column after it: cut, `Insta…` named nothing. After layout,
+  a grown label that spills past a block around it or past the pane goes
+  back to the icon's width, with every grown one in its table, and the
+  document is laid out again.
 - Images are never fetched: remote ones are a tracking risk and add little to
-  reading. An image keeps the box its size gives, and shows its `alt`.
+  reading. Before layout each image either goes (`display: none`) or becomes
+  a label one row high, its `alt` cut with `…` to the image's declared width.
+  An empty box would only push the text apart: a 600×300 banner was 19 blank
+  rows, a 24 px status icon a second row per table row. An image goes when:
+  - it is under one column wide or 2 px high (a tracking pixel or spacer);
+  - it has no `alt`, unless it is all a link shows, which keeps `[link]` so
+    Hint mode can still open it;
+  - it is an icon, no side over 64 px, beside other text: it decorates that
+    text, and its `alt` rarely fits its box (`GitHub` in 32 px read `GitH`);
+  - its `alt` is already in the nearest text around it, within its table row
+    and under 200 bytes, as an avatar's caption or a status icon's job name
+    is (`Appfire` beside `Appfire · Sofia` read `Appfir Appfire`).
+
+  Each label gets a `src` of its own, since mail reuses one icon file under
+  many `alt`s. A percentage width stays, so a long `alt` cannot widen its
+  table past the pane.
 
 Two changes to litehtml, both recorded in `vendor/litehtml/VENDORED.md`.
 `document::rebuild_render_tree` is public: the boxes are built from the
@@ -54,12 +84,17 @@ Preview and kills it after 5 s. Two reasons:
 Mail colours assume a white page. Postal asks the terminal for its background
 with OSC 11 at start (DA1 behind it, so a terminal that does not answer costs
 no wait), takes a dark one when there is no answer, and moves the mail onto it
-(`src/mail_colours.rs`): a background lighter than 0.8 luminance is the page
-and becomes the terminal's own; a block too close to the terminal's background
-moves away from it, so a dark button stays visible on a dark terminal; text
+(`src/mail_colours.rs`): a background lighter than 0.6 luminance is the page
+and becomes the terminal's own; a grey section too close to the terminal's
+background becomes the terminal's too, or it would be moved into a grey slab,
+while a coloured one, or a box small enough to be a control, moves away from
+it, so a dark button stays visible on a dark terminal; text
 too dark for the page's ordinary ink becomes the terminal's fg, other text
 moves until it reads (WCAG 4.5:1); a grey border on the terminal's background
-is drawn dim like Postal's own. `NO_COLOR` keeps the layout and drops every
+is drawn dim like Postal's own. The layout marks a background from a box four
+rows high or half the pane wide as a section. It reads the page and grey
+thresholds too, so they are part of the grid's format in `cpp/cell_grid.h`
+and `src/cell_grid.rs`. `NO_COLOR` keeps the layout and drops every
 colour. No 256- or 16-colour fallback: the target is a 24-bit terminal.
 
 ## Measurements

@@ -1,0 +1,45 @@
+// Images are never fetched, so each one goes, or shows as a label one row
+// high: its alt, or `[link]` for a link with nothing else to show. See
+// docs/adr/0006-rendered-view-engine.md.
+#ifndef CG_IMAGE_LABELS_H
+#define CG_IMAGE_LABELS_H
+
+#include <litehtml.h>
+
+#include <map>
+#include <string>
+#include <vector>
+
+namespace cg
+{
+class ImageLabels
+{
+  public:
+    // Hides or sizes every image under `root` before layout, `cols` wide.
+    void label(const litehtml::element::ptr& root, int cols);
+    // After a layout: shrinks icon labels grown past their own width that
+    // spill, and their table's others. True when layout must run again.
+    bool shrink_spilt();
+    // The label of an image `label` kept, by the src it gave it.
+    const std::string* of(const std::string& src) const;
+
+  private:
+    struct Grown
+    {
+        litehtml::element::ptr el;
+        float                  own_px;
+    };
+
+    void label_one(const litehtml::element::ptr& el);
+    std::string text_for(const litehtml::element::ptr& el, bool icon, const litehtml::element::ptr& link,
+                         bool sole);
+
+    int                                cols = 0;
+    std::map<std::string, std::string> labels;
+    std::vector<Grown>                 grown;
+    // Links that already show `[link]` once.
+    std::vector<const litehtml::element*> labelled_links;
+};
+} // namespace cg
+
+#endif

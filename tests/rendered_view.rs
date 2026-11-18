@@ -14,7 +14,7 @@ use support::{
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
 };
-use termlens::{Key, Screen, Terminal};
+use termlens::{Color, Key, Screen, Terminal};
 
 const WIDE: (u16, u16) = (120, 40);
 const DARK: (u8, u8, u8) = (0, 0, 0);
@@ -144,23 +144,76 @@ fn no_color_keeps_the_layout_and_drops_the_colours() {
     insta::assert_snapshot!(screen.with_styles());
 }
 
-// A remote image is a tracking risk: nothing is fetched, and its box keeps
-// its place so the text under it does not move.
+// A remote image is a tracking risk: nothing is fetched. One with nothing to
+// say takes no room, so a banner leaves no blank rows behind.
 #[test]
-fn images_are_never_fetched_and_keep_their_box() {
+fn images_are_never_fetched_and_one_without_alt_takes_no_room() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let port = listener.local_addr().unwrap().port();
     let body = html(&format!(
-        "<p>Above</p><img src=\"http://127.0.0.1:{port}/banner.png\" width=\"80\" \
-         height=\"48\"><p>Below</p><img src=\"http://127.0.0.1:{port}/logo.png\" alt=\"Logo\">"
+        "<p>Above</p><img src=\"http://127.0.0.1:{port}/banner.png\" width=\"600\" \
+         height=\"300\"><p>Below</p><img src=\"http://127.0.0.1:{port}/logo.png\" alt=\"Logo\">"
     ));
     let screen = preview(body, &DEFAULT, "Logo");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
-    // 48px is three rows, between the margins of the two paragraphs.
-    assert!(row("Below") - row("Above") > 3, "{}", rows.join("\n"));
+    // One blank row: the margins of the two paragraphs.
+    assert_eq!(row("Below") - row("Above"), 2, "{}", rows.join("\n"));
     assert!(listener.accept().is_err(), "an image was fetched");
+}
+
+// An alt is one row, however tall the image, and no wider than it, so the
+// layout around it keeps its shape.
+#[test]
+fn an_alt_is_one_row_and_no_wider_than_its_image() {
+    let body = html(
+        "<p>Above</p><img src=\"https://cdn.example/banner.png\" width=\"80\" height=\"96\" \
+         alt=\"Spring collection banner\"><p>Below</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Spring");
+    let rows = pane(&screen);
+    let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
+    assert_eq!(row("Below") - row("Above"), 4, "{}", rows.join("\n"));
+    // 80px is ten columns.
+    assert_eq!(rows[row("Spring")].trim(), "Spring co…");
+}
+
+// Mail reuses one image file with a different alt each time; each keeps
+// its own.
+#[test]
+fn images_from_one_file_keep_their_own_alts() {
+    let body = html(
+        "<img src=\"https://cdn.example/card.png\" width=\"200\" alt=\"First card\"><br>\
+         <img src=\"https://cdn.example/card.png\" width=\"200\" alt=\"Second card\">",
+    );
+    let screen = preview(body, &DEFAULT, "Second card");
+    assert!(screen.contains("First card"), "{}", screen.text());
+}
+
+// Icons and alts that repeat their row's text are what doubled words in a
+// CI report's table: `macOS macOS`, a cut `an` beside each count.
+#[test]
+fn an_icon_or_an_alt_beside_the_same_text_is_dropped() {
+    let body = html(
+        "<table><tr>\
+         <td><img src=\"https://cdn.example/ok.png\" width=\"24\" height=\"24\" alt=\"macOS\"></td>\
+         <td>CI / macOS</td>\
+         <td><a href=\"https://ci.example/notes\"><img src=\"https://cdn.example/note.png\" \
+         width=\"16\" height=\"16\" alt=\"annotations for CI / macOS\"> 3</a></td>\
+         </tr></table>\
+         <div><img src=\"https://cdn.example/jane.png\" width=\"84\" height=\"84\" alt=\"Jane Doe\">\
+         <div>Jane Doe, product manager</div></div>",
+    );
+    let screen = preview(body, &DEFAULT, "product manager");
+    let rows = pane(&screen);
+    let row = rows.iter().find(|r| r.contains("CI / macOS")).unwrap();
+    assert_eq!(
+        row.split_whitespace().collect::<Vec<_>>(),
+        ["CI", "/", "macOS", "3"]
+    );
+    let names = rows.iter().filter(|r| r.contains("Jane Doe")).count();
+    assert_eq!(names, 1, "{}", rows.join("\n"));
 }
 
 // `v` switches every HTML Preview to the text View and back.
@@ -199,6 +252,21 @@ fn a_mail_too_wide_for_the_pane_falls_back_to_text() {
     insta::assert_snapshot!(screen.text());
 }
 
+// A rule is one line: four borders a cell thick drew an empty box instead.
+#[test]
+fn a_rule_is_one_line() {
+    let screen = preview(html("<p>Above</p><hr><p>Below</p>"), &DEFAULT, "Below");
+    let rows = pane(&screen);
+    let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
+    assert_eq!(row("Below") - row("Above"), 4, "{}", rows.join("\n"));
+    assert!(
+        rows[row("Above") + 2].contains("────"),
+        "{}",
+        rows.join("\n")
+    );
+    assert!(!rows.iter().any(|r| r.contains('┌')), "{}", rows.join("\n"));
+}
+
 /// The screen row and column where `text` starts, in the Preview pane.
 fn at(screen: &Screen, text: &str) -> (u16, u16) {
     (4..39)
@@ -209,6 +277,10 @@ fn at(screen: &Screen, text: &str) -> (u16, u16) {
             Some((row, u16::try_from(col).unwrap()))
         })
         .unwrap_or_else(|| panic!("no {text:?} in\n{}", screen.text()))
+}
+
+fn bg(screen: &Screen, row: u16, col: u16) -> Color {
+    screen.cell(row, col).unwrap().style().bg
 }
 
 // litehtml split an inline around a block inside it even through an
@@ -224,4 +296,95 @@ fn a_link_around_an_inline_block_button_keeps_it_whole() {
     assert!(screen.row_text(row - 1).contains('┌'), "{}", screen.text());
     assert!(screen.row_text(row).contains('│'), "{}", screen.text());
     assert!(screen.row_text(row + 1).contains('└'), "{}", screen.text());
+}
+
+// A border is a row of its own: padding short of a row under it only made a
+// button two rows taller.
+#[test]
+fn padding_under_a_border_adds_no_blank_row() {
+    let body = html(
+        "<p>x</p><a href=\"https://ci.example\" style=\"display:inline-block;\
+         border:1px solid #888;padding:12px 24px\">View run</a>",
+    );
+    let screen = preview(body, &DEFAULT, "View run");
+    let (row, _) = at(&screen, "View run");
+    assert!(screen.row_text(row - 1).contains('┌'), "{}", screen.text());
+    assert!(screen.row_text(row + 1).contains('└'), "{}", screen.text());
+}
+
+// A border the colour of its button's fill does not show in a browser; drawn
+// a cell thick it framed the label in a line the fill had to be moved from.
+#[test]
+fn a_border_the_colour_of_its_fill_is_not_drawn() {
+    let body = html(
+        "<p>x</p><a href=\"https://ci.example\" style=\"display:inline-block;color:#fff;\
+         background:#1f883d;border:1px solid #1f883d;padding:12px 24px\">View run</a>",
+    );
+    let screen = preview(body, &DEFAULT, "View run");
+    let (row, col) = at(&screen, "View run");
+    assert!(
+        !pane(&screen).iter().any(|r| r.contains('┌')),
+        "{}",
+        screen.text()
+    );
+    for r in [row - 1, row, row + 1] {
+        assert!(matches!(bg(&screen, r, col), Color::Rgb(..)), "row {r}");
+    }
+}
+
+// A border a cell thick is drawn round a box's background, as a 1px one
+// looks, not on top of it.
+#[test]
+fn a_box_background_stays_inside_its_border() {
+    let body = html(
+        "<p>x</p><div style=\"width:200px;color:#fff;background:#1f883d;\
+         border:1px solid #888\">Inside</div>",
+    );
+    let screen = preview(body, &DEFAULT, "Inside");
+    let (row, col) = at(&screen, "Inside");
+    assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
+    assert_eq!(
+        bg(&screen, row - 1, col),
+        Color::Default,
+        "{}",
+        screen.text()
+    );
+}
+
+// A black header on a black terminal moved apart from it was a grey slab:
+// a grey section gives way to the terminal, while a small control and a
+// coloured section keep a fill.
+#[test]
+fn a_grey_section_near_the_terminal_takes_its_background() {
+    let body = html(
+        "<div style=\"background:#000;color:#fff;padding:32px\">Header</div>\
+         <div style=\"background:#1e50f5;color:#fff;padding:32px\">Banner</div>\
+         <p><span style=\"background:#000;color:#fff\">Go</span></p>",
+    );
+    let screen = preview(body, &DEFAULT, "Go");
+    let fill = |text: &str| {
+        let (row, col) = at(&screen, text);
+        bg(&screen, row, col)
+    };
+    assert_eq!(fill("Header"), Color::Default);
+    assert!(matches!(fill("Banner"), Color::Rgb(..)));
+    assert!(matches!(fill("Go"), Color::Rgb(..)));
+}
+
+// An icon that is all its link shows is named by its alt, which cut names
+// nothing; where its cell is too narrow, it is cut to fit there.
+#[test]
+fn a_linked_icon_shows_its_whole_alt_where_it_fits() {
+    let icon = "<a href=\"https://social.example\"><img src=\"https://cdn.example/i.png\" \
+                width=\"24\" height=\"24\" alt=\"Instagram\"></a>";
+    let body = html(&format!(
+        "<table style=\"width:40px\"><tr><td style=\"width:40px;max-width:40px;\
+         overflow:hidden\">{icon}</td></tr></table><p>Free</p>{icon}"
+    ));
+    let screen = preview(body, &DEFAULT, "Free");
+    let rows = pane(&screen);
+    let named: Vec<_> = rows.iter().filter(|r| r.contains("Ins")).collect();
+    assert_eq!(named.len(), 2, "{}", rows.join("\n"));
+    assert!(named[0].contains('…') && !named[0].contains("Instagram"));
+    assert!(named[1].contains("Instagram"));
 }
