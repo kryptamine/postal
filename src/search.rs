@@ -111,8 +111,16 @@ impl Search {
 
         if self.hits.is_some() {
             let card = card.slice(..);
-            self.pattern
-                .indices(card, &mut self.matcher, &mut self.units);
+            // On a miss, the words before the one that missed have left
+            // their units behind.
+            if self
+                .pattern
+                .indices(card, &mut self.matcher, &mut self.units)
+                .is_none()
+            {
+                self.units.clear();
+            }
+
             self.units.sort_unstable();
             self.units.dedup();
         }

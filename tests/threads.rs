@@ -273,6 +273,37 @@ fn a_search_ranks_a_thread_by_its_best_match() {
 }
 
 #[test]
+fn a_card_matching_only_part_of_the_query_is_not_highlighted() {
+    let server = FakeImap::start(vec![
+        message(
+            "Alice",
+            ("Invoice", "Please pay by Friday"),
+            "2024-03-01T09:00:00Z",
+        )
+        .in_thread(0),
+        message("Bob", ("Re: Invoice", "Done"), "2024-03-02T09:00:00Z").in_thread(0),
+    ]);
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Done");
+
+    // Alice's Message holds both words, but the card shows only `invoice`:
+    // half a match underlined would claim the card answers the Query.
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("invoice friday").unwrap();
+    let screen = t
+        .snapshot_after(|s| s.contains("/invoice friday") && card(s, "Alice, Bob").is_some())
+        .unwrap();
+    quit(t);
+
+    let row = (0..screen.rows())
+        .find(|&row| list(&screen)[usize::from(row)] == "Invoice")
+        .unwrap();
+    let underlined = (0..u16::try_from(LIST).unwrap())
+        .any(|col| screen.cell(row, col).unwrap().style().underline);
+    assert!(!underlined, "{screen}");
+}
+
+#[test]
 fn without_gmail_each_message_is_a_row_of_its_own() {
     let server = FakeImap::start(conversation());
     server.without_gmail();
