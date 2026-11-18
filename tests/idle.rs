@@ -210,3 +210,27 @@ fn an_expunge_older_than_the_cache_renumbers_the_cached_rows() {
     assert_eq!(marked("Message 503 "), Some(true), "{screen}");
     assert_eq!(marked("Message 502 "), Some(false), "{screen}");
 }
+
+// The IMAP library keeps at most 100 announcements and drops the rest
+// unseen: a bulk delete past that must still remove exactly its rows.
+#[test]
+fn a_burst_past_what_the_library_keeps_still_removes_every_row() {
+    let messages = (0..300)
+        .map(|i| {
+            let date = chrono::DateTime::UNIX_EPOCH + chrono::Duration::hours(i);
+            FakeMessage::new("Sender", &format!("Message {}", i + 1), &date.to_rfc3339())
+        })
+        .collect();
+    let server = FakeImap::start(messages);
+    let home = Home::for_server(&server);
+    let mut t = idling(&server, &home);
+    t.wait_until(|s| s.contains("Message 300 ")).unwrap();
+
+    // Messages 151 to 300, the newest half.
+    server.expunge_range(FIRST_UID + 150..=FIRST_UID + 299);
+    let screen = t
+        .snapshot_after(|s| s.contains("Message 150 ") && !s.contains("Message 300 "))
+        .unwrap();
+    quit(t);
+    assert!(!screen.contains("Message 151 "), "{screen}");
+}

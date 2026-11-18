@@ -234,9 +234,14 @@ impl FakeImap {
     }
 
     pub fn expunge(&self, uid: u32) {
+        self.expunge_range(uid..=uid);
+    }
+
+    /// Expunges every UID in `uids` at once, so one IDLE announces them all.
+    pub fn expunge_range(&self, uids: std::ops::RangeInclusive<u32>) {
         let mut inbox = self.inbox.lock().unwrap();
         inbox.bump();
-        inbox.messages.retain(|m| m.uid != uid);
+        inbox.messages.retain(|m| !uids.contains(&m.uid));
     }
 
     pub fn set_seen(&self, uid: u32, seen: bool) {

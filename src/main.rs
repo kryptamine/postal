@@ -175,18 +175,14 @@ async fn bodies(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-/// Resyncs, cuts the Snippets, then stays in IDLE on the same connection, as
-/// the sequence numbers IDLE sends count in its view of the Inbox. `written`
-/// follows every Cache write.
+/// Resyncs and IDLEs on one connection, as the sequence numbers IDLE sends
+/// count in its `EXAMINE`. `written` follows every Cache write.
 async fn sync(
     config: &Config,
     password: &Credential,
     cache: &Cache,
     written: impl Fn(),
 ) -> Result<(), sync::Error> {
-    let mut session = ImapSession::open(config, password).await?;
-    let examined = sync::resync(&mut session, cache).await?;
-    written();
-    snippets::fetch(&mut session, cache, &written).await?;
-    idle::listen(session, cache, &examined, written).await
+    let session = ImapSession::open(config, password).await?;
+    idle::listen(session, cache, written).await
 }

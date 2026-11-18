@@ -14,6 +14,9 @@ pub enum Pushed {
         uid: Option<u32>,
         unread: bool,
     },
+    /// The library's queue filled up and may have dropped announcements:
+    /// the sequence numbers no longer say which Message is which.
+    Lost,
 }
 
 impl Pushed {

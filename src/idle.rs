@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use crate::{
     cache::{Cache, Changes},
-    imap::{Examined, MailServer, Pushed},
+    imap::{MailServer, Pushed},
     sequence_numbers::SequenceNumbers,
     snippets,
-    sync::Error,
+    sync::{self, Error},
 };
 
 /// How long one `IDLE` lasts before it is ended and sent again: a server
@@ -13,8 +13,8 @@ use crate::{
 /// connection hides a dead one.
 const PERIOD: Duration = Duration::from_secs(10 * 60);
 
-/// Keeps the Cache live from the server's announcements, forever:
-/// `examined` is the resync's `EXAMINE`. `written` follows every Cache write.
+/// Resyncs, cuts the Snippets, then keeps the Cache live from the server's
+/// announcements, forever. `written` follows every Cache write.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -22,16 +22,21 @@ const PERIOD: Duration = Duration::from_secs(10 * 60);
 pub async fn listen<S: MailServer>(
     mut server: S,
     cache: &Cache,
-    examined: &Examined,
     written: impl Fn(),
 ) -> Result<(), Error> {
-    let uids = cache.uids()?;
-    let mut sequence = SequenceNumbers::new(examined.exists, examined.state.uid_next, uids);
+    let mut sequence = resynced(&mut server, cache, &written).await?;
     // What came during the resync and the Snippets goes first.
     let mut pushed = server.pushed();
     loop {
         if pushed.is_empty() {
             (server, pushed) = server.idle(PERIOD).await?;
+            continue;
+        }
+
+        if pushed.iter().any(|p| matches!(p, Pushed::Lost)) {
+            tracing::info!("IDLE announcements were dropped: resyncing");
+            sequence = resynced(&mut server, cache, &written).await?;
+            pushed = server.pushed();
             continue;
         }
 
@@ -54,6 +59,28 @@ pub async fn listen<S: MailServer>(
 
         pushed = server.pushed();
     }
+}
+
+/// Resyncs and cuts the Snippets; numbers the cached UIDs as the resync's
+/// `EXAMINE` did.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn resynced(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    written: &impl Fn(),
+) -> Result<SequenceNumbers, Error> {
+    let examined = sync::resync(server, cache).await?;
+    written();
+    snippets::fetch(server, cache, written).await?;
+    let uids = cache.uids()?;
+    Ok(SequenceNumbers::new(
+        examined.exists,
+        examined.state.uid_next,
+        uids,
+    ))
 }
 
 /// The rows `pushed` changes, plus the Unread count; `None` before the
@@ -86,6 +113,8 @@ async fn changes(
                 uid.or_else(|| sequence.uid(number))
                     .map(|uid| (uid, unread)),
             ),
+            // `listen` resyncs instead of reading these.
+            Pushed::Lost => {}
         }
     }
 

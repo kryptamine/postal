@@ -229,8 +229,14 @@ impl MailServer for ImapSession {
 
     fn pushed(&mut self) -> Vec<Pushed> {
         let mut pushed = Vec::new();
+        // async-imap drops what comes once its queue of 100 is full.
+        let lost = self.session.unsolicited_responses.is_full();
         while let Ok(response) = self.session.unsolicited_responses.try_recv() {
             pushed.extend(Pushed::from_unsolicited(&response));
+        }
+
+        if lost {
+            pushed.push(Pushed::Lost);
         }
 
         pushed
