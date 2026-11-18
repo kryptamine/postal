@@ -64,6 +64,14 @@ _Avoid_: link mode, follow mode, footnotes
 The selected Message's Preview filling the screen in place of the Message List, entered with `Enter`; `q` or `Esc` goes back to the list.
 _Avoid_: reader, zoom, full view
 
+**Search**:
+The Message List narrowed to the Messages whose sender, subject or Snippet fuzzy-match a typed Query, best match first; `/` starts it, `Esc` ends it.
+_Avoid_: filter, find, fzf, lookup
+
+**Query**:
+The text typed into a Search.
+_Avoid_: pattern, search string
+
 **Onboarding**:
 The first-run flow that turns an email address into a working Account.
 _Avoid_: setup wizard, registration

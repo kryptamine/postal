@@ -14,6 +14,7 @@ times the first-run fetch).
 | --- | --- | --- |
 | Cold start to a Message List drawn from Cache | ≤ 100 ms | `hyperfine` |
 | Keypress to frame (scroll, change selection) | ≤ 16 ms | manual trace |
+| Keypress in a Query to narrowed Message List | ≤ 16 ms | manual trace |
 | Steady-state RSS after scrolling the whole list | ≤ 30 MB | `/usr/bin/time` |
 | `EXISTS` received to new row on screen | ≤ 500 ms | manual trace |
 | Allocations per frame in steady state | 0 | CI, `alloc-count` |
@@ -43,6 +44,9 @@ buffer) and reuse buffers. The hot paths are:
    window from Cache;
 3. parsing IMAP responses (`FETCH`, IDLE);
 4. showing an already rendered Preview.
+
+A frame started by a keypress in a Search Query is exempt: matching and
+its highlights allocate (ADR 0007). Moving through a narrowed list is not.
 
 An enabled `tracing` event allocates, so hot paths emit nothing at `info` or
 above; debug and trace events there are allowed, because the allocation check
