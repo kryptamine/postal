@@ -1,10 +1,12 @@
 #include "image_labels.h"
 
+#include "dom.h"
 #include "geometry.h"
 #include "text.h"
 
 #include <algorithm>
-#include <cstring>
+#include <set>
+#include <utility>
 
 using namespace litehtml;
 
@@ -12,28 +14,78 @@ namespace cg
 {
 namespace
 {
-bool tag_is(const element::ptr& el, const char* tag) { return std::strcmp(el->get_tagName(), tag) == 0; }
+// An alt this long is a title rather than a name.
+const int TITLE_CELLS = 16;
 
 float px_or(const css_length& l, float none)
 {
     return !l.is_predefined() && l.units() == css_units_px ? float(l.val()) : none;
 }
 
-// The text a reader sees: litehtml's `get_text` takes in comments too, and
-// mail hides whole Outlook tables in conditional ones.
-void shown_text(const element::ptr& el, std::string& out)
+// Mail tags each link with where in the mail it sits, in the query.
+std::string page_of(const char* href)
 {
-    if(el->is_comment() || el->css().get_display() == display_none) return;
-    if(el->is_text() || el->is_space()) el->get_text(out);
-    for(auto& child : el->children()) shown_text(child, out);
+    std::string url(href);
+    return url.substr(0, url.find_first_of("?#"));
 }
 
-element::ptr link_of(const element::ptr& el)
+// A picture says something or opens something; a spacer image does neither,
+// and its box keeps the gap it was put there for.
+bool picture(const element::ptr& img)
 {
-    for(auto p = el->parent(); p; p = p->parent())
-        if(tag_is(p, "a"))
-            if(const char* href = p->get_attr("href"); href && *href) return p;
-    return nullptr;
+    const char* alt = img->get_attr("alt");
+    if(alt && *alt) return true;
+    for(auto p = img->parent(); p; p = p->parent())
+        if(tag_is(p, "a")) return true;
+    return false;
+}
+
+struct LinkScan
+{
+    // The pages links with words open, and each link with none.
+    std::set<std::string>                               worded;
+    std::vector<std::pair<const element*, std::string>> bare;
+    // Bare links since the last words, and those the next words were a link's.
+    std::vector<const element*> pending;
+    std::set<const element*>    followed;
+};
+
+void scan(const element::ptr& el, LinkScan& s)
+{
+    if(el->is_comment() || el->css().get_display() == display_none) return;
+    if(el->is_text())
+    {
+        std::string text;
+        el->get_text(text);
+        if(squeezed(text).empty()) return;
+        if(link_of(el)) s.followed.insert(s.pending.begin(), s.pending.end());
+        s.pending.clear();
+        return;
+    }
+    if(tag_is(el, "a"))
+        if(const char* href = el->get_attr("href"); href && *href)
+        {
+            std::string text;
+            shown_text(el, text);
+            if(!squeezed(text).empty()) s.worded.insert(page_of(href));
+            else
+            {
+                s.pending.push_back(el.get());
+                s.bare.emplace_back(el.get(), page_of(href));
+            }
+        }
+    for(auto& child : el->children()) scan(child, s);
+}
+
+// Links that show nothing but whose page a button or a title opens too: a
+// product's picture beside its title, or a banner over its button.
+std::set<const element*> redundant_links(const element::ptr& root)
+{
+    LinkScan s;
+    scan(root, s);
+    for(auto& [link, page] : s.bare)
+        if(s.worded.count(page)) s.followed.insert(link);
+    return s.followed;
 }
 
 element::ptr table_of(const element::ptr& el)
@@ -81,8 +133,29 @@ bool spills(const element::ptr& el, int cols)
 void ImageLabels::label(const element::ptr& root, int width)
 {
     cols = width;
-    for(auto& child : root->children()) label(child, width);
-    if(tag_is(root, "img") && root->css().get_display() != display_none) label_one(root);
+    redundant = redundant_links(root);
+    shown_text(root, mail_text);
+    mail_text = squeezed(mail_text);
+    walk(root);
+}
+
+void ImageLabels::walk(const element::ptr& el)
+{
+    for(auto& child : el->children()) walk(child);
+    if(!tag_is(el, "img")) return;
+    if(picture(el)) pictures.push_back(el);
+    if(el->css().get_display() != display_none) label_one(el);
+}
+
+void ImageLabels::fit_boxes(const Contents& contents)
+{
+    for(auto& el : pictures)
+        for(auto box = el->parent(); box && box->css().get_display() != display_none; box = box->parent())
+        {
+            if(contents.of(box.get()).shows_text()) break;
+            box->css().set_height(css_length::predef_value(sizing_auto));
+            box->css().set_min_height(css_length(0, css_units_px));
+        }
 }
 
 // What an image shows, before any cut to its box; empty when it goes.
@@ -95,9 +168,12 @@ std::string ImageLabels::text_for(const element::ptr& el, bool icon, const eleme
     bool invisible    = (w >= 0 && w < CW) || (h >= 0 && h <= 2);
     // An icon decorates the text beside it, and its alt rarely fits it.
     if(invisible || (icon && !sole) || repeats_nearby(el, label)) return "";
+    // A title the mail shows as text already is a card's picture beside its
+    // caption, however far the markup puts it; a name is looked for nearby.
+    if(cells(label.c_str()) >= TITLE_CELLS && mail_text.find(label) != std::string::npos) return "";
     if(!label.empty() || !sole || icon) return label;
-    if(std::find(labelled_links.begin(), labelled_links.end(), link.get()) != labelled_links.end()) return "";
-    labelled_links.push_back(link.get());
+    if(labelled_links.count(link.get()) || redundant.count(link.get())) return "";
+    labelled_links.insert(link.get());
     return "[link]";
 }
 

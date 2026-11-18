@@ -1,0 +1,50 @@
+#include "buttons.h"
+
+#include "colour.h"
+#include "dom.h"
+
+using namespace litehtml;
+
+namespace cg
+{
+namespace
+{
+// The innermost filled box round one line of a few words, all a link's, is
+// a button; the sections round it are not. A page-light fill gives way to
+// the terminal's, and the frame round its rows is the button's shape.
+bool button(const element::ptr& el, const Holds& h)
+{
+    const web_color& bg = el->css().get_bg().m_color;
+    if(!bg.alpha || page_light(rgb(bg))) return false;
+    if(h.over || h.words().empty() || h.blocks || h.filled) return false;
+    return tag_is(el, "a") || link_of(el) || h.linked;
+}
+
+// A slab three rows high reads as no button, and a border a cell thick
+// only adds a row to the fill that is its shape.
+void flatten(const element::ptr& el)
+{
+    css_properties& css = el->css();
+    css_margins     p   = css.get_padding();
+    p.top.set_value(0, css_units_px);
+    p.bottom.set_value(0, css_units_px);
+    css.set_padding(p);
+    css_borders b = css.get_borders();
+    for(css_border* e : {&b.top, &b.bottom, &b.left, &b.right})
+    {
+        e->style = border_style_none;
+        e->width = css_length(0, css_units_px);
+    }
+    css.set_borders(b);
+    css.set_height(css_length::predef_value(sizing_auto));
+    css.set_min_height(css_length(0, css_units_px));
+    for(auto& child : el->children()) flatten(child);
+}
+} // namespace
+
+void flatten_buttons(const element::ptr& root, const Contents& contents)
+{
+    if(button(root, contents.of(root.get()))) return flatten(root);
+    for(auto& child : root->children()) flatten_buttons(child, contents);
+}
+} // namespace cg

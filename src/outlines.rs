@@ -23,12 +23,14 @@ pub fn of(grid: &CellGrid) -> Vec<Outline> {
     let cells = grid.cells();
     let mut out = vec![Outline::Fill; cells.len()];
     let mut seen = vec![false; cells.len()];
+    let page = region::page(grid);
+    let fills: Vec<Option<Rgb>> = cells.iter().map(|cell| region::fill(cell, page)).collect();
     for start in 0..cells.len() {
-        let Some(colour) = region::fill(&cells[start]).filter(|_| !seen[start]) else {
+        let Some(colour) = fills[start].filter(|_| !seen[start]) else {
             continue;
         };
 
-        let members = touching(grid, start, &mut seen);
+        let members = touching(&fills, grid.cols(), start, &mut seen);
         let region = Region::new(grid, &members);
         if !region.boxed() {
             continue;
@@ -51,10 +53,9 @@ pub fn of(grid: &CellGrid) -> Vec<Outline> {
 }
 
 /// The cells joined to `start` through cells of its fill, marked `seen`.
-fn touching(grid: &CellGrid, start: usize, seen: &mut [bool]) -> Vec<usize> {
-    let cells = grid.cells();
-    let cols = usize::from(grid.cols().max(1));
-    let colour = region::fill(&cells[start]);
+fn touching(fills: &[Option<Rgb>], cols: u16, start: usize, seen: &mut [bool]) -> Vec<usize> {
+    let cols = usize::from(cols.max(1));
+    let colour = fills[start];
     let mut members = vec![start];
     seen[start] = true;
     let mut next = 0;
@@ -63,13 +64,13 @@ fn touching(grid: &CellGrid, start: usize, seen: &mut [bool]) -> Vec<usize> {
         let col = i % cols;
         let around = [
             i.checked_sub(cols),
-            Some(i + cols).filter(|&below| below < cells.len()),
+            Some(i + cols).filter(|&below| below < fills.len()),
             (col > 0).then(|| i - 1),
             (col + 1 < cols).then(|| i + 1),
         ];
 
         for n in around.into_iter().flatten() {
-            if !seen[n] && region::fill(&cells[n]) == colour {
+            if !seen[n] && fills[n] == colour {
                 seen[n] = true;
                 members.push(n);
             }

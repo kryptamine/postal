@@ -12,8 +12,10 @@ one key away.
 Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
 buffer of cells: `cell_grid.cpp` draws, `snap.cpp` snaps the styles before
-layout, `image_labels.cpp` decides each image, `colour.cpp` and `text.cpp`
-hold the colour and cell-width helpers.
+layout, `image_labels.cpp` decides each image, `buttons.cpp` lays buttons
+out one row high, `contents.cpp` gathers what each element shows for those
+passes in one walk, and `colour.cpp`, `text.cpp` and `dom.cpp` hold the
+colour, cell-width and element helpers.
 
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
   is one row high. A 600 px mail is 75 columns. `font-size` never changes the
@@ -26,7 +28,8 @@ hold the colour and cell-width helpers.
   row of its own already, and a 12 px padding made a button five rows high. A
   border the colour of the fill it sits on goes, as a browser cannot show it,
   unless that fill is page-light or grey and may itself give way to the
-  terminal, when the border is the box's only shape. Half
+  terminal, when the border is the box's only shape. A transparent border
+  takes no room either. Half
   a row rounds up above a box and down below it, so the 8 px under a paragraph
   and the 8 px over the next make one row. Collapsed table borders become
   separate ones with no spacing: litehtml gives each cell half a collapsed
@@ -55,9 +58,29 @@ hold the colour and cell-width helpers.
     and under 200 bytes, as an avatar's caption or a status icon's job name
     is (`Appfire` beside `Appfire · Sofia` read `Appfir Appfire`).
 
+  - it is all a link shows and a link with words opens the same page (the
+    href before its query, where mail tags where in the mail a link sits),
+    or the next words in the mail are a link's: a product's picture beside
+    its title, a banner over its button;
+  - its `alt` is 16 columns or more and the mail shows it as text anywhere:
+    a card's title under its picture, however far the markup puts it.
+
+  A box with pictures and no text, a space even, was sized for them: its
+  height and min-height go, or a product photo's cell stood twelve rows
+  high. A spacer image (no `alt`, no link) keeps its box's gap.
+
   Each label gets a `src` of its own, since mail reuses one icon file under
   many `alt`s. A percentage width stays, so a long `alt` cannot widen its
   table past the pane.
+
+- A button is the innermost box with a fill that is not page-light round
+  one line of at most 40 columns, all of it a link's. It loses its vertical
+  padding, height and borders: padding was rows of fill, and a slab three
+  rows high read as no button. A page-light button gives way to the
+  terminal, and the frame round its rows (below) is its shape.
+- An inline-block holding blocks is a column of a fluid layout and aligns
+  to the top: on the baseline the columns' bottoms line up, which only
+  images of one height kept level.
 
 Two changes to litehtml, both recorded in `vendor/litehtml/VENDORED.md`.
 `document::rebuild_render_tree` is public: the boxes are built from the
@@ -106,6 +129,11 @@ sits on the terminal's own background (`src/outlines.rs`, `src/region.rs`).
 The pass works on the grid, so the layout, and what fits the pane, does not
 change.
 
+- A section fill is one not page-light, or a page-light one at least 10
+  apart in some channel from the page: the colour most of the pane's two
+  side columns lie on, white where the mail sets none. Cards fill the
+  middle and may outnumber the page there. A light card laid on the page
+  gave way to the terminal with it, and a mail's cards ran together.
 - Section cells of one colour that touch are one region with one frame,
   however many boxes made them: mail builds a block out of many cells.
 - The frame is drawn in the blank cells along the region's edge. An edge
@@ -121,7 +149,10 @@ change.
   that is a drawing made of fills, as the bars of a chart are.
 
 On 819 cached mails at 74 columns this changed 191, left the count that do
-not fit at 63, and cut the filled cells to a fifth.
+not fit at 63, and cut the filled cells to a fifth. The rules for picture
+links, picture boxes, buttons, fluid columns and light cards then changed
+504 of them, left 63 not fitting, and cut the `[link]` labels from 462 to
+192.
 
 Deciding a section by the size of the merged region, not of each box, was
 tried: it framed chart bars and footer gutters and improved nothing.

@@ -58,6 +58,14 @@ impl Rgb {
         }
     }
 
+    /// How far apart two colours are, in their furthest channel.
+    pub fn distance(self, other: Self) -> u8 {
+        self.r
+            .abs_diff(other.r)
+            .max(self.g.abs_diff(other.g))
+            .max(self.b.abs_diff(other.b))
+    }
+
     /// How far the channels spread: low for a grey.
     pub fn chroma(self) -> u8 {
         let high = self.r.max(self.g).max(self.b);

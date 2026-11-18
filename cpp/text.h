@@ -16,6 +16,9 @@ int cells(const char* text);
 std::string fit(const std::string& text, int cols);
 // Runs of whitespace, NBSP among them, become one space, none at the ends.
 std::string squeezed(const std::string& s);
+// As `squeezed`, keeping one space at an end with whitespace, so two pieces
+// squeezed apart join as the whole would.
+std::string loosely_squeezed(const std::string& s);
 } // namespace cg
 
 #endif

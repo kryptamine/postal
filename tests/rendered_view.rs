@@ -312,13 +312,13 @@ fn padding_under_a_border_adds_no_blank_row() {
     assert!(screen.row_text(row + 1).contains('└'), "{}", screen.text());
 }
 
-// A border the colour of its button's fill does not show in a browser; drawn
-// a cell thick it framed the label in a line the fill had to be moved from.
+// A filled button's padding was rows of fill and its border a row more: a
+// slab three rows high or a label in a frame the fill was moved against.
 #[test]
-fn a_border_the_colour_of_its_fill_is_not_drawn() {
+fn a_filled_button_is_one_row_with_no_border() {
     let body = html(
         "<p>x</p><a href=\"https://ci.example\" style=\"display:inline-block;color:#fff;\
-         background:#1f883d;border:1px solid #1f883d;padding:12px 24px\">View run</a>",
+         background:#1f883d;border:1px solid #0b5a20;padding:12px 24px\">View run</a>",
     );
     let screen = preview(body, &DEFAULT, "View run");
     let (row, col) = at(&screen, "View run");
@@ -327,9 +327,28 @@ fn a_border_the_colour_of_its_fill_is_not_drawn() {
         "{}",
         screen.text()
     );
-    for r in [row - 1, row, row + 1] {
-        assert!(matches!(bg(&screen, r, col), Color::Rgb(..)), "row {r}");
+    assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
+    for r in [row - 1, row + 1] {
+        assert_eq!(bg(&screen, r, col), Color::Default, "row {r}");
     }
+}
+
+// A transparent border never shows; a cell thick it boxed a button's label
+// in a frame of the terminal's own colour.
+#[test]
+fn a_transparent_border_takes_no_room() {
+    let body = html(
+        "<p>x</p><a href=\"https://ci.example\"><span style=\"display:inline-block;\
+         border:1px solid transparent\">Learn more</span></a>",
+    );
+    let screen = preview(body, &DEFAULT, "Learn more");
+    assert!(
+        !pane(&screen)
+            .iter()
+            .any(|r| r.contains('┌') || r.contains('│')),
+        "{}",
+        screen.text()
+    );
 }
 
 // A border a cell thick is drawn round a box's background, as a 1px one
@@ -474,4 +493,98 @@ fn a_linked_icon_shows_its_whole_alt_where_it_fits() {
     assert_eq!(named.len(), 2, "{}", rows.join("\n"));
     assert!(named[0].contains('…') && !named[0].contains("Instagram"));
     assert!(named[1].contains("Instagram"));
+}
+
+// A product's picture and a banner over its button open what the words
+// beside them do: `[link]` on each was a column of noise in a shop's mail.
+#[test]
+fn a_picture_link_whose_page_the_words_open_shows_no_label() {
+    let picture = |href: &str| {
+        format!(
+            "<a href=\"{href}\"><img src=\"https://cdn.example/p.png\" width=\"240\" alt=\"\"></a>"
+        )
+    };
+    let body = html(&format!(
+        "{}<p><a href=\"https://shop.example/kettle?from=title\">Kettle</a></p>\
+         {}<p><a href=\"https://t.example/2\">See more</a></p>{}<p>End</p>",
+        picture("https://shop.example/kettle?from=picture"),
+        picture("https://t.example/1"),
+        picture("https://elsewhere.example/"),
+    ));
+    let screen = preview(body, &DEFAULT, "End");
+    let labels: usize = pane(&screen)
+        .iter()
+        .map(|r| r.matches("[link]").count())
+        .sum();
+    assert_eq!(labels, 1, "{}", screen.text());
+}
+
+// A cell sized for a product photo stood twelve blank rows high once the
+// photo was a label, or gone.
+#[test]
+fn a_box_sized_for_a_picture_shrinks_to_what_is_left() {
+    let body = html(
+        "<p>Above</p><table><tr><td style=\"height:200px;min-height:200px\">\
+         <a href=\"https://shop.example/kettle\"><img src=\"https://cdn.example/p.png\" \
+         width=\"240\" alt=\"\"></a></td></tr></table>\
+         <p><a href=\"https://shop.example/kettle\">Kettle</a></p>",
+    );
+    let screen = preview(body, &DEFAULT, "Kettle");
+    let rows = pane(&screen);
+    let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
+    // The two paragraphs' margins, which a table between them keeps apart.
+    assert_eq!(row("Kettle") - row("Above"), 3, "{}", rows.join("\n"));
+}
+
+// Columns of a fluid layout stand on the baseline, which only images of one
+// height kept level: without them the cards rose and fell in a zigzag.
+#[test]
+fn fluid_columns_line_up_at_the_top() {
+    let column = |lines: &str| {
+        format!(
+            "<div style=\"display:inline-block;width:45%\"><table><tr><td>{lines}</td></tr></table></div>"
+        )
+    };
+    let body = html(&format!(
+        "<div>{}{}</div>",
+        column("Left card"),
+        column("Right card<br>second line<br>third line")
+    ));
+    let screen = preview(body, &DEFAULT, "third line");
+    assert_eq!(
+        at(&screen, "Left card").0,
+        at(&screen, "Right card").0,
+        "{}",
+        screen.text()
+    );
+}
+
+// A light card on a white page gave way to the terminal with the page, and
+// the cards of a mail ran together: one set apart from the page is framed.
+#[test]
+fn a_light_card_on_the_page_gets_a_frame() {
+    let body = html(
+        "<p>Page</p><div style=\"background:#f0f0ff;padding:32px\">Card</div><p>More page</p>",
+    );
+    let screen = preview(body, &DEFAULT, "More page");
+    let (row, col) = at(&screen, "Card");
+    assert_eq!(bg(&screen, row, col), Color::Default);
+    assert_eq!(frames(&screen), 1, "{}", screen.text());
+}
+
+// A card's picture is named by its title, which the card shows as text
+// further on: both read `Dungeon Crawler Carl` twice.
+#[test]
+fn an_alt_the_mail_shows_as_a_title_is_dropped() {
+    let body = html(
+        "<table><tr><td><img src=\"https://cdn.example/b.png\" width=\"160\" \
+         alt=\"Dungeon Crawler Carl\"></td></tr></table>\
+         <table><tr><td>Fallout x Dungeon Crawler Carl</td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "Fallout");
+    let titles = pane(&screen)
+        .iter()
+        .filter(|r| r.contains("Dungeon Crawler Carl"))
+        .count();
+    assert_eq!(titles, 1, "{}", screen.text());
 }

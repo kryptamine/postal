@@ -55,7 +55,7 @@ std::string fit(const std::string& text, int cols)
     return text;
 }
 
-std::string squeezed(const std::string& s)
+std::string loosely_squeezed(const std::string& s)
 {
     std::string out;
     bool        space = false;
@@ -64,7 +64,7 @@ std::string squeezed(const std::string& s)
         bool nbsp = s.compare(i, 2, "\xC2\xA0") == 0;
         if(nbsp || std::strchr(" \t\r\n\f", s[i]))
         {
-            space = !out.empty();
+            space = true;
             i += nbsp;
             continue;
         }
@@ -73,6 +73,15 @@ std::string squeezed(const std::string& s)
         space = false;
         out += s[i];
     }
+    if(space) out += ' ';
     return out;
+}
+
+std::string squeezed(const std::string& s)
+{
+    std::string out = loosely_squeezed(s);
+    size_t      start = out.compare(0, 1, " ") == 0, end = out.size();
+    if(end > start && out[end - 1] == ' ') end--;
+    return out.substr(start, end - start);
 }
 } // namespace cg

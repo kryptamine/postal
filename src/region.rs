@@ -1,6 +1,6 @@
 use crate::{
     cell_grid::{self, Cell, CellGrid},
-    rgb::Rgb,
+    rgb::{Rgb, WHITE},
 };
 
 /// A region this short or narrow has no room for a frame.
@@ -17,9 +17,37 @@ const SIDES: [fn(usize, usize) -> usize; 4] = [
     |at, _| at + 1,
 ];
 
-/// The section fill of `cell`: one dark enough not to be the page.
-pub fn fill(cell: &Cell) -> Option<Rgb> {
-    cell.bg().filter(|&bg| cell.panel() && !page_light(bg))
+/// A light fill this far from the page is a card laid on it; any nearer
+/// only tints it.
+const TINT: u8 = 10;
+
+/// The section fill of `cell`: one dark enough not to be the page, or a
+/// light one set apart from the mail's `page`.
+pub fn fill(cell: &Cell, page: Rgb) -> Option<Rgb> {
+    cell.bg()
+        .filter(|&bg| cell.panel() && (!page_light(bg) || bg.distance(page) >= TINT))
+}
+
+/// The colour most of the pane's side columns lie on, white where the mail
+/// sets none: cards fill the middle, and may outnumber the page there.
+pub fn page(grid: &CellGrid) -> Rgb {
+    let sides = grid
+        .rows()
+        .flat_map(|row| [row.first(), row.last()])
+        .flatten();
+    let mut counts: Vec<(Rgb, usize)> = Vec::new();
+    for cell in sides {
+        let bg = cell.bg().unwrap_or(WHITE);
+        match counts.iter_mut().find(|(colour, _)| *colour == bg) {
+            Some((_, count)) => *count += 1,
+            None => counts.push((bg, 1)),
+        }
+    }
+
+    counts
+        .into_iter()
+        .max_by_key(|&(_, count)| count)
+        .map_or(WHITE, |(colour, _)| colour)
 }
 
 /// The cells of one section fill that touch, in a window `RING` cells

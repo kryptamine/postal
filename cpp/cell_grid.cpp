@@ -3,7 +3,9 @@
 // are never fetched. See docs/adr/0006-rendered-view-engine.md.
 #include "cell_grid.h"
 
+#include "buttons.h"
 #include "colour.h"
+#include "contents.h"
 #include "geometry.h"
 #include "image_labels.h"
 #include "snap.h"
@@ -412,6 +414,11 @@ extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
             return nullptr;
         }
         grid->container.images.label(doc->root(), cols);
+        {
+            Contents contents(doc->root());
+            grid->container.images.fit_boxes(contents);
+            flatten_buttons(doc->root(), contents);
+        }
         snap_tree(doc->root());
         // The boxes were built from the styles before the snap.
         doc->rebuild_render_tree();

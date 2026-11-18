@@ -1,9 +1,8 @@
 #include "snap.h"
 
 #include "colour.h"
+#include "dom.h"
 #include "geometry.h"
-
-#include <cstring>
 
 using namespace litehtml;
 
@@ -16,6 +15,12 @@ bool shown(const css_border& b)
     return b.width.val() > 0 && b.style != border_style_none && b.style != border_style_hidden;
 }
 
+void hide(css_border& b)
+{
+    b.style = border_style_none;
+    b.width = css_length(0, css_units_px);
+}
+
 void snap(css_length& l, float (*to)(float))
 {
     if(!l.is_predefined() && l.units() == css_units_px) l.set_value(to(l.val()), css_units_px);
@@ -23,17 +28,26 @@ void snap(css_length& l, float (*to)(float))
 
 bool under_a_row(const css_length& l) { return !l.is_predefined() && l.units() == css_units_px && l.val() < CH; }
 
-// A border the colour of the fill under it does not show in a browser, so it
-// takes no room. A page-light or grey fill may give way to the terminal's
-// background (src/mail_colours.rs), and then the border is the box's shape.
+// A transparent border, or one the colour of the fill under it, takes no
+// room. A page-light or grey fill may give way to the terminal's background
+// (src/mail_colours.rs), and then the border is the box's shape.
 void hide_unseen(css_borders& b, uint32_t fill)
 {
-    if(!fill || page_light(fill) || grey(fill)) return;
+    bool fill_may_go = !fill || page_light(fill) || grey(fill);
     for(css_border* e : {&b.top, &b.bottom, &b.left, &b.right})
-        if(shown(*e) && alike(rgb(e->color), fill))
+        if(shown(*e) && (e->color.alpha == 0 || (!fill_may_go && alike(rgb(e->color), fill)))) hide(*e);
+}
+
+// Inline-blocks holding blocks are the columns of a fluid layout. On the
+// baseline their bottoms line up, which only images of one height hide.
+void top_aligned(const element::ptr& el, css_properties& css)
+{
+    if(css.get_display() != display_inline_block || css.get_vertical_align() != va_baseline) return;
+    for(auto& child : el->children())
+        if(child->is_block_box() || child->css().get_display() == display_table)
         {
-            e->style = border_style_none;
-            e->width = css_length(0, css_units_px);
+            css.set_vertical_align(va_top);
+            return;
         }
 }
 
@@ -58,6 +72,7 @@ void snap_box(const element::ptr& el, uint32_t fill)
 {
     css_properties& css = el->css();
     if(const web_color& own = css.get_bg().m_color; own.alpha) fill = rgb(own);
+    top_aligned(el, css);
 
     css_margins m = css.get_margins();
     snap(m.top, rows_above);
@@ -78,7 +93,7 @@ void snap_box(const element::ptr& el, uint32_t fill)
     snap(p.left, columns);
     snap(p.right, columns);
     css.set_padding(p);
-    one_cell_thick(b, std::strcmp(el->get_tagName(), "hr") == 0);
+    one_cell_thick(b, tag_is(el, "hr"));
     css.set_borders(b);
 
     css_length h = css.get_height();

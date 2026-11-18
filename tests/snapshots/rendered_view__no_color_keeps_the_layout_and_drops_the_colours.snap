@@ -27,14 +27,14 @@ size: 120x40  cursor: hidden
 │                                        ││    Total                                                       +1,959.38   │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
-│                                        ││                                                                            │
 │                                        ││                               View statement                               │
 │                                        ││                                                                            │
-│                                        ││                                                                            │
-│                                        ││ │                                                                          │
-│                                        ││ │   Never share your PIN. We will never ask for it by email.               │
-│                                        ││ │                                                                          │
+│                                        ││ │┌───────────────────────────────────────────────────────────────────────┐ │
+│                                        ││ ││  Never share your PIN. We will never ask for it by email.             │ │
+│                                        ││ │└───────────────────────────────────────────────────────────────────────┘ │
 │                                        ││ Bank logo                                                                  │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
@@ -69,14 +69,14 @@ styles:
 21: 0 dim; 41-42 dim; 47-115 bold; 119 dim
 22: 0 dim; 41-42 dim; 119 dim
 23: 0 dim; 41-42 dim; 119 dim
-24: 0 dim; 41-42 dim; 119 dim
-25: 0 dim; 41-42 dim; 74-90 bold; 119 dim
-26: 0 dim; 41-42 dim; 119 dim
-27: 0 dim; 41-42 dim; 119 dim
-28: 0 dim; 41-42 dim; 119 dim
-29: 0 dim; 41-42 dim; 119 dim
+24: 0 dim; 41-42 dim; 74-90 bold; 119 dim
+25: 0 dim; 41-42 dim; 119 dim
+26: 0 dim; 41-42 dim; 45-117 dim; 119 dim
+27: 0 dim; 41-42 dim; 45-47 dim; 117 dim; 119 dim
+28: 0 dim; 41-42 dim; 45-117 dim; 119 dim
+29: 0 dim; 41-42 dim; 44-52 dim italic; 119 dim
 30: 0 dim; 41-42 dim; 119 dim
-31: 0 dim; 41-42 dim; 44-52 dim italic; 119 dim
+31: 0 dim; 41-42 dim; 119 dim
 32: 0 dim; 41-42 dim; 119 dim
 33: 0 dim; 41-42 dim; 119 dim
 34: 0 dim; 41-42 dim; 119 dim
