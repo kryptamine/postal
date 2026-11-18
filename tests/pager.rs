@@ -103,10 +103,10 @@ fn paged(html: &str, keys: &[Key], no_color: bool) -> String {
     visible(&std::fs::read(&record).unwrap())
 }
 
-// The pager copy keeps the Preview's styling and lists every URL, since
-// the pager has no hint mode and URLs must stay copyable.
+// The pager copy keeps the Preview's styling, makes each link a hyperlink
+// a terminal opens on click, and lists every URL for terminals without.
 #[test]
-fn pipe_hands_the_message_with_link_footnotes_to_the_pager() {
+fn pipe_hands_the_message_with_hyperlinks_and_footnotes_to_the_pager() {
     insta::assert_snapshot!("colour", paged(HTML, &[Key::Char('|')], false));
 }
 
@@ -122,6 +122,17 @@ fn the_full_screen_message_goes_to_the_pager_too() {
         paged(HTML, &keys, true),
         paged(HTML, &[Key::Char('|')], true)
     );
+}
+
+// Mail is untrusted: a control character in a link would end the OSC 8
+// sequence early and reach the terminal as a command of its own.
+#[test]
+fn a_link_with_a_control_character_is_no_hyperlink() {
+    let html = "<p><a href=\"https://evil.example/&#27;]2;owned&#7;\">bait</a> \
+        <a href=\"https://good.example/\">the agenda</a></p>";
+    let copy = paged(html, &[Key::Char('|')], true);
+    assert!(copy.contains("␛]8;;https://good.example/"), "{copy}");
+    assert!(!copy.contains("␛]8;;https://evil.example"), "{copy}");
 }
 
 // Run straight under the terminal, Postal would lead an orphaned process

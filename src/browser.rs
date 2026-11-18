@@ -26,3 +26,14 @@ pub fn open(url: &str) -> io::Result<()> {
 
     Ok(())
 }
+
+/// Mail is untrusted: a `file:` URL or one read as an option could start a
+/// program, and a control character could end an escape sequence early, so
+/// only plain web and mail links leave Postal.
+pub fn safe(url: &str) -> bool {
+    let web = ["http://", "https://", "mailto:"].iter().any(|scheme| {
+        url.get(..scheme.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(scheme))
+    });
+    web && !url.chars().any(char::is_control)
+}

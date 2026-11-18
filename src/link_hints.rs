@@ -2,7 +2,7 @@ use std::{fmt::Write, ops::Range, sync::Arc};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::{stack_str::StackStr, styled_line::StyledLine};
+use crate::{browser, stack_str::StackStr, styled_line::StyledLine};
 
 /// The home row, so typing a label needs no reach.
 const ALPHABET: [char; 9] = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
@@ -39,7 +39,7 @@ impl LinkHints {
         let shown = body.iter().enumerate().take(lines.end).skip(lines.start);
         for (line, styled) in shown {
             for (run, segment) in styled.segments().enumerate() {
-                let Some(url) = segment.link.filter(|url| openable(url)) else {
+                let Some(url) = segment.link.filter(|url| browser::safe(url)) else {
                     continue;
                 };
 
@@ -107,13 +107,4 @@ impl LinkHints {
     const fn two_letters(&self) -> bool {
         self.targets.len() > ALPHABET.len()
     }
-}
-
-/// Mail is untrusted: a `file:` URL or one read as an option could start a
-/// program, so only web and mail links are handed to the opener.
-fn openable(url: &str) -> bool {
-    ["http://", "https://", "mailto:"].iter().any(|scheme| {
-        url.get(..scheme.len())
-            .is_some_and(|start| start.eq_ignore_ascii_case(scheme))
-    })
 }

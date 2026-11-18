@@ -59,3 +59,11 @@ pub fn styled(out: &mut impl Write, text: &str, style: Style) -> io::Result<()> 
     out.write_all(text.as_bytes())?;
     out.write_all(RESET)
 }
+
+/// `text` in `style` as an OSC 8 hyperlink to `url`, which the caller has
+/// checked holds no control character.
+pub fn hyperlink(out: &mut impl Write, url: &str, text: &str, style: Style) -> io::Result<()> {
+    write!(out, "\x1b]8;;{url}\x1b\\")?;
+    styled(out, text, style)?;
+    out.write_all(b"\x1b]8;;\x1b\\")
+}

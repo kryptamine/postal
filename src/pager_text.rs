@@ -1,9 +1,10 @@
 use std::io::{self, Write};
 
-use crate::{ansi, preview::Preview, preview_pane::LABELS, theme::Theme};
+use crate::{ansi, browser, preview::Preview, preview_pane::LABELS, theme::Theme};
 
 /// `preview` as the bytes piped to the pager: the header block, a blank
-/// line, then the body, in the Theme's ANSI styles.
+/// line, then the body, in the Theme's ANSI styles, each link an OSC 8
+/// hyperlink a terminal can open on click.
 pub fn ansi(preview: &Preview, theme: &Theme) -> Vec<u8> {
     let mut out = Vec::new();
     // Writing to a `Vec` cannot fail.
@@ -27,7 +28,11 @@ fn write(out: &mut Vec<u8>, preview: &Preview, theme: &Theme) -> io::Result<()> 
     out.write_all(b"\n")?;
     for line in &preview.body {
         for segment in line.segments() {
-            ansi::styled(out, segment.text, theme.marked(segment.marks))?;
+            let style = theme.marked(segment.marks);
+            match segment.link.filter(|url| browser::safe(url)) {
+                Some(url) => ansi::hyperlink(out, url, segment.text, style)?,
+                None => ansi::styled(out, segment.text, style)?,
+            }
         }
 
         out.write_all(b"\n")?;
