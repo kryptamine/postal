@@ -8,8 +8,8 @@ use ratatui::{
 };
 
 use crate::{
-    centred::centred, inbox_view::InboxView, link_hints::LinkHints, preview::Preview, shown::Shown,
-    stack_str::StackStr, theme::Theme, truncate,
+    centred::centred, inbox_view::InboxView, layout::PADDING, link_hints::LinkHints,
+    preview::Preview, shown::Shown, stack_str::StackStr, theme::Theme, truncate,
 };
 
 /// The header labels, padded so the values line up.
@@ -18,13 +18,13 @@ const LABEL_WIDTH: u16 = 8;
 /// The header rows and the blank row under them.
 const HEADER_ROWS: usize = LABELS.len() + 1;
 
-/// Where a Preview's text goes in `pane`: inside the border, with one column
-/// of padding each side and none on top.
+/// Where a Preview's text goes in `pane`: inside the border, padded each
+/// side and not on top.
 pub const fn text_area(pane: Rect) -> Rect {
     Rect {
-        x: pane.x.saturating_add(2),
+        x: pane.x.saturating_add(1 + PADDING),
         y: pane.y.saturating_add(1),
-        width: pane.width.saturating_sub(4),
+        width: pane.width.saturating_sub(2 * (1 + PADDING)),
         height: pane.height.saturating_sub(2),
     }
 }

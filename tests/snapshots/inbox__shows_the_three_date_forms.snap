@@ -4,11 +4,11 @@ expression: screen
 ---
 size: 80x25  cursor: hidden
 ┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
-│  Today                                                                  00:01│
-│  Shows the time                                                              │
+│   Today                                                                00:01 │
+│   Shows the time                                                             │
 │                                                                              │
-│  This year                                                              1 Jan│
-│  Shows day and month                                                         │
+│   This year                                                            1 Jan │
+│   Shows day and month                                                        │
 │                                                                              │
 │                                                                              │
 │                                                                              │

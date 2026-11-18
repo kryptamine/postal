@@ -63,7 +63,7 @@ fn selected_subject(screen: &Screen) -> Option<String> {
 /// no card on screen names it.
 fn card(screen: &Screen, sender: &str) -> Option<bool> {
     let row = (0..screen.rows()).find(|&row| screen.row_text(row).contains(sender))?;
-    Some(screen.cell(row, 1)?.contents() == "●")
+    Some(screen.cell(row, 2)?.contents() == "●")
 }
 
 fn message(sender: &'static str, subject: &str, date: &str) -> FakeMessage {
@@ -203,7 +203,7 @@ fn an_expunge_older_than_the_cache_renumbers_the_cached_rows() {
 
     let marked = |subject: &str| {
         let row = (0..screen.rows()).find(|&row| screen.row_text(row).contains(subject));
-        row.and_then(|row| screen.cell(row - 1, 1))
+        row.and_then(|row| screen.cell(row - 1, 2))
             .map(|cell| cell.contents() == "●")
     };
 

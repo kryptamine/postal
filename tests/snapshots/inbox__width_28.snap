@@ -4,14 +4,14 @@ expression: screen
 ---
 size: 28x32  cursor: hidden
 ┌ Inbox  1 unread ─────────┐
-│● Александр               │
-│  Café menu for the week …│
+│ ● Александр              │
+│   Café menu for the wee… │
 │                          │
-│  山田太郎                │
-│  東京オフィス移転のお知… │
+│   山田太郎               │
+│   東京オフィス移転のお…  │
 │                          │
-│  Events Team             │
-│  🎉 Launch party on Frid…│
+│   Events Team            │
+│   🎉 Launch party on Fr… │
 │                          │
 │                          │
 │                          │

@@ -8,6 +8,8 @@ const SIDE_BY_SIDE: u16 = 84;
 const LIST_WIDTH: u32 = 35;
 /// The Message List's share of the height above the Preview, in percent.
 const LIST_HEIGHT: u32 = 45;
+/// Columns between a pane's border and its text, each side.
+pub const PADDING: u16 = 1;
 
 /// Where the main screen's parts go: the panes, and the hint line on the
 /// bottom row. Too narrow for a list, there is no Preview, so the list says

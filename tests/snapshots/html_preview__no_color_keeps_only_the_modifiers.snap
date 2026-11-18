@@ -4,9 +4,9 @@ expression: screen.with_styles()
 ---
 size: 120x12  cursor: hidden
 ┌ Inbox  0 unread ───────────────────────┐┌ 1/1 ───────────────────────────────────────────────────────────────────────┐
-│  Sender                      2024-11-18││ From    Sender                                                             │
-│  Subject                               ││ Subject Subject                                                            │
-│  Red bold italic link code             ││ Date    Mon, 18 Nov 2024 09:00                                             │
+│   Sender                    2024-11-18 ││ From    Sender                                                             │
+│   Subject                              ││ Subject Subject                                                            │
+│   Red bold italic link code            ││ Date    Mon, 18 Nov 2024 09:00                                             │
 │                                        ││                                                                            │
 │                                        ││ Red bold italic link code                                                  │
 │                                        ││                                                                            │

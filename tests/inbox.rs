@@ -281,14 +281,15 @@ fn colours_unless_no_color_is_set() {
     quit(t);
 
     let style = |s: &Screen, row, col| *s.cell(row, col).unwrap().style();
-    assert_eq!(style(&coloured, 1, 3).fg, termlens::Color::Indexed(4));
+    assert_eq!(style(&coloured, 1, 4).fg, termlens::Color::Indexed(4));
     for screen in [&coloured, &plain] {
-        let newest = style(screen, 1, 3);
+        let newest = style(screen, 1, 4);
         assert!(newest.reverse, "the selection survives NO_COLOR");
         assert!(newest.bold, "the Unread card stays bold");
-        assert_eq!(screen.cell(1, 1).unwrap().contents(), "●");
-        // Card 2 is read and unselected; its date ends at the right border.
-        assert!(style(screen, 4, 78).dim, "the date is muted");
+        assert_eq!(screen.cell(1, 2).unwrap().contents(), "●");
+        // Card 2 is read and unselected; its date ends one column of padding
+        // short of the right border.
+        assert!(style(screen, 4, 77).dim, "the date is muted");
         assert!(style(screen, 0, 0).dim, "the border is muted");
         assert!(style(screen, 0, 2).bold, "the title is bold");
     }

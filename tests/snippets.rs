@@ -163,7 +163,7 @@ fn shows_a_snippet_for_each_kind_of_text_part() {
     let row = (0..screen.rows())
         .find(|&row| screen.row_text(row).contains("Hello world"))
         .unwrap();
-    assert!(screen.cell(row, 3).unwrap().style().dim, "{screen}");
+    assert!(screen.cell(row, 4).unwrap().style().dim, "{screen}");
     quit(t);
 
     // Reading must leave the Message Unread; a Snippet needs only a part's start.

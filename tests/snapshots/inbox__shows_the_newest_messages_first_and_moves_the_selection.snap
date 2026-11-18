@@ -4,11 +4,11 @@ expression: screen
 ---
 size: 80x25  cursor: hidden
 ┌ Inbox  1 unread ─────────────────────────────────────────────────────────────┐
-│● Carol                                                             2024-05-10│
-│  Newest                                                                      │
+│ ● Carol                                                           2024-05-10 │
+│   Newest                                                                     │
 │                                                                              │
-│  Alice                                                             2024-03-02│
-│  Second newest                                                               │
+│   Alice                                                           2024-03-02 │
+│   Second newest                                                              │
 │                                                                              │
 │                                                                              │
 │                                                                              │

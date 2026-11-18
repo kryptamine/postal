@@ -4,17 +4,17 @@ expression: screen
 ---
 size: 100x32  cursor: hidden
 ┌ Inbox  1 unread ────────────────┐┌ 1/4 ──────────────────────────────────────────────────────────┐
-│● Александр            2024-11-17││ From    Александр                                             │
-│  Café menu for the week ahead   ││ Subject Café menu for the week ahead                          │
+│ ● Александр          2024-11-17 ││ From    Александр                                             │
+│   Café menu for the week ahead  ││ Subject Café menu for the week ahead                          │
 │                                 ││ Date    Sun, 17 Nov 2024 14:05                                │
-│  山田太郎             2024-11-16││                                                               │
-│  東京オフィス移転のお知らせ：新…││                                                               │
+│   山田太郎           2024-11-16 ││                                                               │
+│   東京オフィス移転のお知らせ：… ││                                                               │
 │                                 ││                                                               │
-│  Events Team          2024-11-15││                                                               │
-│  🎉 Launch party on Friday 🍕🍺…││                                                               │
+│   Events Team        2024-11-15 ││                                                               │
+│   🎉 Launch party on Friday 🍕… ││                                                               │
 │                                 ││                                                               │
-│  Café Bot <b…         2024-11-14││                                                               │
-│  (no subject)                   ││                                                               │
+│   Café Bot <b…       2024-11-14 ││                                                               │
+│   (no subject)                  ││                                                               │
 │                                 ││                                                               │
 │                                 ││                                                               │
 │                                 ││                                                               │

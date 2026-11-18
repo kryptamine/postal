@@ -10,8 +10,8 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    centred::centred, date_label::DateLabel, inbox_view::InboxView, message::Message,
-    stack_str::StackStr, theme::Theme, truncate,
+    centred::centred, date_label::DateLabel, inbox_view::InboxView, layout::PADDING,
+    message::Message, stack_str::StackStr, theme::Theme, truncate,
 };
 
 const MARKER: &str = "●";
@@ -116,7 +116,14 @@ impl Cards<'_> {
             base
         };
 
+        // The selection fills the whole card; only its text is padded.
         buf.set_style(card, base);
+        let card = Rect {
+            x: card.x + PADDING,
+            width: card.width.saturating_sub(2 * PADDING),
+            ..card
+        };
+
         if message.unread {
             buf.set_string(card.x, card.y, MARKER, strong);
         }

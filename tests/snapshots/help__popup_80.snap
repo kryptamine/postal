@@ -4,12 +4,12 @@ expression: screen
 ---
 size: 80x24  cursor: hidden
 ┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
-│  Bob                                                               2024-11-18│
-│  Newer    ┌ Help ────────────────────────────────────────────────┐           │
-│  Newer bod│                                                      │           │
-│  Ada      │ Navigate                                             │ 2024-11-17│
-│  Older    │ j / k    ↓ / ↑        next / previous Message        │           │
-│  Older bod│ g / G    Home / End   first / last Message           │           │
+│   Bob                                                             2024-11-18 │
+│   Newer   ┌ Help ────────────────────────────────────────────────┐           │
+│   Newer bo│                                                      │           │
+│   Ada     │ Navigate                                             │2024-11-17 │
+│   Older   │ j / k    ↓ / ↑        next / previous Message        │           │
+│   Older bo│ g / G    Home / End   first / last Message           │           │
 │           │                                                      │           │
 │           │ Message                                              │           │
 └───────────│ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │───────────┘
