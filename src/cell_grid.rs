@@ -64,6 +64,21 @@ impl Cell {
     pub const fn link(&self) -> u32 {
         self.link
     }
+
+    /// A border of the page box shows as a blank cell on the same fill.
+    pub const fn unframed(self) -> Self {
+        if !self.has(PAGE_BOX) {
+            return self;
+        }
+
+        let mut glyph = [0; GLYPH];
+        glyph[0] = b' ';
+        Self {
+            glyph,
+            flags: 0,
+            ..self
+        }
+    }
 }
 
 /// `0x01RRGGBB` when set, 0 when not.

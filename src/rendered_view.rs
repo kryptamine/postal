@@ -22,7 +22,8 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
     for row in grid.rows() {
         let mut line = StyledLine::new();
         let mut last = (Marks::default(), Paint::default());
-        for (cell, outline) in row.iter().zip(outline.by_ref()) {
+        for (&cell, outline) in row.iter().zip(outline.by_ref()) {
+            let cell = &cell.unframed();
             if cell.has(cell_grid::WIDE_TAIL) {
                 continue;
             }
@@ -38,7 +39,6 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
 
             let glyph = match outline {
                 Outline::Line(glyph, _) => glyph,
-                _ if cell.has(cell_grid::PAGE_BOX) => " ",
                 _ => cell.glyph(),
             };
 
@@ -79,8 +79,7 @@ fn look(
         None
     };
 
-    let page_box = cell.has(cell_grid::PAGE_BOX);
-    if cell.has(cell_grid::BORDER) && !page_box {
+    if cell.has(cell_grid::BORDER) {
         let (fg, marks) = colours.line(cell.fg(), bg);
         return (marks, Paint { fg, bg });
     }
@@ -90,7 +89,7 @@ fn look(
     }
 
     let underline = (cell.has(cell_grid::UNDERLINE), Marks::UNDERLINE);
-    if (page_box || cell.glyph() == " ") && !underline.0 {
+    if cell.glyph() == " " && !underline.0 {
         if before.1.bg == bg && !before.0.has(Marks::UNDERLINE) {
             return before;
         }

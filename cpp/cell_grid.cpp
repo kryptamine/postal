@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -50,9 +51,20 @@ void append_glyph(cg_cell& c, const char* g, size_t n)
 
 bool is(const cg_cell& c, const char* g) { return std::strcmp(c.glyph, g) == 0; }
 
+// Cells from row r0 to r1 and column c0 to c1; empty when r1 < r0.
+struct Box
+{
+    int r0, r1, c0, c1;
+
+    bool holds(const Box& in) const
+    {
+        return in.r0 <= in.r1 && r0 <= in.r0 && r1 >= in.r1 && c0 <= in.c0 && c1 >= in.c1;
+    }
+};
+
 struct Frame
 {
-    int                   r0, r1, c0, c1;
+    Box                   box;
     borders               b;
     std::vector<position> clips;
 };
@@ -64,7 +76,6 @@ class grid_container : public document_container
     std::vector<cg_cell>               grid;
     std::vector<position>              clips;
     std::vector<Frame>                 frames;
-    uint32_t                           border_flags = CG_BORDER;
     ImageLabels                        images;
     // A glyph fell past the last column, where the grid has no cell.
     bool                               lost_text = false;
@@ -247,17 +258,17 @@ class grid_container : public document_container
         span(pos.x, pos.width, CW, c0, c1);
         if(r1 < r0) r0 = r1 = int(std::floor(float(pos.y) / CH));
         if(c1 < c0) c0 = c1 = int(std::floor(float(pos.x) / CW));
-        frames.push_back({r0, r1, c0, c1, b, clips});
+        frames.push_back({{r0, r1, c0, c1}, b, clips});
     }
 
-    void line(int row, int col, const char* glyph, const border& b, bool corner = false)
+    void line(int row, int col, const char* glyph, const border& b, uint32_t flags, bool corner = false)
     {
         cg_cell* c = at(row, col);
         if(!c || ((c->flags & CG_TEXT) && !corner) || !visible(row, col)) return;
         if(corner && !is(*c, "─") && !is(*c, "│")) return;
         set_glyph(*c, glyph, std::strlen(glyph));
         c->fg    = rgb(b.color);
-        c->flags = border_flags;
+        c->flags = flags;
     }
 
     bool row_has_text(int row, int c0, int c1) const
@@ -271,62 +282,60 @@ class grid_container : public document_container
         return false;
     }
 
-    // The rows and columns every glyph of the mail's lies within, before any
-    // border is drawn; r1 < r0 when there is none.
-    void content_box(int& r0, int& r1, int& c0, int& c1) const
+    // The cells every glyph of the mail's lies within, before any border is
+    // drawn.
+    Box content_box() const
     {
-        r0 = c0 = INT32_MAX;
-        r1 = c1 = -1;
+        Box box{INT32_MAX, -1, INT32_MAX, -1};
         for(int i = 0; i < int(grid.size()); i++)
             if(!is(grid[size_t(i)], " "))
             {
-                r0 = std::min(r0, i / cols), r1 = std::max(r1, i / cols);
-                c0 = std::min(c0, i % cols), c1 = std::max(c1, i % cols);
+                box.r0 = std::min(box.r0, i / cols), box.r1 = std::max(box.r1, i / cols);
+                box.c0 = std::min(box.c0, i % cols), box.c1 = std::max(box.c1, i % cols);
             }
+        return box;
     }
 
     // A horizontal border on a row of text moves one row out, or is dropped
-    // when that row has text too. A box round the whole mail is marked
-    // CG_PAGE_BOX.
+    // when that row has text too.
     void apply_borders()
     {
         auto on = [](const border& e) {
             return float(e.width) > 0.f && e.style != border_style_none && e.style != border_style_hidden;
         };
-        int mr0, mr1, mc0, mc1;
-        content_box(mr0, mr1, mc0, mc1);
+        const Box mail = content_box();
         for(auto& f : frames)
         {
-            clips    = f.clips;
+            clips                 = f.clips;
+            auto [r0, r1, c0, c1] = f.box;
             bool top = on(f.b.top), bottom = on(f.b.bottom), left = on(f.b.left), right = on(f.b.right);
-            bool whole = mr0 <= mr1 && f.r0 <= mr0 && f.r1 >= mr1 && f.c0 <= mc0 && f.c1 >= mc1;
-            border_flags = top && bottom && left && right && whole ? CG_BORDER | CG_PAGE_BOX : CG_BORDER;
-            int  tr = f.r0, br = f.r1;
-            if(top && row_has_text(tr, f.c0 + left, f.c1 - right))
+            bool     page  = top && bottom && left && right && f.box.holds(mail);
+            uint32_t flags = page ? CG_BORDER | CG_PAGE_BOX : CG_BORDER;
+            int      tr = r0, br = r1;
+            if(top && row_has_text(tr, c0 + left, c1 - right))
             {
-                tr = f.r0 - 1;
-                if(row_has_text(tr, f.c0, f.c1)) { top = false; tr = f.r0; }
+                tr = r0 - 1;
+                if(row_has_text(tr, c0, c1)) { top = false; tr = r0; }
             }
-            if(bottom && row_has_text(br, f.c0 + left, f.c1 - right))
+            if(bottom && row_has_text(br, c0 + left, c1 - right))
             {
-                br = f.r1 + 1;
-                if(row_has_text(br, f.c0, f.c1)) { bottom = false; br = f.r1; }
+                br = r1 + 1;
+                if(row_has_text(br, c0, c1)) { bottom = false; br = r1; }
             }
             if(top)
-                for(int c = f.c0; c <= f.c1; c++) line(tr, c, "─", f.b.top);
+                for(int c = c0; c <= c1; c++) line(tr, c, "─", f.b.top, flags);
             if(bottom)
-                for(int c = f.c0; c <= f.c1; c++) line(br, c, "─", f.b.bottom);
+                for(int c = c0; c <= c1; c++) line(br, c, "─", f.b.bottom, flags);
             if(left)
-                for(int r = tr; r <= br; r++) line(r, f.c0, "│", f.b.left);
+                for(int r = tr; r <= br; r++) line(r, c0, "│", f.b.left, flags);
             if(right)
-                for(int r = tr; r <= br; r++) line(r, f.c1, "│", f.b.right);
-            if(top && left) line(tr, f.c0, "┌", f.b.top, true);
-            if(top && right) line(tr, f.c1, "┐", f.b.top, true);
-            if(bottom && left) line(br, f.c0, "└", f.b.bottom, true);
-            if(bottom && right) line(br, f.c1, "┘", f.b.bottom, true);
+                for(int r = tr; r <= br; r++) line(r, c1, "│", f.b.right, flags);
+            if(top && left) line(tr, c0, "┌", f.b.top, flags, true);
+            if(top && right) line(tr, c1, "┐", f.b.top, flags, true);
+            if(bottom && left) line(br, c0, "└", f.b.bottom, flags, true);
+            if(bottom && right) line(br, c1, "┘", f.b.bottom, flags, true);
         }
         clips.clear();
-        border_flags = CG_BORDER;
     }
 
     void set_clip(const position& pos, const border_radiuses&) override { clips.push_back(pos); }
