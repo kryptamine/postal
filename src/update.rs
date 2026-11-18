@@ -1,11 +1,12 @@
-use crate::{preview::Preview, rendered_previews::PreviewKey, status::Status};
+use crate::{body_fetch::Fetched, preview::Preview, rendered_previews::PreviewKey, status::Status};
 
 /// Work done away from the event loop that changes what the screen shows.
 pub enum Update {
     /// The sync wrote rows or Snippets to the Cache.
     Inbox,
-    /// These UIDs' bodies are now in the Cache.
-    Bodies(Vec<u32>),
+    Bodies(Fetched),
+    /// The connection for bodies is up, or has gone down.
+    BodyLink(bool),
     Rendered(PreviewKey, Preview),
     Status(Status),
 }

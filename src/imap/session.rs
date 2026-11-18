@@ -8,7 +8,9 @@ use async_imap::{
 };
 use futures::TryStreamExt;
 
-use super::{Error, connect::Transport, pushed::Pushed, text_part, traced::Traced, wire_trace};
+use super::{
+    Error, connect::Transport, pushed::Pushed, text_part, traced::Traced, whole_bodies, wire_trace,
+};
 use crate::{
     body_key::body_key, config::Config, credential::Credential, header, message::Message,
     new_message::NewMessage, snippet, sync_state::SyncState,
@@ -244,11 +246,7 @@ impl MailServer for ImapSession {
     }
 
     async fn bodies(&mut self, uids: &[u32]) -> Result<Vec<(u32, Vec<u8>)>, Error> {
-        let fetches = self.uid_fetch(uid_set(uids), "(UID BODY.PEEK[])").await?;
-        Ok(fetches
-            .iter()
-            .filter_map(|f| Some((f.uid?, f.body()?.to_vec())))
-            .collect())
+        whole_bodies::fetch(&mut self.session, &uid_set(uids)).await
     }
 
     fn pushed(&mut self) -> Vec<Pushed> {

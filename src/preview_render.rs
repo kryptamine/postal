@@ -32,9 +32,17 @@ pub fn paged(job: Job) -> Preview {
 fn rendered(job: Job, links: Links) -> Preview {
     Preview {
         body: body(&job.body, usize::from(job.key.width), links),
-        from: job.sender,
-        subject: job.subject,
-        date: job.received.format("%a, %-d %b %Y %H:%M").to_string(),
+        ..header(job.sender, job.subject, job.received)
+    }
+}
+
+/// A Preview of the header alone, for a Message whose body is not here.
+pub fn header(sender: String, subject: String, received: DateTime<FixedOffset>) -> Preview {
+    Preview {
+        from: sender,
+        subject,
+        date: received.format("%a, %-d %b %Y %H:%M").to_string(),
+        body: Vec::new(),
     }
 }
 

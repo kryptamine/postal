@@ -7,6 +7,7 @@ mod pushed;
 mod session;
 mod text_part;
 mod traced;
+mod whole_bodies;
 mod wire_trace;
 
 pub use error::Error;

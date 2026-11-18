@@ -136,6 +136,9 @@ struct Inbox {
     highest_modseq: Option<u64>,
     messages: Vec<Stored>,
     stall: Option<Stall>,
+    /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
+    /// a Message it cannot serve.
+    refused: Vec<u32>,
     outage: Option<Outage>,
     /// Bumped to drop every connection open before.
     cut: u64,
@@ -175,6 +178,7 @@ impl FakeImap {
             messages: Vec::new(),
             stall: None,
             outage: None,
+            refused: Vec::new(),
             cut: 0,
         }));
         let server = Self {
@@ -290,6 +294,10 @@ impl FakeImap {
 
     pub fn recover(&self) {
         self.inbox.lock().unwrap().outage = None;
+    }
+
+    pub fn refuse_body(&self, uid: u32) {
+        self.inbox.lock().unwrap().refused.push(uid);
     }
 }
 
@@ -549,32 +557,55 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox) {
                 server.enqueue_status(Status::bad(tag, None, "not faked").unwrap());
             }
         },
-        CommandBody::Fetch {
-            sequence_set,
-            macro_or_item_names,
-            uid,
-            modifiers,
-        } => {
-            let asked = Asked {
-                from_header: header_fields(&macro_or_item_names),
-                part: body_part(&macro_or_item_names),
-                whole: whole_body(&macro_or_item_names),
-            };
-
-            let changed_since = modifiers.iter().find_map(|m| match m {
-                FetchModifier::ChangedSince(modseq) => Some(modseq.get()),
-                FetchModifier::Vanished => None,
-            });
-            for (seq, stored) in fetched(inbox, &sequence_set, uid, changed_since) {
-                server.enqueue_data(fetch(seq, stored, &asked));
-            }
-
-            server.enqueue_status(Status::ok(tag, None, "FETCH completed").unwrap());
+        body @ CommandBody::Fetch { .. } => {
+            let status = answer_fetch(server, tag, body, inbox);
+            server.enqueue_status(status);
         }
         _ => {
             server.enqueue_status(Status::bad(tag, None, "not faked").unwrap());
         }
     }
+}
+
+/// Enqueues what a `FETCH` asks for and returns its tagged status.
+fn answer_fetch(
+    server: &mut Server,
+    tag: Option<Tag<'static>>,
+    body: CommandBody<'static>,
+    inbox: &Inbox,
+) -> Status<'static> {
+    let CommandBody::Fetch {
+        sequence_set,
+        macro_or_item_names,
+        uid,
+        modifiers,
+    } = body
+    else {
+        unreachable!("only a FETCH is answered here");
+    };
+
+    let asked = Asked {
+        from_header: header_fields(&macro_or_item_names),
+        part: body_part(&macro_or_item_names),
+        whole: whole_body(&macro_or_item_names),
+    };
+
+    let refused = fetched(inbox, &sequence_set, uid, None)
+        .any(|(_, stored)| inbox.refused.contains(&stored.uid));
+    if asked.whole && refused {
+        let text = "Some messages could not be FETCHed (Failure)";
+        return Status::no(tag, None, text).unwrap();
+    }
+
+    let changed_since = modifiers.iter().find_map(|m| match m {
+        FetchModifier::ChangedSince(modseq) => Some(modseq.get()),
+        FetchModifier::Vanished => None,
+    });
+    for (seq, stored) in fetched(inbox, &sequence_set, uid, changed_since) {
+        server.enqueue_data(fetch(seq, stored, &asked));
+    }
+
+    Status::ok(tag, None, "FETCH completed").unwrap()
 }
 
 fn examine(server: &mut Server, inbox: &Inbox) {

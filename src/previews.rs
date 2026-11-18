@@ -1,19 +1,36 @@
-use std::{collections::HashSet, sync::mpsc, thread};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::mpsc,
+    thread,
+};
 
 use futures::channel::mpsc::UnboundedSender;
 
 use crate::{
-    body_fetch::BodyRequest,
+    body_fetch::{BodyRequest, Fetched},
     cache::{self, Cache},
     inbox_view::InboxView,
+    message::Message,
     preview::Preview,
     preview_render::{self, Job},
     rendered_previews::{PreviewKey, RenderedPreviews},
+    shown::Shown,
     update::Update,
 };
 
 /// Rows on each side of the selection whose Preview is made ready too.
 const NEIGHBOURS: usize = 2;
+
+const OFFLINE: &str = "Not downloaded yet · offline";
+
+/// The connection bodies are fetched on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Link {
+    /// Not yet up since Postal started: bodies are asked for once it is.
+    Starting,
+    Live,
+    Down,
+}
 
 /// Gets Previews ready: fetches bodies the Cache lacks, renders on a thread
 /// of its own, and keeps what it rendered.
@@ -22,6 +39,13 @@ pub struct Previews {
     rendering: HashSet<PreviewKey>,
     /// UIDs asked of the server; one it does not answer for stays here.
     fetching: HashSet<u32>,
+    /// UIDs found without a body while the link is down.
+    offline: HashSet<u32>,
+    /// The placeholder of each body the server refused, until a reconnect.
+    refused: HashMap<u32, String>,
+    /// The header of the selected Message, while its body is unavailable.
+    header: Option<(u32, Preview)>,
+    link: Link,
     requests: UnboundedSender<BodyRequest>,
     jobs: mpsc::Sender<Job>,
 }
@@ -47,6 +71,10 @@ impl Previews {
             rendered: RenderedPreviews::default(),
             rendering: HashSet::new(),
             fetching: HashSet::new(),
+            offline: HashSet::new(),
+            refused: HashMap::new(),
+            header: None,
+            link: Link::Starting,
             requests,
             jobs,
         }
@@ -59,6 +87,27 @@ impl Previews {
             body: message.body_key,
             width,
         })
+    }
+
+    pub fn shown(&self, view: &InboxView, width: u16) -> Shown<'_> {
+        let Some(message) = view.messages.as_ref().and_then(|m| m.get(view.selected)) else {
+            return Shown::Loading;
+        };
+
+        if let Some(preview) = self.get(view, width) {
+            return Shown::Rendered(preview);
+        }
+
+        let why = match self.refused.get(&message.uid) {
+            Some(why) => why.as_str(),
+            None if self.offline.contains(&message.uid) => OFFLINE,
+            None => return Shown::Loading,
+        };
+
+        match &self.header {
+            Some((uid, header)) if *uid == message.uid => Shown::Unavailable { header, why },
+            _ => Shown::Loading,
+        }
     }
 
     /// Readies the Previews of the selection and its neighbours at `width`.
@@ -90,32 +139,22 @@ impl Previews {
                 width,
             };
 
-            if self.rendered.touch(key)
-                || self.rendering.contains(&key)
-                || self.fetching.contains(&message.uid)
+            if self.rendered.touch(key) || self.rendering.contains(&key) || self.waits(message.uid)
             {
                 continue;
             }
 
             if let Some(body) = cache.body(message.uid)? {
-                self.rendering.insert(key);
-                let job = Job {
-                    key,
-                    body,
-                    sender: message.sender.clone(),
-                    subject: message.subject.clone(),
-                    received: message.received,
-                };
-
-                // The send fails only once the render thread is gone.
-                let _ = self.jobs.send(job);
-            } else {
+                self.render(key, body, message);
+            } else if self.link == Link::Live {
                 self.fetching.insert(message.uid);
                 if index == selected {
                     request.selected = Some(message.uid);
                 } else {
                     request.neighbours.push(message.uid);
                 }
+            } else if self.link == Link::Down {
+                self.offline.insert(message.uid);
             }
         }
 
@@ -125,12 +164,79 @@ impl Previews {
             let _ = self.requests.unbounded_send(request);
         }
 
+        if let Some(message) = messages.get(selected) {
+            self.ready_header(message);
+        }
+
         Ok(())
     }
 
-    pub fn stored(&mut self, uids: &[u32]) {
-        for uid in uids {
-            self.fetching.remove(uid);
+    /// Whether the body of `uid` is on its way, or cannot come for now.
+    fn waits(&self, uid: u32) -> bool {
+        self.fetching.contains(&uid)
+            || self.offline.contains(&uid)
+            || self.refused.contains_key(&uid)
+    }
+
+    fn render(&mut self, key: PreviewKey, body: Vec<u8>, message: &Message) {
+        self.rendering.insert(key);
+        let job = Job {
+            key,
+            body,
+            sender: message.sender.clone(),
+            subject: message.subject.clone(),
+            received: message.received,
+        };
+
+        // The send fails only once the render thread is gone.
+        let _ = self.jobs.send(job);
+    }
+
+    /// Keeps the header of `selected` from its row while its body cannot come.
+    fn ready_header(&mut self, selected: &Message) {
+        let unavailable =
+            self.offline.contains(&selected.uid) || self.refused.contains_key(&selected.uid);
+        let ready = self
+            .header
+            .as_ref()
+            .is_some_and(|(uid, _)| *uid == selected.uid);
+        if unavailable && !ready {
+            let header = preview_render::header(
+                selected.sender.clone(),
+                selected.subject.clone(),
+                selected.received,
+            );
+            self.header = Some((selected.uid, header));
+        }
+    }
+
+    pub fn fetched(&mut self, fetched: Fetched) {
+        match fetched {
+            Fetched::Stored(uids) => {
+                for uid in uids {
+                    self.fetching.remove(&uid);
+                    self.offline.remove(&uid);
+                }
+            }
+            Fetched::Refused { uids, reason } => {
+                for uid in uids {
+                    self.fetching.remove(&uid);
+                    self.refused.insert(uid, format!("Couldn't load: {reason}"));
+                }
+            }
+        }
+    }
+
+    /// Down, what was asked for will not come; back up, every body that
+    /// could not come is asked for again as it is wanted.
+    pub fn link(&mut self, live: bool) {
+        if live {
+            self.link = Link::Live;
+            self.offline.clear();
+            self.refused.clear();
+        } else {
+            self.link = Link::Down;
+            self.fetching.clear();
         }
     }
 

@@ -37,6 +37,24 @@ impl Error {
             Self::Imap(_) => None,
         }
     }
+
+    /// The server's own words when it answered `NO` to this command alone,
+    /// leaving the connection usable; `None` for any other error.
+    pub fn refusal(&self) -> Option<&str> {
+        let Self::Imap(async_imap::error::Error::No(text)) = self else {
+            return None;
+        };
+
+        if self.outage().is_some() {
+            return None;
+        }
+
+        // async-imap writes `code: .., info: Some("<text>")` around it.
+        let info = text
+            .split_once("info: Some(\"")
+            .and_then(|(_, rest)| rest.strip_suffix("\")"));
+        Some(info.unwrap_or(text))
+    }
 }
 
 impl fmt::Display for Error {

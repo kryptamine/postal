@@ -9,9 +9,17 @@ pub struct BodyRequest {
     pub neighbours: Vec<u32>,
 }
 
+/// How one fetch of bodies ended.
+pub enum Fetched {
+    /// These UIDs' bodies are now in the Cache.
+    Stored(Vec<u32>),
+    /// The server answered `NO` for these UIDs, with this reason.
+    Refused { uids: Vec<u32>, reason: String },
+}
+
 /// Fetches the bodies `requests` name into the Cache until the channel
-/// closes, calling `stored` with the UIDs of each batch written. `waiting`
-/// goes first, and keeps what a failed fetch left unserved, oldest first.
+/// closes, telling `fetched` how each batch ended. A refused batch leaves
+/// the connection alone; any other failure ends the serving.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -20,9 +28,9 @@ pub async fn serve(
     server: &mut impl MailServer,
     cache: &Cache,
     requests: &mut UnboundedReceiver<BodyRequest>,
-    waiting: &mut Vec<BodyRequest>,
-    stored: impl Fn(Vec<u32>),
+    fetched: impl Fn(Fetched),
 ) -> Result<(), Error> {
+    let mut waiting = Vec::new();
     loop {
         if waiting.is_empty() {
             let Some(first) = requests.next().await else {
@@ -37,20 +45,42 @@ pub async fn serve(
         }
 
         // The newest request is the selection on screen; the rest can wait.
-        while let Some(request) = waiting.last() {
+        while let Some(request) = waiting.pop() {
             let selected = Vec::from_iter(request.selected);
-            for uids in [&selected, &request.neighbours] {
-                if uids.is_empty() {
-                    continue;
+            for uids in [selected, request.neighbours] {
+                if !uids.is_empty() {
+                    fetched(fetch(server, cache, uids).await?);
                 }
-
-                let bodies = server.bodies(uids).await?;
-                cache.write_bodies(&bodies)?;
-                tracing::debug!("fetched {} of {} bodies", bodies.len(), uids.len());
-                stored(bodies.into_iter().map(|(uid, _)| uid).collect());
             }
-
-            waiting.pop();
         }
     }
+}
+
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn fetch(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    uids: Vec<u32>,
+) -> Result<Fetched, Error> {
+    let bodies = match server.bodies(&uids).await {
+        Ok(bodies) => bodies,
+        Err(error) => {
+            let Some(reason) = error.refusal() else {
+                return Err(error.into());
+            };
+
+            tracing::warn!("fetching the bodies of {uids:?} was refused: {error}");
+            let reason = reason.to_owned();
+            return Ok(Fetched::Refused { uids, reason });
+        }
+    };
+
+    cache.write_bodies(&bodies)?;
+    tracing::debug!("fetched {} of {} bodies", bodies.len(), uids.len());
+    Ok(Fetched::Stored(
+        bodies.into_iter().map(|(uid, _)| uid).collect(),
+    ))
 }

@@ -40,6 +40,7 @@ mod rendered_previews;
 mod run;
 mod secret;
 mod sequence_numbers;
+mod shown;
 mod snippet;
 mod snippets;
 mod stack_str;
@@ -150,9 +151,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
                 || send(Update::Inbox),
                 |status| send(Update::Status(status)),
             ),
-            bodies(&config, &password, &cache, requested, |uids| {
-                send(Update::Bodies(uids));
-            }),
+            bodies(&config, &password, &cache, requested, &send),
         );
         let background = Background {
             work: work.map_ok(|((), ())| ()),
@@ -176,18 +175,25 @@ async fn bodies(
     password: &Credential,
     cache: &Cache,
     mut requests: UnboundedReceiver<BodyRequest>,
-    stored: impl Fn(Vec<u32>),
+    send: impl Fn(Update),
 ) -> Result<(), sync::Error> {
-    let mut waiting = Vec::new();
     let attempt = async |report: &dyn Fn(Status)| {
         let mut session = ImapSession::open(config, password).await?;
         session.examine().await?;
+        // Asked for before an outage: the Preview asks again once told Live.
+        while requests.try_recv().is_ok() {}
         report(Status::Live);
-        body_fetch::serve(&mut session, cache, &mut requests, &mut waiting, &stored).await
+        let fetched = |fetched| send(Update::Bodies(fetched));
+        body_fetch::serve(&mut session, cache, &mut requests, fetched).await
     };
 
     // The status slot follows the sync connection alone.
-    reconnect::retry(attempt, |_| {}).await
+    reconnect::retry(attempt, |status| match status {
+        Status::Live => send(Update::BodyLink(true)),
+        Status::Retrying { .. } => send(Update::BodyLink(false)),
+        Status::Syncing { .. } | Status::Connecting => {}
+    })
+    .await
 }
 
 #[expect(

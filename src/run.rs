@@ -159,7 +159,7 @@ fn draw(
             let panes = layout::split(frame.area());
             frame.render_stateful_widget(MessageList { theme }, panes.list, view);
             if let Some(pane) = panes.preview {
-                let preview = previews.get(view, preview_pane::text_area(pane).width);
+                let preview = previews.shown(view, preview_pane::text_area(pane).width);
                 let hints = screen.hints.as_ref();
                 let widget = PreviewPane {
                     theme,
@@ -202,7 +202,8 @@ fn apply(
                 screen.hints = None;
             }
         }
-        Update::Bodies(uids) => previews.stored(&uids),
+        Update::Bodies(fetched) => previews.fetched(fetched),
+        Update::BodyLink(live) => previews.link(live),
         Update::Rendered(key, preview) => previews.rendered(key, preview),
         Update::Status(status) => screen.status = status,
     }

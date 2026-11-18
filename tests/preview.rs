@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
+    fake_imap::{FIRST_UID, FakeImap, FakeMessage, Outage, Stall},
     home::Home,
 };
 use termlens::{Key, Screen, Terminal};
@@ -277,4 +277,79 @@ fn scrolls_half_a_page_and_back_to_the_top_on_another_message() {
     t.wait_until(|s| top(s).starts_with("From") && s.contains("Line 1"))
         .unwrap();
     quit(t);
+}
+
+fn hint_line(screen: &Screen) -> String {
+    screen.row_text(screen.rows() - 1)
+}
+
+fn logins(server: &FakeImap) -> usize {
+    let commands = server.commands();
+    commands.iter().filter(|c| c.starts_with("LOGIN")).count()
+}
+
+// With the server gone, a body not in the Cache says so under the row's
+// header, and comes by itself, with its neighbours, once the server is back.
+#[test]
+fn a_body_missing_while_offline_says_so_and_comes_after_the_reconnect() {
+    let server = FakeImap::start(six());
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| previewed(s, 6)).unwrap();
+    wait_for(|| bodies(&home) == 3);
+
+    // The fake drops connections on a tick: until then a fetch still succeeds.
+    server.fail(Outage::Offline);
+    t.wait_until(|s| hint_line(s).contains("offline · retry in"))
+        .unwrap();
+    t.send(Key::Char('G')).unwrap();
+    let screen = t
+        .snapshot_after(|s| s.contains("Not downloaded yet · offline"))
+        .unwrap();
+    assert!(screen.contains("From    Sender"), "{screen}");
+    assert!(screen.contains("Subject Subject 1"), "{screen}");
+    assert!(screen.contains("Date    Fri, 1 Nov 2024 09:00"), "{screen}");
+
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| hint_line(s).contains("not downloaded"))
+        .unwrap();
+    server.recover();
+    t.wait_until(|s| previewed(s, 1)).unwrap();
+    wait_for(|| bodies(&home) == 6);
+    quit(t);
+}
+
+// A body the server refuses says why, and only that fetch fails: the
+// neighbours still come on the same connection.
+#[test]
+fn a_refused_body_says_why_and_keeps_the_connection() {
+    let server = FakeImap::start(six());
+    server.refuse_body(FIRST_UID + 2);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| previewed(s, 6)).unwrap();
+    wait_for(|| bodies(&home) == 3);
+    let before = logins(&server);
+
+    for _ in 0..3 {
+        t.send(Key::Char('j')).unwrap();
+    }
+
+    let screen = t
+        .snapshot_after(|s| s.contains(" 4/6 ") && s.contains("Couldn't load: Some messages"))
+        .unwrap();
+    assert!(screen.contains("Subject Subject 3"), "{screen}");
+    wait_for(|| bodies(&home) == 5);
+    t.send(Key::Char('j')).unwrap();
+    t.wait_until(|s| previewed(s, 2)).unwrap();
+    quit(t);
+
+    assert_eq!(logins(&server), before);
+    let log = std::fs::read_to_string(home.log_path()).unwrap();
+    let refused = "Some messages could not be FETCHed (Failure)";
+    assert!(
+        log.lines()
+            .any(|l| l.contains("WARN") && l.contains("refused") && l.contains(refused)),
+        "{log}"
+    );
 }

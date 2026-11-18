@@ -8,7 +8,7 @@ use ratatui::{
 };
 
 use crate::{
-    centred::centred, inbox_view::InboxView, link_hints::LinkHints, preview::Preview,
+    centred::centred, inbox_view::InboxView, link_hints::LinkHints, preview::Preview, shown::Shown,
     stack_str::StackStr, theme::Theme, truncate,
 };
 
@@ -36,11 +36,11 @@ pub const fn body_lines(scroll: usize, text: Rect) -> Range<usize> {
 }
 
 /// The selected Message's Preview inside a border titled `i/N`: the header,
-/// then the body from the scroll position on. `preview` is `None` until it
-/// is rendered. In hint mode, `hints` labels its links.
+/// then the body from the scroll position on, or a placeholder in its
+/// place. In hint mode, `hints` labels its links.
 pub struct PreviewPane<'a> {
     pub theme: &'a Theme,
-    pub preview: Option<&'a Preview>,
+    pub preview: Shown<'a>,
     pub hints: Option<&'a LinkHints>,
 }
 
@@ -61,8 +61,11 @@ impl StatefulWidget for PreviewPane<'_> {
         let room = usize::from(area.width.saturating_sub(2));
         buf.set_stringn(area.x + 1, area.y, title.as_str(), room, self.theme.title);
         let text = text_area(area);
-        let Some(preview) = self.preview else {
-            return centred("Loading…", text, buf);
+        // An unavailable body leaves the header with no body lines under it.
+        let (preview, placeholder) = match self.preview {
+            Shown::Rendered(preview) => (preview, None),
+            Shown::Loading => return centred("Loading…", text, buf),
+            Shown::Unavailable { header, why } => (header, Some(why)),
         };
 
         let rows = HEADER_ROWS + preview.body.len();
@@ -81,6 +84,18 @@ impl StatefulWidget for PreviewPane<'_> {
             } else if let Some(line) = index.checked_sub(HEADER_ROWS) {
                 self.line(buf, row, preview, line);
             }
+        }
+
+        if let Some(placeholder) = placeholder {
+            let header = u16::try_from(HEADER_ROWS).unwrap_or(u16::MAX);
+            let top = text.y.saturating_add(header).min(text.bottom());
+            let below = Rect {
+                y: top,
+                height: text.bottom() - top,
+                ..text
+            };
+
+            centred(placeholder, below, buf);
         }
     }
 }
