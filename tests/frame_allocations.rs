@@ -14,7 +14,7 @@ use support::{
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
 };
-use termlens::{Key, Terminal};
+use termlens::{Key, Screen, Terminal};
 
 const MESSAGES: i64 = 60;
 
@@ -98,6 +98,37 @@ fn settled_frames(home: &Home) -> Vec<u64> {
     }
 }
 
+/// The selection's place in the Preview's title, as (row, rows).
+fn position(screen: &Screen) -> (usize, usize) {
+    (0..screen.rows())
+        .flat_map(|row| {
+            let text = screen.row_text(row);
+            text.split(' ')
+                .filter_map(|word| {
+                    let (at, count) = word.split_once('/')?;
+                    Some((at.parse().ok()?, count.parse().ok()?))
+                })
+                .collect::<Vec<_>>()
+        })
+        .next()
+        .unwrap()
+}
+
+/// Moves one row and waits for that row's Preview: scrolling on without
+/// waiting fetches only the bodies of the rows it stops on.
+fn step(t: &mut Terminal, key: Key) {
+    let (at, count) = position(&t.screen());
+    let next = if key == Key::Char('j') {
+        (at + 1).min(count)
+    } else {
+        at.saturating_sub(1).max(1)
+    };
+
+    t.send(key).unwrap();
+    t.wait_until(|s| position(s) == (next, count) && !s.contains("Loading…"))
+        .unwrap();
+}
+
 #[test]
 fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
     let server = FakeImap::start(messages());
@@ -117,17 +148,15 @@ fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
 
     // Fetching and rendering a Preview allocates; showing one already
     // rendered must not. The way down fetches every body, and the way back
-    // renders those that came after the selection had moved on.
+    // renders the neighbours each stop left behind.
     let rows = usize::try_from(MESSAGES).unwrap();
     let down = vec![Key::Char('j'); rows];
     let up = vec![Key::Char('k'); rows];
-    for (keys, title) in [(&down, format!(" {MESSAGES}/")), (&up, " 1/".to_owned())] {
+    for keys in [&down, &up] {
         for &key in keys {
-            t.send(key).unwrap();
+            step(&mut t, key);
         }
 
-        t.wait_until(|s| s.contains(&title) && s.contains("also cut"))
-            .unwrap();
         settled_frames(&home);
     }
 
@@ -185,7 +214,7 @@ fn scrolling_a_narrowed_list_allocates_nothing_per_frame() {
     let up = vec![Key::Char('k'); rows];
     for keys in [&down, &up] {
         for &key in keys {
-            t.send(key).unwrap();
+            step(&mut t, key);
         }
 
         settled_frames(&home);
