@@ -33,7 +33,7 @@ The first words of a Message's body, shown under its subject in the Message List
 _Avoid_: preview, excerpt, summary
 
 **Cache**:
-Messages kept on disk between runs, so the Message List shows before the server answers.
+Messages kept on disk between runs, so the Message List shows before the server answers. After a write to disk fails, it lives in memory for the rest of the session.
 _Avoid_: store, database, offline copy
 
 **Toast**:
