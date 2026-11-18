@@ -7,6 +7,8 @@ use ratatui::{Terminal, layout::Rect};
 use crate::{
     alloc_count,
     cache::{self, Cache},
+    help_popup::HelpPopup,
+    hint_line::HintLine,
     inbox_view::InboxView,
     keymap::{self, Action},
     layout,
@@ -19,6 +21,7 @@ use crate::{
     suspend, sync,
     terminal_backend::{self, TerminalBackend},
     theme::Theme,
+    toast::Toast,
     update::Update,
 };
 
@@ -66,28 +69,26 @@ pub async fn run(
 ) -> Result<(), Error> {
     let mut events = EventStream::new();
     let mut view = InboxView::loading();
-    let height = terminal.size().map_err(Error::Terminal)?.height;
-    show(&mut view, cache, Some(message_list::capacity(height)))?;
+    let rows = message_list::capacity(panes(terminal)?.list.height);
+    show(&mut view, cache, Some(rows))?;
     let Background { work, mut updates } = background;
     let mut work = std::pin::pin!(work);
     let mut whole = false;
     let mut working = true;
     let mut listening = true;
+    let mut screen = Screen::default();
     // A frame's allocations count from what triggered it, the input or the
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
     loop {
-        let size = terminal.size().map_err(Error::Terminal)?;
-        let text = layout::split(Rect::new(0, 0, size.width, size.height))
-            .preview
-            .map(preview_pane::text_area);
+        let text = panes(terminal)?.preview.map(preview_pane::text_area);
         if whole && let Some(text) = text {
             previews
                 .want(cache, &view, text.width)
                 .map_err(Error::Cache)?;
         }
 
-        draw(terminal, theme, &mut view, previews)?;
+        draw(terminal, theme, &mut view, previews, &screen)?;
         alloc_count::report(frame_start);
         if !whole {
             whole = true;
@@ -109,16 +110,16 @@ pub async fn run(
                     None => listening = false,
                 }
             }
+            () = tokio::time::sleep_until(screen.toast_until()), if screen.toast.is_some() => {
+                frame_start = alloc_count::count();
+                screen.toast = None;
+            }
             event = events.next() => {
                 frame_start = alloc_count::count();
                 let half_page = text.map_or(1, |t| usize::from(t.height / 2).max(1));
-                match handle(event, &mut view, half_page)? {
+                match handle(event, &mut view, &mut screen, half_page)? {
                     Step::Stay => {}
-                    Step::Page => {
-                        if let Some(text) = paged(terminal, theme, cache, &view)? {
-                            outside(terminal, &mut events, || pager::page(&text))?;
-                        }
-                    }
+                    Step::Page => screen.toast = open(terminal, &mut events, theme, cache, &view)?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::Quit => return Ok(()),
                 }
@@ -127,11 +128,17 @@ pub async fn run(
     }
 }
 
+fn panes(terminal: &Terminal<TerminalBackend>) -> Result<layout::Panes, Error> {
+    let size = terminal.size().map_err(Error::Terminal)?;
+    Ok(layout::split(Rect::new(0, 0, size.width, size.height)))
+}
+
 fn draw(
     terminal: &mut Terminal<TerminalBackend>,
     theme: &Theme,
     view: &mut InboxView,
     previews: &Previews,
+    screen: &Screen,
 ) -> Result<(), Error> {
     terminal
         .draw(|frame| {
@@ -140,6 +147,12 @@ fn draw(
             if let Some(pane) = panes.preview {
                 let preview = previews.get(view, preview_pane::text_area(pane).width);
                 frame.render_stateful_widget(PreviewPane { theme, preview }, pane, view);
+            }
+
+            let toast = screen.toast.as_ref().map(|toast| toast.text);
+            frame.render_widget(HintLine { theme, toast }, panes.hint);
+            if screen.help {
+                frame.render_widget(HelpPopup { theme }, panes.body);
             }
         })
         .map_err(Error::Terminal)?;
@@ -161,6 +174,22 @@ fn apply(
     Ok(())
 }
 
+/// What the main screen shows over and beside the panes.
+#[derive(Default)]
+struct Screen {
+    help: bool,
+    toast: Option<Toast>,
+}
+
+impl Screen {
+    /// When the Toast shown goes; any instant while none is.
+    fn toast_until(&self) -> tokio::time::Instant {
+        self.toast
+            .as_ref()
+            .map_or_else(tokio::time::Instant::now, |toast| toast.until)
+    }
+}
+
 /// What the event loop does after one input event.
 enum Step {
     Stay,
@@ -173,15 +202,24 @@ enum Step {
 fn handle(
     event: Option<io::Result<Event>>,
     view: &mut InboxView,
+    screen: &mut Screen,
     half_page: usize,
 ) -> Result<Step, Error> {
     match event {
         None => Ok(Step::Quit),
         Some(Err(source)) => Err(Error::Terminal(source)),
+        Some(Ok(Event::Key(key))) if screen.help => {
+            screen.help = !keymap::closes_help(key);
+            Ok(Step::Stay)
+        }
         Some(Ok(Event::Key(key))) => Ok(match keymap::action(key) {
             Some(Action::Quit) => Step::Quit,
             Some(Action::Open) => Step::Page,
             Some(Action::Suspend) => Step::Suspend,
+            Some(Action::Help) => {
+                screen.help = true;
+                Step::Stay
+            }
             Some(Action::Move(movement)) => {
                 view.apply(movement);
                 Step::Stay
@@ -216,20 +254,21 @@ fn outside(
     Ok(())
 }
 
-/// The selected Message as the pager shows it, at the terminal's width;
-/// `None` while its body is not in the Cache.
-fn paged(
-    terminal: &Terminal<TerminalBackend>,
+/// Shows the selected Message in the pager. Returns the Toast to show
+/// instead while its body is not in the Cache; `None` drops any shown.
+fn open(
+    terminal: &mut Terminal<TerminalBackend>,
+    events: &mut EventStream,
     theme: &Theme,
     cache: &Cache,
     view: &InboxView,
-) -> Result<Option<Vec<u8>>, Error> {
+) -> Result<Option<Toast>, Error> {
     let Some(message) = view.messages.as_ref().and_then(|m| m.get(view.selected)) else {
         return Ok(None);
     };
 
     let Some(body) = cache.body(message.uid).map_err(Error::Cache)? else {
-        return Ok(None);
+        return Ok(Some(Toast::new("not downloaded")));
     };
 
     let width = terminal.size().map_err(Error::Terminal)?.width;
@@ -244,7 +283,9 @@ fn paged(
         received: message.received,
     });
 
-    Ok(Some(pager_text::ansi(&preview, theme)))
+    let text = pager_text::ansi(&preview, theme);
+    outside(terminal, events, || pager::page(&text))?;
+    Ok(None)
 }
 
 fn show(view: &mut InboxView, cache: &Cache, limit: Option<usize>) -> Result<(), Error> {

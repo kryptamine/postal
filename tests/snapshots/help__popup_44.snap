@@ -1,0 +1,23 @@
+---
+source: tests/help.rs
+expression: screen
+---
+size: 44x18  cursor: hidden
+┌ Help ────────────────────────────────────┐
+│                                          │
+│ Navigate                                 │
+│ j / k    ↓ / ↑        next / previous Me │
+│ g / G    Home / End   first / last Messa │
+│                                          │
+│ Message                                  │
+│ ^d / ^u  PgDn / PgUp  scroll the Preview │
+│ Enter    l            open the Message i │
+│                                          │
+│ Links                                    │
+│ o                     label the links in │
+│                                          │
+│ App                                      │
+│ ?                     this help          │
+│                                          │
+└──────────────────────────────────────────┘
+ j/k move  ^d/^u scroll  ?: help

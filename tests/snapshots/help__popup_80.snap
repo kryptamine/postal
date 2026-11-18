@@ -1,0 +1,29 @@
+---
+source: tests/help.rs
+expression: screen
+---
+size: 80x24  cursor: hidden
+┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
+│  Bob                                                               2024-11-18│
+│  Newer    ┌ Help ────────────────────────────────────────────────┐           │
+│  Newer bod│                                                      │           │
+│  Ada      │ Navigate                                             │ 2024-11-17│
+│  Older    │ j / k    ↓ / ↑        next / previous Message        │           │
+│  Older bod│ g / G    Home / End   first / last Message           │           │
+│           │                                                      │           │
+│           │ Message                                              │           │
+└───────────│ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │───────────┘
+┌ 1/2 ──────│ Enter    l            open the Message in $PAGER     │───────────┐
+│ From    Bo│                                                      │           │
+│ Subject Ne│ Links                                                │           │
+│ Date    Mo│ o                     label the links in the Preview │           │
+│           │                                                      │           │
+│ Newer body│ App                                                  │           │
+│           │ ?                     this help                      │           │
+│           │ q        ^c           quit                           │           │
+│           │ ^z                    suspend to the shell           │           │
+│           │                                                      │           │
+│           └──────────────────────────────────────────────────────┘           │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+ j/k move  ^d/^u scroll  enter open  o links  q quit  ?: help

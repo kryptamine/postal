@@ -255,7 +255,7 @@ fn scrolls_half_a_page_and_back_to_the_top_on_another_message() {
     t.wait_until(|s| top(s).starts_with("From") && s.row_text(18).contains("Line 1"))
         .unwrap();
 
-    // 15 rows of text: half a page is 7, past the 4 header rows.
+    // 14 rows of text: half a page is 7, past the 4 header rows.
     t.send(Key::Ctrl('d')).unwrap();
     wait_top(&mut t, "Line 4");
     t.send(Key::PageDown).unwrap();
@@ -267,9 +267,9 @@ fn scrolls_half_a_page_and_back_to_the_top_on_another_message() {
         t.send(Key::Ctrl('d')).unwrap();
     }
 
-    wait_top(&mut t, "Line 26");
+    wait_top(&mut t, "Line 27");
     t.send(Key::PageUp).unwrap();
-    wait_top(&mut t, "Line 19");
+    wait_top(&mut t, "Line 20");
 
     t.send(Key::Char('j')).unwrap();
     t.wait_until(|s| s.contains("Short body")).unwrap();

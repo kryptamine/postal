@@ -10,6 +10,8 @@ pub struct Theme {
     pub selected: Style,
     pub border: Style,
     pub title: Style,
+    /// A key on the hint line and in the `?` popup.
+    pub key: Style,
     strong: Style,
     emphasis: Style,
     link: Style,
@@ -28,6 +30,7 @@ impl Theme {
                 .add_modifier(Modifier::REVERSED),
             border: Style::new().add_modifier(Modifier::DIM),
             title: Style::new().add_modifier(Modifier::BOLD),
+            key: Style::new().add_modifier(Modifier::BOLD),
             strong: Style::new().add_modifier(Modifier::BOLD),
             emphasis: Style::new().add_modifier(Modifier::ITALIC),
             link: Style::new()
@@ -71,6 +74,7 @@ impl Theme {
             selected: strip(self.selected),
             border: strip(self.border),
             title: strip(self.title),
+            key: strip(self.key),
             strong: strip(self.strong),
             emphasis: strip(self.emphasis),
             link: strip(self.link),

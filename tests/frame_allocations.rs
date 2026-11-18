@@ -126,6 +126,9 @@ fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
         Key::PageUp,
         Key::Char('G'),
         Key::Char('g'),
+        Key::Char('?'),
+        Key::Char('j'),
+        Key::Char('?'),
         Key::Char('x'),
     ];
     for &key in &down {

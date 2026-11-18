@@ -36,6 +36,10 @@ _Avoid_: preview, excerpt, summary
 Messages kept on disk between runs, so the Message List shows before the server answers.
 _Avoid_: store, database, offline copy
 
+**Toast**:
+A short notice in the right slot of the hint line, shown for three seconds; a new one replaces the old.
+_Avoid_: notification, flash, alert
+
 **Onboarding**:
 The first-run flow that turns an email address into a working Account.
 _Avoid_: setup wizard, registration

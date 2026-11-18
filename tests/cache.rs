@@ -18,7 +18,7 @@ const ITEMS: &str =
 
 fn postal(home: &Home) -> Terminal {
     Terminal::builder()
-        .size(80, 32)
+        .size(80, 33)
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
