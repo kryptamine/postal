@@ -40,8 +40,7 @@ pub async fn listen<S: MailServer>(
     };
 
     // Before the resync, so it reads the flags they set and the moves they made.
-    let selected = flag_changes::send(&mut server, cache, None).await?;
-    move_changes::send(&mut server, cache, selected, send).await?;
+    send_changes(&mut server, cache, None, send).await?;
     let mut sequence = shown(&mut server, cache, steering, send, report).await?;
     // `None` while the Folder selected on the server is not known.
     let mut selected = Some(Arc::clone(&steering.folder));
@@ -50,8 +49,7 @@ pub async fn listen<S: MailServer>(
     loop {
         // Ahead of a switch, while `selected` is still the Folder selected.
         if std::mem::take(&mut asked.changes) {
-            selected = flag_changes::send(&mut server, cache, selected.take()).await?;
-            selected = move_changes::send(&mut server, cache, selected, send).await?;
+            selected = send_changes(&mut server, cache, selected.take(), send).await?;
             asked.switched |= selected.as_deref() != Some(&*steering.folder);
             pushed.extend(server.pushed());
             continue;
@@ -104,6 +102,23 @@ pub async fn listen<S: MailServer>(
         take_in(&mut server, cache, (&folder, &mut sequence), pushed, send).await?;
         pushed = server.pushed();
     }
+}
+
+/// Sends the flag changes and the moves the Cache queues, flags first, as
+/// a move would leave them behind. Takes the Folder selected and returns it;
+/// `None` once another was.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn send_changes(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    selected: Option<Arc<str>>,
+    send: &impl Fn(Update),
+) -> Result<Option<Arc<str>>, Error> {
+    let selected = flag_changes::send(server, cache, selected).await?;
+    move_changes::send(server, cache, selected, send).await
 }
 
 /// Writes what `pushed` changed in `folder` to the Cache, with the Snippets
