@@ -5,3 +5,4 @@ pub mod fake_oauth;
 pub mod home;
 pub mod query;
 mod relay;
+pub mod rendered;
