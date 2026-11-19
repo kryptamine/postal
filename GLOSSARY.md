@@ -1,11 +1,11 @@
 # Postal
 
-A keyboard-driven terminal mail client that reads one IMAP mailbox.
+A keyboard-driven terminal mail client that reads one or more IMAP mailboxes.
 
 ## Language
 
 **Account**:
-The single mailbox identity Postal reads: an email address and its credential.
+One mailbox identity Postal reads: an email address at a Provider and its credential. Postal may hold several.
 _Avoid_: user, profile, login
 
 **Folder**:
@@ -13,11 +13,11 @@ One mailbox on the server, holding Messages; on Gmail, a label. Postal shows one
 _Avoid_: mailbox, label, directory
 
 **Inbox**:
-The Folder named `INBOX`, the one every run starts in.
+The Folder named `INBOX` of an Account; with one Account, the one every run starts in.
 _Avoid_: feed
 
 **Folder Picker**:
-A popup over the screen listing every Folder with its Unread count, and Local Drafts, opened with `f`; typing narrows it, `Enter` shows the chosen Folder.
+A popup over the screen listing every Folder with its Unread count, and Local Drafts, opened with `f`; with more than one Account, All Inboxes first, then a section per Account headed by its address; typing narrows it, `Enter` shows the chosen Folder.
 _Avoid_: folder list, switcher, sidebar
 
 **Message**:
@@ -33,7 +33,7 @@ A run of Message List rows whose newest Message arrived in the same span of loca
 _Avoid_: section, bucket, separator
 
 **Thread**:
-The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, each Message is a Thread of its own. In the Message List, those in the shown Folder and the Cache, joined in its count by those found in other Folders once it has been read. Unread while any of its Messages in the shown Folder is.
+The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, each Message is a Thread of its own. A Thread never spans Accounts. In the Message List, those in the shown Folder and the Cache, joined in its count by those found in other Folders once it has been read. Unread while any of its Messages in the shown Folder is.
 _Avoid_: conversation, chain
 
 **Unread**:
@@ -65,7 +65,7 @@ Taking back the latest Delete or Draft discard not yet taken back, with `u`, as 
 _Avoid_: restore, revert
 
 **Preview**:
-The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View.
+The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View. With more than one Account, its header names the Account the Message reached, as does each unfolded Message in Reading.
 _Avoid_: reader, viewer, body pane
 
 **Rendered View**:
@@ -85,7 +85,7 @@ Messages kept on disk between runs, so the Message List shows before the server 
 _Avoid_: store, database, offline copy
 
 **Backfill**:
-Fetching the next 500 Messages older than every cached one, as the selection nears the end of the Message List. Rows never leave the Cache to make room.
+Fetching the next 500 Messages older than every cached one of an Account, as the selection nears the end of the Message List. Rows never leave the Cache to make room. All Inboxes shows rows only down to the latest of the Accounts' oldest cached arrivals, and a Backfill there fetches for that Account.
 _Avoid_: pagination, load more, infinite scroll
 
 **Toast**:
@@ -93,7 +93,7 @@ A short notice in the right slot of the hint line, shown for three seconds; a ne
 _Avoid_: notification, flash, alert
 
 **Status**:
-The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), fetching the body a Reply waits on, connecting, or a countdown to the next reconnect. A Toast covers it while shown.
+The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), fetching the body a Reply waits on, connecting, or a countdown to the next reconnect. With more than one Account, it shows the worst state among them, named by its address. A Toast covers it while shown.
 _Avoid_: indicator, banner, connection bar
 
 **Hint mode**:
@@ -105,7 +105,7 @@ The selected Thread filling the screen in place of the Message List, entered wit
 _Avoid_: reader, zoom, full view
 
 **Search**:
-The Message List narrowed to the Threads holding a Message whose sender, subject or Snippet fuzzy-match a typed Query, each ranked by its best match. It matches every Folder in the Cache but Trash and Spam, each Message once; `/` starts it, and `Esc` ends it in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
+The Message List narrowed to the Threads holding a Message whose sender, subject or Snippet fuzzy-match a typed Query, each ranked by its best match. It matches every Folder of every Account in the Cache but Trash and Spam, each Message once; `/` starts it, and `Esc` ends it in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
 _Avoid_: filter, find, fzf, lookup
 
 **Query**:
@@ -113,11 +113,11 @@ The text typed into a Search.
 _Avoid_: pattern, search string
 
 **Compose**:
-Writing a new Message with `c`: Postal opens `$EDITOR` on a Draft holding its headers and an empty body.
+Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers and an empty body.
 _Avoid_: new mail, write
 
 **Reply**:
-Writing a Message in answer to one with `r`, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft.
+Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft.
 _Avoid_: respond, answer
 
 **Draft**:
@@ -125,7 +125,7 @@ A Message being written, kept on this machine until it is sent or discarded (ADR
 _Avoid_: unsent mail, composition
 
 **Local Drafts**:
-Postal's own Folder in the Folder Picker, never on the server: every Draft and every Outbox Message, newest first, with its recipients and subject. `Enter` opens a Draft's preview, or shows an Outbox Message read-only with its last error; `Backspace` discards a Draft.
+Postal's own Folder in the Folder Picker, never on the server: every Draft and every Outbox Message, newest first, with its recipients and subject, and its sender when there is more than one Account. `Enter` opens a Draft's preview, or shows an Outbox Message read-only with its last error; `Backspace` discards a Draft.
 _Avoid_: Drafts (the server's Folder), unsent
 
 **Send**:
@@ -137,9 +137,13 @@ The Messages sent but not yet accepted by the server, retried on each sync (ADR 
 _Avoid_: queue, pending, spool
 
 **Onboarding**:
-The screen that signs an Account in: on a first run and after `postal login` from the Provider list, then in the browser, checked on the server before anything is written. `L` and a lost secret skip the Provider list. A failure is shown there and can be tried again.
+The screen that signs an Account in: on a first run, and after `postal login` to add one, from the Provider list, then in the browser for Google or by an app-specific password for iCloud, checked on the server before anything is written. Signing in an address again replaces its secret. `L` and a lost secret skip the Provider list; for a lost secret it shows before the run, once per Account, and `Esc` runs without that Account. A failure is shown there and can be tried again.
 _Avoid_: setup wizard, registration
 
 **Provider**:
-The mail service an Account lives at, which decides how it signs in. Only Google for now.
+The mail service an Account lives at, which decides how it signs in. Google, signed in through the browser, or iCloud, by an app-specific password.
 _Avoid_: service, host, backend
+
+**All Inboxes**:
+The Inbox of every Account in one Message List, by newest arrival, at the top of the Folder Picker and where every run starts when there is more than one Account. Every other Folder belongs to one Account.
+_Avoid_: unified inbox, combined inbox, merged view
