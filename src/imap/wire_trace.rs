@@ -2,7 +2,7 @@ use std::io::Write;
 
 /// Turns the bytes of both directions into trace lines, with every literal and
 /// quoted body section shown as `<N bytes>`, and the client's AUTHENTICATE
-/// exchange dropped.
+/// exchange or LOGIN dropped.
 #[derive(Debug, Default)]
 pub struct WireTrace {
     client: Lines,
@@ -22,7 +22,9 @@ impl WireTrace {
             let mut words = line.splitn(3, |&b| b == b' ');
             let tag = words.next().unwrap_or_default();
             let command = words.next().unwrap_or_default();
-            if command.eq_ignore_ascii_case(b"AUTHENTICATE") {
+            if command.eq_ignore_ascii_case(b"AUTHENTICATE")
+                || command.eq_ignore_ascii_case(b"LOGIN")
+            {
                 *login = Some(tag.to_owned());
             }
 

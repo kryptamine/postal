@@ -3,7 +3,9 @@
 
 mod connect;
 mod error;
+mod login;
 mod moved_uids;
+mod named_roles;
 mod new_messages;
 mod pushed;
 mod session;

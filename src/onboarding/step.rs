@@ -11,6 +11,15 @@ pub enum Step<'a> {
         copied: bool,
         back: bool,
     },
+    /// The iCloud address being typed.
+    Address {
+        value: &'a str,
+    },
+    /// The app-specific password being typed, `length` characters so far.
+    Password {
+        heading: &'a str,
+        length: usize,
+    },
     Checking,
     /// Whether the new Account replaces the one the config named.
     Replace {

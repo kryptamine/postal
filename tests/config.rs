@@ -86,6 +86,29 @@ fn plaintext_smtp_is_refused_for_a_remote_host() {
     assert!(stderr.contains("loopback"), "{stderr}");
 }
 
+// Left out, a host is the Provider's: plaintext to it is refused as well.
+#[test]
+fn plaintext_is_refused_for_the_providers_own_host() {
+    let home = Home::new(&format!(
+        "{VALID_HEAD}provider = \"icloud\"\n[smtp]\ntls = false\n[secrets]\nstore = \"file\"\n"
+    ));
+    let stderr = failure(&home);
+    let at = format!("{}:4:7:", home.config_path().display());
+    assert!(stderr.contains(&at), "{stderr}");
+    assert!(stderr.contains("loopback"), "{stderr}");
+}
+
+#[test]
+fn an_unknown_provider_names_the_known_ones() {
+    let home = Home::new(&format!(
+        "{VALID_HEAD}provider = \"yahoo\"\n[secrets]\nstore = \"file\"\n"
+    ));
+    let stderr = failure(&home);
+    let at = format!("{}:2:12:", home.config_path().display());
+    assert!(stderr.contains(&at), "{stderr}");
+    assert!(stderr.contains("icloud"), "{stderr}");
+}
+
 #[test]
 fn a_secret_other_users_can_read_is_refused() {
     let home = Home::new(&format!("{VALID_HEAD}[secrets]\nstore = \"file\"\n"));

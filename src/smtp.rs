@@ -10,10 +10,7 @@ use lettre::{
     },
 };
 
-use crate::{
-    config::Config,
-    oauth::{self, Tokens},
-};
+use crate::{config::Config, oauth, sign_in::SignIn};
 
 #[derive(Debug)]
 pub enum Error {
@@ -50,34 +47,42 @@ impl Error {
 }
 
 /// Hands `message` to the `[smtp]` server for `envelope`, signed in as the
-/// Account by `XOAUTH2`.
+/// Account: by `XOAUTH2`, or by its password and full address.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
 pub async fn send(
     config: &Config,
-    sign_in: &Tokens,
+    sign_in: &SignIn,
     (envelope, message): (&Envelope, &[u8]),
 ) -> Result<(), Error> {
-    let access = sign_in.access().await.map_err(Error::Token)?;
+    let (secret, mechanisms) = match sign_in {
+        SignIn::OAuth(tokens) => {
+            let access = tokens.access().await.map_err(Error::Token)?;
+            (access.expose().to_owned(), vec![Mechanism::Xoauth2])
+        }
+        SignIn::Password(password) => (
+            password.expose().to_owned(),
+            vec![Mechanism::Plain, Mechanism::Login],
+        ),
+    };
 
     let server = &config.smtp;
-    // Implicit TLS, or plaintext, which the config allows only on loopback.
-    let tls = if server.tls {
-        Tls::Wrapper(TlsParameters::new(server.host.clone()).map_err(Error::Smtp)?)
-    } else {
+    // Plaintext is allowed only on loopback, by the config.
+    let tls = if !server.tls {
         Tls::None
+    } else if server.starttls {
+        Tls::Required(TlsParameters::new(server.host.clone()).map_err(Error::Smtp)?)
+    } else {
+        Tls::Wrapper(TlsParameters::new(server.host.clone()).map_err(Error::Smtp)?)
     };
 
     AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&server.host)
         .port(server.port)
         .tls(tls)
-        .credentials(Credentials::new(
-            config.email.clone(),
-            access.expose().to_owned(),
-        ))
-        .authentication(vec![Mechanism::Xoauth2])
+        .credentials(Credentials::new(config.email.clone(), secret))
+        .authentication(mechanisms)
         .build()
         .send_raw(envelope, message)
         .await

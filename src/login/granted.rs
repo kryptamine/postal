@@ -4,15 +4,15 @@ use super::Writes;
 use crate::{
     atomic_file, cache,
     config::{Config, SecretStore},
-    keychain,
-    oauth::Tokens,
-    secret, xdg,
+    keychain, secret,
+    sign_in::SignIn,
+    xdg,
 };
 
 /// A sign-in the IMAP server accepted, not yet written.
 pub struct Granted {
     pub(super) config: Config,
-    pub(super) sign_in: Tokens,
+    pub(super) sign_in: SignIn,
     pub(super) writes: Writes,
 }
 
@@ -36,9 +36,9 @@ impl Granted {
         // The secret goes first, so a config never names an Account without one.
         match config.secrets {
             SecretStore::Keychain => {
-                keychain::write(&config.email, self.sign_in.refresh_token(), &config_path)?;
+                keychain::write(&config.email, self.sign_in.secret(), &config_path)?;
             }
-            SecretStore::File => secret::write(&dir.join("secret"), self.sign_in.refresh_token())?,
+            SecretStore::File => secret::write(&dir.join("secret"), self.sign_in.secret())?,
         }
 
         // Before the config, so the new Account never opens the old one's Cache.

@@ -16,7 +16,9 @@ given and calls the loopback redirect itself, as Google would.
 
 SMTP is faked the same way, in plaintext on loopback: the test server checks
 the sign-in, records each Message as it arrives after `DATA`, and can refuse
-it with a reply the test picks. `$EDITOR` is a command that copies the text a
+it with a reply the test picks. It answers `STARTTLS` and stops there, as no
+certificate the client trusts is at hand: a test checks only that the client
+asks for it before it signs in. `$EDITOR` is a command that copies the text a
 test wrote over the Draft, as if the user had typed it.
 
 Login reads an existing `config.toml` and keeps its `name`, `[imap]`, `[smtp]`

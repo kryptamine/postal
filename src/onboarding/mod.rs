@@ -1,6 +1,8 @@
-//! The Onboarding on its own screen: the Provider, then its sign-in in the
-//! browser, checked on the IMAP server before anything is written.
+//! The Onboarding on its own screen: the Provider, then its sign-in, in the
+//! browser or by an app-specific password, checked on the IMAP server before
+//! anything is written.
 
+mod field;
 mod page;
 mod step;
 
@@ -9,17 +11,29 @@ use std::{convert::Infallible, error::Error, io, path::Path, pin::Pin, pin::pin}
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::Terminal;
 
-use self::{page::Page, step::Step};
+use self::{field::Edit, page::Page, step::Step};
 use crate::{
-    clipboard, credential::Credential, input::Input, login::Consent, provider::Provider,
-    terminal_backend::TerminalBackend, theme::Theme,
+    clipboard,
+    config::Config,
+    credential::Credential,
+    input::Input,
+    login::{self, Consent, Granted},
+    provider::Provider,
+    terminal_backend::TerminalBackend,
+    theme::Theme,
 };
 
 pub enum Start<'a> {
     /// From the Provider list.
     Choose,
-    /// Straight to the browser, which offers this Account first.
-    Again(&'a str),
+    /// Straight to the sign-in of this Account at its Provider.
+    Again(&'a str, Provider),
+}
+
+impl<'a> Start<'a> {
+    pub fn again(config: &'a Config) -> Self {
+        Self::Again(&config.email, config.provider)
+    }
 }
 
 pub enum Outcome {
@@ -69,7 +83,43 @@ impl Key {
 
 enum Waited<T> {
     Done(T),
-    Key(Key),
+    Key(KeyEvent),
+}
+
+/// A text field of the iCloud sign-in.
+#[derive(Clone, Copy)]
+enum Field<'h> {
+    Address,
+    Password { heading: &'h str },
+}
+
+impl<'h> Field<'h> {
+    fn step<'v>(self, value: &'v str) -> Step<'v>
+    where
+        'h: 'v,
+    {
+        match self {
+            Self::Address => Step::Address { value },
+            Self::Password { heading } => Step::Password {
+                heading,
+                length: value.chars().count(),
+            },
+        }
+    }
+
+    fn accepts(self, value: &str) -> bool {
+        match self {
+            Self::Address => value.contains('@'),
+            Self::Password { .. } => !value.is_empty(),
+        }
+    }
+}
+
+/// How a text field was left.
+enum Typed {
+    Entered,
+    Back,
+    Cancelled,
 }
 
 struct Screen<'t> {
@@ -93,7 +143,7 @@ impl Screen<'_> {
                 done = work.as_mut() => return Ok(Waited::Done(done)),
                 event = self.events.next() => match event {
                     Some(Ok(Event::Key(event))) if event.kind == KeyEventKind::Press => {
-                        return Ok(Waited::Key(Key::of(event)));
+                        return Ok(Waited::Key(event));
                     }
                     // A resize, say: drawn again.
                     Some(Ok(_)) => {}
@@ -104,14 +154,18 @@ impl Screen<'_> {
         }
     }
 
-    async fn key(&mut self, step: &Step<'_>) -> io::Result<Key> {
+    async fn event(&mut self, step: &Step<'_>) -> io::Result<KeyEvent> {
         match self
             .wait(step, pin!(std::future::pending::<Infallible>()))
             .await?
         {
-            Waited::Key(key) => Ok(key),
+            Waited::Key(event) => Ok(event),
             Waited::Done(never) => match never {},
         }
+    }
+
+    async fn key(&mut self, step: &Step<'_>) -> io::Result<Key> {
+        Ok(Key::of(self.event(step).await?))
     }
 
     /// `None` when the user quit.
@@ -150,13 +204,28 @@ impl Screen<'_> {
             match self.wait(&step, waiting.as_mut()).await? {
                 Waited::Done(Ok(code)) => return Ok(Ok(code)),
                 Waited::Done(Err(error)) => return Ok(Err(Attempt::Failed(error.into()))),
-                Waited::Key(Key::Char('c')) => {
-                    clipboard::copy(&consent.url)?;
-                    copied = true;
-                }
-                Waited::Key(Key::Esc) => return Ok(Err(Attempt::Back)),
-                Waited::Key(Key::Quit | Key::Cancel) => return Ok(Err(Attempt::Cancelled)),
-                Waited::Key(_) => {}
+                Waited::Key(event) => match Key::of(event) {
+                    Key::Char('c') => {
+                        clipboard::copy(&consent.url)?;
+                        copied = true;
+                    }
+                    Key::Esc => return Ok(Err(Attempt::Back)),
+                    Key::Quit | Key::Cancel => return Ok(Err(Attempt::Cancelled)),
+                    _ => {}
+                },
+            }
+        }
+    }
+
+    /// Edits `value` in `field` until it is entered, as `field` accepts it, or left.
+    async fn field(&mut self, value: &mut String, field: Field<'_>) -> io::Result<Typed> {
+        loop {
+            let event = self.event(&field.step(value)).await?;
+            match field::edit(value, event) {
+                Edit::Submit if field.accepts(value.trim()) => return Ok(Typed::Entered),
+                Edit::Back => return Ok(Typed::Back),
+                Edit::Cancel => return Ok(Typed::Cancelled),
+                Edit::Submit | Edit::Changed | Edit::Ignored => {}
             }
         }
     }
@@ -204,11 +273,13 @@ pub async fn run(
         events: Input::new(),
     };
 
-    let (choosing, hint) = match start {
-        Start::Choose => (true, None),
-        Start::Again(email) => (false, Some(email)),
+    let (choosing, hint, again) = match start {
+        Start::Choose => (true, None, Provider::default()),
+        Start::Again(email, provider) => (false, Some(email), provider),
     };
 
+    // Kept across tries, so a refused password need not be typed with it again.
+    let mut address = hint.unwrap_or_default().to_owned();
     let mut failure: Option<Box<dyn Error>> = None;
     loop {
         if let Some(error) = &failure {
@@ -219,17 +290,21 @@ pub async fn run(
             failure = None;
         }
 
-        // The Provider signed in before, while only one exists to sign in to.
         let provider = if choosing {
             match screen.choose().await? {
                 Some(provider) => provider,
                 None => return Ok(Outcome::Quit(None)),
             }
         } else {
-            Provider::Google
+            again
         };
 
-        match attempt(&mut screen, dir, (provider, hint), choosing).await? {
+        let attempt = match provider {
+            Provider::Google => browser(&mut screen, dir, hint, choosing).await?,
+            Provider::ICloud => password(&mut screen, dir, &mut address, choosing).await?,
+        };
+
+        match attempt {
             Attempt::SignedIn(email) => return Ok(Outcome::SignedIn(email)),
             Attempt::Back if choosing => {}
             Attempt::Back | Attempt::Cancelled => return Ok(Outcome::Quit(None)),
@@ -241,16 +316,16 @@ pub async fn run(
     }
 }
 
-/// One sign-in at `provider`, offering the Account `hint`; `back` when `Esc`
-/// returns to the Provider list.
+/// One sign-in at Google in the browser, offering the Account `hint`;
+/// `back` when `Esc` returns to the Provider list.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-async fn attempt(
+async fn browser(
     screen: &mut Screen<'_>,
     dir: &Path,
-    (provider, hint): (Provider, Option<&str>),
+    hint: Option<&str>,
     back: bool,
 ) -> io::Result<Attempt> {
     let consent = match Consent::open(dir, hint).await {
@@ -258,20 +333,74 @@ async fn attempt(
         Err(error) => return Ok(Attempt::Failed(error)),
     };
 
-    let code = match screen.code(&consent, provider, back).await? {
+    let code = match screen.code(&consent, Provider::Google, back).await? {
         Ok(code) => code,
         Err(left) => return Ok(left),
     };
 
-    let granted = {
-        let mut granting = pin!(consent.grant(&code));
-        loop {
-            match screen.wait(&Step::Checking, granting.as_mut()).await? {
-                Waited::Done(Ok(granted)) => break granted,
-                Waited::Done(Err(error)) => return Ok(Attempt::Failed(error)),
-                Waited::Key(Key::Cancel) => return Ok(Attempt::Cancelled),
-                Waited::Key(_) => {}
+    settle(screen, dir, pin!(consent.grant(&code))).await
+}
+
+/// One sign-in at iCloud by an app-specific password, as `address`, which
+/// is asked for from the Provider list alone: otherwise it is the Account's.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn password(
+    screen: &mut Screen<'_>,
+    dir: &Path,
+    address: &mut String,
+    choosing: bool,
+) -> io::Result<Attempt> {
+    let mut password = String::new();
+    loop {
+        if choosing {
+            match screen.field(address, Field::Address).await? {
+                Typed::Entered => {}
+                Typed::Back => return Ok(Attempt::Back),
+                Typed::Cancelled => return Ok(Attempt::Cancelled),
             }
+        }
+
+        let email = address.trim().to_owned();
+        let heading = format!("Sign in to iCloud as {email}");
+        let field = Field::Password { heading: &heading };
+        match screen.field(&mut password, field).await? {
+            Typed::Entered => {
+                let secret = Credential::new(password.trim().to_owned());
+                let checking = login::check_password(dir, Provider::ICloud, (email, secret));
+                return settle(screen, dir, pin!(checking)).await;
+            }
+            Typed::Back if choosing => password.clear(),
+            Typed::Back => return Ok(Attempt::Back),
+            Typed::Cancelled => return Ok(Attempt::Cancelled),
+        }
+    }
+}
+
+/// Waits for `granting` to sign in to the IMAP server, asks before it
+/// replaces another Account, then writes it.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn settle<F>(
+    screen: &mut Screen<'_>,
+    dir: &Path,
+    mut granting: Pin<&mut F>,
+) -> io::Result<Attempt>
+where
+    F: Future<Output = Result<Granted, Box<dyn Error>>>,
+{
+    let granted = loop {
+        match screen.wait(&Step::Checking, granting.as_mut()).await? {
+            Waited::Done(Ok(granted)) => break granted,
+            Waited::Done(Err(error)) => return Ok(Attempt::Failed(error)),
+            Waited::Key(event) if matches!(Key::of(event), Key::Cancel) => {
+                return Ok(Attempt::Cancelled);
+            }
+            Waited::Key(_) => {}
         }
     };
 

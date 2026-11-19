@@ -6,15 +6,17 @@ use toml::Spanned;
 use crate::{
     config::{Config, Error, IconChoice, Imap, SecretStore, Smtp},
     oauth::Endpoints,
+    provider::Provider,
 };
 
 /// `config.toml` as login reads it: everything but the Account may be set
-/// already, and a missing file is the Gmail defaults.
+/// already, and a server not set is the Provider's.
 pub struct PartialConfig {
     pub email: Option<String>,
+    pub provider: Provider,
     pub name: Option<String>,
-    pub imap: Imap,
-    pub smtp: Smtp,
+    imap: RawImap,
+    smtp: RawSmtp,
     pub secrets: SecretStore,
     pub oauth: Endpoints,
     pub icons: IconChoice,
@@ -24,6 +26,8 @@ pub struct PartialConfig {
 #[serde(deny_unknown_fields)]
 struct RawConfig {
     email: Option<String>,
+    #[serde(default)]
+    provider: Provider,
     name: Option<String>,
     #[serde(default)]
     imap: RawImap,
@@ -44,29 +48,42 @@ struct Secrets {
     store: SecretStore,
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, default)]
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawImap {
-    host: String,
-    port: u16,
-    tls: Spanned<bool>,
+    host: Option<String>,
+    port: Option<u16>,
+    tls: Option<Spanned<bool>>,
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, default)]
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawSmtp {
-    host: String,
-    port: u16,
-    tls: Spanned<bool>,
+    host: Option<String>,
+    port: Option<u16>,
+    tls: Option<Spanned<bool>>,
+    starttls: Option<bool>,
 }
 
-impl Default for RawSmtp {
-    fn default() -> Self {
-        let gmail = Smtp::gmail();
-        Self {
-            host: gmail.host,
-            port: gmail.port,
-            tls: Spanned::new(0..0, gmail.tls),
+impl RawImap {
+    fn at(self, provider: Provider) -> Imap {
+        let default = Imap::of(provider);
+        Imap {
+            host: self.host.unwrap_or(default.host),
+            port: self.port.unwrap_or(default.port),
+            tls: self.tls.map_or(default.tls, Spanned::into_inner),
+        }
+    }
+}
+
+impl RawSmtp {
+    fn at(self, provider: Provider) -> Smtp {
+        let default = Smtp::of(provider);
+        Smtp {
+            host: self.host.unwrap_or(default.host),
+            port: self.port.unwrap_or(default.port),
+            tls: self.tls.map_or(default.tls, Spanned::into_inner),
+            starttls: self.starttls.unwrap_or(default.starttls),
         }
     }
 }
@@ -92,26 +109,16 @@ impl Default for RawOAuth {
     }
 }
 
-impl Default for RawImap {
-    fn default() -> Self {
-        let gmail = Imap::gmail();
-        Self {
-            host: gmail.host,
-            port: gmail.port,
-            tls: Spanned::new(0..0, gmail.tls),
-        }
-    }
-}
-
 impl PartialConfig {
     pub fn load(path: &Path) -> Result<Self, Error> {
         match std::fs::read_to_string(path) {
             Ok(text) => Self::parse(path, &text),
             Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(Self {
                 email: None,
+                provider: Provider::default(),
                 name: None,
-                imap: Imap::gmail(),
-                smtp: Smtp::gmail(),
+                imap: RawImap::default(),
+                smtp: RawSmtp::default(),
                 secrets: SecretStore::default(),
                 oauth: Endpoints::google(),
                 icons: IconChoice::default(),
@@ -136,11 +143,15 @@ impl PartialConfig {
 
         let raw: RawConfig =
             toml::from_str(text).map_err(|e| invalid(e.span().unwrap_or(0..0), e.message()))?;
+        // A host left out is a Provider's, never on loopback.
         for (host, tls) in [
             (&raw.imap.host, &raw.imap.tls),
             (&raw.smtp.host, &raw.smtp.tls),
         ] {
-            if !tls.get_ref() && !is_loopback(host) {
+            if let Some(tls) = tls
+                && !tls.get_ref()
+                && !host.as_deref().is_some_and(is_loopback)
+            {
                 return Err(invalid(
                     tls.span(),
                     "`tls = false` is allowed only for a loopback host",
@@ -150,17 +161,10 @@ impl PartialConfig {
 
         Ok(Self {
             email: raw.email,
+            provider: raw.provider,
             name: raw.name,
-            imap: Imap {
-                host: raw.imap.host,
-                port: raw.imap.port,
-                tls: *raw.imap.tls.get_ref(),
-            },
-            smtp: Smtp {
-                host: raw.smtp.host,
-                port: raw.smtp.port,
-                tls: *raw.smtp.tls.get_ref(),
-            },
+            imap: raw.imap,
+            smtp: raw.smtp,
             secrets: raw.secrets.store,
             oauth: Endpoints {
                 authorization_url: raw.oauth.authorization_url,
@@ -171,13 +175,15 @@ impl PartialConfig {
         })
     }
 
-    /// The Config of this Account, whatever Account the file named.
-    pub fn account(self, email: String) -> Config {
+    /// The Config of this Account at `provider`, whatever Account the file
+    /// named; a server the file does not set is the Provider's.
+    pub fn account(self, email: String, provider: Provider) -> Config {
         Config {
             email,
+            provider,
             name: self.name,
-            imap: self.imap,
-            smtp: self.smtp,
+            imap: self.imap.at(provider),
+            smtp: self.smtp.at(provider),
             secrets: self.secrets,
             oauth: self.oauth,
             icons: self.icons,

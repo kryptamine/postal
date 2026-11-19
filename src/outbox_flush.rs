@@ -6,10 +6,11 @@ use crate::{
     folder::Role,
     imap::MailServer,
     notes::Notes,
-    oauth::Tokens,
     outbox::{Outbox, Queued},
     outgoing::Outgoing,
-    role_folder, smtp,
+    role_folder,
+    sign_in::SignIn,
+    smtp,
     sync::Error,
     update::Update,
 };
@@ -19,7 +20,7 @@ use crate::{
 pub struct Sender<'a> {
     pub outbox: &'a Outbox,
     pub outgoing: Outgoing<'a>,
-    pub sign_in: &'a Tokens,
+    pub sign_in: &'a SignIn,
 }
 
 /// Sends each Message in the Outbox over SMTP, then saves its copy to Sent,

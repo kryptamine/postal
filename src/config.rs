@@ -6,11 +6,12 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::{oauth::Endpoints, partial_config::PartialConfig};
+use crate::{oauth::Endpoints, partial_config::PartialConfig, provider::Provider};
 
 /// The Account settings read from `config.toml`.
 pub struct Config {
     pub email: String,
+    pub provider: Provider,
     /// The display name of `From`; without it, the bare address.
     pub name: Option<String>,
     pub imap: Imap,
@@ -28,29 +29,46 @@ pub struct Imap {
 }
 
 impl Imap {
-    pub fn gmail() -> Self {
+    pub fn of(provider: Provider) -> Self {
+        let host = match provider {
+            Provider::Google => "imap.gmail.com",
+            Provider::ICloud => "imap.mail.me.com",
+        };
+
         Self {
-            host: "imap.gmail.com".to_owned(),
+            host: host.to_owned(),
             port: 993,
             tls: true,
         }
     }
 }
 
-/// Implicit TLS only: there is no STARTTLS.
+/// With `tls`, implicit TLS, or STARTTLS after a plaintext start when
+/// `starttls` is set too.
 #[derive(PartialEq, Eq)]
 pub struct Smtp {
     pub host: String,
     pub port: u16,
     pub tls: bool,
+    pub starttls: bool,
 }
 
 impl Smtp {
-    pub fn gmail() -> Self {
-        Self {
-            host: "smtp.gmail.com".to_owned(),
-            port: 465,
-            tls: true,
+    /// iCloud's SMTP takes STARTTLS on 587 alone (support.apple.com/102525).
+    pub fn of(provider: Provider) -> Self {
+        match provider {
+            Provider::Google => Self {
+                host: "smtp.gmail.com".to_owned(),
+                port: 465,
+                tls: true,
+                starttls: false,
+            },
+            Provider::ICloud => Self {
+                host: "smtp.mail.me.com".to_owned(),
+                port: 587,
+                tls: true,
+                starttls: true,
+            },
         }
     }
 }
@@ -107,12 +125,20 @@ impl Config {
     /// `None` while the file is missing or names no Account yet.
     pub fn load(path: &Path) -> Result<Option<Self>, Error> {
         let mut partial = PartialConfig::load(path)?;
-        Ok(partial.email.take().map(|email| partial.account(email)))
+        let provider = partial.provider;
+        Ok(partial
+            .email
+            .take()
+            .map(|email| partial.account(email, provider)))
     }
 
     /// The file `load` reads back as this Config; the defaults are left out.
     pub fn to_toml(&self) -> String {
         let mut text = format!("email = {}\n", toml::Value::from(self.email.as_str()));
+        if self.provider != Provider::default() {
+            writeln!(text, "provider = \"{}\"", self.provider.key()).ok();
+        }
+
         if let Some(name) = &self.name {
             writeln!(text, "name = {}", toml::Value::from(name.as_str())).ok();
         }
@@ -123,7 +149,7 @@ impl Config {
             IconChoice::None => text += "icons = \"none\"\n",
         }
 
-        if self.imap != Imap::gmail() {
+        if self.imap != Imap::of(self.provider) {
             let host = toml::Value::from(self.imap.host.as_str());
             let Imap { port, tls, .. } = self.imap;
             // Writing to a String cannot fail.
@@ -134,12 +160,17 @@ impl Config {
             .ok();
         }
 
-        if self.smtp != Smtp::gmail() {
+        if self.smtp != Smtp::of(self.provider) {
             let host = toml::Value::from(self.smtp.host.as_str());
-            let Smtp { port, tls, .. } = self.smtp;
+            let Smtp {
+                port,
+                tls,
+                starttls,
+                ..
+            } = self.smtp;
             write!(
                 text,
-                "\n[smtp]\nhost = {host}\nport = {port}\ntls = {tls}\n"
+                "\n[smtp]\nhost = {host}\nport = {port}\ntls = {tls}\nstarttls = {starttls}\n"
             )
             .ok();
         }

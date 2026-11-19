@@ -104,6 +104,7 @@ mod secret;
 mod senders;
 mod sequence_numbers;
 mod shown;
+mod sign_in;
 mod smtp;
 mod snippet;
 mod snippets;
@@ -158,9 +159,11 @@ use crate::{
     outgoing::Outgoing,
     partial_config::PartialConfig,
     previews::Previews,
+    provider::Provider,
     reply_fetch::ReplyFetch,
     rgb::Rgb,
     run::{Background, Exit, Work},
+    sign_in::SignIn,
     status::Status,
     terminal_slot::TerminalSlot,
     theme::Theme,
@@ -255,7 +258,7 @@ fn try_main() -> Result<(), Box<dyn Error>> {
                 Exit::SignIn => {
                     let (terminal, background) = slot.take()?;
                     let theme = onboarding_theme(&dir, background)?;
-                    let again = Start::Again(&config.email);
+                    let again = Start::again(&config);
                     match onboarding::run(terminal, &theme, &dir, again).await? {
                         Outcome::SignedIn(_) => {
                             let (signed_in_as, fresh) = signed_in(slot, &dir).await?;
@@ -316,7 +319,7 @@ async fn onboard(
 async fn signed_in(
     slot: &mut TerminalSlot,
     dir: &Path,
-) -> Result<(Config, Tokens), Box<dyn Error>> {
+) -> Result<(Config, SignIn), Box<dyn Error>> {
     let config_path = dir.join("config.toml");
     loop {
         let Some(config) = Config::load(&config_path)? else {
@@ -330,18 +333,21 @@ async fn signed_in(
         };
 
         let Some(secret) = secret else {
-            onboard(slot, dir, Start::Again(&config.email)).await?;
+            onboard(slot, dir, Start::again(&config)).await?;
             continue;
         };
 
-        let sign_in = match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
-            Ok(tokens) => tokens,
-            Err(error) if error.signed_out() => {
-                tracing::warn!("{error}");
-                onboard(slot, dir, Start::Again(&config.email)).await?;
-                continue;
-            }
-            Err(error) => return Err(error.into()),
+        let sign_in = match config.provider {
+            Provider::ICloud => SignIn::Password(secret),
+            Provider::Google => match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
+                Ok(tokens) => SignIn::OAuth(tokens),
+                Err(error) if error.signed_out() => {
+                    tracing::warn!("{error}");
+                    onboard(slot, dir, Start::again(&config)).await?;
+                    continue;
+                }
+                Err(error) => return Err(error.into()),
+            },
         };
 
         return Ok((config, sign_in));
@@ -357,7 +363,7 @@ async fn signed_in(
 async fn session(
     slot: &mut TerminalSlot,
     config: &Config,
-    sign_in: Option<&Tokens>,
+    sign_in: Option<&SignIn>,
     failed: bool,
 ) -> Result<Exit, Box<dyn Error>> {
     let cache = Cache::open(&xdg::cache_dir()?)?;
@@ -420,7 +426,7 @@ async fn session(
 )]
 async fn bodies(
     config: &Config,
-    sign_in: &Tokens,
+    sign_in: &SignIn,
     cache: &Cache,
     mut requests: UnboundedReceiver<Request>,
     send: impl Fn(Update),

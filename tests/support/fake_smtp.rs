@@ -1,6 +1,6 @@
 //! An SMTP server inside the test process, in plaintext on `127.0.0.1:0`.
-//! It takes `AUTH XOAUTH2` with the access token, and records each sign-in
-//! and each Message it accepts.
+//! It takes `AUTH XOAUTH2` with the access token or `AUTH PLAIN` with the
+//! app-specific password, and records each sign-in and each Message it accepts.
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -11,7 +11,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 
-use super::fake_imap::xoauth2;
+use super::fake_imap::{APP_PASSWORD, EMAIL, xoauth2};
 
 /// One Message as the server took it.
 #[derive(Clone, Debug)]
@@ -33,6 +33,8 @@ struct State {
     down: bool,
     /// Connections closed so, as each try to send makes one.
     turned_away: usize,
+    /// `STARTTLS` commands, each ending its connection.
+    starttls: usize,
 }
 
 pub struct FakeSmtp {
@@ -84,6 +86,10 @@ impl FakeSmtp {
         self.state.lock().unwrap().down = true;
     }
 
+    pub fn starttls(&self) -> usize {
+        self.state.lock().unwrap().starttls
+    }
+
     pub fn turned_away(&self) -> usize {
         self.state.lock().unwrap().turned_away
     }
@@ -111,7 +117,16 @@ fn serve(stream: TcpStream, state: &Mutex<State>) {
             .map_or(command.as_str(), |(verb, _)| verb)
             .to_ascii_uppercase();
         let reply = match verb.as_str() {
-            "EHLO" => "250-fake\r\n250-AUTH XOAUTH2\r\n250 8BITMIME".to_owned(),
+            "EHLO" => {
+                "250-fake\r\n250-STARTTLS\r\n250-AUTH XOAUTH2 PLAIN\r\n250 8BITMIME".to_owned()
+            }
+            // The handshake that follows is never answered: the client's
+            // asking is what a test checks.
+            "STARTTLS" => {
+                state.lock().unwrap().starttls += 1;
+                say("220 2.0.0 Ready to start TLS").ok();
+                return;
+            }
             "AUTH" => auth(&command, state),
             "MAIL" => {
                 mail_from = address(&command);
@@ -175,7 +190,11 @@ fn auth(command: &str, state: &Mutex<State>) -> String {
         .and_then(|encoded| STANDARD.decode(encoded).ok())
         .map(|decoded| String::from_utf8(decoded).unwrap())
         .unwrap_or_default();
-    let ok = mechanism == "XOAUTH2" && response == xoauth2();
+    let ok = match mechanism.as_str() {
+        "XOAUTH2" => response == xoauth2(),
+        "PLAIN" => response == format!("\0{EMAIL}\0{APP_PASSWORD}"),
+        _ => false,
+    };
 
     state.lock().unwrap().logins.push((mechanism, response));
     if ok {

@@ -11,6 +11,8 @@ use crate::{
         token_endpoint,
     },
     partial_config::PartialConfig,
+    provider::Provider,
+    sign_in::SignIn,
 };
 
 /// Google's consent page, opened in the browser: the Account is whoever
@@ -81,9 +83,9 @@ impl Consent {
             return Err(Error::NoMailScope.into());
         }
 
-        let writes = writes(&self.partial, &grant.email);
-        let config = self.partial.account(grant.email);
-        let sign_in = Tokens::new(grant.refresh, token_url, grant.access);
+        let writes = writes(&self.partial, &grant.email, Provider::Google);
+        let config = self.partial.account(grant.email, Provider::Google);
+        let sign_in = SignIn::OAuth(Tokens::new(grant.refresh, token_url, grant.access));
         verify(&config, &sign_in).await?;
         Ok(Granted {
             config,

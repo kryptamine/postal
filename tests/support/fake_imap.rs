@@ -16,7 +16,7 @@ use imap_next::{
     imap_types::{
         auth::{AuthMechanism, AuthenticateData},
         command::{Command, CommandBody, FetchModifier},
-        core::{Atom, IString, NString, QuotedChar, Tag, Vec1},
+        core::{AString, Atom, IString, NString, QuotedChar, Tag, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
@@ -44,6 +44,10 @@ mod moves;
 pub const EMAIL: &str = "me@example.com";
 /// The OAuth access token `AUTHENTICATE XOAUTH2` accepts.
 pub const ACCESS_TOKEN: &str = "ya29.fakeAccessToken";
+/// The app-specific password `LOGIN` accepts, as iCloud formats one.
+pub const APP_PASSWORD: &str = "abcd-efgh-ijkl-mnop";
+/// The user `LOGIN` accepts unless told otherwise: the name part of `EMAIL`.
+pub const LOGIN_USER: &str = "me";
 
 /// The UID of the first Message given to `FakeImap::start`; the rest follow.
 pub const FIRST_UID: u32 = 101;
@@ -249,14 +253,22 @@ impl Folder {
     }
 }
 
+/// What the server lists beside `UIDPLUS`, which is always listed.
+struct Listed {
+    moves: bool,
+    /// Without it, `IDLE` is refused with `BAD`.
+    idle: bool,
+}
+
 struct Inbox {
     /// The Inbox first.
     folders: Vec<Folder>,
     next_msgid: u64,
     /// Advertises `X-GM-EXT-1` and answers `X-GM-MSGID` and `X-GM-THRID`.
     gmail: bool,
-    /// Advertises `MOVE`; `UIDPLUS` is always listed.
-    moves: bool,
+    listed: Listed,
+    /// The user name `LOGIN` takes with `APP_PASSWORD`.
+    login_user: &'static str,
     stall: Option<Stall>,
     /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
     /// a Message it cannot serve.
@@ -303,7 +315,11 @@ impl FakeImap {
             folders: vec![Folder::new(INBOX, &[])],
             next_msgid: FIRST_MSGID,
             gmail: true,
-            moves: true,
+            listed: Listed {
+                moves: true,
+                idle: true,
+            },
+            login_user: LOGIN_USER,
             stall: None,
             outage: None,
             refused: Vec::new(),
@@ -489,12 +505,43 @@ impl FakeImap {
     /// Serves later connections without `MOVE`, as a `UID COPY`, `\Deleted`
     /// and `UID EXPUNGE` stand in for it.
     pub fn without_move(&self) {
-        self.inbox.lock().unwrap().moves = false;
+        self.inbox.lock().unwrap().listed.moves = false;
     }
 
     /// Serves later connections as a server without Gmail's extensions.
     pub fn without_gmail(&self) {
         self.inbox.lock().unwrap().gmail = false;
+    }
+
+    /// Serves later connections without `IDLE`.
+    pub fn without_idle(&self) {
+        self.inbox.lock().unwrap().listed.idle = false;
+    }
+
+    /// Takes `LOGIN` only as `user` from now on.
+    pub fn login_as(&self, user: &'static str) {
+        self.inbox.lock().unwrap().login_user = user;
+    }
+
+    /// Serves later connections as iCloud's IMAP does: no Gmail extensions
+    /// and no `MOVE`, and Folders named for their use with no special-use
+    /// attribute, as iCloud lists them without SPECIAL-USE.
+    pub fn as_icloud(&self) {
+        {
+            let mut inbox = self.inbox.lock().unwrap();
+            inbox.gmail = false;
+            inbox.listed.moves = false;
+        }
+
+        for name in [
+            "Sent Messages",
+            "Drafts",
+            "Junk",
+            "Deleted Messages",
+            "Archive",
+        ] {
+            self.add_folder(name, &[], Vec::new());
+        }
     }
 
     /// Serves every Folder as a server without CONDSTORE: no `HIGHESTMODSEQ`.
@@ -709,9 +756,8 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                 finish_authenticate(&mut server, tag, &authenticate_data, outage);
             }
             Event::IdleCommandReceived { tag } => {
-                let accept = CommandContinuationRequest::basic(None, "idling").unwrap();
-                server.idle_accept(accept).unwrap();
-                idling = Some(tag);
+                let listed = inbox.lock().unwrap().listed.idle;
+                idling = start_idle(&mut server, tag, listed);
             }
             Event::IdleDoneReceived => {
                 let done = Status::ok(idling.take(), None, "IDLE terminated").unwrap();
@@ -735,6 +781,19 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     }
 }
 
+/// Accepts `IDLE` where it is `listed`, returning the tag to end it under.
+fn start_idle(server: &mut Server, tag: Tag<'static>, listed: bool) -> Option<Tag<'static>> {
+    if !listed {
+        let refused = Status::bad(Some(tag), None, "IDLE not listed").unwrap();
+        server.idle_reject(refused).unwrap();
+        return None;
+    }
+
+    let accept = CommandContinuationRequest::basic(None, "idling").unwrap();
+    server.idle_accept(accept).unwrap();
+    Some(tag)
+}
+
 /// Answers `command`, telling `view` what a move expunged.
 fn answer(
     server: &mut Server,
@@ -743,7 +802,21 @@ fn answer(
     view: &mut Vec<(u32, bool)>,
 ) {
     let mut inbox = inbox.lock().unwrap();
-    if matches!(command.body, CommandBody::Append { .. }) {
+    if let CommandBody::Login { username, password } = &command.body {
+        let status = login(
+            &inbox,
+            command.tag.clone(),
+            (username, password.declassify()),
+        );
+        server.enqueue_status(status);
+    } else if matches!(command.body, CommandBody::Noop) {
+        // A client without IDLE learns what changed from the NOOP's answer.
+        if let Some(folder) = inbox.folder(&opened.0) {
+            announce(server, view, folder);
+        }
+
+        server.enqueue_status(Status::ok(Some(command.tag), None, "NOOP completed").unwrap());
+    } else if matches!(command.body, CommandBody::Append { .. }) {
         let status = appends::append(command, &mut inbox);
         server.enqueue_status(status);
     } else if matches!(
@@ -911,6 +984,34 @@ fn finish_authenticate(
     server.authenticate_finish(status.unwrap()).unwrap();
 }
 
+/// Answers `LOGIN` as `AUTHENTICATE` is, taking `APP_PASSWORD` as the
+/// user the test set.
+fn login(
+    inbox: &Inbox,
+    tag: Tag<'static>,
+    (user, password): (&AString, &AString),
+) -> Status<'static> {
+    let text = |value: &AString| String::from_utf8(value.as_ref().to_vec()).unwrap();
+    let ok = text(user) == inbox.login_user && text(password) == APP_PASSWORD;
+    let tag = Some(tag);
+    let status = match inbox.outage {
+        Some(Outage::Throttled) => Status::no(tag, Some(code("THROTTLED")), "Too many logins"),
+        Some(Outage::Revoked) => Status::no(
+            tag,
+            Some(code("AUTHENTICATIONFAILED")),
+            "Invalid credentials",
+        ),
+        _ if ok => Status::ok(tag, None, "LOGIN completed"),
+        _ => Status::no(
+            tag,
+            Some(code("AUTHENTICATIONFAILED")),
+            "Invalid credentials",
+        ),
+    };
+
+    status.unwrap()
+}
+
 /// The SASL XOAUTH2 response of the Account with `ACCESS_TOKEN`.
 pub fn xoauth2() -> String {
     format!("user={EMAIL}\x01auth=Bearer {ACCESS_TOKEN}\x01\x01")
@@ -918,8 +1019,12 @@ pub fn xoauth2() -> String {
 
 fn capabilities(inbox: &Inbox) -> Data<'static> {
     let mut capabilities = vec![Capability::Imap4Rev1, Capability::UidPlus];
-    if inbox.moves {
+    if inbox.listed.moves {
         capabilities.push(Capability::Move);
+    }
+
+    if inbox.listed.idle {
+        capabilities.push(Capability::Idle);
     }
 
     if inbox.gmail {

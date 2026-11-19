@@ -9,8 +9,8 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, connect::Transport, moved_uids, new_messages, pushed::Pushed, tagged, traced::Traced,
-    whole_bodies, wire_trace, xoauth2::XOAuth2,
+    Error, connect::Transport, login, moved_uids, named_roles, new_messages, pushed::Pushed,
+    tagged, traced::Traced, whole_bodies, wire_trace,
 };
 use crate::{
     config::Config,
@@ -18,7 +18,7 @@ use crate::{
     folder::{Folder, Role},
     message_flags::MessageFlags,
     new_message::NewMessage,
-    oauth::Tokens,
+    sign_in::SignIn,
     snippet,
     sync_state::SyncState,
 };
@@ -33,6 +33,9 @@ const GMAIL_ITEMS: &str = concat!(
     "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID X-GM-THRID ",
     "BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])"
 );
+
+/// How often a server without `IDLE` is asked what changed.
+const POLL: Duration = Duration::from_secs(60);
 
 /// A Folder as `EXAMINE` or `SELECT` reports it.
 pub struct Examined {
@@ -148,10 +151,17 @@ pub struct ImapSession {
     pending: Vec<Pushed>,
     /// The Account's, to tell its own Messages.
     email: String,
-    /// What the server lists of `MOVE` (RFC 6851) and `UIDPLUS` (RFC 4315).
-    can_move: bool,
-    uidplus: bool,
+    listed: Listed,
     gmail: bool,
+}
+
+/// What the server lists of `MOVE` (RFC 6851), `UIDPLUS` (RFC 4315) and
+/// `IDLE` (RFC 2177); without `IDLE`, `idle` polls by `NOOP`.
+#[derive(Clone, Copy)]
+struct Listed {
+    moves: bool,
+    uidplus: bool,
+    idle: bool,
 }
 
 impl ImapSession {
@@ -159,7 +169,7 @@ impl ImapSession {
         clippy::future_not_send,
         reason = "Postal runs on a current-thread runtime"
     )]
-    pub async fn open(config: &Config, sign_in: &Tokens) -> Result<Self, Error> {
+    pub async fn open(config: &Config, sign_in: &SignIn) -> Result<Self, Error> {
         tracing::info!("connecting to {}:{}", config.imap.host, config.imap.port);
         let mut transport = super::connect::connect(&config.imap).await?;
         if wire_trace::enabled() {
@@ -176,33 +186,23 @@ impl ImapSession {
             return Err(Error::Bye(text));
         }
 
-        let token = sign_in.access().await.map_err(Error::Token)?;
-        let xoauth2 = XOAuth2 {
-            email: &config.email,
-            token: token.expose(),
-            sent: false,
-        };
-
-        let mut session = client
-            .authenticate("XOAUTH2", xoauth2)
-            .await
-            .map_err(|(e, _)| e)?;
+        let mut session = login::sign_in(client, config, sign_in).await?;
 
         tracing::info!("logged in");
         let capabilities = session.capabilities().await?;
         let gmail = capabilities.has_str("X-GM-EXT-1");
-        let (can_move, uidplus) = (
-            capabilities.has_str("MOVE"),
-            capabilities.has_str("UIDPLUS"),
-        );
+        let listed = Listed {
+            moves: capabilities.has_str("MOVE"),
+            uidplus: capabilities.has_str("UIDPLUS"),
+            idle: capabilities.has_str("IDLE"),
+        };
         Ok(Self {
             session,
             items: if gmail { GMAIL_ITEMS } else { ITEMS },
             uid_validity: 0,
             pending: Vec::new(),
             email: config.email.clone(),
-            can_move,
-            uidplus,
+            listed,
             gmail,
         })
     }
@@ -228,6 +228,23 @@ impl ImapSession {
             pushed,
         )
         .await
+    }
+
+    /// `idle` for a server without `IDLE`: a `NOOP` after `POLL`, or once
+    /// `stop` is done, collects what changed meanwhile.
+    async fn poll(
+        mut self,
+        period: Duration,
+        stop: impl Future<Output = ()>,
+    ) -> Result<(Self, Vec<Pushed>), Error> {
+        tokio::select! {
+            () = tokio::time::sleep(period.min(POLL)) => {}
+            () = stop => {}
+        }
+
+        self.session.noop().await?;
+        let pushed = self.pushed();
+        Ok((self, pushed))
     }
 
     fn opened(&mut self, mailbox: &async_imap::types::Mailbox) -> Examined {
@@ -281,10 +298,10 @@ impl MailServer for ImapSession {
         // What came before stays ahead of what comes during the move.
         let earlier = self.pushed();
         self.pending = earlier;
-        let command = if self.can_move { "MOVE" } else { "COPY" };
+        let command = if self.listed.moves { "MOVE" } else { "COPY" };
         let command = format!("UID {command} {set} {to}");
         let moved = moved_uids::run(&mut self.session, command, &mut self.pending).await?;
-        if !self.can_move {
+        if !self.listed.moves {
             // The copy, flag and expunge a `MOVE` stands for (RFC 6851 3.3).
             let flagged: Vec<Fetch> = self
                 .session
@@ -293,7 +310,7 @@ impl MailServer for ImapSession {
                 .try_collect()
                 .await?;
             drop(flagged);
-            if self.uidplus {
+            if self.listed.uidplus {
                 let pending = &mut self.pending;
                 let expunge = format!("UID EXPUNGE {set}");
                 tagged::run(&mut self.session, expunge, |response| {
@@ -325,11 +342,12 @@ impl MailServer for ImapSession {
     async fn folders(&mut self) -> Result<Vec<Folder>, Error> {
         let names = self.session.list(Some(""), Some("*")).await?;
         let names: Vec<_> = names.try_collect().await?;
-        let folders: Vec<_> = names
+        let mut folders: Vec<_> = names
             .iter()
             .filter(|name| !name.attributes().contains(&NameAttribute::NoSelect))
             .map(|name| Folder::new(name.name(), role(name.attributes())))
             .collect();
+        named_roles::fill(&mut folders);
         tracing::info!("listed {} Folders", folders.len());
         Ok(folders)
     }
@@ -487,14 +505,17 @@ impl MailServer for ImapSession {
         period: Duration,
         stop: impl Future<Output = ()>,
     ) -> Result<(Self, Vec<Pushed>), Error> {
+        if !self.listed.idle {
+            return self.poll(period, stop).await;
+        }
+
         let Self {
             session,
             items,
             uid_validity,
             pending,
             email,
-            can_move,
-            uidplus,
+            listed,
             gmail,
         } = self;
         let mut handle = session.idle();
@@ -515,8 +536,7 @@ impl MailServer for ImapSession {
             uid_validity,
             pending: Vec::new(),
             email,
-            can_move,
-            uidplus,
+            listed,
             gmail,
         };
 

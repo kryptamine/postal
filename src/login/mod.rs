@@ -1,15 +1,17 @@
 mod consent;
 mod granted;
+mod password;
 
 use std::{fmt, io, time::Duration};
 
-pub use self::{consent::Consent, granted::Granted};
+pub use self::{consent::Consent, granted::Granted, password::check_password};
 use crate::{
     config::Config,
     folder,
     imap::{self, ImapSession, MailServer},
-    oauth::Tokens,
     partial_config::PartialConfig,
+    provider::Provider,
+    sign_in::SignIn,
 };
 
 /// For connect, sign-in and `EXAMINE` together.
@@ -27,6 +29,8 @@ pub enum Error {
     Loopback(io::Error),
     /// The user unticked the Gmail permission on the consent screen.
     NoMailScope,
+    /// The IMAP server refused the address or the password.
+    PasswordRefused(Provider),
 }
 
 impl fmt::Display for Error {
@@ -51,6 +55,11 @@ impl fmt::Display for Error {
             Self::NoMailScope => f.write_str(
                 "Google did not grant access to Gmail; leave the Gmail permission ticked",
             ),
+            Self::PasswordRefused(provider) => write!(
+                f,
+                "{} refused the address or the app-specific password",
+                provider.service()
+            ),
         }
     }
 }
@@ -66,9 +75,12 @@ enum Writes {
     Account(String),
 }
 
-fn writes(partial: &PartialConfig, email: &str) -> Writes {
+/// The same address at another Provider is another Account, with another Cache.
+fn writes(partial: &PartialConfig, email: &str, provider: Provider) -> Writes {
     match &partial.email {
-        Some(current) if current.eq_ignore_ascii_case(email) => Writes::SecretOnly,
+        Some(current) if current.eq_ignore_ascii_case(email) && partial.provider == provider => {
+            Writes::SecretOnly
+        }
         Some(current) => Writes::Account(current.clone()),
         None => Writes::Config,
     }
@@ -78,7 +90,7 @@ fn writes(partial: &PartialConfig, email: &str) -> Writes {
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-async fn verify(config: &Config, sign_in: &Tokens) -> Result<(), Error> {
+async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
     let verified = async {
         let mut session = ImapSession::open(config, sign_in).await?;
         session.examine(folder::INBOX).await?;
