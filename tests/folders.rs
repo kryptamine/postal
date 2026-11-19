@@ -1,6 +1,13 @@
 //! Folders: `f` opens the Folder Picker over the screen, and `Enter` shows
 //! the chosen Folder in the Message List.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::time::{Duration, Instant};

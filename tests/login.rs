@@ -1,6 +1,13 @@
 //! `postal login --app-password` asks for the email and an app password,
 //! verifies them against the server, and only then writes config and secret.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};

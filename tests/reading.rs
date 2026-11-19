@@ -1,6 +1,13 @@
 //! `Enter` reads the selected Thread full screen as a stack of Messages,
 //! with keys of its own, until `q` or `Esc` goes back to the list.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::time::Duration;

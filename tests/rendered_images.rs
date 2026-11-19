@@ -1,6 +1,13 @@
 //! Images in the rendered View of HTML mail: never fetched, each one gone
 //! or shown as a label.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::net::TcpListener;

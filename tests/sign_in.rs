@@ -1,6 +1,13 @@
 //! `postal` runs the login flow itself when it has no Account to sign in
 //! as, and `L` signs in again once the server stops accepting the Account.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::{

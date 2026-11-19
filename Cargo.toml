@@ -65,6 +65,9 @@ string_slice = "deny"
 let_underscore_must_use = "deny"
 allow_attributes = "deny"
 allow_attributes_without_reason = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
 
 [build-dependencies]
 cc = { version = "1.11.2", features = ["parallel"] }

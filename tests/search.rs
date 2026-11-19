@@ -1,6 +1,13 @@
 //! Search: `/` narrows the Message List to the Messages a fuzzy Query
 //! matches, best match first, typed in the hint line.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::time::{Duration, Instant};

@@ -1,6 +1,13 @@
 //! `postal login` signs in through Google's consent page, and a Postal
 //! signed in that way trades its refresh token for an access token at start.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::{

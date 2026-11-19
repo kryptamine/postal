@@ -1,6 +1,13 @@
 //! The Message List shows one row per Thread, grouped by Gmail's
 //! `X-GM-THRID`: its senders, count, oldest subject and newest Snippet.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::time::{Duration, Instant};

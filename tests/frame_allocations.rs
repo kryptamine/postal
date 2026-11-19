@@ -1,6 +1,13 @@
 //! ADR 0001: a frame in steady state does not allocate. Built only with the
 //! `alloc-count` feature, which makes the binary log allocations per frame.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::{

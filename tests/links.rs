@@ -1,6 +1,13 @@
 //! `o` labels the links the Preview window shows, and a label opens its URL
 //! in the browser, here a recording stand-in for `open` and `xdg-open`.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::{fmt::Write, time::Duration};

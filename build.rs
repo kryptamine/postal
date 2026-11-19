@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+#[expect(clippy::panic, reason = "a build script fails by panicking")]
 fn sources(dir: &Path, extension: &str) -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
         .unwrap_or_else(|error| panic!("reading {}: {error}", dir.display()))

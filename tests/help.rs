@@ -1,6 +1,13 @@
 //! The hint line along the bottom, the `?` popup over the panes, and the
 //! Toasts in the hint line's right slot.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    reason = "a test fails by panicking"
+)]
+
 mod support;
 
 use std::{fmt::Write, time::Duration};
