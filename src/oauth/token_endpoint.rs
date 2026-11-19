@@ -116,7 +116,7 @@ fn post(token_url: &str, form: &[(&str, &str)]) -> Result<Answer, Error> {
     }
 
     let refusal: Refusal = serde_json::from_str(&body)
-        .map_err(|_| Error::Invalid(format!("HTTP {}", response.status())))?;
+        .map_err(|_unparsed| Error::Invalid(format!("HTTP {}", response.status())))?;
     Err(Error::Refused {
         error: refusal.error,
         description: refusal.error_description,

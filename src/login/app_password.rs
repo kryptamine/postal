@@ -10,6 +10,10 @@ const APP_PASSWORDS: &str = "https://myaccount.google.com/apppasswords";
 
 /// The Onboarding with an app password: asks until the server accepts one,
 /// and writes nothing before it does. The email prompt starts from `email`.
+#[expect(
+    clippy::print_stdout,
+    reason = "sign-in runs before the TUI and talks on stdout"
+)]
 pub fn app_password(dir: &Path, email: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let partial = PartialConfig::load(&dir.join("config.toml"))?;
     let email = ask("Email:", email.unwrap_or_default(), true)?;

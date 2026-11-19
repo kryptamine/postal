@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use nucleo_matcher::{
     Config, Matcher, Utf32String,
     pattern::{AtomKind, CaseMatching, Normalization, Pattern},
@@ -41,7 +43,7 @@ impl FolderPicker {
     pub fn reload(&mut self, mut folders: Vec<Folder>, shown: &Folder) {
         let selected = self
             .chosen()
-            .map_or_else(|| shown.name.clone(), |f| f.name.clone());
+            .map_or_else(|| Arc::clone(&shown.name), |f| Arc::clone(&f.name));
         if !folders.iter().any(|f| f.name == shown.name) {
             folders.push(shown.clone());
             folders.sort_by(Folder::order);

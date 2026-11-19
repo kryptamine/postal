@@ -643,7 +643,7 @@ fn steer(
                 return Ok(());
             }
 
-            Ask::Show(view.folder.name.clone())
+            Ask::Show(Arc::clone(&view.folder.name))
         }
         Step::Thread(id) => Ask::Thread(id),
         _ => return Ok(()),

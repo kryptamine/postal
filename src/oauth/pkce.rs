@@ -30,6 +30,6 @@ pub fn random() -> io::Result<String> {
     let mut bytes = [0; 32];
     SystemRandom::new()
         .fill(&mut bytes)
-        .map_err(|_| io::Error::other("no system randomness"))?;
+        .map_err(|_unspecified| io::Error::other("no system randomness"))?;
     Ok(URL_SAFE_NO_PAD.encode(bytes))
 }

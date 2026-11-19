@@ -134,10 +134,16 @@ async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
         _ = tokio::signal::ctrl_c() => return Err(Error::Cancelled),
     };
 
-    verified.map_err(|_| Error::Timeout)?.map_err(Error::Imap)
+    verified
+        .map_err(|_elapsed| Error::Timeout)?
+        .map_err(Error::Imap)
 }
 
 /// Writes the secret, then what else `writes` says.
+#[expect(
+    clippy::print_stdout,
+    reason = "sign-in runs before the TUI and talks on stdout"
+)]
 fn save(
     dir: &Path,
     config: &Config,

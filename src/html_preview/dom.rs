@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use html2text::{Element, Handle, RcDom};
 use html5ever::{
     LocalName, QualName,
@@ -89,7 +91,7 @@ pub fn width(node: &Handle) -> usize {
 /// The `alt` of every image below `node` that has one, in document order.
 pub fn alts(node: &Handle) -> Vec<String> {
     let mut alts = Vec::new();
-    let mut stack = vec![node.clone()];
+    let mut stack = vec![Rc::clone(node)];
     while let Some(next) = stack.pop() {
         if name(&next) == Some("img")
             && let Some(alt) = attr(&next, "alt")

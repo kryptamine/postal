@@ -47,6 +47,10 @@ pub fn oauth(dir: &Path, hint: Option<&str>) -> Result<(), Box<dyn std::error::E
 
 /// Sends the user to the consent page and waits for the browser to come back;
 /// returns the code with the redirect URI it came to.
+#[expect(
+    clippy::print_stdout,
+    reason = "sign-in runs before the TUI and talks on stdout"
+)]
 async fn wait_for_consent(
     endpoints: &Endpoints,
     pkce: &Pkce,
@@ -74,7 +78,7 @@ async fn wait_for_consent(
     };
 
     let outcome = outcome
-        .map_err(|_| Error::NoRedirect(waited))?
+        .map_err(|_elapsed| Error::NoRedirect(waited))?
         .map_err(Error::Loopback)?;
     match outcome {
         Outcome::Code(code) => Ok((code, loopback.redirect_uri)),

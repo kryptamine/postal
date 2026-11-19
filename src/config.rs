@@ -105,7 +105,7 @@ impl Config {
 
     /// The file `load` reads back as this Config; the defaults are left out.
     pub fn to_toml(&self) -> String {
-        // Serializing a unit variant cannot fail.
+        #[expect(clippy::unreachable, reason = "serializing a unit variant cannot fail")]
         let auth = toml::Value::try_from(self.auth).unwrap_or_else(|_| unreachable!());
         let mut text = format!(
             "email = {}\nauth = {auth}\n",

@@ -69,6 +69,11 @@ unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
 as_conversions = "deny"
+map_err_ignore = "deny"
+clone_on_ref_ptr = "deny"
+unreachable = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
 
 [build-dependencies]
 cc = { version = "1.11.2", features = ["parallel"] }

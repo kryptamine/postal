@@ -78,7 +78,7 @@ async fn read_head(mut stream: TcpStream) -> (TcpStream, io::Result<String>) {
         head.extend_from_slice(&buffer[..read]);
     }
 
-    let head = String::from_utf8(head).map_err(|_| io::ErrorKind::InvalidData.into());
+    let head = String::from_utf8(head).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e));
     (stream, head)
 }
 

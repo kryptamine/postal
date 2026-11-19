@@ -123,6 +123,10 @@ use crate::{
     update::Update,
 };
 
+#[expect(
+    clippy::print_stderr,
+    reason = "the terminal is restored, so stderr reaches the user"
+)]
 fn main() -> ExitCode {
     if let Some(code) = render_process::serve() {
         return code;
@@ -143,6 +147,7 @@ fn main() -> ExitCode {
 }
 
 /// Parses the flags and opens the log; `None` once `--help` is printed.
+#[expect(clippy::print_stdout, reason = "--help prints to stdout")]
 fn start() -> Result<Option<(PathBuf, Command)>, Box<dyn std::error::Error>> {
     let args = cli::parse(std::env::args_os().skip(1))?;
     let log = logging::path(&xdg::state_dir()?);
@@ -156,6 +161,10 @@ fn start() -> Result<Option<(PathBuf, Command)>, Box<dyn std::error::Error>> {
     Ok(Some((log, args.command)))
 }
 
+#[expect(
+    clippy::print_stderr,
+    reason = "the terminal is restored, so stderr reaches the user"
+)]
 fn logged(log: &Path, command: Command) -> ExitCode {
     tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
     let result = match command {

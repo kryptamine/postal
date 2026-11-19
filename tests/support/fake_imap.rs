@@ -914,7 +914,7 @@ fn answer_fetch(
         modifiers,
     } = body
     else {
-        unreachable!("only a FETCH is answered here");
+        panic!("only a FETCH is answered here");
     };
 
     let asked = Asked {
