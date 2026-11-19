@@ -91,6 +91,17 @@ impl StyledLine {
         }
     }
 
+    /// Every run as `marks` alone, in the terminal's own colours, still in
+    /// its link. A fill gone leaves nothing to show the blanks at the end.
+    pub fn restyle(&mut self, marks: Marks) {
+        for run in &mut self.runs {
+            run.marks = marks;
+            run.paint = Paint::default();
+        }
+
+        self.trim_end();
+    }
+
     /// The text in runs, in order.
     pub fn segments(&self) -> impl Iterator<Item = Segment<'_>> {
         let mut start = 0;

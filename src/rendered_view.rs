@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     cell_grid::{self, Cell, CellGrid},
+    footer,
     mail_colours::MailColours,
     marks::Marks,
     outlines::{self, Outline},
@@ -58,6 +59,7 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
     let start = lines.iter().position(|line| !blank(line)).unwrap_or(0);
     lines.drain(..start);
     spacer_rows::squeeze(&mut lines);
+    footer::mute(&mut lines);
     Some(lines)
 }
 

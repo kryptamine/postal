@@ -241,6 +241,20 @@ one blank row sets two blocks apart as well as five. A row with a fill left
 on it stays, since those rows are a drawing. On 539 cached mails at 74
 columns this cut the rows from 41594 to 34668.
 
+### The footer
+
+Every mail ends the same way, an unsubscribe link, an address, a copyright
+line, in as many styles as there are senders. The rows are drawn muted, in
+the terminal's own colours with no fill, and stay links (`src/footer.rs`).
+
+The footer starts at the first row, in the last third of the mail or its
+last 8 rows, that shows `©`, `unsubscribe`, `copyright` or `all rights
+reserved`, or links to an address with `unsub` or `optout` in it. The rows
+of its block above it, back to a blank row, go with it, unless the block
+starts above that last third: then it is the body, with the line in it.
+
+387 of 539 cached mails have one, a median 15% of their rows.
+
 ## Measurements
 
 Release build, Apple M2 Max, 76 columns, median of 10, spawn included (about

@@ -917,3 +917,41 @@ fn a_badge_shows_its_whole_alt_where_it_fits() {
     let rows = pane(&screen).join("\n");
     assert!(rows.contains("Download on the App Store"), "{rows}");
 }
+
+fn dim(screen: &Screen, text: &str) -> bool {
+    let (row, col) = at(screen, text);
+    screen.cell(row, col).unwrap().style().dim
+}
+
+// The footer is the same in every mail and is read in none: from the block
+// with the unsubscribe link on it is muted, its colours and fills gone,
+// and the body above keeps its own.
+#[test]
+fn the_footer_is_muted() {
+    let body = html(
+        "<p style=\"color:#cc0000\">Your order has shipped.</p>\
+         <p>Track it from your account.</p>\
+         <p style=\"color:#cc0000\">Acme Ltd, 1 Main Street<br>\
+         <a href=\"https://mail.example/unsub?u=1\" style=\"background:#1f883d;color:#fff\">\
+         Stop these emails</a></p><p style=\"color:#cc0000\">Sent by a robot.</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Sent by a robot");
+    assert!(!dim(&screen, "Your order"), "{}", screen.with_styles());
+    for text in ["Acme Ltd", "Stop these emails", "Sent by a robot"] {
+        let (row, col) = at(&screen, text);
+        assert!(dim(&screen, text), "{text}\n{}", screen.with_styles());
+        assert_eq!(fg(&screen, row, col), Color::Default, "{text}");
+        assert_eq!(bg(&screen, row, col), Color::Default, "{text}");
+    }
+}
+
+// A copyright line far above the end is part of what the mail says.
+#[test]
+fn a_copyright_line_in_the_body_is_not_the_footer() {
+    let lines = "<p>More of the body.</p>".repeat(20);
+    let body = html(&format!(
+        "<p>© 2024 Acme, quoted here.</p>{lines}<p>The end.</p>"
+    ));
+    let screen = preview(body, &DEFAULT, "© 2024 Acme");
+    assert!(!dim(&screen, "© 2024 Acme"), "{}", screen.with_styles());
+}

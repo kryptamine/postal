@@ -91,6 +91,7 @@ impl Theme {
             (Marks::ALT, self.muted),
             (Marks::UNDERLINE, self.underline),
             (Marks::BORDER, self.border),
+            (Marks::MUTED, self.muted),
         ]
         .into_iter()
         .filter(|&(mark, _)| marks.has(mark))

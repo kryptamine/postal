@@ -17,6 +17,7 @@ mod date_label;
 mod folder;
 mod folder_list;
 mod folder_picker;
+mod footer;
 mod header;
 mod help_popup;
 mod hint_line;
