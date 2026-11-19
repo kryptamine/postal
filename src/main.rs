@@ -86,6 +86,7 @@ mod rendered_view;
 mod reply_draft;
 mod reply_fetch;
 mod rgb;
+mod role_folder;
 mod run;
 mod screen;
 mod search;

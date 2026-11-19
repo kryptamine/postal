@@ -4,6 +4,7 @@ use crate::{
     cache::{Cache, Destination, PendingMove},
     folder::Role,
     imap::MailServer,
+    role_folder,
     sync::{self, Error},
     update::Update,
 };
@@ -33,7 +34,7 @@ pub async fn send(
             Destination::Back(folder) => Some(Arc::clone(folder)),
             Destination::Trash => {
                 if trash.is_none() {
-                    trash = find_trash(server, cache, send).await?;
+                    trash = role_folder::find(server, cache, Role::Trash, send).await?;
                 }
 
                 trash.clone()
@@ -104,34 +105,6 @@ fn record(
     }
 
     Ok(reached)
-}
-
-/// The Folder with the Trash role, listing the Folders first when the
-/// Cache knows none.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
-async fn find_trash(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    send: &impl Fn(Update),
-) -> Result<Option<Arc<str>>, Error> {
-    let trash = |cache: &Cache| -> Result<Option<Arc<str>>, Error> {
-        let folders = cache.folders()?;
-        Ok(folders
-            .into_iter()
-            .find(|f| f.role == Some(Role::Trash))
-            .map(|f| f.name))
-    };
-
-    if let Some(found) = trash(cache)? {
-        return Ok(Some(found));
-    }
-
-    cache.list_folders(&server.folders().await?)?;
-    send(Update::Folders);
-    trash(cache)
 }
 
 /// Leaves every Message of `group` where the server has it.
