@@ -40,7 +40,7 @@ std::vector<element::ptr> cells_of(const element::ptr& row)
 bool spans(const element::ptr& c, const char* attr)
 {
     const char* span = c->get_attr(attr);
-    return span && std::atoi(span) > 1;
+    return span && std::strtol(span, nullptr, 10) > 1;
 }
 
 bool spanned(const element::ptr& table, const char* attr)

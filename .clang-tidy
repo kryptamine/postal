@@ -1,0 +1,15 @@
+# Off: trailing return types and named casts for numbers are style only,
+# litehtml hands fonts over as integers, swappable parameters flag every
+# pair of ints, and promotion makes every unsigned char operand signed.
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-style-cast,
+  -performance-no-int-to-ptr,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-signed-bitwise
+HeaderFilterRegex: 'cpp/'
+WarningsAsErrors: '*'

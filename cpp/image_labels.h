@@ -22,9 +22,9 @@ class ImageLabels
     // spill, and their table's others. True when layout must run again.
     bool shrink_spilt();
     // Images that say or open something, hidden or shown.
-    const std::vector<litehtml::element::ptr>& pictures() const { return pictured; }
+    [[nodiscard]] const std::vector<litehtml::element::ptr>& pictures() const { return pictured; }
     // The label of an image `label` kept, by the src it gave it.
-    const std::string* of(const std::string& src) const;
+    [[nodiscard]] const std::string* of(const std::string& src) const;
 
   private:
     struct Grown

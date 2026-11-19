@@ -15,7 +15,7 @@ struct Box
 {
     int r0, r1, c0, c1;
 
-    bool holds(const Box& in) const
+    [[nodiscard]] bool holds(const Box& in) const
     {
         return in.r0 <= in.r1 && r0 <= in.r0 && r1 >= in.r1 && c0 <= in.c0 && c1 >= in.c1;
     }
@@ -34,7 +34,7 @@ class Grid
 
     explicit Grid(int cols) : cols(cols) {}
 
-    int rows() const { return cols ? int(drawn.size()) / cols : 0; }
+    [[nodiscard]] int rows() const { return cols ? int(drawn.size()) / cols : 0; }
     // The cell, with the grid grown down to its row; null outside the columns.
     cg_cell* at(int row, int col);
 };

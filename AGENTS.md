@@ -63,6 +63,8 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   thresholds live in `clippy.toml`.
 - **The C++ in `cpp/` is formatted by `clang-format`** (`.clang-format`):
   `clang-format -i cpp/*` before the commit. `vendor/` keeps upstream's style.
+- **`clang-tidy cpp/*.cpp` passes** with `bugprone`, `performance` and
+  `modernize` as errors (`.clang-tidy`, flags in `compile_flags.txt`).
 - **A review finding a linter could have caught becomes a rule.** Where a lint
   checks it, turn it on in the same change and fix every place it flags.
 - A linter exception states its reason: `#[allow(..., reason = "...")]`.

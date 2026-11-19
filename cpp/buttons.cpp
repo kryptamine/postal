@@ -16,9 +16,6 @@ namespace
 // The cells of a button's fill at each side of its label.
 const int BUTTON_PAD = 2;
 
-// The fill of a button whose border and label are both too light to be one.
-const web_color NEUTRAL(128, 128, 128);
-
 // One line of a few words, all a link's, in no filled box further in.
 bool label(const element::ptr& el, const Holds& h)
 {
@@ -62,7 +59,8 @@ void fill_from_border(const element::ptr& el)
     css_properties& css = el->css();
     web_color fill = css.get_borders().top.color;
     if(page_light(rgb(fill))) fill = css.get_color();
-    if(page_light(rgb(fill))) fill = NEUTRAL;
+    // Both too light: mid grey.
+    if(page_light(rgb(fill))) fill = web_color(128, 128, 128);
     background bg = css.get_bg();
     bg.m_color = fill;
     css.set_bg(bg);
@@ -141,9 +139,8 @@ void shape(Grid& grid, const Box& box)
             cg_cell& cell = *grid.at(r, c);
             if(c < from) cell.bg = left;
             else if(c > to) cell.bg = right;
-            else if(c >= c0 && c <= c1) cell.bg = fill;
-            // Outside its box the fill takes only cells that show nothing.
-            else if(cell.flags == 0 && is(cell, " ")) cell.bg = fill;
+            // The fill takes its box, and outside it only cells that show nothing.
+            else if((c >= c0 && c <= c1) || (cell.flags == 0 && is(cell, " "))) cell.bg = fill;
             // The fill says it can be pressed; a link's underline is noise.
             if(cell.flags & CG_TEXT) cell.flags = (cell.flags | CG_BOLD) & ~uint32_t(CG_UNDERLINE);
         }

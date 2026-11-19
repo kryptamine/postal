@@ -1,20 +1,20 @@
 #include "alt_names.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
-#include <iterator>
 
 namespace cg
 {
 namespace
 {
-const char* const PICTURE_NOUNS[] = {"icon", "image", "img", "logo", "picture", "photo", "banner"};
-const char* const ARTICLES[] = {"a", "an", "the", "some"};
+constexpr std::array PICTURE_NOUNS = {"icon", "image", "img", "logo", "picture", "photo", "banner"};
+constexpr std::array ARTICLES = {"a", "an", "the", "some"};
 
-template <size_t N> bool among(std::string word, const char* const (&words)[N])
+template <size_t N> bool among(std::string word, const std::array<const char*, N>& words)
 {
     for(auto& ch : word) ch = char(std::tolower(static_cast<unsigned char>(ch)));
-    return std::find(std::begin(words), std::end(words), word) != std::end(words);
+    return std::find(words.begin(), words.end(), word) != words.end();
 }
 } // namespace
 

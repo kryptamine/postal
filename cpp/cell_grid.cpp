@@ -182,9 +182,9 @@ class grid_container : public document_container, public Grid
         put(first_cell(pos.y, CH), first_cell(pos.x, CW), text, rgb(color), flags);
     }
 
-    pixel_t pt_to_px(float pt) const override { return pt * 96 / 72; }
-    pixel_t get_default_font_size() const override { return 16; }
-    const char* get_default_font_name() const override { return "monospace"; }
+    [[nodiscard]] pixel_t pt_to_px(float pt) const override { return pt * 96 / 72; }
+    [[nodiscard]] pixel_t get_default_font_size() const override { return 16; }
+    [[nodiscard]] const char* get_default_font_name() const override { return "monospace"; }
 
     void draw_list_marker(uint_ptr, const list_marker& m) override
     {
@@ -274,7 +274,7 @@ class grid_container : public document_container, public Grid
         c->flags = flags;
     }
 
-    bool row_has_text(int row, int c0, int c1) const
+    [[nodiscard]] bool row_has_text(int row, int c0, int c1) const
     {
         if(row < 0 || row >= rows()) return false;
         for(int c = std::max(c0, 0); c <= std::min(c1, cols - 1); c++)
@@ -287,7 +287,7 @@ class grid_container : public document_container, public Grid
 
     // The cells every glyph of the mail's lies within, before any border is
     // drawn.
-    Box content_box() const
+    [[nodiscard]] Box content_box() const
     {
         Box box{INT32_MAX, -1, INT32_MAX, -1};
         for(int i = 0; i < int(drawn.size()); i++)
