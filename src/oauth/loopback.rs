@@ -6,8 +6,11 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-use super::percent;
+use super::{landing, percent};
 use crate::credential::Credential;
+
+const HTML: &str = "text/html; charset=utf-8";
+const TEXT: &str = "text/plain; charset=utf-8";
 
 /// Enough for the request line and headers of any browser.
 const HEAD_LIMIT: usize = 16 * 1024;
@@ -50,16 +53,11 @@ impl Loopback {
             };
 
             let Some(outcome) = head.ok().and_then(|head| outcome(&head, state)) else {
-                respond(&mut stream, "404 Not Found", "Not found.").await;
+                respond(&mut stream, "404 Not Found", TEXT, "Not found.").await;
                 continue;
             };
 
-            let page = match outcome {
-                Outcome::Code(_) => "Postal got the sign-in. Return to the terminal.",
-                Outcome::Refused(_) => "The sign-in did not go through. Return to the terminal.",
-            };
-
-            respond(&mut stream, "200 OK", page).await;
+            respond(&mut stream, "200 OK", HTML, &landing::page(&outcome)).await;
             return Ok(outcome);
         }
     }
@@ -119,9 +117,11 @@ fn outcome(head: &str, state: &str) -> Option<Outcome> {
 }
 
 /// The browser shows `page`; a failure to send it changes nothing.
-async fn respond(stream: &mut TcpStream, status: &str, page: &str) {
+async fn respond(stream: &mut TcpStream, status: &str, content_type: &str, page: &str) {
     let response = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
+        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\n\
+         Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'\r\n\
+         Content-Length: {}\r\nConnection: close\r\n\r\n{page}",
         page.len()
     );
     stream.write_all(response.as_bytes()).await.ok();

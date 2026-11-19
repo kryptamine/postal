@@ -5,6 +5,7 @@ pub mod consent;
 mod endpoints;
 mod error;
 mod id_token;
+mod landing;
 pub mod loopback;
 mod percent;
 pub mod pkce;
