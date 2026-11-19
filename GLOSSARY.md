@@ -17,7 +17,7 @@ The Folder named `INBOX`, the one every run starts in.
 _Avoid_: feed
 
 **Folder Picker**:
-A popup over the screen listing every Folder with its Unread count, opened with `f`; typing narrows it, `Enter` shows the chosen Folder.
+A popup over the screen listing every Folder with its Unread count, and Local Drafts, opened with `f`; typing narrows it, `Enter` shows the chosen Folder.
 _Avoid_: folder list, switcher, sidebar
 
 **Message**:
@@ -117,12 +117,16 @@ Writing a new Message with `c`: Postal opens `$EDITOR` on a Draft holding its he
 _Avoid_: new mail, write
 
 **Reply**:
-Writing a Message in answer to one with `r`, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`.
+Writing a Message in answer to one with `r`, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft.
 _Avoid_: respond, answer
 
 **Draft**:
-A Message being written, kept on this machine until it is sent or discarded (ADR 0013).
+A Message being written, kept on this machine until it is sent or discarded (ADR 0013); `d` in its preview keeps it for later.
 _Avoid_: unsent mail, composition
+
+**Local Drafts**:
+Postal's own Folder in the Folder Picker, never on the server: every Draft and every Outbox Message, newest first, with its recipients and subject. `Enter` opens a Draft's preview, or shows an Outbox Message read-only with its last error; `Backspace` discards a Draft.
+_Avoid_: Drafts (the server's Folder), unsent
 
 **Send**:
 Handing a Draft to the server over SMTP from its preview with `y`; it waits in the Outbox until the server accepts it.
