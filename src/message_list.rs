@@ -30,8 +30,8 @@ const MARKER: &str = "●";
 /// The marker column and its gap; the subject and Snippet lines indent by the same.
 const INDENT: u16 = 2;
 const CARD_HEIGHT: u16 = 3;
-/// A blank row and the rule naming a Date Group, above all but the top one.
-const GROUP_GAP: u16 = 2;
+/// The rule naming a Date Group, above all but the top one.
+const GROUP_GAP: u16 = 1;
 /// Below this list width the date is dropped. The list beside the Preview
 /// is never narrower than this.
 const MIN_WIDTH_WITH_DATE: u16 = 29;

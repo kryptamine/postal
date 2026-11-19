@@ -141,7 +141,7 @@ fn heads_each_date_group_and_keeps_the_top_one_in_view() {
     let server = FakeImap::start(four_messages());
     let home = Home::for_server(&server);
     // Tall enough for Dave and Bob, not for Alice above them.
-    let mut t = postal_with(&home, (80, 28), &[]);
+    let mut t = postal_with(&home, (80, 25), &[]);
     t.wait_until(loaded).unwrap();
 
     t.send(Key::Char('G')).unwrap();
@@ -151,9 +151,8 @@ fn heads_each_date_group_and_keeps_the_top_one_in_view() {
     let rows: Vec<_> = (0..9).map(|row| screen.row_text(row)).collect();
     assert!(rows[0].starts_with("┌─ 2024 ─"), "{screen}");
     assert!(rows[1].contains("Dave"), "{screen}");
-    assert!(rows[4].trim_matches('│').trim().is_empty(), "{screen}");
-    assert!(rows[5].starts_with("├─ 2023 ─"), "{screen}");
-    assert!(rows[7].contains("Oldest"), "{screen}");
+    assert!(rows[4].starts_with("├─ 2023 ─"), "{screen}");
+    assert!(rows[6].contains("Oldest"), "{screen}");
 
     t.send(Key::Char('/')).unwrap();
     t.send_str("Oldest").unwrap();
