@@ -1,7 +1,6 @@
 //! The text View of HTML mail, from anonymised `.eml` fixtures built on the
 //! patterns of a corpus of real Gmail Messages. `v` switches to it.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::time::{Duration, Instant};

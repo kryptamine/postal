@@ -1,7 +1,6 @@
 //! Images in the rendered View of HTML mail: never fetched, each one gone
 //! or shown as a label.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::net::TcpListener;

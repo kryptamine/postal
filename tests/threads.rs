@@ -1,7 +1,6 @@
 //! The Message List shows one row per Thread, grouped by Gmail's
 //! `X-GM-THRID`: its senders, count, oldest subject and newest Snippet.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::time::{Duration, Instant};

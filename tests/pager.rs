@@ -1,7 +1,6 @@
 //! `|` hands the Message to `$PAGER`, and `Ctrl-z` to the shell; the
 //! screen comes back whole either way.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{path::Path, time::Duration};

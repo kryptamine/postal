@@ -1,7 +1,6 @@
 //! ADR 0001: a frame in steady state does not allocate. Built only with the
 //! `alloc-count` feature, which makes the binary log allocations per frame.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{

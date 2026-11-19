@@ -1,7 +1,6 @@
 //! Losing the server and getting it back: the backoff, its countdown in the
 //! status slot, and the resync after every reconnect.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{

@@ -1,7 +1,6 @@
 //! Reading a Gmail Thread finds its Messages in other Folders through All
 //! Mail, by `X-GM-THRID`, and adds them to the stack and to the row's count.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::time::{Duration, Instant};

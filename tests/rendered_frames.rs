@@ -1,7 +1,6 @@
 //! Section fills in the rendered View of HTML mail, drawn as frames in
 //! their colour.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use support::rendered::{DEFAULT, at, bg, fg, frames, html, pane, preview};

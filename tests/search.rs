@@ -1,7 +1,6 @@
 //! Search: `/` narrows the Message List to the Messages a fuzzy Query
 //! matches, best match first, typed in the hint line.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::time::{Duration, Instant};

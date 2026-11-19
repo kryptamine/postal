@@ -1,7 +1,6 @@
 //! The rendered View of HTML mail: its layout on the cell grid, in colours
 //! moved onto the terminal's background.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use support::rendered::{DEFAULT, LIGHT, Run, at, bg, fixture, html, pane, preview, quit, started};

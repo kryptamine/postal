@@ -1,7 +1,6 @@
 //! `Enter` reads the selected Thread full screen as a stack of Messages,
 //! with keys of its own, until `q` or `Esc` goes back to the list.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::time::Duration;

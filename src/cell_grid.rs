@@ -82,7 +82,7 @@ impl Cell {
 }
 
 /// `0x01RRGGBB` when set, 0 when not.
-#[allow(
+#[expect(
     clippy::cast_possible_truncation,
     reason = "each channel is masked to one byte"
 )]

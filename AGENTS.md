@@ -70,7 +70,8 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   lays out every cached HTML mail under ASan and UBSan.
 - **A review finding a linter could have caught becomes a rule.** Where a lint
   checks it, turn it on in the same change and fix every place it flags.
-- A linter exception states its reason: `#[allow(..., reason = "...")]`.
+- A linter exception is `#[expect(..., reason = "...")]`, so it fails once
+  nothing trips it; `#![allow]` only for a whole module.
 
 ## Comment rule (mandatory)
 

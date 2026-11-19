@@ -1,4 +1,3 @@
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::time::Duration;

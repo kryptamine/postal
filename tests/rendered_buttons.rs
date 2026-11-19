@@ -1,7 +1,6 @@
 //! Buttons in the rendered View of HTML mail: one shape, whatever markup
 //! made them.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use support::rendered::{DEFAULT, at, bg, frames, html, pane, preview};

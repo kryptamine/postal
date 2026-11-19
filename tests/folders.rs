@@ -1,7 +1,6 @@
 //! Folders: `f` opens the Folder Picker over the screen, and `Enter` shows
 //! the chosen Folder in the Message List.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::time::{Duration, Instant};

@@ -1,7 +1,6 @@
 //! The hint line along the bottom, the `?` popup over the panes, and the
 //! Toasts in the hint line's right slot.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{fmt::Write, time::Duration};

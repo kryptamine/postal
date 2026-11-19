@@ -42,7 +42,7 @@ impl Rgb {
     pub fn mix(self, to: Self, amount: f32) -> Self {
         let channel = |from: u8, to: u8| {
             let mixed = (f32::from(to) - f32::from(from)).mul_add(amount, f32::from(from));
-            #[allow(
+            #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,
                 reason = "rounded and clamped to 0..=255 first"

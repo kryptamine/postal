@@ -1,7 +1,6 @@
 //! `postal login --app-password` asks for the email and an app password,
 //! verifies them against the server, and only then writes config and secret.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{fs, os::unix::fs::PermissionsExt, time::Duration};

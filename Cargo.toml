@@ -63,6 +63,8 @@ nursery = { level = "deny", priority = -1 }
 undocumented_unsafe_blocks = "deny"
 string_slice = "deny"
 let_underscore_must_use = "deny"
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
 
 [build-dependencies]
 cc = { version = "1.11.2", features = ["parallel"] }

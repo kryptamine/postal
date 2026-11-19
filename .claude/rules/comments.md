@@ -24,7 +24,7 @@ shell alike.
   measured constant, a constraint the protocol or server imposes, an ordering that matters,
   a case that looks unhandled and is not.
 - Plain words. If a sentence needs a second read, rewrite it shorter.
-- An `#[allow(...)]` says why in the same line, or uses `reason = "..."`.
+- An `#[expect(...)]` says why with `reason = "..."`.
 - In tests, a comment says what the case protects: the behaviour that would
   otherwise be lost, not what the assertion does.
 - A field, method or constant deleted takes its comment with it.

@@ -1,7 +1,6 @@
 //! HTML mail too wide for the pane: what the rendered View lets go of
 //! before the text View takes it.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use support::rendered::{DEFAULT, at, bg, html, pane, preview, quit, started};

@@ -1,7 +1,6 @@
 //! `o` labels the links the Preview window shows, and a label opens its URL
 //! in the browser, here a recording stand-in for `open` and `xdg-open`.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{fmt::Write, time::Duration};

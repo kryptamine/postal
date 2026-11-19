@@ -1,7 +1,6 @@
 //! `postal login` signs in through Google's consent page, and a Postal
 //! signed in that way trades its refresh token for an access token at start.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{

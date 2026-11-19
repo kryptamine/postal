@@ -1,7 +1,6 @@
 //! The text of HTML mail in the rendered View: how it is aligned, and the
 //! roles its colours are reduced to.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use support::rendered::{DEFAULT, at, bg, dim, fg, html, pane, preview};

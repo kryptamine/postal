@@ -1,7 +1,6 @@
 //! `postal` runs the login flow itself when it has no Account to sign in
 //! as, and `L` signs in again once the server stops accepting the Account.
 
-#[allow(dead_code, reason = "each test binary uses part of the harness")]
 mod support;
 
 use std::{
