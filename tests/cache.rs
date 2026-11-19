@@ -367,11 +367,11 @@ fn preview(screen: &Screen) -> String {
 
 fn toast_is_red(screen: &Screen, text: &str) -> bool {
     let line = hint_line(screen);
-    let Some(at) = line.find(text) else {
+    let Some((before, _)) = line.split_once(text) else {
         return false;
     };
 
-    let column = u16::try_from(line[..at].chars().count()).unwrap();
+    let column = u16::try_from(before.chars().count()).unwrap();
     screen
         .cell(screen.rows() - 1, column)
         .is_some_and(|cell| cell.style().fg == Color::Indexed(1))

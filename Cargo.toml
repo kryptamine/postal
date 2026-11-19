@@ -58,6 +58,7 @@ all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 undocumented_unsafe_blocks = "deny"
+string_slice = "deny"
 
 [build-dependencies]
 cc = { version = "1.11.2", features = ["parallel"] }

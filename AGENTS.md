@@ -59,8 +59,9 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
 
 ## Lint rules (mandatory)
 
-- **Clippy runs `all`, `pedantic` and `nursery` as errors**; complexity
-  thresholds live in `clippy.toml`.
+- **Clippy runs `all`, `pedantic` and `nursery` as errors**, with chosen
+  `restriction` lints in `Cargo.toml`; complexity thresholds live in
+  `clippy.toml`.
 - **The C++ in `cpp/` is formatted by `clang-format`** (`.clang-format`):
   `clang-format -i cpp/*` before the commit. `vendor/` keeps upstream's style.
 - **`clang-tidy cpp/*.cpp` passes** with `bugprone`, `performance` and

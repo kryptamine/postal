@@ -30,11 +30,9 @@ pub fn decode(name: &str) -> Cow<'_, str> {
 fn try_decode(name: &str) -> Option<String> {
     let mut decoded = String::with_capacity(name.len());
     let mut rest = name;
-    while let Some(at) = rest.find('&') {
-        decoded.push_str(&rest[..at]);
-        let shifted = &rest[at + 1..];
-        let end = shifted.find('-')?;
-        let run = &shifted[..end];
+    while let Some((before, shifted)) = rest.split_once('&') {
+        decoded.push_str(before);
+        let (run, after) = shifted.split_once('-')?;
         if run.is_empty() {
             decoded.push('&');
         } else {
@@ -51,7 +49,7 @@ fn try_decode(name: &str) -> Option<String> {
             }
         }
 
-        rest = &shifted[end + 1..];
+        rest = after;
     }
 
     decoded.push_str(rest);

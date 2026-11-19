@@ -160,10 +160,7 @@ fn is_loopback(host: &str) -> bool {
 
 /// Both are 1-based; the column counts characters, not bytes.
 fn line_and_column(text: &str, offset: usize) -> (usize, usize) {
-    let before = &text[..offset.min(text.len())];
-    let line_start = before.rfind('\n').map_or(0, |i| i + 1);
-    (
-        before.matches('\n').count() + 1,
-        before[line_start..].chars().count() + 1,
-    )
+    let before = text.get(..offset).unwrap_or(text);
+    let line = before.rsplit('\n').next().unwrap_or_default();
+    (before.matches('\n').count() + 1, line.chars().count() + 1)
 }

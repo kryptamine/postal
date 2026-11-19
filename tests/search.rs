@@ -149,8 +149,8 @@ fn a_query_narrows_the_list_best_match_first_and_the_preview_follows() {
     let row = (0..screen.rows())
         .find(|&row| screen.row_text(row).contains("Please pay by"))
         .unwrap();
-    let col = screen.row_text(row).find("pay by").unwrap();
-    let col = u16::try_from(screen.row_text(row)[..col].chars().count()).unwrap();
+    let text = screen.row_text(row);
+    let col = u16::try_from(text.split_once("pay by").unwrap().0.chars().count()).unwrap();
     for offset in 0..3 {
         let style = screen.cell(row, col + offset).unwrap().style();
         assert!(

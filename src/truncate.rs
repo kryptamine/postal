@@ -32,5 +32,5 @@ pub fn fit(text: &str, width: usize) -> (&str, bool) {
         end = start + grapheme.len();
     }
 
-    (&text[..end], true)
+    (text.split_at(end).0, true)
 }

@@ -31,26 +31,27 @@ pub fn strip(html: &str) -> String {
     let mut text = String::with_capacity(html.len());
     let mut rest = html;
     while let Some(at) = rest.find(['<', '&']) {
-        text.push_str(&rest[..at]);
-        rest = &rest[at..];
+        let (before, from) = rest.split_at(at);
+        text.push_str(before);
+        rest = from;
         if rest.starts_with('&') {
             let (decoded, len) = entity(rest).unwrap_or(('&', 1));
             text.push(decoded);
-            rest = &rest[len..];
+            rest = rest.split_at(len).1;
             continue;
         }
 
         if let Some(comment) = rest.strip_prefix("<!--") {
-            rest = comment.find("-->").map_or("", |end| &comment[end + 3..]);
+            rest = comment.split_once("-->").map_or("", |(_, after)| after);
             continue;
         }
 
-        let Some(end) = rest.find('>') else {
+        let Some((tag, after)) = rest.split_once('>') else {
             return text;
         };
 
-        let tag = &rest[1..end];
-        rest = &rest[end + 1..];
+        let tag = tag.strip_prefix('<').unwrap_or(tag);
+        rest = after;
         let closing = tag.starts_with('/');
         let name = tag
             .trim_start_matches('/')
@@ -77,16 +78,17 @@ fn after_closing<'a>(html: &'a str, name: &str) -> &'a str {
         return "";
     };
 
-    html[start..]
-        .find('>')
-        .map_or("", |end| &html[start + end + 1..])
+    html.split_at(start)
+        .1
+        .split_once('>')
+        .map_or("", |(_, after)| after)
 }
 
 /// The character an entity at the start of `html` stands for, and the
 /// entity's length; `None` when it is not one Postal knows.
 fn entity(html: &str) -> Option<(char, usize)> {
     let end = html.bytes().take(12).position(|b| b == b';')?;
-    let name = &html[1..end];
+    let name = html.get(1..end)?;
     let decoded = match name {
         "amp" => '&',
         "lt" => '<',

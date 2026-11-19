@@ -132,8 +132,8 @@ fn literal_len(line: &[u8]) -> Option<usize> {
     let line = std::str::from_utf8(line)
         .ok()?
         .trim_end_matches(['\r', '\n']);
-    let open = line.strip_suffix('}')?.rfind('{')?;
-    line[open + 1..line.len() - 1].parse().ok()
+    let (_, n) = line.strip_suffix('}')?.rsplit_once('{')?;
+    n.parse().ok()
 }
 
 /// A mailbox name as async-imap quotes it.

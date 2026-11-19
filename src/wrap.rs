@@ -45,7 +45,7 @@ fn quote_prefix(line: &str) -> (&str, &str) {
     }
 
     let rest = line.trim_start_matches(['>', ' ']);
-    (&line[..line.len() - rest.len()], rest)
+    line.split_at(line.len() - rest.len())
 }
 
 fn wrap_line(prefix: &str, text: &str, width: usize, lines: &mut Vec<String>) {

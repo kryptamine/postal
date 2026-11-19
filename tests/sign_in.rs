@@ -239,7 +239,7 @@ fn a_refused_account_shows_signed_out_in_red_and_lists_l() {
     let status = "signed out · L sign in";
     let screen = t.snapshot_after(|s| s.contains(status)).unwrap();
     let hints = screen.row_text(screen.rows() - 1);
-    let column = u16::try_from(hints[..hints.find(status).unwrap()].chars().count()).unwrap();
+    let column = u16::try_from(hints.split_once(status).unwrap().0.chars().count()).unwrap();
     let cell = screen.cell(screen.rows() - 1, column).unwrap();
     assert_eq!(cell.style().fg, termlens::Color::Indexed(1), "{hints}");
     assert_eq!(hints.matches("L sign in").count(), 2, "{hints}");

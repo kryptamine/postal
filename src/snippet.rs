@@ -36,7 +36,7 @@ pub fn from_part(raw: &[u8], part: &TextPart) -> String {
     }
 
     match snippet.char_indices().nth(LENGTH) {
-        Some((end, _)) => snippet[..end].trim_end().to_owned(),
+        Some((end, _)) => snippet.split_at(end).0.trim_end().to_owned(),
         None => snippet,
     }
 }

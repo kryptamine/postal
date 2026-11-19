@@ -63,12 +63,12 @@ fn hint_line(screen: &Screen) -> String {
 /// the hint line does not show `text`.
 fn status(screen: &Screen, text: &str) -> Option<(String, bool)> {
     let line = hint_line(screen);
-    let at = line.find(text)?;
-    let column = line[..at].chars().count();
+    let (before, from) = line.split_at(line.find(text)?);
+    let column = before.chars().count();
     let yellow = screen
         .cell(screen.rows() - 1, u16::try_from(column).unwrap())
         .is_some_and(|cell| cell.style().fg == YELLOW);
-    Some((line[at..].trim_end().to_owned(), yellow))
+    Some((from.trim_end().to_owned(), yellow))
 }
 
 /// The seconds a `retry in Ns` countdown shows.
@@ -227,7 +227,7 @@ fn the_status_says_connecting_then_syncing_dimmed() {
 
     for (screen, text) in [(&connecting, "connecting…"), (&syncing, "syncing")] {
         let line = hint_line(screen);
-        let column = line[..line.find(text).unwrap()].chars().count();
+        let column = line.split_once(text).unwrap().0.chars().count();
         let cell = screen
             .cell(screen.rows() - 1, u16::try_from(column).unwrap())
             .unwrap();

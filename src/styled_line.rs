@@ -111,10 +111,10 @@ impl StyledLine {
 
     /// The text in runs, in order.
     pub fn segments(&self) -> impl Iterator<Item = Segment<'_>> {
-        let mut start = 0;
+        let mut rest = self.text.as_str();
         self.runs.iter().map(move |run| {
-            let text = &self.text[start..start + run.len];
-            start += run.len;
+            let (text, after) = rest.split_at(run.len);
+            rest = after;
             Segment {
                 text,
                 marks: run.marks,

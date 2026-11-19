@@ -69,8 +69,9 @@ fn two_links() -> String {
 fn style_at(screen: &Screen, needle: &str) -> termlens::Style {
     (0..screen.rows())
         .find_map(|row| {
-            let col = screen.row_text(row).find(needle)?;
-            let col = u16::try_from(screen.row_text(row)[..col].chars().count()).unwrap();
+            let text = screen.row_text(row);
+            let (before, _) = text.split_once(needle)?;
+            let col = u16::try_from(before.chars().count()).unwrap();
             Some(*screen.cell(row, col).unwrap().style())
         })
         .unwrap()

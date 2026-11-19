@@ -226,7 +226,7 @@ fn a_search_finds_a_thread_by_a_reply_sender() {
         .find(|&row| screen.row_text(row).contains("Alice, me, Bob"))
         .unwrap();
     let text = screen.row_text(row);
-    let col = text[..text.find("Bob").unwrap()].chars().count();
+    let col = text.split_once("Bob").unwrap().0.chars().count();
     let underlined = |col: usize| {
         screen
             .cell(row, u16::try_from(col).unwrap())
