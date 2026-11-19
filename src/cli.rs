@@ -13,7 +13,6 @@ pub enum Command {
     /// The TUI.
     Run,
     Login,
-    LoginAppPassword,
 }
 
 #[derive(Debug)]
@@ -43,12 +42,10 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Args, Error> {
     };
 
     let mut login = false;
-    let mut app_password = false;
     for arg in args {
         match arg.to_str() {
             Some("-h" | "--help") => parsed.help = true,
             Some("login") if !login => login = true,
-            Some("--app-password") if login && !app_password => app_password = true,
             Some(flag) if flag.len() > 1 && flag.strip_prefix('-').is_some_and(only_v) => {
                 parsed.verbosity += flag.len() - 1;
             }
@@ -56,9 +53,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Args, Error> {
         }
     }
 
-    if app_password {
-        parsed.command = Command::LoginAppPassword;
-    } else if login {
+    if login {
         parsed.command = Command::Login;
     }
 
@@ -74,12 +69,10 @@ pub fn help(log: &Path) -> String {
         "A keyboard-driven terminal mail client that reads one IMAP mailbox
 
 Usage: postal [-v | -vv]
-       postal login [--app-password] [-v | -vv]
+       postal login [-v | -vv]
 
 Commands:
-  login                 sign in to Gmail in the browser
-  login --app-password  sign in to Gmail with an app password;
-                        needs 2-Step Verification on the Google Account
+  login       sign in to Gmail in the browser
 
 Options:
   -v          log debug events

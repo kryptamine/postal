@@ -4,7 +4,7 @@
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{Ipv4Addr, TcpListener, TcpStream},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     thread,
 };
 
@@ -34,6 +34,12 @@ pub struct FakeOAuth {
     grants: Arc<Mutex<Grants>>,
 }
 
+/// One endpoint for the whole test binary, for a test that only needs to sign in.
+pub fn shared() -> &'static FakeOAuth {
+    static SHARED: OnceLock<FakeOAuth> = OnceLock::new();
+    SHARED.get_or_init(FakeOAuth::start)
+}
+
 impl FakeOAuth {
     pub fn start() -> Self {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
@@ -57,6 +63,15 @@ impl FakeOAuth {
 
     pub fn token_url(&self) -> String {
         format!("http://127.0.0.1:{}/token", self.port)
+    }
+
+    /// The `[oauth]` table that points Postal at this endpoint.
+    pub fn config(&self) -> String {
+        format!(
+            "\n[oauth]\nauthorization-url = \"http://127.0.0.1:{}/auth\"\ntoken-url = \"{}\"\n",
+            self.port,
+            self.token_url()
+        )
     }
 
     /// The scopes the next grants say the user agreed to.

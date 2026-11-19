@@ -4,7 +4,7 @@ use serde::Deserialize;
 use toml::Spanned;
 
 use crate::{
-    config::{Auth, Config, Error, Imap, SecretStore, Smtp},
+    config::{Config, Error, Imap, SecretStore, Smtp},
     oauth::Endpoints,
 };
 
@@ -13,7 +13,6 @@ use crate::{
 pub struct PartialConfig {
     pub email: Option<String>,
     pub name: Option<String>,
-    pub auth: Option<Auth>,
     pub imap: Imap,
     pub smtp: Smtp,
     pub secrets: SecretStore,
@@ -25,7 +24,6 @@ pub struct PartialConfig {
 struct RawConfig {
     email: Option<String>,
     name: Option<String>,
-    auth: Option<Auth>,
     #[serde(default)]
     imap: RawImap,
     #[serde(default)]
@@ -109,7 +107,6 @@ impl PartialConfig {
             Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(Self {
                 email: None,
                 name: None,
-                auth: None,
                 imap: Imap::gmail(),
                 smtp: Smtp::gmail(),
                 secrets: SecretStore::default(),
@@ -150,7 +147,6 @@ impl PartialConfig {
         Ok(Self {
             email: raw.email,
             name: raw.name,
-            auth: raw.auth,
             imap: Imap {
                 host: raw.imap.host,
                 port: raw.imap.port,
@@ -170,19 +166,11 @@ impl PartialConfig {
         })
     }
 
-    /// The error names the field the Account still lacks.
-    pub fn config(mut self) -> Result<Config, &'static str> {
-        let email = self.email.take().ok_or("email")?;
-        let auth = self.auth.ok_or("auth")?;
-        Ok(self.account(email, auth))
-    }
-
     /// The Config of this Account, whatever Account the file named.
-    pub fn account(self, email: String, auth: Auth) -> Config {
+    pub fn account(self, email: String) -> Config {
         Config {
             email,
             name: self.name,
-            auth,
             imap: self.imap,
             smtp: self.smtp,
             secrets: self.secrets,

@@ -70,7 +70,7 @@ pub fn init(path: &Path, verbosity: usize) -> Result<(), Error> {
     let file = fs::File::create(path).map_err(open_error)?;
     let (writer, guard) = tracing_appender::non_blocking(CappedFile::new(file, cap()));
     // Without the `tracing-log` bridge, `log` records are dropped: async-imap's
-    // trace logs the LOGIN command with the password in clear.
+    // trace logs the sign-in with the access token in clear.
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_writer(writer)

@@ -17,7 +17,7 @@ use crate::{
     flag,
     folder::{Folder, Role},
     new_message::NewMessage,
-    sign_in::SignIn,
+    oauth::Tokens,
     snippet,
     sync_state::SyncState,
 };
@@ -158,7 +158,7 @@ impl ImapSession {
         clippy::future_not_send,
         reason = "Postal runs on a current-thread runtime"
     )]
-    pub async fn open(config: &Config, sign_in: &SignIn) -> Result<Self, Error> {
+    pub async fn open(config: &Config, sign_in: &Tokens) -> Result<Self, Error> {
         tracing::info!("connecting to {}:{}", config.imap.host, config.imap.port);
         let mut transport = super::connect::connect(&config.imap).await?;
         if wire_trace::enabled() {
@@ -175,20 +175,17 @@ impl ImapSession {
             return Err(Error::Bye(text));
         }
 
-        let mut session = match sign_in {
-            SignIn::Password(password) => client.login(&config.email, password.expose()).await,
-            SignIn::OAuth(tokens) => {
-                let token = tokens.access().await.map_err(Error::Token)?;
-                let xoauth2 = XOAuth2 {
-                    email: &config.email,
-                    token: token.expose(),
-                    sent: false,
-                };
+        let token = sign_in.access().await.map_err(Error::Token)?;
+        let xoauth2 = XOAuth2 {
+            email: &config.email,
+            token: token.expose(),
+            sent: false,
+        };
 
-                client.authenticate("XOAUTH2", xoauth2).await
-            }
-        }
-        .map_err(|(e, _)| e)?;
+        let mut session = client
+            .authenticate("XOAUTH2", xoauth2)
+            .await
+            .map_err(|(e, _)| e)?;
 
         tracing::info!("logged in");
         let capabilities = session.capabilities().await?;

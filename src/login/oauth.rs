@@ -3,7 +3,6 @@ use std::path::Path;
 use super::{Error, save, verify, writes};
 use crate::{
     browser,
-    config::Auth,
     credential::Credential,
     oauth::{
         Endpoints, Tokens, consent,
@@ -12,7 +11,6 @@ use crate::{
         token_endpoint,
     },
     partial_config::PartialConfig,
-    sign_in::SignIn,
 };
 
 /// The Onboarding through Google's consent page, which offers the Account
@@ -34,13 +32,9 @@ pub fn oauth(dir: &Path, hint: Option<&str>) -> Result<(), Box<dyn std::error::E
         return Err(Error::NoMailScope.into());
     }
 
-    let writes = writes(&partial, &grant.email, Auth::OAuth)?;
-    let config = partial.account(grant.email, Auth::OAuth);
-    let sign_in = SignIn::OAuth(Tokens::new(
-        grant.refresh,
-        endpoints.token_url,
-        grant.access,
-    ));
+    let writes = writes(&partial, &grant.email)?;
+    let config = partial.account(grant.email);
+    let sign_in = Tokens::new(grant.refresh, endpoints.token_url, grant.access);
     runtime.block_on(verify(&config, &sign_in))?;
     save(dir, &config, &sign_in, writes)
 }

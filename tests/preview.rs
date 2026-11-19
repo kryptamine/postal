@@ -339,7 +339,10 @@ fn hint_line(screen: &Screen) -> String {
 
 fn logins(server: &FakeImap) -> usize {
     let commands = server.commands();
-    commands.iter().filter(|c| c.starts_with("LOGIN")).count()
+    commands
+        .iter()
+        .filter(|c| c.starts_with("AUTHENTICATE"))
+        .count()
 }
 
 // With the server gone, a body not in the Cache says so under the row's

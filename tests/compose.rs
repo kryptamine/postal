@@ -19,8 +19,8 @@ use std::{
 
 use mail_parser::{Address, MessageParser};
 use support::{
-    fake_imap::{ACCESS_TOKEN, EMAIL, FakeImap, FakeMessage, PASSWORD, xoauth2},
-    fake_oauth::{FakeOAuth, REFRESH_TOKEN},
+    fake_imap::{ACCESS_TOKEN, EMAIL, FakeImap, FakeMessage, xoauth2},
+    fake_oauth,
     fake_smtp::FakeSmtp,
     home::Home,
 };
@@ -70,12 +70,18 @@ fn smtp_config(smtp: &FakeSmtp) -> String {
     )
 }
 
-/// An app-password Account with a display name, on both fake servers.
+/// An Account with a display name, on both fake servers.
 fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
+    named_home(imap, smtp, &format!("name = \"{NAME}\"\n"))
+}
+
+/// An Account with the `name` line given, on both fake servers.
+fn named_home(imap: &FakeImap, smtp: &FakeSmtp, name: &str) -> Home {
     Home::new(&format!(
-        "email = \"{EMAIL}\"\nname = \"{NAME}\"\nauth = \"app-password\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n{}\n[secrets]\nstore = \"file\"\n",
+        "email = \"{EMAIL}\"\n{name}\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n{}\n[secrets]\nstore = \"file\"\n{}",
         imap.port,
-        smtp_config(smtp)
+        smtp_config(smtp),
+        fake_oauth::shared().config()
     ))
 }
 
@@ -185,10 +191,8 @@ fn a_sent_draft_reaches_the_server_as_written_with_the_headers_postal_adds() {
     // Gmail saves the copy in Sent itself.
     assert!(!imap.commands().iter().any(|c| c.starts_with("APPEND ")));
 
-    assert_eq!(
-        smtp.logins(),
-        [("PLAIN".to_owned(), format!("\0{EMAIL}\0{PASSWORD}"))]
-    );
+    assert_eq!(smtp.logins(), [("XOAUTH2".to_owned(), xoauth2())]);
+    assert!(xoauth2().contains(ACCESS_TOKEN));
     let received = smtp.received();
     assert_eq!(received.len(), 1);
     assert_eq!(received[0].mail_from, EMAIL);
@@ -233,18 +237,11 @@ fn a_sent_draft_reaches_the_server_as_written_with_the_headers_postal_adds() {
 }
 
 #[test]
-fn an_oauth_account_sends_with_xoauth2() {
-    let (imap, smtp, oauth) = (inbox(), FakeSmtp::start(), FakeOAuth::start());
-    let home = Home::new(&format!(
-        "email = \"{EMAIL}\"\nauth = \"oauth\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n{}\n[secrets]\nstore = \"file\"\n\n[oauth]\ntoken-url = \"{}\"\n",
-        imap.port,
-        smtp_config(&smtp),
-        oauth.token_url()
-    ));
-    fs::write(home.secret_path(), format!("{REFRESH_TOKEN}\n")).unwrap();
+fn without_a_name_from_is_the_bare_address() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let home = named_home(&imap, &smtp, "");
     let editor = Editor::writing(WRITTEN);
     let mut t = composed(&home, &editor);
-    // Without a name in the config, `From` is the bare address.
     let screen = t.screen();
     assert!(screen.contains(&format!("From    {EMAIL}")), "{screen:?}");
 
@@ -252,8 +249,6 @@ fn an_oauth_account_sends_with_xoauth2() {
     t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
     quit(t);
 
-    assert_eq!(smtp.logins(), [("XOAUTH2".to_owned(), xoauth2())]);
-    assert!(xoauth2().contains(ACCESS_TOKEN));
     assert_eq!(smtp.received().len(), 1);
 }
 

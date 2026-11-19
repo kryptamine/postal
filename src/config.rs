@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{oauth::Endpoints, partial_config::PartialConfig};
 
@@ -13,21 +13,10 @@ pub struct Config {
     pub email: String,
     /// The display name of `From`; without it, the bare address.
     pub name: Option<String>,
-    pub auth: Auth,
     pub imap: Imap,
     pub smtp: Smtp,
     pub secrets: SecretStore,
     pub oauth: Endpoints,
-}
-
-/// What the secret store holds for the Account.
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum Auth {
-    AppPassword,
-    /// A refresh token.
-    #[serde(rename = "oauth")]
-    OAuth,
 }
 
 #[derive(PartialEq, Eq)]
@@ -85,10 +74,6 @@ pub enum Error {
         column: usize,
         message: String,
     },
-    Missing {
-        path: PathBuf,
-        field: &'static str,
-    },
 }
 
 impl fmt::Display for Error {
@@ -101,9 +86,6 @@ impl fmt::Display for Error {
                 column,
                 message,
             } => write!(f, "{}:{line}:{column}: {message}", path.display()),
-            Self::Missing { path, field } => {
-                write!(f, "{}: missing field `{field}`", path.display())
-            }
         }
     }
 }
@@ -113,27 +95,17 @@ impl std::error::Error for Error {}
 impl Config {
     /// `None` while the file is missing or names no Account yet.
     pub fn load(path: &Path) -> Result<Option<Self>, Error> {
-        let partial = PartialConfig::load(path)?;
-        if partial.email.is_none() {
-            return Ok(None);
-        }
-
-        partial.config().map(Some).map_err(|field| Error::Missing {
-            path: path.to_owned(),
-            field,
-        })
+        let mut partial = PartialConfig::load(path)?;
+        Ok(partial.email.take().map(|email| partial.account(email)))
     }
 
     /// The file `load` reads back as this Config; the defaults are left out.
     pub fn to_toml(&self) -> String {
-        #[expect(clippy::unreachable, reason = "serializing a unit variant cannot fail")]
-        let auth = toml::Value::try_from(self.auth).unwrap_or_else(|_| unreachable!());
         let mut text = format!("email = {}\n", toml::Value::from(self.email.as_str()));
         if let Some(name) = &self.name {
             writeln!(text, "name = {}", toml::Value::from(name.as_str())).ok();
         }
 
-        writeln!(text, "auth = {auth}").ok();
         if self.imap != Imap::gmail() {
             let host = toml::Value::from(self.imap.host.as_str());
             let Imap { port, tls, .. } = self.imap;

@@ -1,5 +1,5 @@
-//! `postal login --app-password` asks for the email and an app password,
-//! verifies them against the server, and only then writes config and secret.
+//! `postal login` signs in through Google's consent page, and a Postal
+//! signed in that way trades its refresh token for an access token at start.
 
 #![allow(
     clippy::unwrap_used,
@@ -10,29 +10,85 @@
 
 mod support;
 
-use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
+use std::{
+    fs,
+    os::unix::fs::PermissionsExt,
+    time::{Duration, Instant},
+};
 
+use base64::{
+    Engine,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+};
 use support::{
-    browser::Browser,
-    fake_imap::{EMAIL, FakeImap, Outage, PASSWORD},
+    browser::{Browser, follow_redirect},
+    fake_imap::{ACCESS_TOKEN, EMAIL, FakeImap, Outage, xoauth2},
+    fake_oauth::{CODE, FakeOAuth, REFRESH_TOKEN},
     home::Home,
+    query::{self, Form},
 };
 use termlens::{Key, Terminal};
 
-const APP_PASSWORDS: &str = "https://myaccount.google.com/apppasswords";
-
-/// The app password as Google's page shows it, in groups of four.
-const PASTED: &str = "abcd efgh ijkl mnop";
-
-/// A config with no Account yet: the server and the file store, as only a
-/// test sets them before the first login.
-fn seeded(server: &FakeImap) -> Home {
+/// An Account signed in with OAuth: its secret is the refresh token.
+fn signed_in(server: &FakeImap, oauth: &FakeOAuth) -> Home {
     let home = Home::new(&format!(
-        "[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n",
-        server.port
+        "email = \"{EMAIL}\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}",
+        server.port,
+        oauth.config()
+    ));
+    fs::write(home.secret_path(), format!("{REFRESH_TOKEN}\n")).unwrap();
+    home
+}
+
+/// A config with no Account yet: the fake servers and the file store.
+fn seeded(server: &FakeImap, oauth: &FakeOAuth) -> Home {
+    seeded_with(server, oauth, "")
+}
+
+/// As `seeded`, with `oauth_extra` added to the `[oauth]` table.
+fn seeded_with(server: &FakeImap, oauth: &FakeOAuth, oauth_extra: &str) -> Home {
+    let home = Home::new(&format!(
+        "[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}{oauth_extra}",
+        server.port,
+        oauth.config()
     ));
     fs::remove_file(home.secret_path()).unwrap();
     home
+}
+
+/// The consent URL Postal opened, once it has.
+fn consent_url(browser: &Browser) -> String {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(url) = browser.opened().pop() {
+            return url;
+        }
+
+        assert!(Instant::now() < deadline, "no browser opened");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// Plays the user granting access: Google redirects with the code.
+fn grant(consent: &Form) -> String {
+    let code = CODE.replace('/', "%2F");
+    let granted = format!("code={code}&state={}&scope=email", consent["state"]);
+    follow_redirect(&consent["redirect_uri"], &granted)
+}
+
+/// The secret file without its line break.
+fn secret(home: &Home) -> Option<String> {
+    let text = fs::read_to_string(home.secret_path()).ok()?;
+    Some(text.trim_end().to_owned())
+}
+
+/// Asserts the login failed with `message` and left the seeded config alone.
+fn assert_failed_writing_nothing(t: &mut Terminal, home: &Home, seed: &str, message: &str) {
+    let screen = t.snapshot_after(|s| s.contains("postal:")).unwrap();
+    assert!(!t.wait_exit().unwrap().success(), "{screen:?}");
+    assert!(screen.logical_text().contains(message), "{screen:?}");
+    assert_eq!(secret(home), None);
+    assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
 }
 
 fn spawn(home: &Home, browser: &Browser, args: &[&str]) -> Terminal {
@@ -55,56 +111,149 @@ fn spawn_with(home: &Home, browser: &Browser, args: &[&str], envs: &[(&str, &str
         .unwrap()
 }
 
-fn login(home: &Home, browser: &Browser) -> Terminal {
-    spawn(home, browser, &["login", "--app-password"])
-}
+#[test]
+fn postal_refreshes_the_access_token_at_start() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = signed_in(&server, &oauth);
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &[]);
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
 
-fn give_email(t: &mut Terminal) {
-    t.wait_until(|s| s.contains("Email:")).unwrap();
-    t.send_str(EMAIL).unwrap();
-    t.send(Key::Enter).unwrap();
-    t.wait_until(|s| s.contains("App password:")).unwrap();
-}
-
-fn give_password(t: &mut Terminal, password: &str) {
-    t.paste(password).unwrap();
-    t.send(Key::Enter).unwrap();
-}
-
-/// The secret file without its line break.
-fn secret(home: &Home) -> Option<String> {
-    let text = fs::read_to_string(home.secret_path()).ok()?;
-    Some(text.trim_end().to_owned())
+    let requests = oauth.requests();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    assert_eq!(requests[0]["grant_type"], "refresh_token");
+    assert_eq!(requests[0]["refresh_token"], REFRESH_TOKEN);
+    let commands = server.commands();
+    assert!(
+        commands.iter().any(|c| c == "AUTHENTICATE XOAUTH2"),
+        "{commands:?}"
+    );
+    assert!(
+        !commands.iter().any(|c| c.starts_with("LOGIN")),
+        "{commands:?}"
+    );
 }
 
 #[test]
-fn a_verified_app_password_writes_config_and_secret() {
+fn an_unreachable_token_endpoint_at_start_is_an_outage() {
     let server = FakeImap::start(Vec::new());
-    let home = seeded(&server);
+    let oauth = FakeOAuth::start();
+    let home = signed_in(&server, &oauth);
+    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let dead = format!("http://{}/token", closed.local_addr().unwrap());
+    drop(closed);
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    fs::write(
+        home.config_path(),
+        config.replace(&oauth.token_url(), &dead),
+    )
+    .unwrap();
     let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_email(&mut t);
-    let screen = t.screen();
-    assert!(screen.contains("2-Step Verification"), "{screen:?}");
-    assert!(screen.contains(APP_PASSWORDS), "{screen:?}");
-    browser.wait_for(&[APP_PASSWORDS]);
-
-    give_password(&mut t, PASTED);
-    let screen = t.snapshot_after(|s| s.contains("Signed in")).unwrap();
+    let mut t = spawn(&home, &browser, &[]);
+    t.wait_until(|s| s.contains("offline · retry in")).unwrap();
+    t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
-    assert!(!screen.contains("abcd"), "echoed the password: {screen:?}");
+}
 
-    assert_eq!(secret(&home).as_deref(), Some(PASSWORD));
+#[test]
+fn a_revoked_refresh_token_at_start_signs_in_again_as_the_account() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = signed_in(&server, &oauth);
+    fs::write(home.secret_path(), "1//revoked\n").unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &[]);
+    let consent = query::of_url(&consent_url(&browser));
+    assert_eq!(consent["login_hint"], EMAIL);
+    assert!(server.commands().is_empty(), "{:?}", server.commands());
+
+    grant(&consent);
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
+}
+
+#[test]
+fn an_access_token_near_its_expiry_is_refreshed_before_a_connection() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    oauth.expire_in(30);
+    let home = signed_in(&server, &oauth);
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &[]);
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    // One at start, then one more for the connection that synced.
+    let requests = oauth.requests();
+    assert!(requests.len() >= 2, "{requests:?}");
+    assert!(requests.iter().all(|r| r["grant_type"] == "refresh_token"));
+}
+
+#[test]
+fn a_granted_consent_writes_config_and_refresh_token() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    let url = consent_url(&browser);
+    t.wait_until(|s| s.logical_text().contains(&url)).unwrap();
+    assert!(
+        url.starts_with(&format!("http://127.0.0.1:{}/auth?", oauth.port)),
+        "{url}"
+    );
+    let consent = query::of_url(&url);
+    assert_eq!(consent["scope"], "https://mail.google.com/ openid email");
+    assert_eq!(consent["code_challenge_method"], "S256");
+    assert!(
+        consent["redirect_uri"].starts_with("http://127.0.0.1:"),
+        "{url}"
+    );
+
+    // A browser may open a socket ahead of need and send nothing on it.
+    let host = consent["redirect_uri"].strip_prefix("http://").unwrap();
+    let _idle = std::net::TcpStream::connect(host).unwrap();
+
+    // Another page cannot hand Postal a code without the state it sent.
+    let forged = format!("code=forged&state=not-{}", consent["state"]);
+    let status = follow_redirect(&consent["redirect_uri"], &forged);
+    assert!(status.contains("404"), "{status}");
+
+    assert!(grant(&consent).contains("200"));
+    t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
+        .unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    let requests = oauth.requests();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    let exchange = &requests[0];
+    assert_eq!(exchange["grant_type"], "authorization_code");
+    assert_eq!(exchange["code"], CODE);
+    assert_eq!(exchange["redirect_uri"], consent["redirect_uri"]);
+    let digest = ring::digest::digest(&ring::digest::SHA256, exchange["code_verifier"].as_bytes());
+    assert_eq!(URL_SAFE_NO_PAD.encode(digest), consent["code_challenge"]);
+
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
     let mode = fs::metadata(home.secret_path())
         .unwrap()
         .permissions()
         .mode();
     assert_eq!(mode & 0o777, 0o600);
-    // Opening the Inbox is part of the check, not only the login.
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    assert!(config.contains(&format!("email = \"{EMAIL}\"")), "{config}");
     let commands = server.commands();
-    let login = commands.iter().position(|c| c.starts_with("LOGIN"));
+    let authenticate = commands.iter().position(|c| c == "AUTHENTICATE XOAUTH2");
     let examine = commands.iter().position(|c| c.starts_with("EXAMINE"));
-    assert!(login.is_some() && login < examine, "{commands:?}");
+    assert!(
+        authenticate.is_some() && authenticate < examine,
+        "{commands:?}"
+    );
 
     // The written config must be one Postal starts from.
     let mut t = spawn(&home, &browser, &[]);
@@ -113,19 +262,93 @@ fn a_verified_app_password_writes_config_and_secret() {
     assert!(t.wait_exit().unwrap().success());
 }
 
+#[test]
+fn a_denied_consent_names_the_refusal() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let seed = fs::read_to_string(home.config_path()).unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    let consent = query::of_url(&consent_url(&browser));
+    let denied = format!("error=access_denied&state={}", consent["state"]);
+    follow_redirect(&consent["redirect_uri"], &denied);
+
+    assert_failed_writing_nothing(&mut t, &home, &seed, "refused the sign-in: access_denied");
+    assert!(oauth.requests().is_empty());
+}
+
+#[test]
+fn a_browser_that_never_comes_back_times_out() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded_with(&server, &oauth, "redirect-timeout = 1\n");
+    let seed = fs::read_to_string(home.config_path()).unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    consent_url(&browser);
+
+    assert_failed_writing_nothing(&mut t, &home, &seed, "did not come back within 1s");
+}
+
+// Google's consent screen lets the user untick Gmail and still grant the rest.
+#[test]
+fn a_consent_without_the_gmail_scope_fails_clearly() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    oauth.grant_scope("openid https://www.googleapis.com/auth/userinfo.email");
+    let home = seeded(&server, &oauth);
+    let seed = fs::read_to_string(home.config_path()).unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    grant(&query::of_url(&consent_url(&browser)));
+
+    assert_failed_writing_nothing(&mut t, &home, &seed, "did not grant access to Gmail");
+    assert!(server.commands().is_empty(), "{:?}", server.commands());
+}
+
+#[test]
+fn tokens_never_reach_the_log() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login", "-vv"]);
+    grant(&query::of_url(&consent_url(&browser)));
+    t.wait_until(|s| s.contains("Signed in")).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    let mut t = spawn(&home, &browser, &["-vv"]);
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    let login = home.log_path().with_extension("log.1");
+    let log = fs::read_to_string(&login).unwrap() + &fs::read_to_string(home.log_path()).unwrap();
+    assert!(log.contains(" C: "), "no wire trace: {log}");
+    let secrets = [
+        CODE,
+        REFRESH_TOKEN,
+        ACCESS_TOKEN,
+        &STANDARD.encode(xoauth2()),
+    ];
+    for secret in secrets {
+        assert!(!log.contains(secret), "logged {secret}: {log}");
+    }
+}
+
 // The config is written whole on login, so what it set before must stay.
 #[test]
 fn a_login_keeps_the_name_and_the_smtp_server() {
     let server = FakeImap::start(Vec::new());
-    let home = seeded(&server);
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
     let extra =
         "name = \"Zoë Example\"\n\n[smtp]\nhost = \"127.0.0.1\"\nport = 2525\ntls = false\n";
     let config = fs::read_to_string(home.config_path()).unwrap();
     fs::write(home.config_path(), format!("{extra}{config}")).unwrap();
     let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_email(&mut t);
-    give_password(&mut t, PASTED);
+    let mut t = spawn(&home, &browser, &["login"]);
+    grant(&query::of_url(&consent_url(&browser)));
     t.wait_until(|s| s.contains("Signed in")).unwrap();
     assert!(t.wait_exit().unwrap().success());
 
@@ -138,87 +361,45 @@ fn a_login_keeps_the_name_and_the_smtp_server() {
 }
 
 #[test]
-fn a_rejected_password_prompts_again_and_writes_nothing() {
-    let server = FakeImap::start(Vec::new());
-    let home = seeded(&server);
-    let seed = fs::read_to_string(home.config_path()).unwrap();
-    let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_email(&mut t);
-
-    give_password(&mut t, "wxyz wxyz wxyz wxyz");
-    t.wait_until(|s| s.contains("refused")).unwrap();
-    t.wait_until(|s| s.logical_text().matches("App password:").count() == 2)
-        .unwrap();
-    assert_eq!(secret(&home), None);
-    assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
-
-    give_password(&mut t, PASTED);
-    t.wait_until(|s| s.contains("Signed in")).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-    assert_eq!(secret(&home).as_deref(), Some(PASSWORD));
-}
-
-#[test]
 fn a_dropped_connection_exits_non_zero_and_writes_nothing() {
     let server = FakeImap::start(Vec::new());
-    let home = seeded(&server);
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
     let seed = fs::read_to_string(home.config_path()).unwrap();
     let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_email(&mut t);
+    let mut t = spawn(&home, &browser, &["login"]);
+    let consent = query::of_url(&consent_url(&browser));
 
     server.fail(Outage::Offline);
-    give_password(&mut t, PASTED);
-    let screen = t.snapshot_after(|s| s.contains("postal:")).unwrap();
-    assert!(!t.wait_exit().unwrap().success(), "{screen:?}");
-    let prompts = screen.logical_text().matches("App password:").count();
-    assert_eq!(prompts, 1, "prompted again: {screen:?}");
-    assert_eq!(secret(&home), None);
-    assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
+    grant(&consent);
+    assert_failed_writing_nothing(&mut t, &home, &seed, "postal:");
 }
 
 #[test]
 fn a_login_with_the_same_email_replaces_only_the_secret() {
     let server = FakeImap::start(Vec::new());
-    let home = Home::for_server(&server);
+    let oauth = FakeOAuth::start();
+    let home = signed_in(&server, &oauth);
     // Comments survive only if the config is left alone.
     let config = format!(
         "# hand-written\n{}",
         fs::read_to_string(home.config_path()).unwrap()
     );
     fs::write(home.config_path(), &config).unwrap();
-    fs::write(home.secret_path(), "revoked\n").unwrap();
+    fs::write(home.secret_path(), "1//revoked\n").unwrap();
     let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_email(&mut t);
+    let mut t = spawn(&home, &browser, &["login"]);
+    grant(&query::of_url(&consent_url(&browser)));
 
-    give_password(&mut t, PASTED);
     t.wait_until(|s| s.contains("Signed in")).unwrap();
     assert!(t.wait_exit().unwrap().success());
-    assert_eq!(secret(&home).as_deref(), Some(PASSWORD));
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), config);
 }
 
-#[test]
-fn ctrl_c_at_the_password_prompt_exits_and_writes_nothing() {
-    let server = FakeImap::start(Vec::new());
-    let home = seeded(&server);
-    let seed = fs::read_to_string(home.config_path()).unwrap();
-    let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_email(&mut t);
-
-    t.send(Key::Ctrl('c')).unwrap();
-    t.wait_until(|s| s.contains("login cancelled")).unwrap();
-    assert!(!t.wait_exit().unwrap().success());
-    assert_eq!(secret(&home), None);
-    assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
-}
-
 /// An Account signed in before as someone else, with a Cache of its own.
-fn another_account(server: &FakeImap) -> (Home, String) {
-    let home = Home::for_server(server);
+fn another_account(server: &FakeImap, oauth: &FakeOAuth) -> (Home, String) {
+    let home = signed_in(server, oauth);
     let config = fs::read_to_string(home.config_path())
         .unwrap()
         .replace(EMAIL, "old@example.com");
@@ -228,10 +409,9 @@ fn another_account(server: &FakeImap) -> (Home, String) {
     (home, config)
 }
 
-fn give_other_email(t: &mut Terminal, answer: &str) {
-    t.wait_until(|s| s.contains("Email:")).unwrap();
-    t.send_str(EMAIL).unwrap();
-    t.send(Key::Enter).unwrap();
+/// Grants the consent as `EMAIL` and answers the replacement question.
+fn sign_in_as_another(t: &mut Terminal, browser: &Browser, answer: &str) {
+    grant(&query::of_url(&consent_url(browser)));
     t.wait_until(|s| s.contains("old@example.com") && s.contains("[y/N]"))
         .unwrap();
     t.send_str(answer).unwrap();
@@ -241,17 +421,16 @@ fn give_other_email(t: &mut Terminal, answer: &str) {
 #[test]
 fn a_login_as_another_account_replaces_it_and_deletes_the_cache() {
     let server = FakeImap::start(Vec::new());
-    let (home, _) = another_account(&server);
+    let oauth = FakeOAuth::start();
+    let (home, _) = another_account(&server, &oauth);
     let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_other_email(&mut t, "y");
-    t.wait_until(|s| s.contains("App password:")).unwrap();
+    let mut t = spawn(&home, &browser, &["login"]);
+    sign_in_as_another(&mut t, &browser, "y");
 
-    give_password(&mut t, PASTED);
     t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
         .unwrap();
     assert!(t.wait_exit().unwrap().success());
-    assert_eq!(secret(&home).as_deref(), Some(PASSWORD));
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
     let config = fs::read_to_string(home.config_path()).unwrap();
     assert!(config.contains(&format!("email = \"{EMAIL}\"")), "{config}");
     assert!(!home.cache_path().exists());
@@ -260,14 +439,16 @@ fn a_login_as_another_account_replaces_it_and_deletes_the_cache() {
 #[test]
 fn a_declined_replacement_writes_nothing() {
     let server = FakeImap::start(Vec::new());
-    let (home, config) = another_account(&server);
+    let oauth = FakeOAuth::start();
+    let (home, config) = another_account(&server, &oauth);
+    fs::write(home.secret_path(), "1//old\n").unwrap();
     let browser = Browser::new();
-    let mut t = login(&home, &browser);
-    give_other_email(&mut t, "n");
+    let mut t = spawn(&home, &browser, &["login"]);
+    sign_in_as_another(&mut t, &browser, "n");
 
     t.wait_until(|s| s.contains("login cancelled")).unwrap();
     assert!(!t.wait_exit().unwrap().success());
-    assert_eq!(secret(&home).as_deref(), Some(PASSWORD));
+    assert_eq!(secret(&home).as_deref(), Some("1//old"));
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), config);
     assert!(home.cache_path().exists());
 }
@@ -276,18 +457,19 @@ fn a_declined_replacement_writes_nothing() {
 #[test]
 fn a_locked_keychain_hints_at_the_file_store_and_writes_no_config() {
     let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
     let seed = format!(
-        "[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n",
-        server.port
+        "[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n{}",
+        server.port,
+        oauth.config()
     );
     let home = Home::new(&seed);
     fs::remove_file(home.secret_path()).unwrap();
     let browser = Browser::new();
     let locked = [("POSTAL_KEYCHAIN_FAIL", "the test locked the keychain")];
-    let mut t = spawn_with(&home, &browser, &["login", "--app-password"], &locked);
-    give_email(&mut t);
+    let mut t = spawn_with(&home, &browser, &["login"], &locked);
+    grant(&query::of_url(&consent_url(&browser)));
 
-    give_password(&mut t, PASTED);
     t.wait_until(|s| s.contains("store = \"file\"")).unwrap();
     assert!(!t.wait_exit().unwrap().success());
     assert_eq!(secret(&home), None);

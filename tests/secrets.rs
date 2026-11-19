@@ -46,7 +46,7 @@ fn assert_hints_at_the_file_store(home: &Home) {
     );
 }
 
-const HEAD: &str = "email = \"me@example.com\"\nauth = \"app-password\"\n";
+const HEAD: &str = "email = \"me@example.com\"\n";
 
 // Home also writes a valid secret file: reading it instead would be the
 // silent fallback to plaintext the user never chose.
@@ -68,8 +68,8 @@ fn an_empty_secrets_table_uses_the_keychain() {
     assert_hints_at_the_file_store(&home);
 }
 
-// The fake server accepts only the password in the secret file, so the
-// Inbox showing proves the file was read and the keychain left alone.
+// The fake token endpoint accepts only the refresh token in the secret file,
+// so the Inbox showing proves the file was read and the keychain left alone.
 #[test]
 fn the_file_store_never_touches_the_keychain() {
     let server = FakeImap::start(vec![FakeMessage::new(
@@ -98,6 +98,6 @@ fn the_file_store_never_touches_the_keychain() {
 fn an_unknown_store_names_the_path_and_line() {
     let home = Home::new(&format!("{HEAD}[secrets]\nstore = \"vault\"\n"));
     let stderr = String::from_utf8(postal_locked_keychain(&home).stderr).unwrap();
-    let at = format!("{}:4:9:", home.config_path().display());
+    let at = format!("{}:3:9:", home.config_path().display());
     assert!(stderr.contains(&at), "{stderr}");
 }

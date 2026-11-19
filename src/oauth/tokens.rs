@@ -35,7 +35,7 @@ impl Tokens {
     }
 
     /// Trades `refresh` for a first access token, blocking on the network.
-    /// Offline, the first connection tries again, as it would with a password.
+    /// Offline, the first connection tries again.
     pub fn refreshed(refresh: Credential, token_url: String) -> Result<Self, Error> {
         let access = match token_endpoint::refresh(&token_url, &refresh) {
             Ok(access) => Some(Access::from(access)),

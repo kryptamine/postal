@@ -42,8 +42,6 @@ mod appends;
 mod moves;
 
 pub const EMAIL: &str = "me@example.com";
-/// As Gmail stores an app password; its page shows it in groups of four.
-pub const PASSWORD: &str = "abcdefghijklmnop";
 /// The OAuth access token `AUTHENTICATE XOAUTH2` accepts.
 pub const ACCESS_TOKEN: &str = "ya29.fakeAccessToken";
 
@@ -160,10 +158,10 @@ pub enum Outage {
     /// Each connection is greeted with `BYE [UNAVAILABLE]`, as Gmail does
     /// while a backend is down.
     Bye,
-    /// `LOGIN` is answered `NO [THROTTLED]`.
+    /// Every sign-in is answered `NO [THROTTLED]`.
     Throttled,
     /// Every sign-in is answered `NO [AUTHENTICATIONFAILED]`, as for a
-    /// revoked app password or access token.
+    /// revoked access token.
     Revoked,
 }
 
@@ -701,9 +699,9 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                 command_authenticate,
             } => authenticating = start_authenticate(&mut server, command_authenticate),
             Event::AuthenticateDataReceived { authenticate_data } => {
-                let revoked = inbox.lock().unwrap().outage == Some(Outage::Revoked);
+                let outage = inbox.lock().unwrap().outage;
                 let tag = authenticating.take();
-                finish_authenticate(&mut server, tag, &authenticate_data, revoked);
+                finish_authenticate(&mut server, tag, &authenticate_data, outage);
             }
             Event::IdleCommandReceived { tag } => {
                 let accept = CommandContinuationRequest::basic(None, "idling").unwrap();
@@ -863,20 +861,6 @@ fn code(atom: &'static str) -> Code<'static> {
     Code::Other(CodeOther::unvalidated(atom.as_bytes()))
 }
 
-fn login(tag: Option<Tag<'static>>, ok: bool) -> Status<'static> {
-    let status = if ok {
-        Status::ok(tag, None, "LOGIN completed")
-    } else {
-        Status::no(
-            tag,
-            Some(code("AUTHENTICATIONFAILED")),
-            "Invalid credentials",
-        )
-    };
-
-    status.unwrap()
-}
-
 /// Asks for the XOAUTH2 response and returns the tag to answer it under;
 /// any other mechanism is refused at once.
 fn start_authenticate(server: &mut Server, command: CommandAuthenticate) -> Option<Tag<'static>> {
@@ -896,12 +880,26 @@ fn finish_authenticate(
     server: &mut Server,
     tag: Option<Tag<'static>>,
     data: &AuthenticateData,
-    revoked: bool,
+    outage: Option<Outage>,
 ) {
-    let ok = !revoked
-        && matches!(data, AuthenticateData::Continue(data)
-            if data.declassify().as_ref() == xoauth2().as_bytes());
-    server.authenticate_finish(login(tag, ok)).unwrap();
+    let ok = matches!(data, AuthenticateData::Continue(data)
+        if data.declassify().as_ref() == xoauth2().as_bytes());
+    let status = match outage {
+        Some(Outage::Throttled) => Status::no(tag, Some(code("THROTTLED")), "Too many logins"),
+        Some(Outage::Revoked) => Status::no(
+            tag,
+            Some(code("AUTHENTICATIONFAILED")),
+            "Invalid credentials",
+        ),
+        _ if ok => Status::ok(tag, None, "AUTHENTICATE completed"),
+        _ => Status::no(
+            tag,
+            Some(code("AUTHENTICATIONFAILED")),
+            "Invalid credentials",
+        ),
+    };
+
+    server.authenticate_finish(status.unwrap()).unwrap();
 }
 
 /// The SASL XOAUTH2 response of the Account with `ACCESS_TOKEN`.
@@ -965,16 +963,6 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
     };
 
     match command.body {
-        CommandBody::Login { .. } if inbox.outage == Some(Outage::Throttled) => {
-            let status = Status::no(tag, Some(code("THROTTLED")), "Too many logins");
-            server.enqueue_status(status.unwrap());
-        }
-        CommandBody::Login { username, password } => {
-            let ok = inbox.outage != Some(Outage::Revoked)
-                && username.as_ref() == EMAIL.as_bytes()
-                && password.declassify().as_ref() == PASSWORD.as_bytes();
-            server.enqueue_status(login(tag, ok));
-        }
         CommandBody::Capability => {
             server.enqueue_data(capabilities(inbox));
             server.enqueue_status(Status::ok(tag, None, "CAPABILITY completed").unwrap());

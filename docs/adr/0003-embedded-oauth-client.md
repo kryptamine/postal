@@ -11,9 +11,9 @@ client shows an "app not verified" screen and is capped at 100 users for its
 lifetime. That is acceptable for the MVP; verification is needed before a
 public release.
 
-An app password (`postal login --app-password`) stays as the fallback: for
-Workspace accounts whose admin blocks third-party apps, and once the user cap
-is reached.
+OAuth is the only way to sign in. An app password was the fallback for
+Workspace accounts whose admin blocks third-party apps and for the user cap;
+it was removed to keep one sign-in path, so those accounts cannot use Postal.
 
 ## Considered options
 

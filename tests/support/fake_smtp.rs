@@ -1,6 +1,6 @@
 //! An SMTP server inside the test process, in plaintext on `127.0.0.1:0`.
-//! It takes `AUTH PLAIN` with the app password and `AUTH XOAUTH2` with the
-//! access token, and records each sign-in and each Message it accepts.
+//! It takes `AUTH XOAUTH2` with the access token, and records each sign-in
+//! and each Message it accepts.
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -11,7 +11,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 
-use super::fake_imap::{EMAIL, PASSWORD, xoauth2};
+use super::fake_imap::xoauth2;
 
 /// One Message as the server took it.
 #[derive(Clone, Debug)]
@@ -111,7 +111,7 @@ fn serve(stream: TcpStream, state: &Mutex<State>) {
             .map_or(command.as_str(), |(verb, _)| verb)
             .to_ascii_uppercase();
         let reply = match verb.as_str() {
-            "EHLO" => "250-fake\r\n250-AUTH PLAIN XOAUTH2\r\n250 8BITMIME".to_owned(),
+            "EHLO" => "250-fake\r\n250-AUTH XOAUTH2\r\n250 8BITMIME".to_owned(),
             "AUTH" => auth(&command, state),
             "MAIL" => {
                 mail_from = address(&command);
@@ -166,7 +166,7 @@ fn take(received: Received, state: &Mutex<State>) -> String {
 }
 
 /// Checks `AUTH <mechanism> <initial response>` against the Account's
-/// secrets, as Gmail would.
+/// access token, as Gmail would.
 fn auth(command: &str, state: &Mutex<State>) -> String {
     let mut words = command.split(' ').skip(1);
     let mechanism = words.next().unwrap_or_default().to_owned();
@@ -175,11 +175,7 @@ fn auth(command: &str, state: &Mutex<State>) -> String {
         .and_then(|encoded| STANDARD.decode(encoded).ok())
         .map(|decoded| String::from_utf8(decoded).unwrap())
         .unwrap_or_default();
-    let ok = match mechanism.as_str() {
-        "PLAIN" => response == format!("\0{EMAIL}\0{PASSWORD}"),
-        "XOAUTH2" => response == xoauth2(),
-        _ => false,
-    };
+    let ok = mechanism == "XOAUTH2" && response == xoauth2();
 
     state.lock().unwrap().logins.push((mechanism, response));
     if ok {

@@ -100,7 +100,6 @@ mod secret;
 mod senders;
 mod sequence_numbers;
 mod shown;
-mod sign_in;
 mod smtp;
 mod snippet;
 mod snippets;
@@ -142,7 +141,7 @@ use crate::{
     body_fetch::Request,
     cache::Cache,
     cli::Command,
-    config::{Auth, Config, SecretStore},
+    config::{Config, SecretStore},
     imap::ImapSession,
     oauth::Tokens,
     older_pages::OlderPages,
@@ -152,7 +151,6 @@ use crate::{
     previews::Previews,
     reply_fetch::ReplyFetch,
     run::{Background, Exit, Work},
-    sign_in::SignIn,
     status::Status,
     theme::Theme,
     update::Update,
@@ -207,9 +205,6 @@ fn logged(log: &Path, command: Command) -> ExitCode {
         Command::Login => xdg::config_dir()
             .map_err(Into::into)
             .and_then(|dir| login::oauth(&dir, None)),
-        Command::LoginAppPassword => xdg::config_dir()
-            .map_err(Into::into)
-            .and_then(|dir| login::app_password(&dir, None)),
     };
 
     match result {
@@ -234,7 +229,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         match session(&config, sign_in.as_ref(), failed)? {
             Exit::Quit => return Ok(()),
-            Exit::SignIn => match login::sign_in_again(&dir, &config) {
+            Exit::SignIn => match login::oauth(&dir, Some(&config.email)) {
                 Ok(()) => {
                     let (signed_in_as, fresh) = signed_in(&dir)?;
                     (config, sign_in, failed) = (signed_in_as, Some(fresh), false);
@@ -252,7 +247,7 @@ fn try_main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// The Account the TUI opens as; with none yet, the login flow runs first.
-fn signed_in(dir: &Path) -> Result<(Config, SignIn), Box<dyn std::error::Error>> {
+fn signed_in(dir: &Path) -> Result<(Config, Tokens), Box<dyn std::error::Error>> {
     let config_path = dir.join("config.toml");
     loop {
         let Some(config) = Config::load(&config_path)? else {
@@ -266,21 +261,18 @@ fn signed_in(dir: &Path) -> Result<(Config, SignIn), Box<dyn std::error::Error>>
         };
 
         let Some(secret) = secret else {
-            login::sign_in_again(dir, &config)?;
+            login::oauth(dir, Some(&config.email))?;
             continue;
         };
 
-        let sign_in = match config.auth {
-            Auth::AppPassword => SignIn::Password(secret),
-            Auth::OAuth => match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
-                Ok(tokens) => SignIn::OAuth(tokens),
-                Err(error) if error.signed_out() => {
-                    tracing::warn!("{error}");
-                    login::sign_in_again(dir, &config)?;
-                    continue;
-                }
-                Err(error) => return Err(error.into()),
-            },
+        let sign_in = match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
+            Ok(tokens) => tokens,
+            Err(error) if error.signed_out() => {
+                tracing::warn!("{error}");
+                login::oauth(dir, Some(&config.email))?;
+                continue;
+            }
+            Err(error) => return Err(error.into()),
         };
 
         return Ok((config, sign_in));
@@ -291,7 +283,7 @@ fn signed_in(dir: &Path) -> Result<(Config, SignIn), Box<dyn std::error::Error>>
 /// last sign-in did.
 fn session(
     config: &Config,
-    sign_in: Option<&SignIn>,
+    sign_in: Option<&Tokens>,
     failed: bool,
 ) -> Result<Exit, Box<dyn std::error::Error>> {
     let cache = Cache::open(&xdg::cache_dir()?)?;
@@ -363,7 +355,7 @@ fn session(
 )]
 async fn bodies(
     config: &Config,
-    sign_in: &SignIn,
+    sign_in: &Tokens,
     cache: &Cache,
     mut requests: UnboundedReceiver<Request>,
     send: impl Fn(Update),

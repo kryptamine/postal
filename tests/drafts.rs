@@ -15,6 +15,7 @@ use std::{fs, path::PathBuf, time::Duration};
 
 use support::{
     fake_imap::{EMAIL, FakeImap, FakeMessage},
+    fake_oauth,
     fake_smtp::FakeSmtp,
     home::Home,
     picker::picked,
@@ -25,8 +26,10 @@ const WRITTEN: &str = "To: Bob Example <bob@example.com>\nSubject: Café plans\n
 
 fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
     Home::new(&format!(
-        "email = \"{EMAIL}\"\nauth = \"app-password\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[smtp]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n",
-        imap.port, smtp.port
+        "email = \"{EMAIL}\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[smtp]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}",
+        imap.port,
+        smtp.port,
+        fake_oauth::shared().config()
     ))
 }
 

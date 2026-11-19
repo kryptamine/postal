@@ -1,19 +1,17 @@
-mod app_password;
 mod oauth;
 
 use std::{fmt, io, path::Path, time::Duration};
 
-pub use self::{app_password::app_password, oauth::oauth};
+pub use self::oauth::oauth;
 use crate::{
     atomic_file, cache,
-    config::{Auth, Config, SecretStore},
+    config::{Config, SecretStore},
     folder,
     imap::{self, ImapSession, MailServer},
     keychain,
+    oauth::Tokens,
     partial_config::PartialConfig,
-    prompt, secret,
-    sign_in::SignIn,
-    xdg,
+    prompt, secret, xdg,
 };
 
 /// For connect, sign-in and `EXAMINE` together.
@@ -43,13 +41,6 @@ impl fmt::Display for Error {
                 VERIFY_TIMEOUT.as_secs()
             ),
             Self::Imap(source) => source.fmt(f),
-            Self::Denied(code) if code == "access_denied" || code == "admin_policy_enforced" => {
-                write!(
-                    f,
-                    "Google refused the sign-in ({code}); \
-                     sign in with an app password instead: `postal login --app-password`"
-                )
-            }
             Self::Denied(code) => write!(f, "Google refused the sign-in: {code}"),
             Self::NoRedirect(waited) => write!(
                 f,
@@ -73,18 +64,10 @@ pub fn cancelled(error: &(dyn std::error::Error + 'static)) -> bool {
     matches!(error.downcast_ref(), Some(Error::Cancelled))
 }
 
-/// The login flow by the `auth` of the Account `config` names, for it.
-pub fn sign_in_again(dir: &Path, config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    match config.auth {
-        Auth::OAuth => oauth(dir, Some(&config.email)),
-        Auth::AppPassword => app_password(dir, Some(&config.email)),
-    }
-}
-
 /// What a login writes besides the secret.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Writes {
-    /// The config names this Account with this `auth` already.
+    /// The config names this Account already.
     SecretOnly,
     Config,
     /// The config named another Account, whose Cache goes with it.
@@ -92,15 +75,9 @@ enum Writes {
 }
 
 /// What a login as `email` writes; replacing another Account asks first.
-fn writes(
-    partial: &PartialConfig,
-    email: &str,
-    auth: Auth,
-) -> Result<Writes, Box<dyn std::error::Error>> {
+fn writes(partial: &PartialConfig, email: &str) -> Result<Writes, Box<dyn std::error::Error>> {
     match partial.email.as_deref() {
-        Some(current) if current.eq_ignore_ascii_case(email) && partial.auth == Some(auth) => {
-            Ok(Writes::SecretOnly)
-        }
+        Some(current) if current.eq_ignore_ascii_case(email) => Ok(Writes::SecretOnly),
         Some(current) if !current.eq_ignore_ascii_case(email) => {
             let question = format!(
                 "Signed in as {current}. Sign in as {email} instead and delete the Cache? [y/N]"
@@ -121,7 +98,7 @@ fn writes(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
+async fn verify(config: &Config, sign_in: &Tokens) -> Result<(), Error> {
     let verified = async {
         let mut session = ImapSession::open(config, sign_in).await?;
         session.examine(folder::INBOX).await?;
@@ -147,14 +124,16 @@ async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
 fn save(
     dir: &Path,
     config: &Config,
-    sign_in: &SignIn,
+    sign_in: &Tokens,
     writes: Writes,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config_path = dir.join("config.toml");
     // The secret goes first, so a config never names an Account without one.
     match config.secrets {
-        SecretStore::Keychain => keychain::write(&config.email, sign_in.secret(), &config_path)?,
-        SecretStore::File => secret::write(&dir.join("secret"), sign_in.secret())?,
+        SecretStore::Keychain => {
+            keychain::write(&config.email, sign_in.refresh_token(), &config_path)?;
+        }
+        SecretStore::File => secret::write(&dir.join("secret"), sign_in.refresh_token())?,
     }
 
     // Before the config, so the new Account never opens the old one's Cache.

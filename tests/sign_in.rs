@@ -17,7 +17,7 @@ use std::{
 
 use support::{
     browser::{Browser, follow_redirect},
-    fake_imap::{EMAIL, FakeImap, FakeMessage, Outage, PASSWORD},
+    fake_imap::{EMAIL, FakeImap, FakeMessage, Outage},
     fake_oauth::{CODE, FakeOAuth, REFRESH_TOKEN},
     home::Home,
     query::{self, Form},
@@ -41,15 +41,6 @@ fn spawn(home: &Home, browser: &Browser, args: &[&str]) -> Terminal {
 
 fn hello() -> Vec<FakeMessage> {
     vec![FakeMessage::new("Alice", "Hello", "2024-03-02T09:00:00Z")]
-}
-
-/// The `[oauth]` overrides that point Postal at `oauth`.
-fn overrides(oauth: &FakeOAuth) -> String {
-    format!(
-        "\n[oauth]\nauthorization-url = \"http://127.0.0.1:{}/auth\"\ntoken-url = \"{}\"\n",
-        oauth.port,
-        oauth.token_url()
-    )
 }
 
 /// The consent URL Postal opened, once it has.
@@ -80,7 +71,7 @@ fn a_first_run_signs_in_then_opens_the_inbox() {
     let home = Home::new(&format!(
         "[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}",
         server.port,
-        overrides(&oauth)
+        oauth.config()
     ));
     fs::remove_file(home.secret_path()).unwrap();
     let browser = Browser::new();
@@ -95,19 +86,16 @@ fn a_first_run_signs_in_then_opens_the_inbox() {
 }
 
 #[test]
-fn a_missing_secret_signs_in_again_with_the_email_given() {
+fn a_missing_secret_signs_in_again_as_the_account() {
     let server = FakeImap::start(hello());
     let home = Home::for_server(&server);
     fs::remove_file(home.secret_path()).unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &[]);
 
-    t.wait_until(|s| s.contains(&format!("Email: {EMAIL}")))
-        .unwrap();
-    t.send(Key::Enter).unwrap();
-    t.wait_until(|s| s.contains("App password:")).unwrap();
-    t.paste(PASSWORD).unwrap();
-    t.send(Key::Enter).unwrap();
+    let consent = consent(&browser);
+    assert_eq!(consent["login_hint"], EMAIL);
+    grant(&consent);
     t.wait_until(|s| s.contains("Hello")).unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
@@ -123,15 +111,10 @@ fn sign_out(t: &mut Terminal, server: &FakeImap) {
     assert!(t.screen().contains("Hello"));
 }
 
-/// Answers the app password flow `L` runs, as the Account it had.
-fn sign_in_again(t: &mut Terminal) {
+/// Grants the consent `L` opens, as the Account it had.
+fn sign_in_again(t: &mut Terminal, browser: &Browser) {
     t.send(Key::Char('L')).unwrap();
-    t.wait_until(|s| s.contains(&format!("Email: {EMAIL}")))
-        .unwrap();
-    t.send(Key::Enter).unwrap();
-    t.wait_until(|s| s.contains("App password:")).unwrap();
-    t.paste(PASSWORD).unwrap();
-    t.send(Key::Enter).unwrap();
+    grant(&consent(browser));
 }
 
 #[test]
@@ -159,7 +142,7 @@ fn l_signs_in_again_and_restarts_sync() {
     t.send(Key::Char('?')).unwrap();
     t.wait_until(|s| !s.contains(" Help ")).unwrap();
     server.recover();
-    sign_in_again(&mut t);
+    sign_in_again(&mut t, &browser);
 
     t.wait_until(|s| s.contains("Hello") && !s.contains("signed out"))
         .unwrap();
@@ -173,6 +156,7 @@ fn l_signs_in_again_and_restarts_sync() {
     assert!(t.wait_exit().unwrap().success());
 }
 
+// Postal waits for the browser without raw mode, where Ctrl-C is SIGINT.
 #[test]
 fn ctrl_c_in_the_login_flow_returns_to_the_tui_signed_out() {
     let server = FakeImap::start(hello());
@@ -182,23 +166,19 @@ fn ctrl_c_in_the_login_flow_returns_to_the_tui_signed_out() {
     sign_out(&mut t, &server);
     server.recover();
     t.send(Key::Char('L')).unwrap();
-    t.wait_until(|s| s.contains("Email:")).unwrap();
+    consent(&browser);
 
     t.send(Key::Ctrl('c')).unwrap();
     t.wait_until(|s| s.contains("Hello") && s.contains("signed out · L sign in"))
         .unwrap();
     assert_eq!(
         fs::read_to_string(home.secret_path()).unwrap(),
-        format!("{PASSWORD}\n")
+        format!("{REFRESH_TOKEN}\n")
     );
     // Signed out stays so: nothing reconnects behind the screen.
     server.clear_commands();
     std::thread::sleep(Duration::from_millis(300));
     assert!(server.commands().is_empty(), "{:?}", server.commands());
-
-    sign_in_again(&mut t);
-    t.wait_until(|s| s.contains("Hello") && !s.contains("signed out"))
-        .unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 }
@@ -206,39 +186,20 @@ fn ctrl_c_in_the_login_flow_returns_to_the_tui_signed_out() {
 /// An Account signed in with OAuth: its secret is the refresh token.
 fn oauth_account(server: &FakeImap, oauth: &FakeOAuth) -> Home {
     let home = Home::new(&format!(
-        "email = \"{EMAIL}\"\nauth = \"oauth\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}",
+        "email = \"{EMAIL}\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}",
         server.port,
-        overrides(oauth)
+        oauth.config()
     ));
     fs::write(home.secret_path(), format!("{REFRESH_TOKEN}\n")).unwrap();
     home
 }
 
-// Postal waits for the browser without raw mode, where Ctrl-C is SIGINT.
-#[test]
-fn ctrl_c_while_waiting_for_the_browser_returns_to_the_tui_signed_out() {
-    let server = FakeImap::start(hello());
-    let oauth = FakeOAuth::start();
-    let home = oauth_account(&server, &oauth);
-    let browser = Browser::new();
-    let mut t = spawn(&home, &browser, &[]);
-    sign_out(&mut t, &server);
-    t.send(Key::Char('L')).unwrap();
-    consent(&browser);
-
-    t.send(Key::Ctrl('c')).unwrap();
-    t.wait_until(|s| s.contains("Hello") && s.contains("signed out · L sign in"))
-        .unwrap();
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
-// A refused password is no outage: retrying it would only be refused again.
+// A refused access token is no outage: retrying it would only be refused again.
 #[test]
 fn a_refused_account_shows_signed_out_in_red_and_lists_l() {
     let server = FakeImap::start(hello());
     let home = Home::for_server(&server);
-    fs::write(home.secret_path(), "wrong\n").unwrap();
+    server.fail(Outage::Revoked);
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &[]);
 
@@ -253,7 +214,7 @@ fn a_refused_account_shows_signed_out_in_red_and_lists_l() {
     let logins = server
         .commands()
         .iter()
-        .filter(|c| c.starts_with("LOGIN"))
+        .filter(|c| c.starts_with("AUTHENTICATE"))
         .count();
     // One each for the sync and the body connections, and no retry.
     assert!(logins <= 2, "{:?}", server.commands());

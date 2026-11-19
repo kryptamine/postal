@@ -6,7 +6,10 @@ use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
 use tempfile::TempDir;
 
-use super::fake_imap::{EMAIL, FakeImap, PASSWORD};
+use super::{
+    fake_imap::{EMAIL, FakeImap},
+    fake_oauth::{self, REFRESH_TOKEN},
+};
 
 pub struct Home {
     dir: TempDir,
@@ -21,16 +24,18 @@ impl Home {
         fs::create_dir_all(home.postal_dir()).unwrap();
         fs::write(home.config_path(), config).unwrap();
         let secret = home.postal_dir().join("secret");
-        fs::write(&secret, format!("{PASSWORD}\n")).unwrap();
+        fs::write(&secret, format!("{REFRESH_TOKEN}\n")).unwrap();
         fs::set_permissions(&secret, fs::Permissions::from_mode(0o600)).unwrap();
         home
     }
 
-    /// A valid config pointing at `server` over plaintext loopback.
+    /// A valid config pointing at `server` over plaintext loopback, signed in
+    /// through the shared fake token endpoint.
     pub fn for_server(server: &FakeImap) -> Self {
         Self::new(&format!(
-            "email = \"{EMAIL}\"\nauth = \"app-password\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n",
-            server.port
+            "email = \"{EMAIL}\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}",
+            server.port,
+            fake_oauth::shared().config()
         ))
     }
 

@@ -14,7 +14,8 @@ use std::{
 };
 
 use support::{
-    fake_imap::{FakeImap, FakeMessage, PASSWORD},
+    fake_imap::{ACCESS_TOKEN, FakeImap, FakeMessage},
+    fake_oauth::REFRESH_TOKEN,
     home::Home,
 };
 use termlens::{Key, Terminal};
@@ -105,18 +106,17 @@ fn a_full_log_ends_with_one_truncation_line() {
 }
 
 // The wire trace must stay useful (commands, elided literals) without ever
-// carrying the app password or a header body.
+// carrying a token or a header body.
 #[test]
-fn the_wire_trace_never_carries_the_password_or_literals() {
+fn the_wire_trace_never_carries_tokens_or_literals() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
     let log = run(&server, &home, &["-vv"], &[], &[]);
     assert!(log.contains("C: "), "{log}");
     assert!(log.contains("EXAMINE"), "{log}");
     assert!(log.contains(" bytes>"), "{log}");
-    assert!(!log.contains(PASSWORD), "{log}");
-    assert!(!log.contains("abcd"), "{log}");
-    assert!(!log.contains("LOGIN \""), "{log}");
+    assert!(!log.contains(ACCESS_TOKEN), "{log}");
+    assert!(!log.contains(REFRESH_TOKEN), "{log}");
     assert!(!log.contains("From: Alice"), "{log}");
 }
 

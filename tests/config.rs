@@ -33,13 +33,13 @@ fn failure(home: &Home) -> String {
     String::from_utf8(output.stderr).unwrap()
 }
 
-const VALID_HEAD: &str = "email = \"me@example.com\"\nauth = \"app-password\"\n";
+const VALID_HEAD: &str = "email = \"me@example.com\"\n";
 
 #[test]
 fn a_syntax_error_names_the_path_and_line() {
     let home = Home::new(&format!("{VALID_HEAD}[imap\nhost = \"x\"\n"));
     let stderr = failure(&home);
-    let at = format!("{}:3:", home.config_path().display());
+    let at = format!("{}:2:", home.config_path().display());
     assert!(stderr.contains(&at), "{stderr}");
 }
 
@@ -49,7 +49,7 @@ fn a_wrong_value_names_the_path_and_line() {
         "{VALID_HEAD}\n[imap]\nport = \"993\"\n\n[secrets]\nstore = \"file\"\n"
     ));
     let stderr = failure(&home);
-    let at = format!("{}:5:8:", home.config_path().display());
+    let at = format!("{}:4:8:", home.config_path().display());
     assert!(stderr.contains(&at), "{stderr}");
 }
 
@@ -59,21 +59,9 @@ fn an_unknown_field_names_the_path_and_line() {
         "{VALID_HEAD}colour = true\n[secrets]\nstore = \"file\"\n"
     ));
     let stderr = failure(&home);
-    let at = format!("{}:3:1:", home.config_path().display());
+    let at = format!("{}:2:1:", home.config_path().display());
     assert!(stderr.contains(&at), "{stderr}");
     assert!(stderr.contains("colour"), "{stderr}");
-}
-
-// A config without `email` names no Account yet and starts the login flow.
-#[test]
-fn a_missing_field_names_the_path() {
-    let home = Home::new("email = \"me@example.com\"\n[secrets]\nstore = \"file\"\n");
-    let stderr = failure(&home);
-    assert!(
-        stderr.contains(&home.config_path().display().to_string()),
-        "{stderr}"
-    );
-    assert!(stderr.contains("auth"), "{stderr}");
 }
 
 #[test]
@@ -82,7 +70,7 @@ fn plaintext_is_refused_for_a_remote_host() {
         "{VALID_HEAD}[imap]\nhost = \"imap.gmail.com\"\ntls = false\n[secrets]\nstore = \"file\"\n"
     ));
     let stderr = failure(&home);
-    let at = format!("{}:5:7:", home.config_path().display());
+    let at = format!("{}:4:7:", home.config_path().display());
     assert!(stderr.contains(&at), "{stderr}");
     assert!(stderr.contains("loopback"), "{stderr}");
 }
@@ -93,7 +81,7 @@ fn plaintext_smtp_is_refused_for_a_remote_host() {
         "{VALID_HEAD}[smtp]\nhost = \"smtp.gmail.com\"\ntls = false\n[secrets]\nstore = \"file\"\n"
     ));
     let stderr = failure(&home);
-    let at = format!("{}:5:7:", home.config_path().display());
+    let at = format!("{}:4:7:", home.config_path().display());
     assert!(stderr.contains(&at), "{stderr}");
     assert!(stderr.contains("loopback"), "{stderr}");
 }

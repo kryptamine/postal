@@ -41,7 +41,7 @@ impl Error {
         }
     }
 
-    /// The server refused the user name or password, as RFC 5530's
+    /// The server refused the access token, as RFC 5530's
     /// `AUTHENTICATIONFAILED` says; async-imap leaves the code in the text.
     pub fn bad_credentials(&self) -> bool {
         matches!(self, Self::Imap(async_imap::error::Error::No(text))

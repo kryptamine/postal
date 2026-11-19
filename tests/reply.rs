@@ -20,6 +20,7 @@ use mail_parser::{Address, MessageParser};
 use support::{
     fake_body::FakeBody,
     fake_imap::{EMAIL, FIRST_UID, FakeImap, FakeMessage, INBOX, Stall},
+    fake_oauth,
     fake_smtp::{FakeSmtp, Received},
     home::Home,
 };
@@ -32,8 +33,10 @@ const SAID: &str = "On Mon, 18 Nov 2024 09:00, Ada Lovelace wrote:";
 
 fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
     Home::new(&format!(
-        "email = \"{EMAIL}\"\nauth = \"app-password\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[smtp]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n",
-        imap.port, smtp.port
+        "email = \"{EMAIL}\"\n\n[imap]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[smtp]\nhost = \"127.0.0.1\"\nport = {}\ntls = false\n\n[secrets]\nstore = \"file\"\n{}",
+        imap.port,
+        smtp.port,
+        fake_oauth::shared().config()
     ))
 }
 
