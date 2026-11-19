@@ -18,7 +18,10 @@ An Undo of a Delete still queued only drops it. One the server has made is
 moved back out of Trash by the UID the server named in its `COPYUID`; without
 one there is nothing to address, and the Undo says so. The row goes back
 under its old UID, which the server no longer has, until the next resync of
-its Folder swaps in the new one in a single transaction. Writing the new UID
+its Folder fetches the new one and swaps it in, in the same transaction. The
+Cache keeps the new UID meanwhile, so a Delete or a mark made before that
+resync reaches the Message by it, and an `EXPUNGE` of the old UID, the
+move's own, leaves the row alone. Writing the new UID
 in directly could leave UIDs below it never fetched, as a resync asks only
 for UIDs past the highest cached one. The Messages likewise reach Trash's
 rows only by its own resync.

@@ -134,6 +134,8 @@ pub enum Stall {
     /// As `Fetch`, but only for a `FETCH` by sequence number, as the first
     /// fetch and a page of older Messages send.
     Sequence,
+    /// After a `UID MOVE` is recorded, before it is made.
+    Move,
 }
 
 /// How the server turns clients away until `FakeImap::recover`.
@@ -559,6 +561,19 @@ async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
     }
 }
 
+/// Holds a `FETCH` or a `UID MOVE` while a stall covers it.
+async fn wait_unless_command_stalled(inbox: &Mutex<Inbox>, body: &CommandBody<'static>) {
+    match body {
+        CommandBody::Fetch {
+            macro_or_item_names,
+            uid,
+            ..
+        } => wait_unless_fetch_stalled(inbox, macro_or_item_names, *uid).await,
+        CommandBody::Move { .. } => wait_unless_stalled(inbox, Stall::Move).await,
+        _ => {}
+    }
+}
+
 async fn wait_unless_fetch_stalled(
     inbox: &Mutex<Inbox>,
     items: &MacroOrMessageDataItemNames<'static>,
@@ -663,15 +678,7 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                     (opened, view) = examined;
                 }
 
-                if let CommandBody::Fetch {
-                    macro_or_item_names,
-                    uid,
-                    ..
-                } = &command.body
-                {
-                    wait_unless_fetch_stalled(&inbox, macro_or_item_names, *uid).await;
-                }
-
+                wait_unless_command_stalled(&inbox, &command.body).await;
                 answer(&mut server, command, (&inbox, &opened), &mut view);
             }
             _ => {}

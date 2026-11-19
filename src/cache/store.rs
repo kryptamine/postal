@@ -353,8 +353,8 @@ impl Cache {
     pub fn uids(&self, folder: &str) -> Result<Vec<u32>, Error> {
         let connection = self.connection.borrow();
         let mut statement = connection.prepare_cached(
-            "SELECT uid FROM message WHERE mailbox = ?1 AND NOT EXISTS
-                 (SELECT 1 FROM moved WHERE mailbox = ?1 AND uid = message.uid AND state = 2)
+            "SELECT uid FROM message WHERE mailbox = ?1 AND NOT EXISTS (SELECT 1 FROM moved
+                 WHERE mailbox = ?1 AND uid = message.uid AND state IN (2, 4))
              UNION SELECT uid FROM moved WHERE mailbox = ?1 AND state = 0
              ORDER BY uid",
         )?;
@@ -511,8 +511,24 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     }
 
     insert(&transaction, folder, &changes.new)?;
-    let mut delete =
-        transaction.prepare_cached("DELETE FROM message WHERE mailbox = ?1 AND uid = ?2")?;
+    // An Undo's row gives way once its new UID is in.
+    let returned = "SELECT 1 FROM message n WHERE n.mailbox = ?1 AND n.uid = moved.back_uid";
+    transaction.execute(
+        &format!(
+            "DELETE FROM message WHERE mailbox = ?1 AND uid IN
+                 (SELECT uid FROM moved WHERE mailbox = ?1 AND state = 4 AND EXISTS ({returned}))"
+        ),
+        [folder],
+    )?;
+    transaction.execute(
+        &format!("DELETE FROM moved WHERE mailbox = ?1 AND state = 4 AND EXISTS ({returned})"),
+        [folder],
+    )?;
+    // A row an Undo put back stays: the expunge is its move's.
+    let mut delete = transaction.prepare_cached(
+        "DELETE FROM message WHERE mailbox = ?1 AND uid = ?2 AND NOT EXISTS
+             (SELECT 1 FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state IN (2, 3, 4))",
+    )?;
     for uid in &changes.expunged {
         delete.execute(params![folder, uid])?;
     }
@@ -595,7 +611,9 @@ fn mark(
         .execute(params![key, unread])?;
     connection
         .prepare_cached(
-            "INSERT OR REPLACE INTO flag_change (mailbox, uid, unread) VALUES (?1, ?2, ?3)",
+            "INSERT OR REPLACE INTO flag_change (mailbox, uid, unread) VALUES (?1, coalesce(
+                 (SELECT back_uid FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = 4), ?2
+             ), ?3)",
         )?
         .execute(params![folder, uid, unread])?;
     Ok(true)

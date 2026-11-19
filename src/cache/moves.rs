@@ -12,10 +12,13 @@ const IN_TRASH: i64 = 1;
 const BACK: i64 = 2;
 /// An Undo took it back while queued: unsent, unless the move was under way.
 const CANCELLED: i64 = 3;
+/// Back out of Trash under `back_uid`; the row shown keeps the old UID
+/// until a resync fetches the new one.
+const RETURNED: i64 = 4;
 
-/// The columns `moved` keeps of a `message` row, in the same order.
-const COLUMNS: &str = "mailbox, uid, body_key, received, received_offset, unread, sender, subject,
-    thread, from_me, snippet, text_section, text_encoding, text_charset, text_html";
+/// The columns `moved` keeps of a `message` row but its Folder and UID.
+const ROW: &str = "body_key, received, received_offset, unread, sender, subject, thread,
+    from_me, snippet, text_section, text_encoding, text_charset, text_html";
 
 /// One Message the server is to move: to Trash for a Delete, or back for an Undo.
 pub struct PendingMove {
@@ -157,17 +160,23 @@ impl Cache {
         })
     }
 
-    /// The server answered the move of `id` back out of Trash. Its row
-    /// keeps the old UID until a resync swaps in the new one; when the
-    /// Message was no longer in Trash, the row goes.
-    pub fn moved_back(&self, id: i64, restored: bool) -> Result<(), Error> {
+    /// The server moved `id` back out of Trash, under `uid` there; `None`
+    /// when the Message was no longer in Trash, and its row goes.
+    pub fn moved_back(&self, id: i64, uid: Option<u32>) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
+            if uid.is_some() {
+                transaction
+                    .prepare_cached("UPDATE moved SET state = ?2, back_uid = ?3 WHERE id = ?1")?
+                    .execute(params![id, RETURNED, uid])?;
+                return transaction.commit();
+            }
+
             let row: Option<(String, u32)> = transaction
                 .prepare_cached("SELECT mailbox, uid FROM moved WHERE id = ?1")?
                 .query_row([id], |row| Ok((row.get(0)?, row.get(1)?)))
                 .optional()?;
-            if let Some((folder, uid)) = row.filter(|_| !restored) {
+            if let Some((folder, uid)) = row {
                 drop_row(&transaction, (&folder, uid))?;
             }
 
@@ -216,12 +225,22 @@ fn delete(
         return Ok(false);
     };
 
+    // A row back from Trash is moved by the UID the server gave it there.
+    let back: Option<u32> = connection
+        .prepare_cached(
+            "SELECT back_uid FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3",
+        )?
+        .query_row(params![folder, uid, RETURNED], |row| row.get(0))
+        .optional()?;
+    connection
+        .prepare_cached("DELETE FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3")?
+        .execute(params![folder, uid, RETURNED])?;
     connection
         .prepare_cached(&format!(
-            "INSERT INTO moved (batch, state, {COLUMNS})
-             SELECT ?1, ?2, {COLUMNS} FROM message WHERE mailbox = ?3 AND uid = ?4"
+            "INSERT INTO moved (batch, state, mailbox, uid, {ROW})
+             SELECT ?1, ?2, mailbox, ?5, {ROW} FROM message WHERE mailbox = ?3 AND uid = ?4"
         ))?
-        .execute(params![batch, QUEUED, folder, uid])?;
+        .execute(params![batch, QUEUED, folder, uid, back.unwrap_or(uid)])?;
     // Gmail drops every label of a Message moved to Trash.
     let copies = "(mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL)";
     connection
@@ -247,7 +266,8 @@ fn delete(
 fn restore(connection: &Connection, id: i64) -> rusqlite::Result<String> {
     connection
         .prepare_cached(&format!(
-            "INSERT OR REPLACE INTO message ({COLUMNS}) SELECT {COLUMNS} FROM moved WHERE id = ?1"
+            "INSERT OR REPLACE INTO message (mailbox, uid, {ROW})
+             SELECT mailbox, uid, {ROW} FROM moved WHERE id = ?1"
         ))?
         .execute([id])?;
     connection

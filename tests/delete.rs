@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FIRST_UID, FakeImap, FakeMessage, INBOX, Outage},
+    fake_imap::{FIRST_UID, FakeImap, FakeMessage, INBOX, Outage, Stall},
     home::Home,
     picker::{picked, picker},
 };
@@ -43,10 +43,15 @@ fn quit(mut t: Terminal) {
     assert!(t.wait_exit().unwrap().success());
 }
 
+#[track_caller]
 fn wait_for(condition: impl Fn() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
+        assert!(
+            Instant::now() < deadline,
+            "timed out at {}",
+            std::panic::Location::caller()
+        );
         std::thread::sleep(Duration::from_millis(10));
     }
 }
@@ -414,4 +419,63 @@ fn without_a_trash_folder_the_delete_is_taken_back() {
         .unwrap();
     quit(t);
     assert!(moves(&server).is_empty(), "{screen}");
+}
+
+/// The states of the Deletes the Cache holds, by id.
+fn moved(home: &Home) -> Vec<i64> {
+    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
+    let mut statement = cache
+        .prepare("SELECT state FROM moved ORDER BY id")
+        .unwrap();
+    let states = statement.query_map([], |row| row.get(0)).unwrap();
+    states.collect::<Result<_, _>>().unwrap()
+}
+
+// Between an Undo and the resync after it, the restored row still has the
+// UID the Message had before; a Delete then must move it by its new one.
+#[test]
+fn a_delete_right_after_an_undo_reaches_the_restored_message() {
+    let server = server();
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Newest");
+    t.send(Key::Backspace).unwrap();
+    wait_for(|| moved(&home) == [1]);
+    server.stall(Stall::Fetch);
+
+    t.send(Key::Char('u')).unwrap();
+    t.wait_until(|s| list(s).contains("Newest")).unwrap();
+    wait_for(|| moved(&home) == [4]);
+    t.send(Key::Backspace).unwrap();
+    t.wait_until(|s| !list(s).contains("Newest")).unwrap();
+    server.release();
+
+    wait_for(|| server.subjects(TRASH) == ["Newest"]);
+    wait_for(|| server.commands().iter().filter(|c| *c == "IDLE").count() >= 3);
+    let screen = t.snapshot_after(|_| true).unwrap();
+    quit(t);
+    assert_eq!(server.subjects(INBOX), ["Oldest", "Middle"], "{screen}");
+    assert!(!list(&screen).contains("Newest"), "{screen}");
+}
+
+// The server's EXPUNGE of a move undone meanwhile must not take the row
+// the Undo put back.
+#[test]
+fn an_undo_while_the_move_is_under_way_keeps_the_row() {
+    let server = server();
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Newest");
+    server.stall(Stall::Move);
+    t.send(Key::Backspace).unwrap();
+    t.wait_until(|s| !list(s).contains("Newest")).unwrap();
+    wait_for(|| server.commands().iter().any(|c| c.starts_with("UID MOVE")));
+
+    t.send(Key::Char('u')).unwrap();
+    t.wait_until(|s| list(s).contains("Newest")).unwrap();
+    server.release();
+    wait_for(|| moved(&home).is_empty() && server.subjects(INBOX).len() == 3);
+    std::thread::sleep(Duration::from_millis(300));
+    let screen = t.snapshot_after(|_| true).unwrap();
+    quit(t);
+    assert!(list(&screen).contains("Newest"), "{screen}");
+    assert!(server.subjects(TRASH).is_empty());
 }

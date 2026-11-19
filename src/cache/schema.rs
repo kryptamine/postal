@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 8;
+pub const VERSION: i64 = 9;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -84,11 +84,13 @@ CREATE TABLE moved (
     id INTEGER PRIMARY KEY,
     -- One per Delete, shared by its Messages.
     batch INTEGER NOT NULL,
-    -- 0 queued, 1 in Trash, 2 queued back by an Undo, 3 undone while queued.
+    -- 0 queued, 1 in Trash, 2 queued back by an Undo, 3 undone while queued,
+    -- 4 back under `back_uid` while the row keeps `uid` until a resync.
     state INTEGER NOT NULL,
     -- Where the server put it, once it says.
     trash TEXT,
     trash_uid INTEGER,
+    back_uid INTEGER,
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
     body_key INTEGER NOT NULL,

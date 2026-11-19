@@ -95,7 +95,7 @@ fn record(
         // A server with UIDPLUS names each Message it moved.
         if m.to.is_some() {
             restored &= there(m.uid).is_some();
-            cache.moved_back(m.id, there(m.uid).is_some())?;
+            cache.moved_back(m.id, there(m.uid))?;
         } else {
             restored &= cache.moved(m.id, to, there(m.uid))?;
         }
@@ -137,7 +137,7 @@ async fn find_trash(
 fn refused(cache: &Cache, group: &[PendingMove], send: &impl Fn(Update)) -> Result<(), Error> {
     for m in group {
         if m.to.is_some() {
-            cache.moved_back(m.id, false)?;
+            cache.moved_back(m.id, None)?;
         } else {
             cache.unmove(m.id)?;
         }
