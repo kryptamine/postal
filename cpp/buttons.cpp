@@ -60,11 +60,11 @@ bool outlined(const element::ptr& el)
 void fill_from_border(const element::ptr& el)
 {
     css_properties& css = el->css();
-    web_color       fill = css.get_borders().top.color;
+    web_color fill = css.get_borders().top.color;
     if(page_light(rgb(fill))) fill = css.get_color();
     if(page_light(rgb(fill))) fill = NEUTRAL;
     background bg = css.get_bg();
-    bg.m_color    = fill;
+    bg.m_color = fill;
     css.set_bg(bg);
 }
 
@@ -121,7 +121,7 @@ void shape(Grid& grid, const Box& box)
             if(cg_cell& cell = *grid.at(r, c); (cell.flags & CG_TEXT) && !is(cell, " "))
             {
                 first = std::min(first, c);
-                last  = std::max(last, c);
+                last = std::max(last, c);
             }
     if(last < 0) return;
     int from = first - BUTTON_PAD, to = last + BUTTON_PAD, end = grid.cols - 1;
@@ -134,7 +134,7 @@ void shape(Grid& grid, const Box& box)
         int c0 = box.c0, c1 = box.c1;
         while(c0 > 0 && fill_only(grid, box, r, c0 - 1, fill)) c0--;
         while(c1 < end && fill_only(grid, box, r, c1 + 1, fill)) c1++;
-        uint32_t left  = c0 > 0 ? grid.at(r, c0 - 1)->bg : 0;
+        uint32_t left = c0 > 0 ? grid.at(r, c0 - 1)->bg : 0;
         uint32_t right = c1 < end ? grid.at(r, c1 + 1)->bg : 0;
         for(int c = std::max(std::min(c0, from), 0); c <= std::min(std::max(c1, to), end); c++)
         {

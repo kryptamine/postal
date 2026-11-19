@@ -35,7 +35,7 @@ bool spilt(const element::ptr& el, float width, std::vector<element::ptr>& out)
     if(el->children().empty() && el->get_render_item())
     {
         position p = el->get_placement();
-        past       = float(p.width) > 0 && float(p.x) + float(p.width) > width + 0.5f;
+        past = float(p.width) > 0 && float(p.x) + float(p.width) > width + 0.5f;
     }
     for(auto& child : el->children()) past = spilt(child, width, out) || past;
     if(past && table(el->css().get_display())) out.push_back(el);

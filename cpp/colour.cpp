@@ -21,9 +21,7 @@ uint32_t rgb(const litehtml::web_color& c)
 uint32_t blend(uint32_t under, uint32_t over, float a)
 {
     if(!under) under = 0x01FFFFFF;
-    auto mix = [a](uint32_t u, uint32_t o) {
-        return uint32_t(std::lround(float(u) + (float(o) - float(u)) * a));
-    };
+    auto mix = [a](uint32_t u, uint32_t o) { return uint32_t(std::lround(float(u) + (float(o) - float(u)) * a)); };
     uint32_t r = mix(channel(under, 16), channel(over, 16));
     uint32_t g = mix(channel(under, 8), channel(over, 8));
     uint32_t b = mix(channel(under, 0), channel(over, 0));

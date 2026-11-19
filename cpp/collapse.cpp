@@ -7,7 +7,7 @@ namespace cg
 void collapse(const element::ptr& el)
 {
     css_properties& css = el->css();
-    css_margins     p   = css.get_padding();
+    css_margins p = css.get_padding();
     p.top.set_value(0, css_units_px);
     p.bottom.set_value(0, css_units_px);
     css.set_padding(p);

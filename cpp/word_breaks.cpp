@@ -15,12 +15,12 @@ std::vector<std::string> breakable(const std::string& word)
 {
     if(cells(word.c_str()) <= WHOLE) return {word};
     std::vector<std::string> pieces;
-    std::string              piece;
-    int                      width = 0;
+    std::string piece;
+    int width = 0;
     for(const char* s = word.c_str(); *s;)
     {
         const char* start = s;
-        uint32_t    cp;
+        uint32_t cp;
         utf8_next(s, cp);
         int w = cp_width(cp);
         if(width + w > MOST)

@@ -30,23 +30,22 @@ class ImageLabels
     struct Grown
     {
         litehtml::element::ptr el;
-        float                  own_px;
+        float own_px;
     };
 
     void walk(const litehtml::element::ptr& el);
     void label_one(const litehtml::element::ptr& el);
-    std::string text_for(const litehtml::element::ptr& el, bool icon, const litehtml::element::ptr& link,
-                         bool sole);
+    std::string text_for(const litehtml::element::ptr& el, bool icon, const litehtml::element::ptr& link, bool sole);
 
-    int                                 cols = 0;
-    std::map<std::string, std::string>  labels;
-    std::vector<Grown>                  grown;
+    int cols = 0;
+    std::map<std::string, std::string> labels;
+    std::vector<Grown> grown;
     // All the text the mail shows, squeezed.
-    std::string                         mail_text;
-    std::set<const litehtml::element*>  redundant;
+    std::string mail_text;
+    std::set<const litehtml::element*> redundant;
     std::vector<litehtml::element::ptr> pictured;
     // Links that already show their name once.
-    std::set<const litehtml::element*>  labelled_links;
+    std::set<const litehtml::element*> labelled_links;
 };
 } // namespace cg
 

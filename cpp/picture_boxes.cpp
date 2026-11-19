@@ -90,8 +90,8 @@ void clear_border(const element::ptr& c, bool right)
 {
     css_borders b = c->css().get_borders();
     css_border& e = right ? b.right : b.left;
-    e.style       = border_style_none;
-    e.width       = css_length(0, css_units_px);
+    e.style = border_style_none;
+    e.width = css_length(0, css_units_px);
     c->css().set_borders(b);
 }
 
@@ -102,8 +102,8 @@ void drop_column(const element::ptr& table, size_t column, const Contents& conte
 {
     if(spanned(table, "colspan") || spanned(table, "rowspan")) return;
     std::vector<element::ptr> rows;
-    int                       body  = 0;
-    bool                      named = false;
+    int body = 0;
+    bool named = false;
     for(auto& row : rows_of(table))
     {
         std::vector<element::ptr> cells = cells_of(row);

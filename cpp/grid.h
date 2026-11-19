@@ -29,7 +29,7 @@ bool is(const cg_cell& c, const char* glyph);
 class Grid
 {
   public:
-    int                  cols;
+    int cols;
     std::vector<cg_cell> drawn;
 
     explicit Grid(int cols) : cols(cols) {}

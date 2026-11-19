@@ -7,11 +7,31 @@ namespace cg
 void utf8_next(const char*& s, uint32_t& cp)
 {
     auto u = reinterpret_cast<const unsigned char*>(s);
-    if(u[0] < 0x80) { cp = u[0]; s += 1; }
-    else if((u[0] >> 5) == 6 && u[1]) { cp = ((u[0] & 31u) << 6) | (u[1] & 63u); s += 2; }
-    else if((u[0] >> 4) == 14 && u[1] && u[2]) { cp = ((u[0] & 15u) << 12) | ((u[1] & 63u) << 6) | (u[2] & 63u); s += 3; }
-    else if(u[1] && u[2] && u[3]) { cp = ((u[0] & 7u) << 18) | ((u[1] & 63u) << 12) | ((u[2] & 63u) << 6) | (u[3] & 63u); s += 4; }
-    else { cp = 0xFFFD; s += 1; }
+    if(u[0] < 0x80)
+    {
+        cp = u[0];
+        s += 1;
+    }
+    else if((u[0] >> 5) == 6 && u[1])
+    {
+        cp = ((u[0] & 31u) << 6) | (u[1] & 63u);
+        s += 2;
+    }
+    else if((u[0] >> 4) == 14 && u[1] && u[2])
+    {
+        cp = ((u[0] & 15u) << 12) | ((u[1] & 63u) << 6) | (u[2] & 63u);
+        s += 3;
+    }
+    else if(u[1] && u[2] && u[3])
+    {
+        cp = ((u[0] & 7u) << 18) | ((u[1] & 63u) << 12) | ((u[2] & 63u) << 6) | (u[3] & 63u);
+        s += 4;
+    }
+    else
+    {
+        cp = 0xFFFD;
+        s += 1;
+    }
 }
 
 int cp_width(uint32_t cp)
@@ -41,7 +61,7 @@ int cells(const char* text)
 
 std::string fit(const std::string& text, int cols)
 {
-    int         w = 0;
+    int w = 0;
     const char* s = text.c_str();
     const char* cut = s;
     while(*s)
@@ -58,7 +78,7 @@ std::string fit(const std::string& text, int cols)
 std::string loosely_squeezed(const std::string& s)
 {
     std::string out;
-    bool        space = false;
+    bool space = false;
     for(size_t i = 0; i < s.size(); i++)
     {
         bool nbsp = s.compare(i, 2, "\xC2\xA0") == 0;
@@ -80,7 +100,7 @@ std::string loosely_squeezed(const std::string& s)
 std::string squeezed(const std::string& s)
 {
     std::string out = loosely_squeezed(s);
-    size_t      start = out.compare(0, 1, " ") == 0, end = out.size();
+    size_t start = out.compare(0, 1, " ") == 0, end = out.size();
     if(end > start && out[end - 1] == ' ') end--;
     return out.substr(start, end - start);
 }

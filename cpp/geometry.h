@@ -14,7 +14,7 @@ const float CW = 8, CH = 16;
 inline void span(float a, float len, float unit, int& first, int& last)
 {
     first = int(std::ceil(a / unit - 0.5f));
-    last  = int(std::ceil((a + len) / unit - 0.5f)) - 1;
+    last = int(std::ceil((a + len) / unit - 0.5f)) - 1;
 }
 
 inline int first_cell(float a, float unit) { return int(std::ceil(a / unit - 0.5f)); }

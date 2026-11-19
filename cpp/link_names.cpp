@@ -11,7 +11,7 @@ namespace
 std::vector<std::string> split(const std::string& s, const char* by)
 {
     std::vector<std::string> parts;
-    size_t                   start = 0;
+    size_t start = 0;
     while(start <= s.size())
     {
         size_t end = s.find_first_of(by, start);
@@ -36,7 +36,7 @@ std::string slug_words(std::string segment)
     while(!words.empty() && all_of(words.back(), isdigit)) words.pop_back();
     if(words.size() < 2) return "";
     std::string out;
-    int         singles = 0;
+    int singles = 0;
     for(auto& w : words)
     {
         if(!all_of(w, islower)) return "";
@@ -69,15 +69,15 @@ std::string domain(const std::string& host)
 std::string link_name(const char* href)
 {
     std::string url(href ? href : "");
-    size_t      scheme = url.find("://");
+    size_t scheme = url.find("://");
     if(scheme == std::string::npos || (url.compare(0, scheme, "http") != 0 && url.compare(0, scheme, "https") != 0))
         return "link";
     std::string rest = url.substr(scheme + 3);
-    rest             = rest.substr(0, rest.find_first_of("?#"));
-    size_t      slash = rest.find('/');
-    std::string host  = rest.substr(0, slash);
-    host              = host.substr(host.find('@') == std::string::npos ? 0 : host.find('@') + 1);
-    host              = host.substr(0, host.find(':'));
+    rest = rest.substr(0, rest.find_first_of("?#"));
+    size_t slash = rest.find('/');
+    std::string host = rest.substr(0, slash);
+    host = host.substr(host.find('@') == std::string::npos ? 0 : host.find('@') + 1);
+    host = host.substr(0, host.find(':'));
     std::transform(host.begin(), host.end(), host.begin(), [](unsigned char c) { return char(std::tolower(c)); });
     if(host.empty()) return "link";
 

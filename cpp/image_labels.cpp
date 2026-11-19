@@ -48,11 +48,11 @@ bool picture(const element::ptr& img)
 struct LinkScan
 {
     // The pages links with words open, and each link with none.
-    std::set<std::string>                               worded;
+    std::set<std::string> worded;
     std::vector<std::pair<const element*, std::string>> bare;
     // Bare links since the last words, and those the next words were a link's.
     std::vector<const element*> pending;
-    std::set<const element*>    followed;
+    std::set<const element*> followed;
 };
 
 void scan(const element::ptr& el, LinkScan& s)
@@ -154,10 +154,10 @@ void ImageLabels::walk(const element::ptr& el)
 std::string ImageLabels::text_for(const element::ptr& el, bool icon, const element::ptr& link, bool sole)
 {
     const css_properties& css = el->css();
-    float       w = px_or(css.get_width(), -1), h = px_or(css.get_height(), -1);
-    const char* alt   = el->get_attr("alt");
+    float w = px_or(css.get_width(), -1), h = px_or(css.get_height(), -1);
+    const char* alt = el->get_attr("alt");
     std::string label = alt_name(squeezed(alt ? alt : ""));
-    bool invisible    = (w >= 0 && w < CW) || (h >= 0 && h <= 2);
+    bool invisible = (w >= 0 && w < CW) || (h >= 0 && h <= 2);
     // An icon decorates the text beside it, and its alt rarely fits it.
     if(invisible || (icon && !sole) || repeats_nearby(el, label)) return "";
     // A title the mail shows as text already is a card's picture beside its
@@ -171,20 +171,20 @@ std::string ImageLabels::text_for(const element::ptr& el, bool icon, const eleme
 
 void ImageLabels::label_one(const element::ptr& el)
 {
-    css_properties& css  = el->css();
-    float           w    = px_or(css.get_width(), -1), h = px_or(css.get_height(), -1);
-    bool            icon = (w >= 0 || h >= 0) && w <= 64 && h <= 64;
-    element::ptr    link = link_of(el);
-    std::string     link_text;
+    css_properties& css = el->css();
+    float w = px_or(css.get_width(), -1), h = px_or(css.get_height(), -1);
+    bool icon = (w >= 0 || h >= 0) && w <= 64 && h <= 64;
+    element::ptr link = link_of(el);
+    std::string link_text;
     if(link) shown_text(link, link_text);
-    bool        sole  = link && squeezed(link_text).empty();
+    bool sole = link && squeezed(link_text).empty();
     std::string label = text_for(el, icon, link, sole);
 
     // An icon left is all its link shows, so its alt names the link, and
     // cut it names nothing: it takes its whole alt, and a column after it.
     // So does a badge, a larger picture that is all its link shows.
-    int  want  = cells(label.c_str());
-    int  own   = w >= 0 ? int(w / CW) : cols;
+    int want = cells(label.c_str());
+    int own = w >= 0 ? int(w / CW) : cols;
     bool grows = w >= 0 && (icon || sole);
     if(grows && want > own) grown.push_back({el, w});
     int shown = std::min(want, grows ? std::max(own, icon ? TITLE_CELLS : BADGE_CELLS) : own);
@@ -212,7 +212,7 @@ bool ImageLabels::shrink_spilt()
     // to their own width together.
     // Past the pane, the tables before it pushed it there: every one goes.
     std::vector<element::ptr> spilt;
-    bool                      all = false;
+    bool all = false;
     for(auto& g : grown)
     {
         if(spills(g.el, cols)) spilt.push_back(table_of(g.el));

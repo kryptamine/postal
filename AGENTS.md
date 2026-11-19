@@ -61,6 +61,8 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
 
 - **Clippy runs `all`, `pedantic` and `nursery` as errors**; complexity
   thresholds live in `clippy.toml`.
+- **The C++ in `cpp/` is formatted by `clang-format`** (`.clang-format`):
+  `clang-format -i cpp/*` before the commit. `vendor/` keeps upstream's style.
 - **A review finding a linter could have caught becomes a rule.** Where a lint
   checks it, turn it on in the same change and fix every place it flags.
 - A linter exception states its reason: `#[allow(..., reason = "...")]`.

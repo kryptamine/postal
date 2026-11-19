@@ -17,10 +17,10 @@ struct Holds
 {
     // The words it shows, loosely squeezed; empty when `over`.
     std::string text;
-    bool        over = false;
+    bool over = false;
     // The one block its words lie in, or `blocks` when more than one.
-    const litehtml::element* block  = nullptr;
-    bool                     blocks = false;
+    const litehtml::element* block = nullptr;
+    bool blocks = false;
     // A link inside it, or a filled box inside it, shows all its words.
     bool linked = false;
     bool filled = false;
@@ -30,7 +30,7 @@ struct Holds
     int length = 0;
     // A link, an `h1` with words, inside it.
     bool anchored = false;
-    bool headed   = false;
+    bool headed = false;
 
     std::string words() const;
     // Any text at all, a space even: whitespace between cells sizes a box.

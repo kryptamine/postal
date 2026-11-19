@@ -53,8 +53,8 @@ bool alone(const element::ptr& el, const std::vector<element::ptr>& fills)
 void strip(const element::ptr& el, bool outer)
 {
     css_properties& css = el->css();
-    background      bg  = css.get_bg();
-    bg.m_color          = web_color::transparent;
+    background bg = css.get_bg();
+    bg.m_color = web_color::transparent;
     css.set_bg(bg);
     if(!outer)
     {

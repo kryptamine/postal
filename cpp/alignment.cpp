@@ -38,7 +38,7 @@ void lines(const element::ptr& el, std::set<float>& rows, size_t& breaks)
 void spread(const element::ptr& el, bool listed)
 {
     css_properties& css = el->css();
-    listed              = listed || css.get_display() == display_list_item;
+    listed = listed || css.get_display() == display_list_item;
     if(css.get_text_align() == text_align_justify || (listed && css.get_text_align() == text_align_center))
         css.set_text_align(text_align_left);
     for(auto& child : el->children()) spread(child, listed);
@@ -54,7 +54,7 @@ bool left_align_paragraphs(const element::ptr& root)
     if(root->css().get_text_align() == text_align_center && !in_flow(root))
     {
         std::set<float> rows;
-        size_t          breaks = 0;
+        size_t breaks = 0;
         lines(root, rows, breaks);
         // Lines the mail broke itself are a list, an address: not wrapped.
         if(rows.size() >= PARAGRAPH_LINES + breaks)
