@@ -102,11 +102,21 @@ the colour, cell-width and element helpers.
   many `alt`s. A percentage width stays, so a long `alt` cannot widen its
   table past the pane.
 
-- A button is the innermost box with a fill that is not page-light round
-  one line of at most 40 columns, all of it a link's. It loses its vertical
-  padding, height and borders: padding was rows of fill, and a slab three
-  rows high read as no button. A page-light button gives way to the
-  terminal, and the frame round its rows (below) is its shape.
+- A button is the innermost box round one line of at most 40 columns, all
+  of it a link's, with a fill that is not page-light, or with a border on
+  every side and no such fill; a bordered cell counts only as the one cell
+  of its table, since in a table of several it is data that holds a link.
+  It loses its vertical padding, height and borders: padding was rows of
+  fill, and a slab three rows high read as no button. One with a border
+  alone takes the border's colour as its fill, or its label's where the
+  border is page-light, or mid grey. After the draw every button gets one
+  shape: its label in bold with no underline, on two cells of fill at each
+  side, whatever width the mail gave it; a box round it in the same fill
+  is cut back with it, and the fill is let out only over blank cells. A
+  page-light button gives way to the terminal, and the frame round its
+  rows (below) is its shape. On 539 cached mails 52 framed buttons became
+  fills, and 440 of 570 short fills have exactly that shape; the rest are
+  badges and cells that are no links.
 - A filled box holding an `h1`, at most two lines of a 600 px mail (150
   cells), no link and no shown picture, in a colour no other box outside it
   fills, is a cover band its logo and pictures left: it loses its fill,

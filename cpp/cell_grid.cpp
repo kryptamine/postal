@@ -68,6 +68,9 @@ struct Box
     }
 };
 
+// The cells of a button's fill at each side of its label.
+const int BUTTON_PAD = 2;
+
 struct Frame
 {
     Box                   box;
@@ -365,6 +368,55 @@ class grid_container : public document_container
         clips.clear();
     }
 
+    // The cell shows `fill` and nothing else, and no row over or under the
+    // button carries the fill on: that would be a section it lies in.
+    bool fill_only(const Box& button, int r, int c, uint32_t fill)
+    {
+        auto filled = [&](int row) { return row >= 0 && row < rows() && (at(row, c)->bg & ~CG_BG_PANEL) == fill; };
+        return fill && filled(r) && at(r, c)->flags == 0 && !filled(button.r0 - 1) && !filled(button.r1 + 1);
+    }
+
+    // A button is its label with BUTTON_PAD cells of its fill at each side,
+    // in bold, whatever width and padding the mail gave it: `box` holds its
+    // words, and the fill round them is cut back or let out to that.
+    void shape_button(Box box)
+    {
+        box = {std::max(box.r0, 0), std::min(box.r1, rows() - 1), std::max(box.c0, 0), std::min(box.c1, cols - 1)};
+        int first = INT32_MAX, last = -1;
+        for(int r = box.r0; r <= box.r1; r++)
+            for(int c = box.c0; c <= box.c1; c++)
+                if(cg_cell& cell = *at(r, c); (cell.flags & CG_TEXT) && !is(cell, " "))
+                {
+                    first = std::min(first, c);
+                    last  = std::max(last, c);
+                }
+        if(last < 0) return;
+        int from = first - BUTTON_PAD, to = last + BUTTON_PAD;
+        for(int r = box.r0; r <= box.r1; r++)
+        {
+            uint32_t fill = 0;
+            for(int c = box.c0; c <= box.c1 && !fill; c++)
+                if(at(r, c)->flags & CG_TEXT) fill = at(r, c)->bg & ~CG_BG_PANEL;
+            // A box round the button in its own fill is part of its shape.
+            int c0 = box.c0, c1 = box.c1;
+            while(c0 > 0 && fill_only(box, r, c0 - 1, fill)) c0--;
+            while(c1 < cols - 1 && fill_only(box, r, c1 + 1, fill)) c1++;
+            uint32_t left  = c0 > 0 ? at(r, c0 - 1)->bg : 0;
+            uint32_t right = c1 < cols - 1 ? at(r, c1 + 1)->bg : 0;
+            for(int c = std::max(std::min(c0, from), 0); c <= std::min(std::max(c1, to), cols - 1); c++)
+            {
+                cg_cell& cell = *at(r, c);
+                if(c < from) cell.bg = left;
+                else if(c > to) cell.bg = right;
+                else if(c >= c0 && c <= c1) cell.bg = fill;
+                // Outside its box the fill takes only cells that show nothing.
+                else if(cell.flags == 0 && is(cell, " ")) cell.bg = fill;
+                // The fill says it can be pressed; a link's underline is noise.
+                if(cell.flags & CG_TEXT) cell.flags = (cell.flags | CG_BOLD) & ~uint32_t(CG_UNDERLINE);
+            }
+        }
+    }
+
     void set_clip(const position& pos, const border_radiuses&) override { clips.push_back(pos); }
     void del_clip() override
     {
@@ -496,10 +548,11 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
                                           user_css);
     if(!doc) return nullptr;
     container.images.label(doc->root(), cols);
+    std::vector<element::ptr> buttons;
     {
         Contents contents(doc->root());
         fit_picture_boxes(container.images.pictures(), contents);
-        flatten_buttons(doc->root(), contents);
+        buttons = flatten_buttons(doc->root(), contents);
         unframe_titles(doc->root(), contents);
     }
     snap_tree(doc->root());
@@ -510,6 +563,21 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
     {
         lay_out(doc, container);
         draw(doc, container);
+    }
+    for(auto& button : buttons)
+    {
+        // Its words: an inline button has no box of its own to ask for.
+        std::vector<position> words;
+        leaf_boxes(button, words);
+        Box box{INT32_MAX, -1, INT32_MAX, -1};
+        for(auto& p : words)
+        {
+            int r0, r1, c0, c1;
+            span(p.y, p.height, CH, r0, r1);
+            span(p.x, p.width, CW, c0, c1);
+            box = {std::min(box.r0, r0), std::max(box.r1, r1), std::min(box.c0, c0), std::max(box.c1, c1)};
+        }
+        container.shape_button(box);
     }
     grid->mark_links(doc->root());
     return grid.release();

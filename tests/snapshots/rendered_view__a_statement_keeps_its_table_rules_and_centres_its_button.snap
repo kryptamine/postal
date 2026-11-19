@@ -68,7 +68,7 @@ styles:
 20: 0 dim; 41-42 dim; 47-115 dim; 119 dim
 21: 0 dim; 41-42 dim; 47-115 bold; 119 dim
 22: 0 dim; 41-42 dim; 119 dim
-23: 0 dim; 41-42 dim; 71-73 bg=#47494c; 74-90 fg=#ffffff bg=#47494c bold; 119 dim
+23: 0 dim; 41-42 dim; 72-73 bg=#47494c; 74-89 fg=#ffffff bg=#47494c bold; 119 dim
 24: 0 dim; 41-42 dim; 119 dim
 25: 0 dim; 41-42 dim; 44 fg=#fbbc04; 45-117 dim; 119 dim
 26: 0 dim; 41-42 dim; 44 fg=#fbbc04; 45-117 dim; 119 dim
