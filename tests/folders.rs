@@ -104,7 +104,8 @@ fn ready(server: &FakeImap, home: &Home) -> Terminal {
 }
 
 /// The popup's rows inside its border, trimmed: the columns between the
-/// corners of the box titled `Folders`.
+/// corners of the box titled `Folders`. Empty until the whole box is drawn,
+/// since a snapshot can land between the bytes of one frame.
 fn picker(screen: &Screen) -> Vec<String> {
     let chars = |row: u16| screen.row_text(row).chars().collect::<Vec<_>>();
     let Some(top) = (0..screen.rows()).find(|&r| screen.row_text(r).contains("┌ Folders")) else {
@@ -113,10 +114,18 @@ fn picker(screen: &Screen) -> Vec<String> {
 
     let corners = chars(top);
     let left = corners.iter().position(|&c| c == '┌').unwrap();
-    let right = left + corners[left..].iter().position(|&c| c == '┐').unwrap();
-    (top + 1..screen.rows())
+    let Some(right) = corners[left..].iter().position(|&c| c == '┐') else {
+        return Vec::new();
+    };
+
+    let right = left + right;
+    let Some(bottom) = (top + 1..screen.rows()).find(|&r| chars(r).get(left) == Some(&'└'))
+    else {
+        return Vec::new();
+    };
+
+    (top + 1..bottom)
         .map(chars)
-        .take_while(|row| row[left] != '└')
         .map(|row| {
             row[left + 1..right]
                 .iter()
@@ -208,8 +217,13 @@ fn show(t: &mut Terminal, query: &str) {
     t.send(Key::Char('f')).unwrap();
     t.wait_until(|s| !picker(s).is_empty()).unwrap();
     t.send_str(query).unwrap();
-    t.wait_until(|s| picker(s).first().is_some_and(|q| q.ends_with(query)))
-        .unwrap();
+    // A first start lists the Cache's Inbox alone until the server's list
+    // comes, and Enter on no match does nothing. Settled, since mid-frame the
+    // old rows can still stand under the new query.
+    t.snapshot_after(|s| {
+        picker(s).first().is_some_and(|q| q.ends_with(query)) && !picked(s).is_empty()
+    })
+    .unwrap();
     t.send(Key::Enter).unwrap();
 }
 
