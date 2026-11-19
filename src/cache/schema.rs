@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 7;
+pub const VERSION: i64 = 8;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -77,6 +77,33 @@ CREATE TABLE flag_change (
     uid INTEGER NOT NULL,
     unread INTEGER NOT NULL,
     PRIMARY KEY (mailbox, uid)
+);
+-- A Delete the server has yet to see or that this run may still Undo,
+-- with the row it took out of `message`: docs/adr/0012-delete-and-undo.md.
+CREATE TABLE moved (
+    id INTEGER PRIMARY KEY,
+    -- One per Delete, shared by its Messages.
+    batch INTEGER NOT NULL,
+    -- 0 queued, 1 in Trash, 2 queued back by an Undo, 3 undone while queued.
+    state INTEGER NOT NULL,
+    -- Where the server put it, once it says.
+    trash TEXT,
+    trash_uid INTEGER,
+    mailbox TEXT NOT NULL,
+    uid INTEGER NOT NULL,
+    body_key INTEGER NOT NULL,
+    received INTEGER NOT NULL,
+    received_offset INTEGER NOT NULL,
+    unread INTEGER NOT NULL,
+    sender TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    thread INTEGER,
+    from_me INTEGER NOT NULL,
+    snippet TEXT,
+    text_section TEXT,
+    text_encoding TEXT,
+    text_charset TEXT,
+    text_html INTEGER
 );
 ";
 

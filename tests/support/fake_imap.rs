@@ -18,6 +18,7 @@ use imap_next::{
         core::{Atom, IString, NString, QuotedChar, Tag, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
+        extensions::uidplus::{UidElement, UidSet},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
         flag::{Flag, FlagFetch, FlagNameAttribute},
         flag::{StoreResponse, StoreType},
@@ -155,6 +156,8 @@ struct Stored {
     msgid: u64,
     modseq: u64,
     message: FakeMessage,
+    /// Flagged `\Deleted`, for a `UID EXPUNGE` to take.
+    deleted: bool,
 }
 
 impl Stored {
@@ -208,8 +211,13 @@ impl Folder {
             msgid,
             modseq,
             message,
+            deleted: false,
         });
         uid
+    }
+
+    fn trash(&self) -> bool {
+        self.attributes.contains(&"\\Trash")
     }
 
     /// Kept out of All Mail: Trash, Spam and All Mail itself.
@@ -228,6 +236,8 @@ struct Inbox {
     next_msgid: u64,
     /// Advertises `X-GM-EXT-1` and answers `X-GM-MSGID` and `X-GM-THRID`.
     gmail: bool,
+    /// Advertises `MOVE`; `UIDPLUS` is always listed.
+    moves: bool,
     stall: Option<Stall>,
     /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
     /// a Message it cannot serve.
@@ -270,6 +280,7 @@ impl FakeImap {
             folders: vec![Folder::new(INBOX, &[])],
             next_msgid: FIRST_MSGID,
             gmail: true,
+            moves: true,
             stall: None,
             outage: None,
             refused: Vec::new(),
@@ -409,6 +420,30 @@ impl FakeImap {
     /// The `X-GM-MSGID` of the Message with this UID.
     pub fn msgid(&self, uid: u32) -> u64 {
         self.inbox.lock().unwrap().inbox().stored(uid).msgid
+    }
+
+    /// The subjects of the Messages in `folder`, in sequence order.
+    pub fn subjects(&self, folder: &str) -> Vec<String> {
+        let inbox = self.inbox.lock().unwrap();
+        let subjects = inbox.folder(folder).unwrap().messages.iter();
+        let subjects = subjects.map(|m| m.message.subject.clone()).collect();
+        drop(inbox);
+        subjects
+    }
+
+    /// Expunges every Message of `folder`, as emptying Trash elsewhere does.
+    pub fn empty(&self, folder: &str) {
+        let mut inbox = self.inbox.lock().unwrap();
+        let folder = inbox.folder_mut(folder);
+        folder.bump();
+        folder.messages.clear();
+        drop(inbox);
+    }
+
+    /// Serves later connections without `MOVE`, as a `UID COPY`, `\Deleted`
+    /// and `UID EXPUNGE` stand in for it.
+    pub fn without_move(&self) {
+        self.inbox.lock().unwrap().moves = false;
     }
 
     /// Serves later connections as a server without Gmail's extensions.
@@ -637,11 +672,32 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                     wait_unless_fetch_stalled(&inbox, macro_or_item_names, *uid).await;
                 }
 
-                respond(&mut server, command, &mut inbox.lock().unwrap(), &opened);
+                answer(&mut server, command, (&inbox, &opened), &mut view);
             }
             _ => {}
         }
     }
+}
+
+/// Answers `command`, telling `view` what a move expunged.
+fn answer(
+    server: &mut Server,
+    command: Command<'static>,
+    (inbox, opened): (&Mutex<Inbox>, &Opened),
+    view: &mut Vec<(u32, bool)>,
+) {
+    let mut inbox = inbox.lock().unwrap();
+    if matches!(
+        command.body,
+        CommandBody::Move { .. } | CommandBody::Copy { .. } | CommandBody::ExpungeUid { .. }
+    ) {
+        let status = transfer(server, command, (&mut inbox, opened), view);
+        server.enqueue_status(status);
+    } else {
+        respond(server, command, &mut inbox, opened);
+    }
+
+    drop(inbox);
 }
 
 /// A Folder's name, and whether it was `SELECT`ed rather than `EXAMINE`d.
@@ -798,7 +854,11 @@ pub fn xoauth2() -> String {
 }
 
 fn capabilities(inbox: &Inbox) -> Data<'static> {
-    let mut capabilities = vec![Capability::Imap4Rev1];
+    let mut capabilities = vec![Capability::Imap4Rev1, Capability::UidPlus];
+    if inbox.moves {
+        capabilities.push(Capability::Move);
+    }
+
     if inbox.gmail {
         capabilities.push(Capability::from(Atom::try_from("X-GM-EXT-1").unwrap()));
     }
@@ -915,6 +975,18 @@ fn store(inbox: &mut Inbox, command: Command<'static>, opened: &Opened) -> Statu
         return Status::no(tag, None, "STORE needs a Folder selected read-write").unwrap();
     };
 
+    if kind == StoreType::Add && flags.contains(&Flag::Deleted) {
+        let uids: Vec<u32> = fetched(folder, &sequence_set, true, None)
+            .map(|(_, stored)| stored.uid)
+            .collect();
+        let folder = inbox.folder_mut(&opened.0);
+        for uid in uids {
+            folder.stored(uid).deleted = true;
+        }
+
+        return Status::ok(tag, None, "STORE completed").unwrap();
+    }
+
     let has_seen = flags.contains(&Flag::Seen);
     let seen = match kind {
         StoreType::Add if has_seen => true,
@@ -944,6 +1016,118 @@ fn store(inbox: &mut Inbox, command: Command<'static>, opened: &Opened) -> Statu
     }
 
     Status::ok(tag, None, "STORE completed").unwrap()
+}
+
+/// Answers a `UID MOVE`, a `UID COPY` or a `UID EXPUNGE` in the Folder
+/// `opened`, with `COPYUID` as UIDPLUS sends it, and announces the
+/// expunges to `view`. Into Gmail's Trash a Message loses every label.
+fn transfer(
+    server: &mut Server,
+    command: Command<'static>,
+    (inbox, opened): (&mut Inbox, &Opened),
+    view: &mut Vec<(u32, bool)>,
+) -> Status<'static> {
+    let tag = Some(command.tag);
+    if inbox.folder(&opened.0).is_none() || !opened.1 {
+        return Status::no(tag, None, "needs a Folder selected read-write").unwrap();
+    }
+
+    let (set, to, moving) = match command.body {
+        CommandBody::Move {
+            sequence_set,
+            mailbox,
+            uid: true,
+        } => (sequence_set, Some(mailbox_name(&mailbox)), true),
+        CommandBody::Copy {
+            sequence_set,
+            mailbox,
+            uid: true,
+        } => (sequence_set, Some(mailbox_name(&mailbox)), false),
+        CommandBody::ExpungeUid { sequence_set } => (sequence_set, None, true),
+        _ => return Status::bad(tag, None, "not faked").unwrap(),
+    };
+
+    let source = inbox.folder(&opened.0).unwrap();
+    let picked: Vec<(u32, u64, FakeMessage, bool)> = fetched(source, &set, true, None)
+        .map(|(_, s)| (s.uid, s.msgid, s.message.clone(), s.deleted))
+        .collect();
+    if to.as_ref().is_some_and(|to| inbox.folder(to).is_none()) {
+        return Status::no(tag, Some(code("TRYCREATE")), "no such Folder").unwrap();
+    }
+
+    let copyuid = to.and_then(|to| copy_into(inbox, &opened.0, &to, &picked));
+
+    if moving {
+        let gone: Vec<u32> = picked
+            .iter()
+            .filter(|(.., deleted)| copyuid.is_some() || *deleted)
+            .map(|&(uid, ..)| uid)
+            .collect();
+        let source = inbox.folder_mut(&opened.0);
+        source.bump();
+        source.messages.retain(|m| !gone.contains(&m.uid));
+        if let Some(code) = copyuid.clone() {
+            // A move sends its COPYUID untagged, ahead of the expunges (RFC 6851).
+            server.enqueue_status(Status::ok(None, Some(code), "moved").unwrap());
+        }
+
+        announce(server, view, inbox.folder(&opened.0).unwrap());
+        return Status::ok(tag, None, "completed").unwrap();
+    }
+
+    Status::ok(tag, copyuid, "completed").unwrap()
+}
+
+/// The source and destination sets of a `COPYUID`; `None` for no Message.
+fn uid_sets(pairs: &[(u32, u32)]) -> Option<(UidSet, UidSet)> {
+    let set = |uids: Vec<u32>| {
+        let elements = uids
+            .into_iter()
+            .map(|uid| UidElement::Single(NonZeroU32::new(uid).unwrap()));
+        Vec1::try_from(elements.collect::<Vec<_>>())
+            .ok()
+            .map(UidSet)
+    };
+
+    Some((
+        set(pairs.iter().map(|&(from, _)| from).collect())?,
+        set(pairs.iter().map(|&(_, to)| to).collect())?,
+    ))
+}
+
+/// Copies `picked` into the Folder named `to`, and returns the `COPYUID`
+/// for them.
+fn copy_into(
+    inbox: &mut Inbox,
+    from: &str,
+    to: &str,
+    picked: &[(u32, u64, FakeMessage, bool)],
+) -> Option<Code<'static>> {
+    let target = inbox.folder(to).unwrap();
+
+    let (into_trash, mirrored) = (target.trash(), !target.apart());
+    let mut pairs = Vec::new();
+    for (uid, msgid, message, _) in picked {
+        if inbox.gmail && into_trash {
+            for folder in inbox.folders.iter_mut().filter(|f| f.name != from) {
+                folder.bump();
+                folder.messages.retain(|m| m.msgid != *msgid);
+            }
+        } else if inbox.gmail && mirrored {
+            for all in inbox.folders.iter_mut().filter(|f| f.mirrors) {
+                all.push(*msgid, message.clone());
+            }
+        }
+
+        pairs.push((*uid, inbox.folder_mut(to).push(*msgid, message.clone())));
+    }
+
+    let uid_validity = NonZeroU32::new(inbox.folder(to).unwrap().uid_validity).unwrap();
+    uid_sets(&pairs).map(|(source, destination)| Code::CopyUid {
+        uid_validity,
+        source,
+        destination,
+    })
 }
 
 /// Enqueues what a `LIST` or a `STATUS` asks for and returns its tagged status.

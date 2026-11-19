@@ -9,8 +9,8 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, connect::Transport, new_messages, pushed::Pushed, traced::Traced, whole_bodies,
-    wire_trace, xoauth2::XOAuth2,
+    Error, connect::Transport, moved_uids, new_messages, pushed::Pushed, tagged, traced::Traced,
+    whole_bodies, wire_trace, xoauth2::XOAuth2,
 };
 use crate::{
     config::Config,
@@ -48,6 +48,10 @@ pub trait MailServer {
 
     /// Sets or clears `\Seen` on `uids` of the selected Folder.
     async fn store_unread(&mut self, uids: &[u32], unread: bool) -> Result<(), Error>;
+
+    /// Moves `uids` of the selected Folder to the Folder named `to`, and
+    /// returns each `(uid, uid there)` the server named.
+    async fn move_to(&mut self, uids: &[u32], to: &str) -> Result<Vec<(u32, u32)>, Error>;
 
     /// Every Folder the server lists that can be opened.
     async fn folders(&mut self) -> Result<Vec<Folder>, Error>;
@@ -136,6 +140,9 @@ pub struct ImapSession {
     pending: Vec<Pushed>,
     /// The Account's, to tell its own Messages.
     email: String,
+    /// What the server lists of `MOVE` (RFC 6851) and `UIDPLUS` (RFC 4315).
+    can_move: bool,
+    uidplus: bool,
 }
 
 impl ImapSession {
@@ -176,13 +183,20 @@ impl ImapSession {
         .map_err(|(e, _)| e)?;
 
         tracing::info!("logged in");
-        let gmail = session.capabilities().await?.has_str("X-GM-EXT-1");
+        let capabilities = session.capabilities().await?;
+        let gmail = capabilities.has_str("X-GM-EXT-1");
+        let (can_move, uidplus) = (
+            capabilities.has_str("MOVE"),
+            capabilities.has_str("UIDPLUS"),
+        );
         Ok(Self {
             session,
             items: if gmail { GMAIL_ITEMS } else { ITEMS },
             uid_validity: 0,
             pending: Vec::new(),
             email: config.email.clone(),
+            can_move,
+            uidplus,
         })
     }
 
@@ -260,6 +274,40 @@ impl MailServer for ImapSession {
         );
         drop(echoed);
         Ok(())
+    }
+
+    async fn move_to(&mut self, uids: &[u32], to: &str) -> Result<Vec<(u32, u32)>, Error> {
+        let (set, to) = (uid_set(uids), quoted(to));
+        // What came before stays ahead of what comes during the move.
+        let earlier = self.pushed();
+        self.pending = earlier;
+        let command = if self.can_move { "MOVE" } else { "COPY" };
+        let command = format!("UID {command} {set} {to}");
+        let moved = moved_uids::run(&mut self.session, command, &mut self.pending).await?;
+        if !self.can_move {
+            // The copy, flag and expunge a `MOVE` stands for (RFC 6851 3.3).
+            let flagged: Vec<Fetch> = self
+                .session
+                .uid_store(&set, "+FLAGS.SILENT (\\Deleted)")
+                .await?
+                .try_collect()
+                .await?;
+            drop(flagged);
+            if self.uidplus {
+                let pending = &mut self.pending;
+                let expunge = format!("UID EXPUNGE {set}");
+                tagged::run(&mut self.session, expunge, |response| {
+                    pending.extend(Pushed::from_response(response));
+                })
+                .await?;
+            } else {
+                // A plain `EXPUNGE` would also take what another client flagged.
+                tracing::warn!("no UIDPLUS: {} Messages left flagged \\Deleted", uids.len());
+            }
+        }
+
+        tracing::info!("moved {} Messages", uids.len());
+        Ok(moved)
     }
 
     async fn folders(&mut self) -> Result<Vec<Folder>, Error> {
@@ -433,6 +481,8 @@ impl MailServer for ImapSession {
             uid_validity,
             pending,
             email,
+            can_move,
+            uidplus,
         } = self;
         let mut handle = session.idle();
         handle.init().await?;
@@ -452,6 +502,8 @@ impl MailServer for ImapSession {
             uid_validity,
             pending: Vec::new(),
             email,
+            can_move,
+            uidplus,
         };
 
         let mut pushed = pending;
@@ -497,6 +549,11 @@ fn bye(response: &Response<'_>) -> Option<String> {
         ),
         _ => None,
     }
+}
+
+/// A Folder name as an IMAP quoted string.
+fn quoted(name: &str) -> String {
+    format!("\"{}\"", name.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 fn uid_set(uids: &[u32]) -> String {

@@ -3,10 +3,12 @@
 
 mod changes;
 mod error;
+mod moves;
 mod schema;
 mod store;
 
 pub use changes::Changes;
 pub use error::Error;
+pub use moves::PendingMove;
 pub use schema::delete;
 pub use store::Cache;

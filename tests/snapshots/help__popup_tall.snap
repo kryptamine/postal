@@ -3,39 +3,39 @@ source: tests/help.rs
 expression: screen
 ---
 size: 80x36  cursor: hidden
-┌─ 2024 ───────────────────────────────────────────────────────────────────────┐
-│   Bob     ┌ Help ────────────────────────────────────────────────┐2024-11-18 │
-│   Newer   │                                                      │           │
-│   Newer bo│ Navigate                                             │           │
-│   Ada     │ j / k    ↓ / ↑        next / previous Message        │2024-11-17 │
-│   Older   │ g / G    Home / End   first / last Message           │           │
-│   Older bo│                                                      │           │
-│           │ Message                                              │           │
-│           │ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │           │
-│           │ Enter    l            read the Message full screen   │           │
-│           │ |                     open the Message in $PAGER     │           │
-│           │ U                     mark the Message Unread        │           │
-│           │                                                      │           │
-│           │ Links                                                │           │
-└───────────│ o                     label the links in the Preview │───────────┘
-┌ Inbox · 1/│                                                      │───────────┐
-│ From    Bo│ View                                                 │           │
-│ Subject Ne│ v                     rendered / text view of HTML   │           │
-│ Date    Mo│                                                      │           │
-├───────────│ App                                                  │───────────┤
-│ Newer body│ ?                     this help                      │           │
-│           │ q        ^c           quit                           │           │
-│           │ ^z                    suspend to the shell           │           │
-│           │                                                      │           │
-│           │ Search                                               │           │
-│           │ /                     search, or edit the Query      │           │
-│           │ ^j / ^k  ↓ / ↑        move, while typing the Query   │           │
-│           │ Enter                 keep the Query                 │           │
-│           │ Esc                   end the Search                 │           │
-│           │                                                      │           │
-│           │ Folders                                              │           │
-│           │ f                     pick the Folder to show        │           │
-│           │                                                      │           │
-│           └──────────────────────────────────────────────────────┘           │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌─ 2024 ───┌ Help ──────────────────────────────────────────────────┐──────────┐
+│   Bob    │                                                        │024-11-18 │
+│   Newer  │ Navigate                                               │          │
+│   Newer b│ j / k      ↓ / ↑        next / previous Message        │          │
+│   Ada    │ g / G      Home / End   first / last Message           │024-11-17 │
+│   Older  │                                                        │          │
+│   Older b│ Message                                                │          │
+│          │ ^d / ^u    PgDn / PgUp  scroll the Preview half a page │          │
+│          │ Enter      l            read the Message full screen   │          │
+│          │ |                       open the Message in $PAGER     │          │
+│          │ U                       mark the Message Unread        │          │
+│          │ Backspace               delete: move to Trash          │          │
+│          │ u                       undo the last delete           │          │
+│          │                                                        │          │
+└──────────│ Links                                                  │──────────┘
+┌ Inbox · 1│ o                       label the links in the Preview │──────────┐
+│ From    B│                                                        │          │
+│ Subject N│ View                                                   │          │
+│ Date    M│ v                       rendered / text view of HTML   │          │
+├──────────│                                                        │──────────┤
+│ Newer bod│ App                                                    │          │
+│          │ ?                       this help                      │          │
+│          │ q          ^c           quit                           │          │
+│          │ ^z                      suspend to the shell           │          │
+│          │                                                        │          │
+│          │ Search                                                 │          │
+│          │ /                       search, or edit the Query      │          │
+│          │ ^j / ^k    ↓ / ↑        move, while typing the Query   │          │
+│          │ Enter                   keep the Query                 │          │
+│          │ Esc                     end the Search                 │          │
+│          │                                                        │          │
+│          │ Folders                                                │          │
+│          │ f                       pick the Folder to show        │          │
+│          │                                                        │          │
+└──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

@@ -32,7 +32,7 @@ pub type FolderFlags = (Arc<str>, Vec<(u32, bool)>);
 /// Once a write to disk fails, the Cache moves into memory for the rest of
 /// the session, so a full disk or a lost permission stops nothing.
 pub struct Cache {
-    connection: RefCell<Connection>,
+    pub(super) connection: RefCell<Connection>,
     rebuilt: bool,
     in_memory: Cell<bool>,
     unreported_failure: Cell<bool>,
@@ -41,6 +41,8 @@ pub struct Cache {
 impl Cache {
     pub fn open(dir: &Path) -> Result<Self, Error> {
         let (connection, rebuilt) = schema::open(dir)?;
+        // An Undo reaches only the Deletes of its own run.
+        connection.execute("DELETE FROM moved WHERE state IN (1, 3)", [])?;
         Ok(Self {
             connection: RefCell::new(connection),
             rebuilt,
@@ -346,11 +348,16 @@ impl Cache {
         Ok(state)
     }
 
-    /// Every cached UID of `folder`, ascending.
+    /// Every UID of `folder` the server holds as the Cache knows it,
+    /// ascending: a queued Delete's too, an Undo's old one not.
     pub fn uids(&self, folder: &str) -> Result<Vec<u32>, Error> {
         let connection = self.connection.borrow();
-        let mut statement =
-            connection.prepare_cached("SELECT uid FROM message WHERE mailbox = ?1 ORDER BY uid")?;
+        let mut statement = connection.prepare_cached(
+            "SELECT uid FROM message WHERE mailbox = ?1 AND NOT EXISTS
+                 (SELECT 1 FROM moved WHERE mailbox = ?1 AND uid = message.uid AND state = 2)
+             UNION SELECT uid FROM moved WHERE mailbox = ?1 AND state = 0
+             ORDER BY uid",
+        )?;
         let uids = statement
             .query_map([folder], |row| row.get(0))?
             .collect::<Result<_, _>>()?;
@@ -471,7 +478,10 @@ impl Cache {
     /// Runs `write` on disk; when that fails, copies what the disk holds
     /// into memory and runs it there. `write` must leave nothing behind
     /// when it fails, as a transaction does.
-    fn write<T>(&self, write: impl Fn(&Connection) -> rusqlite::Result<T>) -> Result<T, Error> {
+    pub(super) fn write<T>(
+        &self,
+        write: impl Fn(&Connection) -> rusqlite::Result<T>,
+    ) -> Result<T, Error> {
         let error = match write(&self.connection.borrow()) {
             Ok(done) => return Ok(done),
             Err(error) if self.in_memory.get() => return Err(error.into()),
@@ -497,6 +507,7 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     if changes.replace {
         transaction.execute("DELETE FROM message WHERE mailbox = ?1", [folder])?;
         transaction.execute("DELETE FROM flag_change WHERE mailbox = ?1", [folder])?;
+        transaction.execute("DELETE FROM moved WHERE mailbox = ?1", [folder])?;
     }
 
     insert(&transaction, folder, &changes.new)?;
@@ -534,10 +545,11 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     transaction.commit()
 }
 
-/// Drops `folder` with its rows and its queued flag changes.
+/// Drops `folder` with its rows and its queued changes.
 fn forget(connection: &Connection, folder: &str) -> rusqlite::Result<()> {
     connection.execute("DELETE FROM message WHERE mailbox = ?1", [folder])?;
     connection.execute("DELETE FROM flag_change WHERE mailbox = ?1", [folder])?;
+    connection.execute("DELETE FROM moved WHERE mailbox = ?1", [folder])?;
     connection.execute("DELETE FROM mailbox WHERE name = ?1", [folder])?;
     Ok(())
 }
@@ -614,12 +626,15 @@ fn evict(connection: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// A row whose Delete the server has yet to see stays out: the server
+/// still lists it in `folder`.
 fn insert(connection: &Connection, folder: &str, rows: &[NewMessage]) -> rusqlite::Result<()> {
     let mut insert = connection.prepare_cached(
         "INSERT OR REPLACE INTO message
          (uid, body_key, received, received_offset, unread, sender, subject, snippet,
           text_section, text_encoding, text_charset, text_html, mailbox, thread, from_me)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
+         WHERE NOT EXISTS (SELECT 1 FROM moved WHERE mailbox = ?13 AND uid = ?1 AND state = 0)",
     )?;
     for new in rows {
         let (m, part) = (&new.row, new.text_part.as_ref());

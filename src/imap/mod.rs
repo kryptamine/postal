@@ -1,8 +1,9 @@
-//! The IMAP boundary. Postal only reads: each Folder is opened with `EXAMINE`
-//! and nothing is ever stored, copied or expunged.
+//! The IMAP boundary. Postal writes only `\Seen` and the moves of Delete
+//! and Undo; bodies are fetched with `BODY.PEEK`.
 
 mod connect;
 mod error;
+mod moved_uids;
 mod new_messages;
 mod pushed;
 mod session;

@@ -6,18 +6,18 @@ size: 44x18  cursor: hidden
 ┌ Help ────────────────────────────────────┐
 │                                          │
 │ Navigate                                 │
-│ j / k    ↓ / ↑        next / previous Me │
-│ g / G    Home / End   first / last Messa │
+│ j / k      ↓ / ↑        next / previous  │
+│ g / G      Home / End   first / last Mes │
 │                                          │
 │ Message                                  │
-│ ^d / ^u  PgDn / PgUp  scroll the Preview │
-│ Enter    l            read the Message f │
-│ |                     open the Message i │
-│ U                     mark the Message U │
+│ ^d / ^u    PgDn / PgUp  scroll the Previ │
+│ Enter      l            read the Message │
+│ |                       open the Message │
+│ U                       mark the Message │
+│ Backspace               delete: move to  │
+│ u                       undo the last de │
 │                                          │
 │ Links                                    │
-│ o                     label the links in │
-│                                          │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help

@@ -47,6 +47,7 @@ mod message;
 mod message_list;
 mod mode;
 mod modified_utf7;
+mod move_changes;
 mod new_message;
 mod oauth;
 mod older_pages;

@@ -168,7 +168,7 @@ pub async fn run(
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
-                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread) => steer(step, &mut view, &mut screen, cache, &asks)?,
+                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
@@ -396,6 +396,8 @@ fn apply(
             screen.backfill = Some(Status::Syncing { done, total });
         }
         Update::Backfill(Backfill::Paged { .. }) => screen.backfill = None,
+        Update::NoTrash => screen.toast = Some(Toast::error("no Trash Folder")),
+        Update::Unrestored => screen.toast = Some(Toast::error("nothing to undo")),
     }
 
     Ok(())
@@ -416,6 +418,9 @@ struct Screen {
     /// While `mode` is `Reading`.
     reading: Option<Reading>,
     dwell: Dwell,
+    /// The Deletes an Undo may take back, the latest last, each with the
+    /// Thread selected when it was made.
+    undo: Vec<(i64, Option<Key>)>,
 }
 
 impl Screen {
@@ -483,6 +488,8 @@ enum Step {
     /// Messages in other Folders are asked for.
     Read(Option<u64>),
     MarkUnread,
+    Delete,
+    Undo,
     Browse(Arc<str>),
     Page,
     Suspend,
@@ -544,6 +551,8 @@ fn act(
             read(action, view, screen)
         }
         Some(Action::MarkUnread) => Step::MarkUnread,
+        Some(Action::Delete) => Step::Delete,
+        Some(Action::Undo) => Step::Undo,
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
             Step::Stay
@@ -705,8 +714,104 @@ fn mark(
     show(view, cache, None)?;
     relist(screen, view, cache)?;
     // The send fails only while signed out; the change waits in the Cache.
-    asks.unbounded_send(Ask::Flags).ok();
+    asks.unbounded_send(Ask::Changes).ok();
     Ok(true)
+}
+
+/// Delete on the selected Thread's Messages in their Folders, or in
+/// Reading on the one at the cursor.
+fn delete(
+    view: &mut InboxView,
+    screen: &mut Screen,
+    cache: &Cache,
+    asks: &UnboundedSender<Ask>,
+) -> Result<(), Error> {
+    // A Search never shows Trash.
+    if view.search.is_none() && view.folder.role == Some(Role::Trash) {
+        screen.toast = Some(Toast::new("already in Trash"));
+        return Ok(());
+    }
+
+    let cursor = screen.reading.as_ref().map(|reading| reading.cursor);
+    let messages: Vec<_> = view
+        .stack()
+        .filter(|m| cursor.is_none_or(|cursor| m.body_key == cursor))
+        .filter_map(|m| Some((Arc::clone(m.folder.as_ref()?), m.uid)))
+        .collect();
+    if messages.is_empty() {
+        if cursor.is_some() {
+            screen.toast = Some(Toast::new("only in another Folder"));
+        }
+
+        return Ok(());
+    }
+
+    let thread = view.selected_key();
+    let Some(batch) = cache.delete(&messages).map_err(Error::Cache)? else {
+        return Ok(());
+    };
+
+    screen.undo.push((batch, thread));
+    show(view, cache, None)?;
+    screen.hints = None;
+    if view.selected_key() != thread {
+        screen.list();
+    }
+
+    relist(screen, view, cache)?;
+    // The send fails only while signed out; the move waits in the Cache.
+    asks.unbounded_send(Ask::Changes).ok();
+    screen.toast = Some(Toast::new("deleted · u to undo"));
+    Ok(())
+}
+
+/// Undo of the latest Delete not yet taken back, selecting its Thread.
+fn undo(
+    view: &mut InboxView,
+    screen: &mut Screen,
+    cache: &Cache,
+    asks: &UnboundedSender<Ask>,
+) -> Result<(), Error> {
+    let folders = match screen.undo.pop() {
+        Some((batch, thread)) => {
+            let folders = cache.undo(batch).map_err(Error::Cache)?;
+            (!folders.is_empty()).then_some((folders, thread))
+        }
+        None => None,
+    };
+
+    let Some((folders, thread)) = folders else {
+        screen.toast = Some(Toast::new("nothing to undo"));
+        return Ok(());
+    };
+
+    show(view, cache, None)?;
+    screen.hints = None;
+    if let Some(key) = thread {
+        if screen.reading.is_some() && view.selected_key() != thread {
+            screen.list();
+        }
+
+        view.select(key);
+    }
+
+    relist(screen, view, cache)?;
+    asks.unbounded_send(Ask::Changes).ok();
+    let here = view.search.is_some() || folders.contains(&view.folder.name);
+    screen.toast = Some(if here {
+        Toast::new("restored")
+    } else {
+        let known = cache.folders().map_err(Error::Cache)?;
+        let label = |name: &Arc<str>| {
+            known.iter().find(|f| f.name == *name).map_or_else(
+                || Folder::new(name, None).label().to_owned(),
+                |f| f.label().to_owned(),
+            )
+        };
+
+        Toast::new(format!("restored to {}", label(&folders[0])))
+    });
+    Ok(())
 }
 
 /// Acts on one key in the Folder Picker, which takes them all.
@@ -755,7 +860,7 @@ fn switch(
 }
 
 /// Opens the Folder Picker as the Cache last saw the Folders, starts a
-/// Search, shows the Folder picked, or marks Messages read or Unread,
+/// Search, shows the Folder picked, or marks, deletes or restores Messages,
 /// asking the sync connection to follow.
 fn steer(
     step: Step,
@@ -786,6 +891,8 @@ fn steer(
             Ask::Thread(id)
         }
         Step::MarkUnread => return mark_unread(view, screen, cache, asks),
+        Step::Delete => return delete(view, screen, cache, asks),
+        Step::Undo => return undo(view, screen, cache, asks),
         Step::Search => return start_search(view, screen, cache),
         _ => return Ok(()),
     };

@@ -5,7 +5,8 @@ raw IMAP responses over a loopback socket in the same process (no separate
 server or process), runs the real binary in a pty, and records the commands
 the client sends. This keeps response parsing, a hot path, under test, and lets
 a test assert what the client may change: `BODY.PEEK` only, `STORE` of
-`\Seen` alone, never `EXPUNGE` or `COPY`.
+`\Seen`, and `MOVE` only to Trash and back, or the `COPY`, `\Deleted` and
+`UID EXPUNGE` standing in for it (ADR 0012).
 
 Google's OAuth server counts as part of the mail provider and is faked the same
 way, at the HTTP level: the config carries undocumented `[oauth]` overrides for

@@ -3,27 +3,27 @@ source: tests/reading.rs
 expression: screen
 ---
 size: 80x24  cursor: hidden
-┌ 1/1 ──────┌ Help ────────────────────────────────────────────────┐───────────┐
-│ From    Bo│                                                      │           │
-│ Subject Ne│ Read                                                 │           │
-│ Date    Mo│ j / k    ↓ / ↑        scroll a line                  │           │
-│           │ g / G    Home / End   top / bottom of the Thread     │           │
-│ Line 01   │ ^d / ^u  PgDn / PgUp  scroll half a page             │           │
-│ Line 02   │ n / p                 next / previous Message        │           │
-│ Line 03   │ Enter    Space        fold / unfold the Message      │           │
-│ Line 04   │ |                     open the Message in $PAGER     │           │
-│ Line 05   │ q / Esc  h / ←        back to the list               │           │
-│ Line 06   │                                                      │           │
-│ Line 07   │ Message                                              │           │
-│ Line 08   │ U                     mark the Message Unread        │           │
-│ Line 09   │                                                      │           │
-│ Line 10   │ Links                                                │           │
-│ Line 11   │ o                     label the links in the Preview │           │
-│ Line 12   │                                                      │           │
-│ Line 13   │ View                                                 │           │
-│ Line 14   │ v                     rendered / text view of HTML   │           │
-│ Line 15   │                                                      │           │
-│ Line 16   │ App                                                  │           │
-│ Line 17   │                                                      │           │
-└───────────└──────────────────────────────────────────────────────┘───────────┘
+┌ 1/1 ─────┌ Help ──────────────────────────────────────────────────┐──────────┐
+│ From    B│                                                        │          │
+│ Subject N│ Read                                                   │          │
+│ Date    M│ j / k      ↓ / ↑        scroll a line                  │          │
+│          │ g / G      Home / End   top / bottom of the Thread     │          │
+│ Line 01  │ ^d / ^u    PgDn / PgUp  scroll half a page             │          │
+│ Line 02  │ n / p                   next / previous Message        │          │
+│ Line 03  │ Enter      Space        fold / unfold the Message      │          │
+│ Line 04  │ |                       open the Message in $PAGER     │          │
+│ Line 05  │ q / Esc    h / ←        back to the list               │          │
+│ Line 06  │                                                        │          │
+│ Line 07  │ Message                                                │          │
+│ Line 08  │ U                       mark the Message Unread        │          │
+│ Line 09  │ Backspace               delete: move to Trash          │          │
+│ Line 10  │ u                       undo the last delete           │          │
+│ Line 11  │                                                        │          │
+│ Line 12  │ Links                                                  │          │
+│ Line 13  │ o                       label the links in the Preview │          │
+│ Line 14  │                                                        │          │
+│ Line 15  │ View                                                   │          │
+│ Line 16  │ v                       rendered / text view of HTML   │          │
+│ Line 17  │                                                        │          │
+└──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

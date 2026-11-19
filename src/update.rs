@@ -19,4 +19,8 @@ pub enum Update {
     Rendered(PreviewKey, Preview),
     Status(Status),
     Backfill(Backfill),
+    /// No Folder has the Trash role: the Deletes queued were taken back.
+    NoTrash,
+    /// An Undo found its Messages gone from Trash.
+    Unrestored,
 }

@@ -6,6 +6,7 @@ use crate::{
     folder::INBOX,
     folder_list,
     imap::{MailServer, Pushed},
+    move_changes,
     sequence_numbers::SequenceNumbers,
     snippets,
     status::Status,
@@ -38,8 +39,9 @@ pub async fn listen<S: MailServer>(
         return Ok(());
     };
 
-    // Before the resync, so it reads the flags they set.
-    flag_changes::send(&mut server, cache, None).await?;
+    // Before the resync, so it reads the flags they set and the moves they made.
+    let selected = flag_changes::send(&mut server, cache, None).await?;
+    move_changes::send(&mut server, cache, selected, send).await?;
     let mut sequence = shown(&mut server, cache, steering, send, report).await?;
     // `None` while the Folder selected on the server is not known.
     let mut selected = Some(Arc::clone(&steering.folder));
@@ -47,8 +49,9 @@ pub async fn listen<S: MailServer>(
     let mut pushed = server.pushed();
     loop {
         // Ahead of a switch, while `selected` is still the Folder selected.
-        if std::mem::take(&mut asked.flags) {
+        if std::mem::take(&mut asked.changes) {
             selected = flag_changes::send(&mut server, cache, selected.take()).await?;
+            selected = move_changes::send(&mut server, cache, selected, send).await?;
             asked.switched |= selected.as_deref() != Some(&*steering.folder);
             pushed.extend(server.pushed());
             continue;

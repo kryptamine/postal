@@ -80,6 +80,18 @@ impl InboxView {
         }
     }
 
+    /// Selects the Thread `key` when it is shown.
+    pub fn select(&mut self, key: Key) {
+        let body = self.selected_body();
+        if let Some(row) = self.position(key) {
+            self.selected = row;
+        }
+
+        if self.selected_body() != body {
+            self.preview_scroll = 0;
+        }
+    }
+
     /// Shows `folder` in place of the one shown, without its rows until
     /// `show`: any Search ends, and the newest Message will be selected.
     pub fn switch(&mut self, folder: Folder) {
