@@ -27,7 +27,7 @@ impl Write for CappedFile {
             return Ok(buf.len());
         }
 
-        let len = buf.len() as u64;
+        let len = u64::try_from(buf.len()).unwrap_or(u64::MAX);
         if self.written + len > self.cap {
             self.written = self.cap;
             self.file.write_all(b"log truncated\n")?;

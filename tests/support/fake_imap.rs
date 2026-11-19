@@ -1099,7 +1099,10 @@ fn body_part(items: &MacroOrMessageDataItemNames<'static>) -> Option<PartAsked> 
 fn body_part_item(body: &FakeBody, asked: &PartAsked) -> MessageDataItem<'static> {
     let content = body.part(asked.path.as_ref()).unwrap_or_default();
     let (start, len) = asked.partial.map_or((0, content.len()), |(start, len)| {
-        (start as usize, len.get() as usize)
+        (
+            usize::try_from(start).unwrap(),
+            usize::try_from(len.get()).unwrap(),
+        )
     });
     let served = content.get(start..).unwrap_or_default();
     let served = &served[..len.min(served.len())];

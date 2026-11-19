@@ -45,6 +45,7 @@ impl Rgb {
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,
+                clippy::as_conversions,
                 reason = "rounded and clamped to 0..=255 first"
             )]
             let byte = mixed.round().clamp(0.0, 255.0) as u8;

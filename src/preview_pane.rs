@@ -30,8 +30,8 @@ pub const fn text_area(pane: Rect) -> Rect {
 }
 
 /// The body lines that `text` shows from scroll position `scroll`.
-pub const fn body_lines(scroll: usize, text: Rect) -> Range<usize> {
-    let end = scroll.saturating_add(text.height as usize);
+pub fn body_lines(scroll: usize, text: Rect) -> Range<usize> {
+    let end = scroll.saturating_add(usize::from(text.height));
     scroll.saturating_sub(HEADER_ROWS)..end.saturating_sub(HEADER_ROWS)
 }
 

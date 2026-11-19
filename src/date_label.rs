@@ -27,7 +27,7 @@ impl DateLabel {
                 label,
                 "{} {}",
                 received.day(),
-                MONTHS[received.month0() as usize]
+                usize::try_from(received.month0()).map_or("", |m| MONTHS[m])
             )
         } else {
             write!(

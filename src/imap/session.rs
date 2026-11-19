@@ -239,7 +239,9 @@ impl MailServer for ImapSession {
 
     async fn unread_in(&mut self, folder: &str) -> Result<usize, Error> {
         let status = self.session.status(folder, "(UNSEEN)").await?;
-        Ok(status.unseen.map_or(0, |n| n as usize))
+        Ok(status
+            .unseen
+            .map_or(0, |n| usize::try_from(n).unwrap_or(usize::MAX)))
     }
 
     #[expect(

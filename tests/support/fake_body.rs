@@ -103,7 +103,9 @@ impl FakeBody {
         }
 
         let raw = message.raw_message();
-        let content = &raw[part.raw_body_offset() as usize..part.raw_end_offset() as usize];
+        let start = usize::try_from(part.raw_body_offset()).unwrap();
+        let end = usize::try_from(part.raw_end_offset()).unwrap();
+        let content = &raw[start..end];
         Self::Part {
             media_type,
             subtype,

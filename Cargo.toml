@@ -68,6 +68,7 @@ allow_attributes_without_reason = "deny"
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+as_conversions = "deny"
 
 [build-dependencies]
 cc = { version = "1.11.2", features = ["parallel"] }

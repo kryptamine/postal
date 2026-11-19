@@ -82,20 +82,13 @@ impl Cell {
 }
 
 /// `0x01RRGGBB` when set, 0 when not.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "each channel is masked to one byte"
-)]
 const fn colour(packed: u32) -> Option<Rgb> {
     if packed == 0 {
         return None;
     }
 
-    Some(Rgb {
-        r: (packed >> 16) as u8,
-        g: (packed >> 8) as u8,
-        b: packed as u8,
-    })
+    let [_, r, g, b] = packed.to_be_bytes();
+    Some(Rgb { r, g, b })
 }
 
 /// A laid out document: rows of `cols` cells, and the href of each link id.
