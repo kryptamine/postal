@@ -137,14 +137,15 @@ element helpers.
   and the layout runs again (`alignment.cpp`): a title, a button and an
   address stay centred. This changed 117 of 539 cached mails.
 
-Four changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
+Five changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
 `document::rebuild_render_tree` is public: the boxes are built from the
 computed styles inside `createFromString`, before the snap, and must be built
 again after it. A block inside an inline-block no longer splits the inline
 around it, a litehtml bug that cut link-wrapped buttons in two. And a cell's
 `colspan` and `rowspan` are clamped as HTML parses them: `colspan="0"` read
 memory outside the table's columns. And `text-decoration: none` no longer
-shifts by -1.
+shifts by -1, and `string_id` has a fixed underlying type, so the ids of
+names interned while parsing are in its range.
 
 ### A mail too wide for the pane
 

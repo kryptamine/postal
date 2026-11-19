@@ -5,7 +5,7 @@ Vendored from https://github.com/litehtml/litehtml at commit
 (with the bundled gumbo in `src/gumbo/`) and `LICENSE`. Built by `build.rs`.
 See `docs/adr/0006-rendered-view-engine.md`.
 
-Four changes, marked `Postal:` in the source:
+Five changes, marked `Postal:` in the source:
 
 - `document::rebuild_render_tree` is public in
   `include/litehtml/document.h`, so `cpp/cell_grid.cpp` can rebuild the boxes
@@ -21,6 +21,10 @@ Four changes, marked `Postal:` in the source:
 - `style::parse_text_decoration_line` in `src/style.cpp` skips `none`, the
   value at index 0, which shifted 1 by -1: undefined behaviour on nearly
   every mail.
+- `string_id` in `include/litehtml/string_id.h` has `int` as its fixed
+  underlying type. Names interned while parsing get ids past the last
+  enumerator, out of the range of an enum without one: undefined behaviour
+  that UBSan reports on most mail.
 
 To update, replace these directories from a newer commit, apply the changes
 again and update the hash.

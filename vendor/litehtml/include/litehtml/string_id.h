@@ -6,8 +6,10 @@
 namespace litehtml
 {
 
+// Postal: a fixed underlying type, since names interned while parsing get
+// ids past the last enumerator, which is undefined behaviour without one.
 #define STRING_ID(...)                                                                                                 \
-    enum string_id                                                                                                     \
+    enum string_id : int                                                                                               \
     {                                                                                                                  \
         __VA_ARGS__                                                                                                    \
     };                                                                                                                 \
