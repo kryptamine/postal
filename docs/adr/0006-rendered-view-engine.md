@@ -16,7 +16,8 @@ layout, `image_labels.cpp` decides each image and `link_names.cpp` names a
 bare picture link, `picture_boxes.cpp` fits or drops the boxes round
 pictures, `buttons.cpp` and `titles.cpp` collapse buttons and cover bands
 with `collapse.cpp`, `contents.cpp` gathers what each element shows for
-those passes in one walk, and `colour.cpp`, `text.cpp` and `dom.cpp` hold
+those passes in one walk, `loosen.cpp`, `stacking.cpp` and `word_breaks.cpp`
+make a mail too wide fit, and `colour.cpp`, `text.cpp` and `dom.cpp` hold
 the colour, cell-width and element helpers.
 
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
@@ -118,6 +119,27 @@ around it, a litehtml bug that cut link-wrapped buttons in two. And a cell's
 `colspan` and `rowspan` are clamped as HTML parses them: `colspan="0"` read
 memory outside the table's columns. And `text-decoration: none` no longer
 shifts by -1.
+
+### A mail too wide for the pane
+
+Mail is made for 600 px and fixes its widths. A layout that draws a glyph
+past the last column is laid out a second time, from the HTML again:
+
+- a word over 16 cells is parsed in pieces a line may break between, after
+  a mark of an address (`/ ? & = . _ - : , ; @ % + #`) once a piece is 8
+  cells, and anywhere at 24: litehtml has no `overflow-wrap`, and a long
+  address set the least width of its column;
+- every `min-width` and every width in px goes, an image's apart, which
+  cuts its label; `nowrap` wraps and `pre` becomes `pre-wrap`;
+- if text is still lost, each table round a box that ends past the pane
+  becomes blocks, one cell under another, and the layout runs once more.
+
+Only a mail that loses text after that shows in the text View. The clip
+given to litehtml's draw is as wide as the document: it skips a box wholly
+outside the clip, so text there was never drawn and never counted as lost.
+
+On 539 cached mails this left 4 of 73 not fitting at 74 columns, long reply
+chains quoted many levels deep, and 33 at 40 columns.
 
 ### A process of its own
 

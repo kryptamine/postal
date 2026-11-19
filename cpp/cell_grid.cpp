@@ -8,10 +8,13 @@
 #include "contents.h"
 #include "geometry.h"
 #include "image_labels.h"
+#include "loosen.h"
 #include "picture_boxes.h"
 #include "snap.h"
+#include "stacking.h"
 #include "text.h"
 #include "titles.h"
+#include "word_breaks.h"
 
 #include <litehtml.h>
 
@@ -19,6 +22,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -79,8 +84,29 @@ class grid_container : public document_container
     ImageLabels                        images;
     // A glyph fell past the last column, where the grid has no cell.
     bool                               lost_text = false;
+    // Long words are parsed in pieces a line may break between.
+    bool                               break_words;
 
-    explicit grid_container(int cols) : cols(cols) {}
+    grid_container(int cols, bool break_words) : cols(cols), break_words(break_words) {}
+
+    void split_text(const char* text, const std::function<void(const char*)>& on_word,
+                    const std::function<void(const char*)>& on_space) override
+    {
+        if(!break_words) return document_container::split_text(text, on_word, on_space);
+        auto in_pieces = [&on_word](const char* word) {
+            for(auto& piece : breakable(word)) on_word(piece.c_str());
+        };
+        document_container::split_text(text, in_pieces, on_space);
+    }
+
+    // Back to an empty grid, to draw a layout that changed.
+    void wipe()
+    {
+        grid.clear();
+        frames.clear();
+        clips.clear();
+        lost_text = false;
+    }
 
     int rows() const { return cols ? int(grid.size()) / cols : 0; }
 
@@ -403,7 +429,7 @@ struct cg_grid
     grid_container           container;
     std::vector<std::string> hrefs;
 
-    explicit cg_grid(int cols) : container(cols) {}
+    cg_grid(int cols, bool break_words) : container(cols, break_words) {}
 
     // Each link's id goes on the cells of its leaf boxes: its words, or the
     // box of an image inside it.
@@ -432,43 +458,72 @@ struct cg_grid
     }
 };
 
+namespace
+{
+void lay_out(const document::ptr& doc, grid_container& container)
+{
+    float width = float(container.cols) * CW;
+    // The boxes were built from the styles before they changed.
+    doc->rebuild_render_tree();
+    doc->render(width);
+    if(container.images.shrink_spilt())
+    {
+        doc->rebuild_render_tree();
+        doc->render(width);
+    }
+}
+
+void draw(const document::ptr& doc, grid_container& container)
+{
+    container.wipe();
+    // Wider than the pane: litehtml skips a box wholly outside the clip, and
+    // text there must be drawn to count as lost.
+    position clip(0, 0, std::max(float(container.cols) * CW, float(doc->width())), doc->height());
+    doc->draw(0, 0, 0, &clip);
+    container.apply_borders();
+}
+
+// `loose` is the second try at a mail that lost text past the pane: its
+// long words break, its fixed widths go, and the tables round what still
+// spills are stacked. See docs/adr/0006-rendered-view-engine.md.
+cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
+{
+    auto grid = std::make_unique<cg_grid>(cols, loose);
+    grid_container& container = grid->container;
+    auto doc = document::createFromString(estring(std::string(html, len), encoding::utf_8), &container, master_css,
+                                          user_css);
+    if(!doc) return nullptr;
+    container.images.label(doc->root(), cols);
+    {
+        Contents contents(doc->root());
+        fit_picture_boxes(container.images.pictures(), contents);
+        flatten_buttons(doc->root(), contents);
+        unframe_titles(doc->root(), contents);
+    }
+    snap_tree(doc->root());
+    if(loose) loosen(doc->root());
+    lay_out(doc, container);
+    draw(doc, container);
+    if(loose && container.lost_text && stack_spilt_tables(doc->root(), float(cols) * CW))
+    {
+        lay_out(doc, container);
+        draw(doc, container);
+    }
+    grid->mark_links(doc->root());
+    return grid.release();
+}
+} // namespace
+
 extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
 {
-    cg_grid* grid = nullptr;
     try
     {
-        grid = new cg_grid(cols);
-        auto doc = document::createFromString(estring(std::string(html, len), encoding::utf_8), &grid->container,
-                                              master_css, user_css);
-        if(!doc)
-        {
-            delete grid;
-            return nullptr;
-        }
-        grid->container.images.label(doc->root(), cols);
-        {
-            Contents contents(doc->root());
-            fit_picture_boxes(grid->container.images.pictures(), contents);
-            flatten_buttons(doc->root(), contents);
-            unframe_titles(doc->root(), contents);
-        }
-        snap_tree(doc->root());
-        // The boxes were built from the styles before the snap.
-        doc->rebuild_render_tree();
-        doc->render(float(cols) * CW);
-        if(grid->container.images.shrink_spilt())
-        {
-            doc->rebuild_render_tree();
-            doc->render(float(cols) * CW);
-        }
-        position clip(0, 0, float(cols) * CW, doc->height());
-        doc->draw(0, 0, 0, &clip);
-        grid->container.apply_borders();
-        grid->mark_links(doc->root());
-        return grid;
+        cg_grid* grid = rendered(html, len, cols, false);
+        if(!grid || !grid->container.lost_text) return grid;
+        delete grid;
+        return rendered(html, len, cols, true);
     } catch(...)
     {
-        delete grid;
         return nullptr;
     }
 }
