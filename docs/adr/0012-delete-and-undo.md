@@ -33,7 +33,10 @@ misplace the `EXPUNGE`s the move brings. A resync or a page of older Messages
 never writes a queued Delete's row back.
 
 An Undo made while the server is moving that Delete marks it undone; when
-the server answers, the move is queued back. The Undo stack lives for one
+the server answers, the move is queued back. A Delete of a Message whose
+Undo the server has yet to make takes that Undo back in turn: nothing is
+sent, or, with its move under way, the Message is queued for Trash again by
+the UID the server answers with. The Undo stack lives for one
 run, so a restart drops what only it could take back.
 
 ## Considered options

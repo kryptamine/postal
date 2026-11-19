@@ -479,3 +479,50 @@ fn an_undo_while_the_move_is_under_way_keeps_the_row() {
     assert!(list(&screen).contains("Newest"), "{screen}");
     assert!(server.subjects(TRASH).is_empty());
 }
+
+// A Delete before the server made the Undo takes the Undo back: nothing
+// goes to the server, and the Message stays in Trash.
+#[test]
+fn a_delete_before_the_undo_is_sent_keeps_the_message_in_trash() {
+    let server = server();
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Newest");
+    t.send(Key::Backspace).unwrap();
+    wait_for(|| moved(&home) == [1]);
+    server.fail(Outage::Offline);
+
+    t.send(Key::Char('u')).unwrap();
+    t.wait_until(|s| list(s).contains("Newest")).unwrap();
+    t.send(Key::Backspace).unwrap();
+    t.wait_until(|s| !list(s).contains("Newest")).unwrap();
+    server.recover();
+    wait_for(|| server.commands().iter().filter(|c| *c == "IDLE").count() >= 3);
+    quit(t);
+    assert_eq!(server.subjects(TRASH), ["Newest"]);
+    assert_eq!(moves(&server).len(), 1, "{:#?}", moves(&server));
+}
+
+// A Delete while the Undo's move is under way sends the Message back to
+// Trash by the UID the server gave it, once that move is answered.
+#[test]
+fn a_delete_while_the_undo_is_under_way_follows_it_to_trash() {
+    let server = server();
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Newest");
+    t.send(Key::Backspace).unwrap();
+    wait_for(|| moved(&home) == [1]);
+    server.stall(Stall::Move);
+
+    t.send(Key::Char('u')).unwrap();
+    t.wait_until(|s| list(s).contains("Newest")).unwrap();
+    wait_for(|| moves(&server).len() == 2);
+    t.send(Key::Backspace).unwrap();
+    t.wait_until(|s| !list(s).contains("Newest")).unwrap();
+    server.release();
+
+    wait_for(|| moves(&server).len() == 3 && server.subjects(TRASH) == ["Newest"]);
+    let screen = t.snapshot_after(|_| true).unwrap();
+    quit(t);
+    assert_eq!(server.subjects(INBOX), ["Oldest", "Middle"], "{screen}");
+    assert!(!list(&screen).contains("Newest"), "{screen}");
+}

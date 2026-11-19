@@ -161,10 +161,28 @@ impl Cache {
     }
 
     /// The server moved `id` back out of Trash, under `uid` there; `None`
-    /// when the Message was no longer in Trash, and its row goes.
+    /// when the Message was no longer in Trash, and its row goes. A Delete
+    /// made meanwhile queues it for Trash again, by that `uid`.
     pub fn moved_back(&self, id: i64, uid: Option<u32>) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
+            let state: Option<i64> = transaction
+                .prepare_cached("SELECT state FROM moved WHERE id = ?1")?
+                .query_row([id], |row| row.get(0))
+                .optional()?;
+            if state == Some(IN_TRASH) {
+                match uid {
+                    Some(uid) => transaction
+                        .prepare_cached(
+                            "UPDATE moved SET state = ?2, uid = ?3, trash = NULL,
+                                 trash_uid = NULL WHERE id = ?1",
+                        )?
+                        .execute(params![id, QUEUED, uid])?,
+                    None => transaction.execute("DELETE FROM moved WHERE id = ?1", [id])?,
+                };
+                return transaction.commit();
+            }
+
             if uid.is_some() {
                 transaction
                     .prepare_cached("UPDATE moved SET state = ?2, back_uid = ?3 WHERE id = ?1")?
@@ -204,43 +222,39 @@ impl Cache {
     }
 }
 
-/// One Message of `Cache::delete`; false when it is not cached, or still
-/// on its way back from Trash under a UID the server no longer has.
+/// One Message of `Cache::delete`; false when it is not cached.
 fn delete(
     connection: &Connection,
     batch: i64,
     (folder, uid): (&str, u32),
 ) -> rusqlite::Result<bool> {
-    let returning = connection
-        .prepare_cached(
-            "SELECT 1 FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state IN (?3, ?4)",
-        )?
-        .query_row(params![folder, uid, BACK, CANCELLED], |_| Ok(()))
-        .optional()?;
     let key: Option<(i64, Option<i64>)> = connection
         .prepare_cached("SELECT body_key, thread FROM message WHERE mailbox = ?1 AND uid = ?2")?
         .query_row(params![folder, uid], |row| Ok((row.get(0)?, row.get(1)?)))
         .optional()?;
-    let Some((key, thread)) = key.filter(|_| returning.is_none()) else {
+    let Some((key, thread)) = key else {
         return Ok(false);
     };
 
-    // A row back from Trash is moved by the UID the server gave it there.
-    let back: Option<u32> = connection
+    // An Undo the server has yet to make is itself taken back: the
+    // Message stays in Trash, or goes back once that move is answered.
+    let undone: Option<(i64, i64)> = connection
         .prepare_cached(
-            "SELECT back_uid FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3",
+            "SELECT id, state FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state IN (?3, ?4)",
         )?
-        .query_row(params![folder, uid, RETURNED], |row| row.get(0))
+        .query_row(params![folder, uid, BACK, CANCELLED], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
         .optional()?;
-    connection
-        .prepare_cached("DELETE FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3")?
-        .execute(params![folder, uid, RETURNED])?;
-    connection
-        .prepare_cached(&format!(
-            "INSERT INTO moved (batch, state, mailbox, uid, {ROW})
-             SELECT ?1, ?2, mailbox, ?5, {ROW} FROM message WHERE mailbox = ?3 AND uid = ?4"
-        ))?
-        .execute(params![batch, QUEUED, folder, uid, back.unwrap_or(uid)])?;
+    if let Some((id, state)) = undone {
+        let state = if state == BACK { IN_TRASH } else { QUEUED };
+        connection
+            .prepare_cached("UPDATE moved SET batch = ?2, state = ?3 WHERE id = ?1")?
+            .execute(params![id, batch, state])?;
+    } else {
+        queue(connection, batch, (folder, uid))?;
+    }
+
     // Gmail drops every label of a Message moved to Trash.
     let copies = "(mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL)";
     connection
@@ -259,6 +273,27 @@ fn delete(
     }
 
     Ok(true)
+}
+
+/// Queues the move of `(folder, uid)` to Trash, by the UID the server gave
+/// a row back from Trash.
+fn queue(connection: &Connection, batch: i64, (folder, uid): (&str, u32)) -> rusqlite::Result<()> {
+    let back: Option<u32> = connection
+        .prepare_cached(
+            "SELECT back_uid FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3",
+        )?
+        .query_row(params![folder, uid, RETURNED], |row| row.get(0))
+        .optional()?;
+    connection
+        .prepare_cached("DELETE FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3")?
+        .execute(params![folder, uid, RETURNED])?;
+    connection
+        .prepare_cached(&format!(
+            "INSERT INTO moved (batch, state, mailbox, uid, {ROW})
+             SELECT ?1, ?2, mailbox, ?5, {ROW} FROM message WHERE mailbox = ?3 AND uid = ?4"
+        ))?
+        .execute(params![batch, QUEUED, folder, uid, back.unwrap_or(uid)])?;
+    Ok(())
 }
 
 /// Writes the row `moved` kept for `id` back into its Folder, and returns
