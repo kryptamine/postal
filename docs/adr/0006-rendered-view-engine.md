@@ -11,14 +11,16 @@ one key away.
 [litehtml](https://github.com/litehtml/litehtml) (BSD-3-Clause, with gumbo,
 Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
-buffer of cells: `cell_grid.cpp` draws, `snap.cpp` snaps the styles before
-layout, `image_labels.cpp` decides each image and `link_names.cpp` names a
-bare picture link, `picture_boxes.cpp` fits or drops the boxes round
-pictures, `buttons.cpp` and `titles.cpp` collapse buttons and cover bands
-with `collapse.cpp`, `contents.cpp` gathers what each element shows for
-those passes in one walk, `loosen.cpp`, `stacking.cpp` and `word_breaks.cpp`
-make a mail too wide fit, and `colour.cpp`, `text.cpp` and `dom.cpp` hold
-the colour, cell-width and element helpers.
+buffer of cells: `cell_grid.cpp` draws into the cells of `grid.cpp`,
+`snap.cpp` snaps the styles before layout and `alignment.cpp` sets text
+left, `image_labels.cpp` decides each image, `alt_names.cpp` names it and
+`link_names.cpp` names a bare picture link, `picture_boxes.cpp` fits or
+drops the boxes round pictures, `buttons.cpp` and `titles.cpp` collapse
+buttons and cover bands with `collapse.cpp`, `contents.cpp` gathers what
+each element shows for those passes in one walk, `loosen.cpp`,
+`stacking.cpp` and `word_breaks.cpp` make a mail too wide fit, and
+`colour.cpp`, `text.cpp` and `dom.cpp` hold the colour, cell-width and
+element helpers.
 
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
   is one row high. A 600 px mail is 75 columns. `font-size` never changes the
@@ -193,7 +195,8 @@ in place moves until it reads (WCAG 4.5:1); a grey border on the terminal's
 background is drawn dim like Postal's own.
 
 Text on the terminal's background has a role instead of the mail's colour
-(`src/palette.rs`), so every mail reads in the same ink:
+(`src/palette.rs`, applied by `src/looks.rs`), so every mail reads in the
+same ink:
 
 - A grey, channels under 40 apart, is ordinary text and takes the
   terminal's fg when it is set off from what the mail put under it as well
@@ -263,7 +266,7 @@ tried: it framed chart bars and footer gutters and improved nothing.
 
 Mail spaces its blocks with padding, margins and empty cells, rows of
 nothing each. After the frames are drawn, a run of equal rows that show
-only the sides of the frames they cross becomes one (`src/spacer_rows.rs`):
+only the sides of the frames they cross becomes one (`src/rendered_view.rs`):
 one blank row sets two blocks apart as well as five. A row with a fill left
 on it stays, since those rows are a drawing. On 539 cached mails at 74
 columns this cut the rows from 41594 to 34668.

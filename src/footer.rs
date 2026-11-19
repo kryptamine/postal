@@ -17,11 +17,8 @@ pub fn mute(lines: &mut [StyledLine]) {
         return;
     };
 
-    let blank = |line: &StyledLine| line.text.chars().all(|c| c == ' ' || c == '│');
-    let block = lines[..marker]
-        .iter()
-        .rposition(blank)
-        .map_or(0, |row| row + 1);
+    let above = lines[..marker].iter().rposition(StyledLine::spacer);
+    let block = above.map_or(0, |row| row + 1);
     // A block that starts higher up is the mail's body with the line in it.
     let start = if block < tail { marker } else { block };
     for line in &mut lines[start..] {

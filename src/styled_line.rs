@@ -102,6 +102,13 @@ impl StyledLine {
         self.trim_end();
     }
 
+    /// Shows nothing but the sides of the frames it crosses: no word, and
+    /// no fill, which would make the row part of a drawing.
+    pub fn spacer(&self) -> bool {
+        let blank = |c| c == ' ' || c == '│';
+        self.text.chars().all(blank) && self.runs.iter().all(|run| run.paint.bg.is_none())
+    }
+
     /// The text in runs, in order.
     pub fn segments(&self) -> impl Iterator<Item = Segment<'_>> {
         let mut start = 0;

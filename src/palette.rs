@@ -1,9 +1,10 @@
 use crate::{
     cell_grid::GREY_SPREAD,
-    mail_colours::INK,
     rgb::{Rgb, WHITE},
 };
 
+/// A colour this dark on a light page reads as black: WCAG luminance.
+const INK: f32 = 0.12;
 /// A grey this well set off from what it lies on is ordinary text even in a
 /// mail that sets most of its text lighter: WCAG's enhanced contrast.
 const PLAIN: f32 = 7.0;

@@ -4,8 +4,6 @@ use crate::{
     rgb::{BLACK, Rgb, WHITE},
 };
 
-/// Text this dark on the page is its ordinary text: the terminal's own fg.
-pub const INK: f32 = 0.12;
 /// The least contrast with what is under it, as WCAG ratios: a block must
 /// stand out from the terminal, text must read, a line must show.
 const BLOCK: f32 = 1.8;
@@ -37,15 +35,10 @@ impl MailColours {
         Some(apart(bg, self.terminal, BLOCK))
     }
 
-    /// The fg of text over `bg`, which `background` gave; `None` for the
-    /// terminal's own.
-    pub fn text(self, fg: Option<Rgb>, bg: Option<Rgb>) -> Option<Rgb> {
-        let fg = fg?;
-        match bg {
-            None if fg.luminance() < INK => None,
-            None => Some(apart(fg, self.terminal, TEXT)),
-            Some(bg) => Some(apart(fg, bg, TEXT)),
-        }
+    /// `fg` moved until it reads over `bg`, which `background` gave: `None`
+    /// is the terminal's own.
+    pub fn text(self, fg: Rgb, bg: Option<Rgb>) -> Rgb {
+        apart(fg, bg.unwrap_or(self.terminal), TEXT)
     }
 
     /// A grey border on the terminal's background is drawn as Postal draws
