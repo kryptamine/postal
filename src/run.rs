@@ -167,7 +167,7 @@ pub async fn run(
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
-                    step @ (Step::Folders | Step::Show(_) | Step::Thread(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
+                    step @ (Step::Folders | Step::Show(_) | Step::Reveal(..) | Step::Search | Step::Thread(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
@@ -312,7 +312,7 @@ fn apply(
 ) -> Result<(), Error> {
     match update {
         Update::Inbox => {
-            let (thread, selected) = (view.selected_key(), view.selected_uid());
+            let (thread, selected) = (view.selected_key(), view.selected_body());
             let stack: Vec<i64> = match screen.reading {
                 Some(_) => view.stack().map(|m| m.body_key).collect(),
                 None => Vec::new(),
@@ -322,7 +322,7 @@ fn apply(
             // The labels belong to the Messages they were laid out on, and
             // Reading to the Thread it was opened on; a Query being typed stays.
             if screen.reading.is_none() {
-                if view.selected_uid() != selected {
+                if view.selected_body() != selected {
                     screen.hints = None;
                 }
             } else if view.selected_key() != thread {
@@ -446,6 +446,9 @@ enum Step {
     Links,
     Folders,
     Show(Folder),
+    /// A Search ended on a Thread of this Folder, not the shown one.
+    Reveal(Arc<str>, Key),
+    Search,
     /// The Messages of this Gmail Thread in other Folders are asked for.
     Thread(u64),
     Browse(Arc<str>),
@@ -532,11 +535,19 @@ fn act(
             screen.help = true;
             Step::Stay
         }
-        Some(
-            action @ (Action::Search | Action::Type(_) | Action::Erase | Action::EndSearch { .. }),
-        ) => {
-            search(action, view, screen);
+        Some(Action::Search) => Step::Search,
+        Some(Action::Type(c)) => {
+            view.edit_query(|search| search.push(c));
             Step::Stay
+        }
+        Some(Action::Erase) => {
+            view.edit_query(Search::pop);
+            Step::Stay
+        }
+        Some(Action::EndSearch { restore }) => {
+            let elsewhere = view.end_search(restore);
+            screen.list();
+            elsewhere.map_or(Step::Stay, |(folder, key)| Step::Reveal(folder, key))
         }
         Some(Action::Move(movement)) => {
             view.apply(movement);
@@ -562,8 +573,10 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Option<u64> {
             let reading = Reading::open(view.stack())?;
             screen.mode = Mode::Reading;
             screen.reading = Some(reading);
-            // Gmail keeps Trash and Spam out of All Mail, and their Threads apart.
-            let apart = matches!(view.folder.role, Some(Role::Trash | Role::Spam));
+            // Gmail keeps Trash and Spam out of All Mail, and their Threads
+            // apart; a Search never shows theirs.
+            let apart =
+                view.search.is_none() && matches!(view.folder.role, Some(Role::Trash | Role::Spam));
             if let Some(Key::Gmail(id)) = view.selected_key()
                 && !apart
             {
@@ -623,8 +636,9 @@ fn switch(
     Ok(true)
 }
 
-/// Opens the Folder Picker as the Cache last saw the Folders, or shows the
-/// Folder picked, asking the sync connection to follow.
+/// Opens the Folder Picker as the Cache last saw the Folders, starts a
+/// Search, or shows the Folder picked or found, asking the sync connection
+/// to follow.
 fn steer(
     step: Step,
     view: &mut InboxView,
@@ -645,7 +659,24 @@ fn steer(
 
             Ask::Show(Arc::clone(&view.folder.name))
         }
+        Step::Reveal(name, key) => {
+            let folders = cache.folders().map_err(Error::Cache)?;
+            let folder = folders.into_iter().find(|f| f.name == name);
+            let switched = switch(
+                view,
+                screen,
+                cache,
+                folder.unwrap_or_else(|| Folder::new(&name, None)),
+            )?;
+            view.select(key);
+            if !switched {
+                return Ok(());
+            }
+
+            Ask::Show(Arc::clone(&view.folder.name))
+        }
         Step::Thread(id) => Ask::Thread(id),
+        Step::Search => return start_search(view, screen, cache),
         _ => return Ok(()),
     };
 
@@ -663,17 +694,17 @@ fn relist(screen: &mut Screen, view: &InboxView, cache: &Cache) -> Result<(), Er
     Ok(())
 }
 
-fn search(action: Action, view: &mut InboxView, screen: &mut Screen) {
-    match action {
-        Action::Search if view.start_search() => screen.mode = Mode::Query,
-        Action::Type(c) => view.edit_query(|search| search.push(c)),
-        Action::Erase => view.edit_query(Search::pop),
-        Action::EndSearch { restore } => {
-            view.end_search(restore);
-            screen.list();
-        }
-        _ => {}
+/// Types the Query of a new Search over the whole Cache, or of the one under way.
+fn start_search(view: &mut InboxView, screen: &mut Screen, cache: &Cache) -> Result<(), Error> {
+    let shown = Arc::clone(&view.folder.name);
+    if view
+        .start_search(|| cache.everywhere(&shown))
+        .map_err(Error::Cache)?
+    {
+        screen.mode = Mode::Query;
     }
+
+    Ok(())
 }
 
 /// Enters hint mode on the links the Preview window shows, or says there
@@ -787,6 +818,10 @@ fn show(view: &mut InboxView, cache: &Cache, limit: Option<usize>) -> Result<(),
         .map_err(Error::Cache)?
     {
         view.show(inbox);
+    }
+
+    if view.search.is_some() {
+        view.research(cache.everywhere(&view.folder.name).map_err(Error::Cache)?);
     }
 
     Ok(())

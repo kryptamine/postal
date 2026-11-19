@@ -33,6 +33,7 @@ mod keychain;
 mod keymap;
 mod layout;
 mod link_hints;
+mod listing;
 mod litehtml;
 mod logging;
 mod login;

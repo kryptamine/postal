@@ -6,15 +6,16 @@ use crate::message::Message;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
     Gmail(u64),
-    /// A Message with no thread ID, a Thread of its own.
-    Lone(u32),
+    /// A Message with no thread ID, a Thread of its own, by body key: UIDs
+    /// repeat across Folders.
+    Lone(i64),
 }
 
 impl Key {
     pub const fn of(message: &Message) -> Self {
         match message.thread {
             Some(id) => Self::Gmail(id),
-            None => Self::Lone(message.uid),
+            None => Self::Lone(message.body_key),
         }
     }
 }

@@ -65,12 +65,12 @@ impl StatefulWidget for MessageList<'_> {
         block.render(area, buf);
         let label = view.folder.label();
         let mut text = StackStr::<160>::new();
-        let Some(messages) = view.messages.as_deref() else {
+        let Some(list) = &view.list else {
             let loading = write!(text, "Loading {label}…").map_or("Loading…", |()| text.as_str());
             return centred(loading, inner, buf);
         };
 
-        if messages.is_empty() {
+        if list.messages.is_empty() && view.search.is_none() {
             let empty = write!(text, "{label} is empty").map_or("empty", |()| text.as_str());
             return centred(empty, inner, buf);
         }
@@ -111,10 +111,6 @@ fn draw_rows(
     area: Rect,
     buf: &mut Buffer,
 ) {
-    let Some(messages) = view.messages.as_deref() else {
-        return;
-    };
-
     let inner = area.inner(Margin::new(1, 1));
     let mut y = inner.y;
     for row in view.offset..view.rows() {
@@ -133,18 +129,17 @@ fn draw_rows(
             name_group(cards.theme, buf, area, y - 1, group);
         }
 
-        let index = view.search.as_ref().map_or(Some(row), |s| s.row(row));
-        let Some(thread) = index.and_then(|i| view.threads.get(i)) else {
+        let selected = row == view.selected;
+        let Some((messages, thread, matched)) = view.card(row) else {
             continue;
         };
 
-        let matched = view.search.as_mut().zip(index).map(|(s, i)| s.matched(i));
         let card = Rect::new(inner.x, y, inner.width, CARD_HEIGHT).intersection(inner);
         y += CARD_HEIGHT;
         let shown = Shown {
             messages,
             thread,
-            selected: row == view.selected,
+            selected,
         };
 
         cards.draw(&shown, card, buf);

@@ -1,6 +1,8 @@
 use std::{
     cell::{Cell, RefCell},
+    collections::HashSet,
     path::Path,
+    sync::Arc,
 };
 
 use chrono::{DateTime, FixedOffset, Offset, Utc};
@@ -75,8 +77,14 @@ impl Cache {
              FROM message WHERE mailbox = ?1
              ORDER BY received DESC, uid DESC LIMIT ?2",
         )?;
+        let name: Arc<str> = folder.into();
         let messages = statement
-            .query_map(params![folder, limit], message)?
+            .query_map(params![folder, limit], |row| {
+                Ok(Message {
+                    folder: Some(Arc::clone(&name)),
+                    ..message(row)?
+                })
+            })?
             .collect::<Result<_, _>>()?;
         // Only those whose body is cached: that body comes with the Thread alone.
         let mut statement = connection.prepare_cached(
@@ -88,17 +96,60 @@ impl Cache {
              ORDER BY t.received, t.key",
         )?;
         let elsewhere = statement
-            .query_map([folder], |row| {
-                Ok(Message {
-                    elsewhere: true,
-                    ..message(row)?
-                })
-            })?
+            .query_map([folder], message)?
             .collect::<Result<_, _>>()?;
         Ok(Some(Inbox {
             messages,
             elsewhere,
         }))
+    }
+
+    /// Every cached Folder's Messages but Trash's and Spam's, newest first,
+    /// each once: the copy in `shown` wins, else the first in Folder order.
+    /// Their Threads' Messages found elsewhere come as in `inbox`.
+    pub fn everywhere(&self, shown: &str) -> Result<Inbox, Error> {
+        let mut folders = self.folders()?;
+        folders.retain(|f| !matches!(f.role, Some(Role::Trash | Role::Spam)));
+        folders.sort_by_key(|f| *f.name != *shown);
+        let connection = self.connection.borrow();
+        let mut statement = connection.prepare_cached(
+            "SELECT uid, body_key, received, received_offset, unread, sender, subject,
+                    coalesce(snippet, ''), thread, from_me
+             FROM message WHERE mailbox = ?1",
+        )?;
+        let (mut messages, mut keys) = (Vec::new(), HashSet::new());
+        for folder in &folders {
+            for row in statement.query_map([&*folder.name], message)? {
+                let row = row?;
+                if keys.insert(row.body_key) {
+                    messages.push(Message {
+                        folder: Some(Arc::clone(&folder.name)),
+                        ..row
+                    });
+                }
+            }
+        }
+
+        messages.sort_unstable_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
+        let threads: HashSet<u64> = messages.iter().filter_map(|m| m.thread).collect();
+        let mut statement = connection.prepare_cached(
+            "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
+                    t.snippet, t.thread, t.from_me
+             FROM thread_message t JOIN body ON body.key = t.key
+             ORDER BY t.received, t.key",
+        )?;
+        let mut elsewhere = Vec::new();
+        for row in statement.query_map([], message)? {
+            let row = row?;
+            if row.thread.is_some_and(|t| threads.contains(&t)) && !keys.contains(&row.body_key) {
+                elsewhere.push(row);
+            }
+        }
+
+        Ok(Inbox {
+            messages,
+            elsewhere,
+        })
     }
 
     /// Replaces what is cached of Gmail's Thread `id` from other Folders
@@ -496,7 +547,7 @@ fn message(row: &Row<'_>) -> rusqlite::Result<Message> {
         snippet: row.get(7)?,
         thread: row.get::<_, Option<i64>>(8)?.map(i64::cast_unsigned),
         from_me: row.get(9)?,
-        elsewhere: false,
+        folder: None,
     })
 }
 

@@ -34,7 +34,7 @@ impl OlderPages {
     /// Does not allocate unless it asks. A Search never asks: it matches
     /// only the Cache.
     pub fn want(&mut self, view: &InboxView) {
-        let Some(messages) = view.messages.as_deref() else {
+        let Some(list) = &view.list else {
             return;
         };
 
@@ -43,7 +43,7 @@ impl OlderPages {
             return;
         }
 
-        let Some(oldest) = messages.iter().map(|m| m.uid).min() else {
+        let Some(oldest) = list.messages.iter().map(|m| m.uid).min() else {
             return;
         };
 

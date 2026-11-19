@@ -6,6 +6,7 @@ use nucleo_matcher::{
 };
 
 use crate::{
+    listing::Listing,
     matched::Matched,
     message::Message,
     thread::{self as threads, Key, Thread},
@@ -17,9 +18,11 @@ const MIN_CHUNK: usize = 1024;
 /// Between two sender names on a card, and in its haystack.
 pub const SENDER_GAP: &str = ", ";
 
-/// A Search over the Message List: the Query and the Threads matching it.
+/// A Search over every cached Folder: the Query and the Threads matching it.
 pub struct Search {
     query: String,
+    /// What is searched, from every Folder but Trash and Spam.
+    listing: Listing,
     pattern: Pattern,
     matcher: Matcher,
     /// Each Message's sender, subject and Snippet, one per Message.
@@ -39,9 +42,10 @@ pub struct Search {
 }
 
 impl Search {
-    pub fn new(messages: &[Message], threads: &[Thread]) -> Self {
+    pub fn new(listing: Listing) -> Self {
         let mut search = Self {
             query: String::new(),
+            listing,
             pattern: Pattern::default(),
             matcher: Matcher::new(Config::DEFAULT),
             haystacks: Vec::new(),
@@ -53,17 +57,22 @@ impl Search {
             units: Vec::new(),
         };
 
-        search.index(messages, threads);
+        search.index();
         search
+    }
+
+    pub const fn listing(&self) -> &Listing {
+        &self.listing
     }
 
     pub fn query(&self) -> &str {
         &self.query
     }
 
-    /// Matches the Query again over the new full list.
-    pub fn reload(&mut self, messages: &[Message], threads: &[Thread]) {
-        self.index(messages, threads);
+    /// Matches the Query again over what the Cache holds now.
+    pub fn reload(&mut self, listing: Listing) {
+        self.listing = listing;
+        self.index();
         self.rematch(false);
     }
 
@@ -100,15 +109,21 @@ impl Search {
             .map_or_else(all, |hits| hits.iter().position(|&i| i == index))
     }
 
-    /// The matched units of Thread `index`'s card; none for an empty Query,
-    /// or when the match is in a Message the card does not show. Does not
-    /// allocate once the buffer has grown.
-    pub fn matched(&mut self, index: usize) -> Matched<'_> {
-        self.units.clear();
-        let Some(card) = self.cards.get(index) else {
-            return Matched::new(&[], true);
-        };
+    /// The Messages and Thread of the card at `row`, with its matched units:
+    /// none for an empty Query, or when the match is in a Message the card
+    /// does not show. Does not allocate once the buffer has grown.
+    pub fn card(&mut self, row: usize) -> Option<(&[Message], &Thread, Matched<'_>)> {
+        let index = self.row(row)?;
+        let ascii = self.highlight(index)?;
+        let thread = self.listing.threads.get(index)?;
+        let matched = Matched::new(&self.units, ascii);
+        Some((&self.listing.messages, thread, matched))
+    }
 
+    /// Fills `units` for Thread `index`'s card; whether that card is ASCII.
+    fn highlight(&mut self, index: usize) -> Option<bool> {
+        self.units.clear();
+        let card = self.cards.get(index)?;
         if self.hits.is_some() {
             let card = card.slice(..);
             // On a miss, the words before the one that missed have left
@@ -125,10 +140,13 @@ impl Search {
             self.units.dedup();
         }
 
-        Matched::new(&self.units, matches!(card, Utf32String::Ascii(_)))
+        Some(matches!(card, Utf32String::Ascii(_)))
     }
 
-    fn index(&mut self, messages: &[Message], threads: &[Thread]) {
+    fn index(&mut self) {
+        let Listing {
+            messages, threads, ..
+        } = &self.listing;
         self.haystacks = messages
             .iter()
             .map(|m| Utf32String::from(format!("{}\n{}\n{}", m.sender, m.subject, m.snippet)))

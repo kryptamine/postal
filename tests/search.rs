@@ -1,5 +1,5 @@
-//! Search: `/` narrows the Message List to the Messages a fuzzy Query
-//! matches, best match first, typed in the hint line.
+//! Search: `/` narrows the Message List to the Messages of every cached
+//! Folder a fuzzy Query matches, best match first, typed in the hint line.
 
 #![allow(
     clippy::unwrap_used,
@@ -16,6 +16,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    picker::{picked, picker},
 };
 use termlens::{Color, Key, Screen, Terminal};
 
@@ -324,5 +325,125 @@ fn a_new_message_that_matches_joins_the_results_and_the_selection_stays() {
     let screen = t.snapshot_after(|s| !list(s).contains("Invoice")).unwrap();
     assert!(hint_line(&screen).contains("/pays"), "{screen}");
     assert_eq!(selected_subject(&screen).as_deref(), Some("Payslip"));
+    quit(t);
+}
+
+/// Shows the Folder the Folder Picker matches to `query`, and waits until
+/// its rows are in.
+fn show(t: &mut Terminal, query: &str, title: &str, row: &str) {
+    t.send(Key::Char('f')).unwrap();
+    t.wait_until(|s| !picker(s).is_empty()).unwrap();
+    t.send_str(query).unwrap();
+    t.snapshot_after(|s| {
+        picker(s).first().is_some_and(|q| q.ends_with(query)) && !picked(s).is_empty()
+    })
+    .unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.row_text(0).contains(title) && list(s).contains(row))
+        .unwrap();
+}
+
+/// Gmail, with each Folder opened once so the Cache holds it: Sent holds a
+/// booking too far down to be fetched, Trash a refund, and All Mail a copy
+/// of every Message but the refund.
+fn gmail(server: &FakeImap, home: &Home) -> Terminal {
+    server.add_folder(
+        "[Gmail]/Sent Mail",
+        &["\\Sent"],
+        vec![
+            message("Me", "Flight booking", "2024-01-02T09:00:00Z", "Seat 14A"),
+            message("Me", "Dentist", "2024-01-03T09:00:00Z", "Tuesday"),
+            message("Me", "Gym", "2024-01-05T09:00:00Z", "Mondays"),
+            message("Me", "Rent", "2024-01-06T09:00:00Z", "Paid"),
+        ],
+    );
+    server.add_folder(
+        "[Gmail]/Trash",
+        &["\\Trash"],
+        vec![message(
+            "Eve",
+            "Flight refund",
+            "2024-01-04T09:00:00Z",
+            "Sorry",
+        )],
+    );
+    server.add_all_mail("[Gmail]/All Mail");
+    let mut t = ready(server, home);
+    show(&mut t, "sent", " Sent · ", "Rent");
+    show(&mut t, "trash", " Trash · ", "Flight refund");
+    show(&mut t, "all", " All Mail · ", "Flight booking");
+    show(&mut t, "inbox", " Inbox · ", "Holiday photos");
+    t
+}
+
+fn body_cached(home: &Home, subject: &str) -> bool {
+    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
+    cache
+        .query_row(
+            "SELECT count(*) FROM body JOIN message ON message.body_key = body.key
+             WHERE message.subject = ?1",
+            [subject],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap()
+        > 0
+}
+
+#[test]
+fn a_search_finds_messages_in_every_cached_folder_but_trash() {
+    let server = FakeImap::start(messages());
+    let home = Home::for_server(&server);
+    let mut t = gmail(&server, &home);
+
+    assert!(!body_cached(&home, "Flight booking"));
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("flight").unwrap();
+    // Its body is asked of Sent, not of the shown Inbox.
+    let screen = t.snapshot_after(|s| s.contains("Seat 14A")).unwrap();
+    assert_eq!(selected_subject(&screen).as_deref(), Some("Flight booking"));
+    assert!(!list(&screen).contains("Flight refund"), "{screen}");
+    assert_eq!(
+        list(&screen).matches("Flight booking").count(),
+        1,
+        "{screen}"
+    );
+
+    // A Message in the Inbox and All Mail is one match.
+    for _ in 0.."flight".len() {
+        t.send(Key::Backspace).unwrap();
+    }
+
+    t.send_str("1042").unwrap();
+    let screen = t
+        .snapshot_after(|s| !list(s).contains("Holiday") && list(s).contains("Invoice 1042"))
+        .unwrap();
+    assert_eq!(list(&screen).matches("Invoice 1042").count(), 1, "{screen}");
+    quit(t);
+}
+
+#[test]
+fn ending_a_search_on_a_match_elsewhere_shows_its_folder() {
+    let server = FakeImap::start(messages());
+    let home = Home::for_server(&server);
+    let mut t = gmail(&server, &home);
+
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("seat").unwrap();
+    wait_selected(&mut t, "Flight booking");
+    t.send(Key::Enter).unwrap();
+    t.send(Key::Esc).unwrap();
+    let screen = t
+        .snapshot_after(|s| s.row_text(0).contains(" Sent · ") && list(s).contains("Rent"))
+        .unwrap();
+    assert_eq!(selected_subject(&screen).as_deref(), Some("Flight booking"));
+
+    // Esc while typing goes back to where `/` was pressed instead.
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("1042").unwrap();
+    wait_selected(&mut t, "Invoice 1042");
+    t.send(Key::Esc).unwrap();
+    let screen = t.snapshot_after(|s| list(s).contains("Rent")).unwrap();
+    assert!(screen.row_text(0).contains(" Sent · "), "{screen}");
+    assert_eq!(selected_subject(&screen).as_deref(), Some("Flight booking"));
     quit(t);
 }

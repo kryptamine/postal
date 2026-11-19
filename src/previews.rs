@@ -115,8 +115,8 @@ impl Previews {
             return Body::Rendered(preview);
         }
 
-        // A Message from elsewhere is never asked for: its UID is none of ours.
-        if message.elsewhere {
+        // What is known by UID is of `folder` alone.
+        if !self.holds(message) {
             return Body::Loading;
         }
 
@@ -156,7 +156,8 @@ impl Previews {
         let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
         let rows = std::iter::once(selected).chain(around.filter(|&i| i != selected));
         let wanted = rows.filter_map(|index| Some((view.row(index)?, index == selected)));
-        self.ready(cache, view, wanted, width)?;
+        let folder = view.selected_message().and_then(|m| m.folder.as_ref());
+        self.ready(cache, (view, folder), wanted, width)?;
         if let Some(message) = view.selected_message() {
             self.ready_header(message);
         }
@@ -174,21 +175,26 @@ impl Previews {
         width: u16,
     ) -> Result<(), cache::Error> {
         let stack = view.stack().filter(|m| unfolded(m.body_key));
-        let wanted = stack.map(|m| (m, m.body_key == cursor));
-        self.ready(cache, view, wanted, width)
+        let wanted = stack.clone().map(|m| (m, m.body_key == cursor));
+        let at_cursor = stack
+            .filter(|m| m.body_key == cursor)
+            .find_map(|m| m.folder.as_ref());
+        self.ready(cache, (view, at_cursor), wanted, width)
     }
 
     /// Renders each `(message, selected)` whose body is cached and asks the
-    /// server for the rest. When all are rendered already this does not allocate.
+    /// server in `folder` for the rest of that Folder's; the shown one when
+    /// `None`. When all are rendered already this does not allocate.
     fn ready<'m>(
         &mut self,
         cache: &Cache,
-        view: &InboxView,
+        (view, folder): (&InboxView, Option<&Arc<str>>),
         wanted: impl Iterator<Item = (&'m Message, bool)>,
         width: u16,
     ) -> Result<(), cache::Error> {
-        if self.folder != view.folder.name {
-            self.switch(&view.folder.name);
+        let folder = folder.unwrap_or(&view.folder.name);
+        if self.folder != *folder {
+            self.switch(folder);
         }
 
         let mut request = BodyRequest {
@@ -204,15 +210,16 @@ impl Previews {
                 view: view.html,
             };
 
+            let here = self.holds(message);
             if self.rendered.touch(key)
                 || self.rendering.contains(&key)
-                || (!message.elsewhere && self.unavailable(message.uid))
+                || (here && self.unavailable(message.uid))
             {
                 continue;
             }
 
             // A body on its way is not in the Cache yet.
-            let body = if !message.elsewhere && self.fetching.contains(&message.uid) {
+            let body = if here && self.fetching.contains(&message.uid) {
                 None
             } else {
                 cache.body(message.body_key)?
@@ -220,8 +227,8 @@ impl Previews {
 
             match body {
                 Some(body) => self.render(key, body, message),
-                // It came with the Thread, or does not come at all.
-                None if message.elsewhere => {}
+                // It came with the Thread, or comes once its Folder is asked.
+                None if !here => {}
                 None if self.link == Link::Live => {
                     if selected {
                         request.selected = Some(message.uid);
@@ -249,6 +256,11 @@ impl Previews {
         self.offline.clear();
         self.refused.clear();
         self.header = None;
+    }
+
+    /// Whether `message`'s UID is one of `folder`'s.
+    fn holds(&self, message: &Message) -> bool {
+        message.folder.as_deref() == Some(&*self.folder)
     }
 
     /// Whether the body of `uid` cannot come for now.
