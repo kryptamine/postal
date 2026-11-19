@@ -31,7 +31,7 @@ size: 120x40  cursor: hidden
 │                                        ││ │┌───────────────────────────────────────────────────────────────────────┐ │
 │                                        ││ ││  Never share your PIN. We will never ask for it by email.             │ │
 │                                        ││ │└───────────────────────────────────────────────────────────────────────┘ │
-│                                        ││ Bank logo                                                                  │
+│                                        ││ Bank                                                                       │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
@@ -73,7 +73,7 @@ styles:
 25: 0 dim; 41-42 dim; 44 fg=#b08403; 45-117 dim; 119 dim
 26: 0 dim; 41-42 dim; 44 fg=#b08403; 45-47 dim; 48-116 fg=#5f6368; 117 dim; 119 dim
 27: 0 dim; 41-42 dim; 44 fg=#b08403; 45-117 dim; 119 dim
-28: 0 dim; 41-42 dim; 44-52 dim italic; 119 dim
+28: 0 dim; 41-42 dim; 44-47 dim italic; 119 dim
 29: 0 dim; 41-42 dim; 119 dim
 30: 0 dim; 41-42 dim; 119 dim
 31: 0 dim; 41-42 dim; 119 dim

@@ -6,6 +6,8 @@
 #include "text.h"
 
 #include <algorithm>
+#include <cctype>
+#include <iterator>
 #include <set>
 #include <utility>
 
@@ -17,6 +19,35 @@ namespace
 {
 // An alt this long is a title rather than a name.
 const int TITLE_CELLS = 16;
+
+// A link's own picture, a badge, may grow to this to show its whole alt.
+const int BADGE_CELLS = 32;
+
+// Nouns an alt names the picture by, where it should say what it shows.
+const char* const PICTURE_NOUNS[] = {"icon", "image", "img", "logo", "picture", "photo", "banner"};
+const char* const ARTICLES[]      = {"a", "an", "the", "some"};
+
+std::string lowered(std::string s)
+{
+    for(auto& ch : s) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+template <size_t N> bool among(const std::string& word, const char* const (&words)[N])
+{
+    return std::find(std::begin(words), std::end(words), lowered(word)) != std::end(words);
+}
+
+// `alt` without the noun at its end that only calls it a picture:
+// `Messaging icon` names `Messaging`, and `Some Image` names nothing.
+std::string named(const std::string& alt)
+{
+    size_t      cut  = alt.find_last_of(' ');
+    std::string last = alt.substr(cut == std::string::npos ? 0 : cut + 1);
+    if(!among(last, PICTURE_NOUNS)) return alt;
+    std::string rest = cut == std::string::npos ? "" : alt.substr(0, cut);
+    return rest.find(' ') == std::string::npos && among(rest, ARTICLES) ? "" : rest;
+}
 
 float px_or(const css_length& l, float none)
 {
@@ -108,12 +139,17 @@ bool repeats_nearby(const element::ptr& el, const std::string& alt)
     return false;
 }
 
+bool past_pane(const element::ptr& el, int cols)
+{
+    return float(el->get_placement().right()) > float(cols) * CW + 0.5f;
+}
+
 // The label spills past a block around it, over its neighbours or under a
 // clip, as in a cell of fixed width, or past the pane, widening its table.
 bool spills(const element::ptr& el, int cols)
 {
     position p = el->get_placement();
-    if(float(p.right()) > float(cols) * CW + 0.5f) return true;
+    if(past_pane(el, cols)) return true;
     for(auto a = el->parent(); a; a = a->parent())
     {
         if(!a->get_render_item() || a->css().get_display() == display_inline) continue;
@@ -147,7 +183,7 @@ std::string ImageLabels::text_for(const element::ptr& el, bool icon, const eleme
     const css_properties& css = el->css();
     float       w = px_or(css.get_width(), -1), h = px_or(css.get_height(), -1);
     const char* alt   = el->get_attr("alt");
-    std::string label = squeezed(alt ? alt : "");
+    std::string label = named(squeezed(alt ? alt : ""));
     bool invisible    = (w >= 0 && w < CW) || (h >= 0 && h <= 2);
     // An icon decorates the text beside it, and its alt rarely fits it.
     if(invisible || (icon && !sole) || repeats_nearby(el, label)) return "";
@@ -173,10 +209,12 @@ void ImageLabels::label_one(const element::ptr& el)
 
     // An icon left is all its link shows, so its alt names the link, and
     // cut it names nothing: it takes its whole alt, and a column after it.
-    int want = cells(label.c_str());
-    int own  = w >= 0 ? int(w / CW) : cols;
-    if(icon && want > own && w >= 0) grown.push_back({el, w});
-    int shown = std::min(want, icon && w >= 0 ? std::max(own, 16) : own);
+    // So does a badge, a larger picture that is all its link shows.
+    int  want  = cells(label.c_str());
+    int  own   = w >= 0 ? int(w / CW) : cols;
+    bool grows = w >= 0 && (icon || sole);
+    if(grows && want > own) grown.push_back({el, w});
+    int shown = std::min(want, grows ? std::max(own, icon ? TITLE_CELLS : BADGE_CELLS) : own);
     if(shown <= 0)
     {
         css.set_display(display_none);
@@ -199,11 +237,16 @@ bool ImageLabels::shrink_spilt()
 {
     // One row of icons pushes the next off, so a table's grown icons go back
     // to their own width together.
+    // Past the pane, the tables before it pushed it there: every one goes.
     std::vector<element::ptr> spilt;
+    bool                      all = false;
     for(auto& g : grown)
+    {
         if(spills(g.el, cols)) spilt.push_back(table_of(g.el));
+        all = all || past_pane(g.el, cols);
+    }
     for(auto& g : grown)
-        if(std::find(spilt.begin(), spilt.end(), table_of(g.el)) != spilt.end())
+        if(all || std::find(spilt.begin(), spilt.end(), table_of(g.el)) != spilt.end())
             g.el->css().set_width(css_length(columns(g.own_px), css_units_px));
     return !spilt.empty();
 }

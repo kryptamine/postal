@@ -50,10 +50,16 @@ the colour, cell-width and element helpers.
   shape and gets no frame of its own; with it gone, a card's light fill and
   a band at its top were framed apart, one frame cutting through the other.
 - An icon label that is all its link shows takes its whole `alt`, up to 16
-  columns, and a column after it: cut, `Insta…` named nothing. After layout,
-  a grown label that spills past a block around it or past the pane goes
-  back to the icon's width, with every grown one in its table, and the
-  document is laid out again.
+  columns, and a column after it: cut, `Insta…` named nothing. A larger
+  picture that is all its link shows, a store badge, takes up to 32. After
+  layout, a grown label that spills past a block around it goes back to the
+  picture's width, with every grown one in its table, and one past the pane
+  takes every grown label back: the tables before it pushed it there. The
+  document is then laid out again.
+- An `alt` loses the noun at its end that only calls it a picture (`icon`,
+  `image`, `img`, `logo`, `picture`, `photo`, `banner`): `Messaging icon`
+  names `Messaging`. With nothing left but an article, as in `Some Image`
+  or `Logo`, the image has no `alt`.
 - Images are never fetched: remote ones are a tracking risk and add little to
   reading. Before layout each image either goes (`display: none`) or becomes
   a label one row high, its `alt` cut with `…` to the image's declared width.
