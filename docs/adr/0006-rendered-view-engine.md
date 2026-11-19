@@ -293,6 +293,12 @@ Release build, Apple M2 Max, 76 columns, median of 10, spawn included (about
 | Real newsletter | 95 KB | 43 ms |
 | Synthetic newsletter | 391 KB | 171 ms |
 
+A mail that does not fit is parsed and laid out twice, and one with a
+centred paragraph is laid out twice: over 539 cached mails the second
+passes added 8% to the total, left the median at 15 ms and moved the ninth
+decile from 45 to 59 ms. The slowest mail to gain, 55 KB, went from 77 to
+146 ms.
+
 All of it runs on the render thread, behind the placeholder, once per
 (Message, width, View); drawing a laid out Preview allocates nothing. The
 binary grows by 2.0 MB, a clean build by about 8 s of C++ on 12 cores, and
