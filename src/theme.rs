@@ -27,7 +27,7 @@ pub struct Theme {
     pub matched: Style,
     strong: Style,
     emphasis: Style,
-    link: Style,
+    pub link: Style,
     code: Style,
     underline: Style,
     /// Whether the rendered View keeps the mail's colours.

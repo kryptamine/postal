@@ -76,6 +76,8 @@ fn a_first_run_signs_in_then_opens_the_inbox() {
     fs::remove_file(home.secret_path()).unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &[]);
+    t.wait_until(|s| s.contains("Google (Gmail)")).unwrap();
+    t.send(Key::Enter).unwrap();
 
     grant(&consent(&browser));
     t.wait_until(|s| s.contains("Hello")).unwrap();
@@ -156,7 +158,7 @@ fn l_signs_in_again_and_restarts_sync() {
     assert!(t.wait_exit().unwrap().success());
 }
 
-// Postal waits for the browser without raw mode, where Ctrl-C is SIGINT.
+// Ctrl-C ends the sign-in alone, never the TUI it was opened from.
 #[test]
 fn ctrl_c_in_the_login_flow_returns_to_the_tui_signed_out() {
     let server = FakeImap::start(hello());

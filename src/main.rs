@@ -14,6 +14,7 @@ mod cache;
 mod cell_grid;
 mod centred;
 mod cli;
+mod clipboard;
 mod composing;
 mod config;
 mod credential;
@@ -68,6 +69,7 @@ mod new_message;
 mod notes;
 mod oauth;
 mod older_pages;
+mod onboarding;
 mod outage;
 mod outbox;
 mod outbox_flush;
@@ -84,7 +86,7 @@ mod preview;
 mod preview_pane;
 mod preview_render;
 mod previews;
-mod prompt;
+mod provider;
 mod reading;
 mod reconnect;
 mod region;
@@ -115,6 +117,7 @@ mod sync;
 mod sync_state;
 mod terminal_backend;
 mod terminal_background;
+mod terminal_slot;
 mod text_part;
 mod theme;
 mod thread;
@@ -132,6 +135,7 @@ mod wrap;
 mod xdg;
 
 use std::{
+    error::Error,
     path::{Path, PathBuf},
     process::ExitCode,
 };
@@ -148,13 +152,17 @@ use crate::{
     imap::ImapSession,
     oauth::Tokens,
     older_pages::OlderPages,
+    onboarding::{Outcome, Start},
     outbox::Outbox,
     outbox_flush::Sender,
     outgoing::Outgoing,
+    partial_config::PartialConfig,
     previews::Previews,
     reply_fetch::ReplyFetch,
+    rgb::Rgb,
     run::{Background, Exit, Work},
     status::Status,
+    terminal_slot::TerminalSlot,
     theme::Theme,
     update::Update,
 };
@@ -205,9 +213,7 @@ fn logged(log: &Path, command: Command) -> ExitCode {
     tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
     let result = match command {
         Command::Run => try_main(),
-        Command::Login => xdg::config_dir()
-            .map_err(Into::into)
-            .and_then(|dir| login::oauth(&dir, None)),
+        Command::Login => login(),
     };
 
     match result {
@@ -223,38 +229,98 @@ fn logged(log: &Path, command: Command) -> ExitCode {
     }
 }
 
-/// The TUI, left for the login flow on `L` and opened again after it.
-fn try_main() -> Result<(), Box<dyn std::error::Error>> {
+/// `postal login`: the Onboarding from the Provider list.
+#[expect(
+    clippy::print_stdout,
+    reason = "the terminal is restored, so stdout reaches the user"
+)]
+fn login() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
-    let (mut config, sign_in) = signed_in(&dir)?;
-    let mut sign_in = Some(sign_in);
-    let mut failed = false;
-    loop {
-        match session(&config, sign_in.as_ref(), failed)? {
-            Exit::Quit => return Ok(()),
-            Exit::SignIn => match login::oauth(&dir, Some(&config.email)) {
-                Ok(()) => {
-                    let (signed_in_as, fresh) = signed_in(&dir)?;
-                    (config, sign_in, failed) = (signed_in_as, Some(fresh), false);
-                }
-                Err(error) => {
-                    sign_in = None;
-                    failed = !login::cancelled(&*error);
-                    if failed {
-                        tracing::error!("signing in again failed: {error}");
+    let email = on_screen(async |slot| onboard(slot, &dir, Start::Choose).await)?;
+    println!("Signed in as {email}.");
+    Ok(())
+}
+
+/// The TUI, left for the Onboarding on `L` and opened again after it.
+fn try_main() -> Result<(), Box<dyn Error>> {
+    let dir = xdg::config_dir()?;
+    on_screen(async |slot| {
+        let (mut config, sign_in) = signed_in(slot, &dir).await?;
+        let mut sign_in = Some(sign_in);
+        let mut failed = false;
+        loop {
+            let exit = Box::pin(session(slot, &config, sign_in.as_ref(), failed)).await?;
+            match exit {
+                Exit::Quit => return Ok(()),
+                Exit::SignIn => {
+                    let (terminal, background) = slot.take()?;
+                    let theme = onboarding_theme(&dir, background)?;
+                    let again = Start::Again(&config.email);
+                    match onboarding::run(terminal, &theme, &dir, again).await? {
+                        Outcome::SignedIn(_) => {
+                            let (signed_in_as, fresh) = signed_in(slot, &dir).await?;
+                            (config, sign_in, failed) = (signed_in_as, Some(fresh), false);
+                        }
+                        Outcome::Quit(error) => {
+                            sign_in = None;
+                            failed = error.is_some();
+                        }
                     }
                 }
-            },
+            }
         }
+    })
+}
+
+/// Runs `work`, which takes the terminal once it draws, and hands the
+/// terminal back as Postal found it.
+fn on_screen<T>(
+    work: impl AsyncFnOnce(&mut TerminalSlot) -> Result<T, Box<dyn Error>>,
+) -> Result<T, Box<dyn Error>> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    runtime.block_on(async { work(&mut TerminalSlot::new()).await })
+}
+
+/// The Theme before there is an Account: the config may set the icons.
+fn onboarding_theme(dir: &Path, background: Rgb) -> Result<Theme, Box<dyn Error>> {
+    let icons = PartialConfig::load(&dir.join("config.toml"))?.icons;
+    Ok(Theme::from_env(background, Icons::choose(icons)))
+}
+
+/// The Onboarding from `start`; leaving it is an error, the last failure
+/// or a cancel.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn onboard(
+    slot: &mut TerminalSlot,
+    dir: &Path,
+    start: Start<'_>,
+) -> Result<String, Box<dyn Error>> {
+    let (terminal, background) = slot.take()?;
+    let theme = onboarding_theme(dir, background)?;
+    match onboarding::run(terminal, &theme, dir, start).await? {
+        Outcome::SignedIn(email) => Ok(email),
+        Outcome::Quit(error) => Err(error.unwrap_or_else(|| login::Error::Cancelled.into())),
     }
 }
 
-/// The Account the TUI opens as; with none yet, the login flow runs first.
-fn signed_in(dir: &Path) -> Result<(Config, Tokens), Box<dyn std::error::Error>> {
+/// The Account the TUI opens as; with none yet, the Onboarding runs first.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn signed_in(
+    slot: &mut TerminalSlot,
+    dir: &Path,
+) -> Result<(Config, Tokens), Box<dyn Error>> {
     let config_path = dir.join("config.toml");
     loop {
         let Some(config) = Config::load(&config_path)? else {
-            login::oauth(dir, None)?;
+            onboard(slot, dir, Start::Choose).await?;
             continue;
         };
 
@@ -264,7 +330,7 @@ fn signed_in(dir: &Path) -> Result<(Config, Tokens), Box<dyn std::error::Error>>
         };
 
         let Some(secret) = secret else {
-            login::oauth(dir, Some(&config.email))?;
+            onboard(slot, dir, Start::Again(&config.email)).await?;
             continue;
         };
 
@@ -272,7 +338,7 @@ fn signed_in(dir: &Path) -> Result<(Config, Tokens), Box<dyn std::error::Error>>
             Ok(tokens) => tokens,
             Err(error) if error.signed_out() => {
                 tracing::warn!("{error}");
-                login::oauth(dir, Some(&config.email))?;
+                onboard(slot, dir, Start::Again(&config.email)).await?;
                 continue;
             }
             Err(error) => return Err(error.into()),
@@ -284,18 +350,20 @@ fn signed_in(dir: &Path) -> Result<(Config, Tokens), Box<dyn std::error::Error>>
 
 /// The TUI until it exits, signed out without `sign_in`; `failed` when the
 /// last sign-in did.
-fn session(
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn session(
+    slot: &mut TerminalSlot,
     config: &Config,
     sign_in: Option<&Tokens>,
     failed: bool,
-) -> Result<Exit, Box<dyn std::error::Error>> {
+) -> Result<Exit, Box<dyn Error>> {
     let cache = Cache::open(&xdg::cache_dir()?)?;
     // Without one, Compose says so when it is used.
     let outbox = Outbox::new(xdg::data_dir().ok());
     let outgoing = Outgoing { config };
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (requests, requested) = futures::channel::mpsc::unbounded();
     let (asks, asked) = futures::channel::mpsc::unbounded();
@@ -307,47 +375,41 @@ fn session(
         sender.unbounded_send(update).ok();
     };
 
-    runtime.block_on(async {
-        let mut terminal = terminal_backend::init()?;
-        // A terminal that does not say is taken for a dark one.
-        let background = terminal_background::query().unwrap_or(rgb::BLACK);
-        let theme = Theme::from_env(background, Icons::choose(config.icons));
-        let mut previews = Previews::start(requests, updates_to_previews, theme.mail);
-        let work = sign_in.map_or(Work::SignedOut { failed }, |sign_in| {
-            Work::Running(
-                futures::future::try_join(
-                    sync(
-                        config,
-                        &cache,
-                        (
-                            Steering::new(asked),
-                            Sender {
-                                outbox: &outbox,
-                                outgoing,
-                                sign_in,
-                            },
-                        ),
-                        (&send, |status| send(Update::Status(status))),
+    let (terminal, background) = slot.take()?;
+    let theme = Theme::from_env(background, Icons::choose(config.icons));
+    let mut previews = Previews::start(requests, updates_to_previews, theme.mail);
+    let work = sign_in.map_or(Work::SignedOut { failed }, |sign_in| {
+        Work::Running(
+            futures::future::try_join(
+                sync(
+                    config,
+                    &cache,
+                    (
+                        Steering::new(asked),
+                        Sender {
+                            outbox: &outbox,
+                            outgoing,
+                            sign_in,
+                        },
                     ),
-                    bodies(config, sign_in, &cache, requested, &send),
-                )
-                .map_ok(|((), ())| ()),
+                    (&send, |status| send(Update::Status(status))),
+                ),
+                bodies(config, sign_in, &cache, requested, &send),
             )
-        });
-        let background = Background {
-            work,
-            updates,
-            older,
-            replies,
-            asks,
-            outgoing,
-            outbox: &outbox,
-        };
+            .map_ok(|((), ())| ()),
+        )
+    });
+    let background = Background {
+        work,
+        updates,
+        older,
+        replies,
+        asks,
+        outgoing,
+        outbox: &outbox,
+    };
 
-        let result = run::run(&mut terminal, &theme, &cache, &mut previews, background).await;
-        ratatui::restore();
-        Ok(result?)
-    })
+    Ok(run::run(terminal, &theme, &cache, &mut previews, background).await?)
 }
 
 /// The second connection, kept open for the bodies the Preview asks for:

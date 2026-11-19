@@ -72,7 +72,7 @@ Usage: postal [-v | -vv]
        postal login [-v | -vv]
 
 Commands:
-  login       sign in to Gmail in the browser
+  login       choose a mail provider and sign in
 
 Options:
   -v          log debug events

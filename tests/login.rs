@@ -83,12 +83,35 @@ fn secret(home: &Home) -> Option<String> {
 }
 
 /// Asserts the login failed with `message` and left the seeded config alone.
+/// Quits the failure Postal shows, then checks it exits with `message`.
 fn assert_failed_writing_nothing(t: &mut Terminal, home: &Home, seed: &str, message: &str) {
+    t.wait_until(|s| s.contains("Sign-in failed")).unwrap();
+    t.send(Key::Char('q')).unwrap();
     let screen = t.snapshot_after(|s| s.contains("postal:")).unwrap();
     assert!(!t.wait_exit().unwrap().success(), "{screen:?}");
     assert!(screen.logical_text().contains(message), "{screen:?}");
     assert_eq!(secret(home), None);
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
+}
+
+/// Picks the one Provider the list offers.
+fn choose_google(t: &mut Terminal) {
+    t.wait_until(|s| s.contains("Google (Gmail)")).unwrap();
+    t.send(Key::Enter).unwrap();
+}
+
+/// The consent URLs Postal opened, once there are `count`.
+fn consent_urls(browser: &Browser, count: usize) -> Vec<String> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let opened = browser.opened();
+        if opened.len() >= count {
+            return opened;
+        }
+
+        assert!(Instant::now() < deadline, "opened only {opened:?}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn spawn(home: &Home, browser: &Browser, args: &[&str]) -> Terminal {
@@ -202,8 +225,13 @@ fn a_granted_consent_writes_config_and_refresh_token() {
     let home = seeded(&server, &oauth);
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     let url = consent_url(&browser);
-    t.wait_until(|s| s.logical_text().contains(&url)).unwrap();
+    // Without a browser that opened, the URL is the way to sign in.
+    t.wait_until(|s| s.contains("If it did not open")).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    t.wait_until(|s| s.clipboard().and_then(|c| c.text()) == Some(url.as_str()))
+        .unwrap();
     assert!(
         url.starts_with(&format!("http://127.0.0.1:{}/auth?", oauth.port)),
         "{url}"
@@ -270,6 +298,7 @@ fn a_denied_consent_names_the_refusal() {
     let seed = fs::read_to_string(home.config_path()).unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     let consent = query::of_url(&consent_url(&browser));
     let denied = format!("error=access_denied&state={}", consent["state"]);
     follow_redirect(&consent["redirect_uri"], &denied);
@@ -286,6 +315,7 @@ fn a_browser_that_never_comes_back_times_out() {
     let seed = fs::read_to_string(home.config_path()).unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     consent_url(&browser);
 
     assert_failed_writing_nothing(&mut t, &home, &seed, "did not come back within 1s");
@@ -301,6 +331,7 @@ fn a_consent_without_the_gmail_scope_fails_clearly() {
     let seed = fs::read_to_string(home.config_path()).unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     grant(&query::of_url(&consent_url(&browser)));
 
     assert_failed_writing_nothing(&mut t, &home, &seed, "did not grant access to Gmail");
@@ -314,6 +345,7 @@ fn tokens_never_reach_the_log() {
     let home = seeded(&server, &oauth);
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login", "-vv"]);
+    choose_google(&mut t);
     grant(&query::of_url(&consent_url(&browser)));
     t.wait_until(|s| s.contains("Signed in")).unwrap();
     assert!(t.wait_exit().unwrap().success());
@@ -347,6 +379,7 @@ fn a_login_keeps_the_name_the_icons_and_the_smtp_server() {
     fs::write(home.config_path(), format!("{extra}{config}")).unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     grant(&query::of_url(&consent_url(&browser)));
     t.wait_until(|s| s.contains("Signed in")).unwrap();
     assert!(t.wait_exit().unwrap().success());
@@ -368,6 +401,7 @@ fn a_dropped_connection_exits_non_zero_and_writes_nothing() {
     let seed = fs::read_to_string(home.config_path()).unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     let consent = query::of_url(&consent_url(&browser));
 
     server.fail(Outage::Offline);
@@ -389,6 +423,7 @@ fn a_login_with_the_same_email_replaces_only_the_secret() {
     fs::write(home.secret_path(), "1//revoked\n").unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     grant(&query::of_url(&consent_url(&browser)));
 
     t.wait_until(|s| s.contains("Signed in")).unwrap();
@@ -412,10 +447,9 @@ fn another_account(server: &FakeImap, oauth: &FakeOAuth) -> (Home, String) {
 /// Grants the consent as `EMAIL` and answers the replacement question.
 fn sign_in_as_another(t: &mut Terminal, browser: &Browser, answer: &str) {
     grant(&query::of_url(&consent_url(browser)));
-    t.wait_until(|s| s.contains("old@example.com") && s.contains("[y/N]"))
+    t.wait_until(|s| s.contains("old@example.com") && s.contains("y replace"))
         .unwrap();
     t.send_str(answer).unwrap();
-    t.send(Key::Enter).unwrap();
 }
 
 #[test]
@@ -425,6 +459,7 @@ fn a_login_as_another_account_replaces_it_and_deletes_the_cache() {
     let (home, _) = another_account(&server, &oauth);
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     sign_in_as_another(&mut t, &browser, "y");
 
     t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
@@ -444,6 +479,7 @@ fn a_declined_replacement_writes_nothing() {
     fs::write(home.secret_path(), "1//old\n").unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
     sign_in_as_another(&mut t, &browser, "n");
 
     t.wait_until(|s| s.contains("login cancelled")).unwrap();
@@ -468,10 +504,77 @@ fn a_locked_keychain_hints_at_the_file_store_and_writes_no_config() {
     let browser = Browser::new();
     let locked = [("POSTAL_KEYCHAIN_FAIL", "the test locked the keychain")];
     let mut t = spawn_with(&home, &browser, &["login"], &locked);
+    choose_google(&mut t);
     grant(&query::of_url(&consent_url(&browser)));
 
-    t.wait_until(|s| s.contains("store = \"file\"")).unwrap();
+    t.wait_until(|s| s.contains("Sign-in failed")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+    t.wait_until(|s| s.logical_text().contains("store = \"file\""))
+        .unwrap();
     assert!(!t.wait_exit().unwrap().success());
     assert_eq!(secret(&home), None);
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
+}
+
+#[test]
+fn quitting_the_provider_list_writes_nothing() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let seed = fs::read_to_string(home.config_path()).unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    t.wait_until(|s| s.contains("Google (Gmail)")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+
+    t.wait_until(|s| s.contains("login cancelled")).unwrap();
+    assert!(!t.wait_exit().unwrap().success());
+    assert!(browser.opened().is_empty());
+    assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
+}
+
+// The first consent's listener is gone: only the second sign-in counts.
+#[test]
+fn esc_on_the_browser_step_returns_to_the_provider_list() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
+    consent_url(&browser);
+    t.wait_until(|s| s.contains("Esc back")).unwrap();
+    t.send(Key::Esc).unwrap();
+
+    choose_google(&mut t);
+    let urls = consent_urls(&browser, 2);
+    grant(&query::of_url(&urls[1]));
+    t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
+        .unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
+}
+
+#[test]
+fn a_failed_sign_in_is_shown_and_tried_again() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
+    let consent = query::of_url(&consent_url(&browser));
+    let denied = format!("error=access_denied&state={}", consent["state"]);
+    follow_redirect(&consent["redirect_uri"], &denied);
+    t.wait_until(|s| s.contains("Sign-in failed") && s.contains("access_denied"))
+        .unwrap();
+    assert_eq!(secret(&home), None);
+
+    t.send(Key::Enter).unwrap();
+    choose_google(&mut t);
+    grant(&query::of_url(&consent_urls(&browser, 2)[1]));
+    t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
+        .unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
 }

@@ -27,7 +27,7 @@ ring = "0.17.14"
 rusqlite = { version = "0.40.2", features = ["backup", "bundled", "fallible_uint"] }
 serde = { version = "1.0.229", features = ["derive", "rc"] }
 serde_json = "1.0.154"
-tokio = { version = "1.54.1", features = ["rt", "macros", "net", "time", "io-util", "signal"] }
+tokio = { version = "1.54.1", features = ["rt", "macros", "net", "time", "io-util"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 toml = "1.2.1"
 tracing = "0.1.44"

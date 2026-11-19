@@ -137,5 +137,9 @@ The Messages sent but not yet accepted by the server, retried on each sync (ADR 
 _Avoid_: queue, pending, spool
 
 **Onboarding**:
-The first-run flow that turns an email address into a working Account.
+The screen that signs an Account in: on a first run and after `postal login` from the Provider list, then in the browser, checked on the server before anything is written. `L` and a lost secret skip the Provider list. A failure is shown there and can be tried again.
 _Avoid_: setup wizard, registration
+
+**Provider**:
+The mail service an Account lives at, which decides how it signs in. Only Google for now.
+_Avoid_: service, host, backend
