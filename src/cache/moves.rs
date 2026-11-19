@@ -4,36 +4,30 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
 
-/// Queued: the server still holds the Message where it was.
-const QUEUED: i64 = 0;
-/// The server moved it to Trash.
-const IN_TRASH: i64 = 1;
-/// An Undo took it back; the server has yet to move it out of Trash.
-const BACK: i64 = 2;
-/// An Undo took it back while queued: unsent, unless the move was under way.
-const CANCELLED: i64 = 3;
-/// Back out of Trash under `back_uid`; the row shown keeps the old UID
-/// until a resync fetches the new one.
-const RETURNED: i64 = 4;
-
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
 const ROW: &str = "body_key, received, received_offset, unread, sender, subject, thread,
     from_me, snippet, text_section, text_encoding, text_charset, text_html";
 
-/// One Message the server is to move: to Trash for a Delete, or back for an Undo.
+/// One Message the server is to move, from the Folder to select.
 pub struct PendingMove {
     pub id: i64,
-    /// The Folder to select, and the Message's UID there.
     pub from: Arc<str>,
     pub uid: u32,
-    /// `None` for Trash, whichever Folder the server names so.
-    pub to: Option<Arc<str>>,
+    pub to: Destination,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum Destination {
+    /// For a Delete: whichever Folder the server names Trash.
+    Trash,
+    /// For an Undo: the Folder the Message was deleted from.
+    Back(Arc<str>),
 }
 
 impl Cache {
     /// Takes each `(folder, uid)` out of the Message List, with Gmail's
-    /// copies of it under other labels, and queues its move to Trash.
-    /// Returns the Delete for an Undo; `None` when no row was cached.
+    /// copies of it under other labels, and wants it in Trash. Returns the
+    /// Delete for an Undo; `None` when no row was cached.
     pub fn delete(&self, messages: &[(Arc<str>, u32)]) -> Result<Option<i64>, Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
@@ -52,47 +46,40 @@ impl Cache {
         })
     }
 
-    /// Puts the Messages of Delete `batch` back in their Folders and queues
-    /// their move out of Trash. Returns the Folders they went back to, none
-    /// when the server cannot be asked: it named no UID in Trash.
+    /// Puts the Messages of Delete `batch` back in their Folders. Returns
+    /// the Folders they went back to; none when the server named no UID in
+    /// Trash to move them back by.
     pub fn undo(&self, batch: i64) -> Result<Vec<Arc<str>>, Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            let rows: Vec<(i64, i64, Option<String>, Option<u32>)> = transaction
-                .prepare_cached("SELECT id, state, trash, trash_uid FROM moved WHERE batch = ?1")?
-                .query_map([batch], |row| {
-                    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
-                })?
+            // Unreachable: in Trash under a UID the server never named.
+            transaction.execute(
+                "DELETE FROM moved WHERE batch = ?1 AND at_trash AND at_uid IS NULL",
+                [batch],
+            )?;
+            let trashed: Vec<(String, u32)> = transaction
+                .prepare_cached(
+                    "SELECT trash, at_uid FROM moved WHERE batch = ?1 AND want_trash AND at_trash",
+                )?
+                .query_map([batch], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<Result<_, _>>()?;
+            for (trash, uid) in trashed {
+                drop_row(&transaction, (&trash, uid))?;
+            }
+
+            let rows: Vec<(i64, String)> = transaction
+                .prepare_cached("SELECT id, mailbox FROM moved WHERE batch = ?1 AND want_trash")?
+                .query_map([batch], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .collect::<Result<_, _>>()?;
             let mut folders: Vec<Arc<str>> = Vec::new();
-            for (id, state, trash, trash_uid) in rows {
-                let folder = match (state, trash, trash_uid) {
-                    (QUEUED, ..) => {
-                        let folder = restore(&transaction, id)?;
-                        transaction.execute(
-                            "UPDATE moved SET state = ?2 WHERE id = ?1",
-                            [id, CANCELLED],
-                        )?;
-                        folder
-                    }
-                    (IN_TRASH, Some(trash), Some(uid)) => {
-                        let folder = restore(&transaction, id)?;
-                        drop_row(&transaction, (&trash, uid))?;
-                        transaction
-                            .execute("UPDATE moved SET state = ?2 WHERE id = ?1", [id, BACK])?;
-                        folder
-                    }
-                    _ => {
-                        transaction.execute("DELETE FROM moved WHERE id = ?1", [id])?;
-                        continue;
-                    }
-                };
-
+            for (id, folder) in rows {
+                restore(&transaction, id)?;
                 if !folders.iter().any(|f| **f == *folder) {
                     folders.push(folder.into());
                 }
             }
 
+            transaction.execute("UPDATE moved SET want_trash = 0 WHERE batch = ?1", [batch])?;
             transaction.commit()?;
             Ok(folders)
         })
@@ -102,124 +89,111 @@ impl Cache {
     pub fn pending_moves(&self) -> Result<Vec<PendingMove>, Error> {
         let connection = self.connection.borrow();
         let mut statement = connection.prepare_cached(
-            "SELECT id, state, mailbox, uid, trash, trash_uid FROM moved
-             WHERE state IN (?1, ?2) ORDER BY state DESC, mailbox, trash, uid",
+            "SELECT id, want_trash, mailbox, trash, at_uid FROM moved
+             WHERE want_trash != at_trash AND at_uid IS NOT NULL
+             ORDER BY want_trash, mailbox, trash, at_uid",
         )?;
         let pending = statement
-            .query_map([QUEUED, BACK], |row| {
-                let (state, mailbox): (i64, String) = (row.get(1)?, row.get(2)?);
-                if state == BACK {
-                    return Ok(PendingMove {
-                        id: row.get(0)?,
-                        from: row.get::<_, String>(4)?.into(),
-                        uid: row.get(5)?,
-                        to: Some(mailbox.into()),
-                    });
-                }
-
-                Ok(PendingMove {
-                    id: row.get(0)?,
-                    from: mailbox.into(),
-                    uid: row.get(3)?,
-                    to: None,
+            .query_map([], |row| {
+                let (id, want_trash, mailbox): (i64, bool, String) =
+                    (row.get(0)?, row.get(1)?, row.get(2)?);
+                let uid = row.get(4)?;
+                Ok(if want_trash {
+                    PendingMove {
+                        id,
+                        from: mailbox.into(),
+                        uid,
+                        to: Destination::Trash,
+                    }
+                } else {
+                    PendingMove {
+                        id,
+                        from: row.get::<_, String>(3)?.into(),
+                        uid,
+                        to: Destination::Back(mailbox.into()),
+                    }
                 })
             })?
             .collect::<Result<_, _>>()?;
         Ok(pending)
     }
 
-    /// The server moved `id` to `trash`, under `uid` there when it said.
-    /// An Undo made meanwhile queues it back; false when it cannot, without
-    /// `uid`, and the Message stays in Trash.
-    pub fn moved(&self, id: i64, trash: &str, uid: Option<u32>) -> Result<bool, Error> {
+    /// The server made `pending`, into `to` under `uid` there when it said.
+    /// False when the Message is out of reach of the Undo that wants it back.
+    pub fn arrived(
+        &self,
+        pending: &PendingMove,
+        to: &str,
+        uid: Option<u32>,
+    ) -> Result<bool, Error> {
+        let in_trash = pending.to == Destination::Trash;
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            let state: Option<i64> = transaction
-                .prepare_cached("SELECT state FROM moved WHERE id = ?1")?
-                .query_row([id], |row| row.get(0))
-                .optional()?;
-            let late = state == Some(CANCELLED);
-            if late && uid.is_none() {
-                let row: (String, u32) = transaction.query_row(
-                    "SELECT mailbox, uid FROM moved WHERE id = ?1",
-                    [id],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )?;
-                drop_row(&transaction, (&row.0, row.1))?;
-                transaction.execute("DELETE FROM moved WHERE id = ?1", [id])?;
-            } else if matches!(state, Some(QUEUED | CANCELLED)) {
-                transaction
-                    .prepare_cached(
-                        "UPDATE moved SET state = ?2, trash = ?3, trash_uid = ?4 WHERE id = ?1",
-                    )?
-                    .execute(params![id, if late { BACK } else { IN_TRASH }, trash, uid])?;
+            transaction
+                .prepare_cached(
+                    "UPDATE moved SET at_trash = ?2, at_uid = ?3,
+                         trash = CASE WHEN ?2 THEN ?4 ELSE trash END
+                     WHERE id = ?1",
+                )?
+                .execute(params![pending.id, in_trash, uid, to])?;
+            // Gone from Trash, or into it unnamed: nothing can move it now.
+            let reached = uid.is_some() || !wanted_back(&transaction, pending.id)?;
+            if uid.is_none() {
+                lose(&transaction, pending.id)?;
             }
 
             transaction.commit()?;
-            Ok(!late || uid.is_some())
+            Ok(reached)
         })
     }
 
-    /// The server moved `id` back out of Trash, under `uid` there; `None`
-    /// when the Message was no longer in Trash, and its row goes. A Delete
-    /// made meanwhile queues it for Trash again, by that `uid`.
-    pub fn moved_back(&self, id: i64, uid: Option<u32>) -> Result<(), Error> {
+    /// The server refused `pending`: the Message stays where it is, shown
+    /// again for a Delete and out of reach for an Undo. False for the latter.
+    pub fn refused(&self, pending: &PendingMove) -> Result<bool, Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            let state: Option<i64> = transaction
-                .prepare_cached("SELECT state FROM moved WHERE id = ?1")?
-                .query_row([id], |row| row.get(0))
-                .optional()?;
-            if state == Some(IN_TRASH) {
-                match uid {
-                    Some(uid) => transaction
-                        .prepare_cached(
-                            "UPDATE moved SET state = ?2, uid = ?3, trash = NULL,
-                                 trash_uid = NULL WHERE id = ?1",
-                        )?
-                        .execute(params![id, QUEUED, uid])?,
-                    None => transaction.execute("DELETE FROM moved WHERE id = ?1", [id])?,
-                };
-                return transaction.commit();
+            let back = wanted_back(&transaction, pending.id)?;
+            let into_trash = pending.to == Destination::Trash;
+            if !into_trash {
+                lose(&transaction, pending.id)?;
+            } else if !back {
+                restore(&transaction, pending.id)?;
             }
 
-            if uid.is_some() {
-                transaction
-                    .prepare_cached("UPDATE moved SET state = ?2, back_uid = ?3 WHERE id = ?1")?
-                    .execute(params![id, RETURNED, uid])?;
-                return transaction.commit();
-            }
-
-            let row: Option<(String, u32)> = transaction
-                .prepare_cached("SELECT mailbox, uid FROM moved WHERE id = ?1")?
-                .query_row([id], |row| Ok((row.get(0)?, row.get(1)?)))
-                .optional()?;
-            if let Some((folder, uid)) = row {
-                drop_row(&transaction, (&folder, uid))?;
-            }
-
-            transaction.execute("DELETE FROM moved WHERE id = ?1", [id])?;
-            transaction.commit()
+            transaction.execute("DELETE FROM moved WHERE id = ?1", [pending.id])?;
+            transaction.commit()?;
+            Ok(into_trash || !back)
         })
     }
+}
 
-    /// Takes back a Delete of `id` the server refused, or could not be sent.
-    pub fn unmove(&self, id: i64) -> Result<(), Error> {
-        self.write(|connection| {
-            let transaction = connection.unchecked_transaction()?;
-            // An Undo has put the row back already.
-            let undone = transaction
-                .prepare_cached("SELECT 1 FROM moved WHERE id = ?1 AND state = ?2")?
-                .query_row([id, CANCELLED], |_| Ok(()))
-                .optional()?;
-            if undone.is_none() {
-                restore(&transaction, id)?;
-            }
+/// Once its new UID is in `folder`, an Undo's row gives way to it.
+pub(super) fn settle(connection: &Connection, folder: &str) -> rusqlite::Result<()> {
+    let arrived = "NOT at_trash AND at_uid != uid
+        AND EXISTS (SELECT 1 FROM message n WHERE n.mailbox = ?1 AND n.uid = at_uid)";
+    connection.execute(
+        &format!(
+            "DELETE FROM message WHERE mailbox = ?1 AND uid IN
+                 (SELECT uid FROM undone WHERE mailbox = ?1 AND {arrived})"
+        ),
+        [folder],
+    )?;
+    connection.execute(
+        &format!("DELETE FROM moved WHERE mailbox = ?1 AND NOT want_trash AND {arrived}"),
+        [folder],
+    )?;
+    Ok(())
+}
 
-            transaction.execute("DELETE FROM moved WHERE id = ?1", [id])?;
-            transaction.commit()
-        })
-    }
+/// Drops what an Undo of an earlier run might have needed: the Deletes the
+/// server made, and those undone before it saw them.
+pub(super) fn forget_settled(connection: &Connection) -> rusqlite::Result<()> {
+    connection
+        .execute(
+            "DELETE FROM moved WHERE want_trash = at_trash AND (at_trash OR at_uid = uid)",
+            [],
+        )
+        .map(drop)
 }
 
 /// One Message of `Cache::delete`; false when it is not cached.
@@ -236,23 +210,21 @@ fn delete(
         return Ok(false);
     };
 
-    // An Undo the server has yet to make is itself taken back: the
-    // Message stays in Trash, or goes back once that move is answered.
-    let undone: Option<(i64, i64)> = connection
+    // A row an Undo put back is wanted in Trash again, wherever it is.
+    let again = connection
         .prepare_cached(
-            "SELECT id, state FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state IN (?3, ?4)",
+            "UPDATE moved SET want_trash = 1, batch = ?3
+             WHERE mailbox = ?1 AND uid = ?2 AND NOT want_trash",
         )?
-        .query_row(params![folder, uid, BACK, CANCELLED], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
-        .optional()?;
-    if let Some((id, state)) = undone {
-        let state = if state == BACK { IN_TRASH } else { QUEUED };
+        .execute(params![folder, uid, batch])?;
+    if again == 0 {
         connection
-            .prepare_cached("UPDATE moved SET batch = ?2, state = ?3 WHERE id = ?1")?
-            .execute(params![id, batch, state])?;
-    } else {
-        queue(connection, batch, (folder, uid))?;
+            .prepare_cached(&format!(
+                "INSERT INTO moved (batch, want_trash, at_trash, at_uid, mailbox, uid, {ROW})
+                 SELECT ?1, 1, 0, uid, mailbox, uid, {ROW} FROM message
+                 WHERE mailbox = ?2 AND uid = ?3"
+            ))?
+            .execute(params![batch, folder, uid])?;
     }
 
     // Gmail drops every label of a Message moved to Trash.
@@ -275,30 +247,30 @@ fn delete(
     Ok(true)
 }
 
-/// Queues the move of `(folder, uid)` to Trash, by the UID the server gave
-/// a row back from Trash.
-fn queue(connection: &Connection, batch: i64, (folder, uid): (&str, u32)) -> rusqlite::Result<()> {
-    let back: Option<u32> = connection
-        .prepare_cached(
-            "SELECT back_uid FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3",
-        )?
-        .query_row(params![folder, uid, RETURNED], |row| row.get(0))
+fn wanted_back(connection: &Connection, id: i64) -> rusqlite::Result<bool> {
+    let back = connection
+        .prepare_cached("SELECT NOT want_trash FROM moved WHERE id = ?1")?
+        .query_row([id], |row| row.get(0))
         .optional()?;
-    connection
-        .prepare_cached("DELETE FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = ?3")?
-        .execute(params![folder, uid, RETURNED])?;
-    connection
-        .prepare_cached(&format!(
-            "INSERT INTO moved (batch, state, mailbox, uid, {ROW})
-             SELECT ?1, ?2, mailbox, ?5, {ROW} FROM message WHERE mailbox = ?3 AND uid = ?4"
-        ))?
-        .execute(params![batch, QUEUED, folder, uid, back.unwrap_or(uid)])?;
+    Ok(back.unwrap_or(false))
+}
+
+/// Forgets `id` for good, with the row an Undo showed for it.
+fn lose(connection: &Connection, id: i64) -> rusqlite::Result<()> {
+    let shown: Option<(String, u32)> = connection
+        .prepare_cached("SELECT mailbox, uid FROM moved WHERE id = ?1 AND NOT want_trash")?
+        .query_row([id], |row| Ok((row.get(0)?, row.get(1)?)))
+        .optional()?;
+    if let Some((folder, uid)) = shown {
+        drop_row(connection, (&folder, uid))?;
+    }
+
+    connection.execute("DELETE FROM moved WHERE id = ?1", [id])?;
     Ok(())
 }
 
-/// Writes the row `moved` kept for `id` back into its Folder, and returns
-/// that Folder.
-fn restore(connection: &Connection, id: i64) -> rusqlite::Result<String> {
+/// Writes the row `moved` kept for `id` back into its Folder.
+fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
     connection
         .prepare_cached(&format!(
             "INSERT OR REPLACE INTO message (mailbox, uid, {ROW})
@@ -311,9 +283,7 @@ fn restore(connection: &Connection, id: i64) -> rusqlite::Result<String> {
              WHERE name = (SELECT mailbox FROM moved WHERE id = ?1 AND unread)",
         )?
         .execute([id])?;
-    connection
-        .prepare_cached("SELECT mailbox FROM moved WHERE id = ?1")?
-        .query_row([id], |row| row.get(0))
+    Ok(())
 }
 
 /// Drops one row from the Message List, with its share of the Unread count.

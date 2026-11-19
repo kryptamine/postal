@@ -14,30 +14,32 @@ is looked up at send time, after a `LIST` if the Cache knows none, so a
 Delete works before the Folder Picker ever opened; with no Trash, the queued
 Deletes are taken back.
 
-An Undo of a Delete still queued only drops it. One the server has made is
-moved back out of Trash by the UID the server named in its `COPYUID`; without
+Each Message in `moved` holds two facts: whether the user wants it in Trash,
+and where the server has it, in Trash or in its Folder, under which UID. A
+Delete or an Undo only sets the first; the sync connection moves every
+Message where the two disagree, by the UID the server last named, and writes
+the answer into the second. So an Undo made while its Delete is under way,
+or a Delete made while its Undo is, needs no case of its own: once the
+server answers, the two disagree again and the next pass moves the Message
+back. An Undo of a Delete the server has not seen leaves them agreeing, and
+nothing is sent.
+
+A move out of Trash needs the UID the server named in its `COPYUID`; without
 one there is nothing to address, and the Undo says so. The row goes back
 under its old UID, which the server no longer has, until the next resync of
-its Folder fetches the new one and swaps it in, in the same transaction. The
-Cache keeps the new UID meanwhile, so a Delete or a mark made before that
-resync reaches the Message by it, and an `EXPUNGE` of the old UID, the
-move's own, leaves the row alone. Writing the new UID
-in directly could leave UIDs below it never fetched, as a resync asks only
-for UIDs past the highest cached one. The Messages likewise reach Trash's
-rows only by its own resync.
+its Folder fetches the new one and swaps it in, in the same transaction.
+Writing the new UID in directly could leave UIDs below it never fetched, as
+a resync asks only for UIDs past the highest cached one. The Messages
+likewise reach Trash's rows only by its own resync.
 
-Until the server has made a move, the Cache reports the UIDs the server holds
-rather than the rows it shows: a queued Delete's UID still counts and an
-Undo's old one does not, or the sequence numbers a resync assigns would
-misplace the `EXPUNGE`s the move brings. A resync or a page of older Messages
-never writes a queued Delete's row back.
-
-An Undo made while the server is moving that Delete marks it undone; when
-the server answers, the move is queued back. A Delete of a Message whose
-Undo the server has yet to make takes that Undo back in turn: nothing is
-sent, or, with its move under way, the Message is queued for Trash again by
-the UID the server answers with. The Undo stack lives for one
-run, so a restart drops what only it could take back.
+Two views name what the rest of the Cache must know. `deleted` lists what
+the server still holds in a Folder that the Message List leaves out: a
+resync counts those UIDs when it numbers the Folder, so the `EXPUNGE`s a move
+brings land on the right rows, and never writes those rows back. `undone`
+lists the rows an Undo put back: an `EXPUNGE` of one is its own move's and
+leaves it, and a mark on one goes by the UID the server has it under. The
+Undo stack lives for one run, so a restart drops what only it could take
+back.
 
 ## Considered options
 

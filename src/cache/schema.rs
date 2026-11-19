@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 9;
+pub const VERSION: i64 = 10;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -78,19 +78,18 @@ CREATE TABLE flag_change (
     unread INTEGER NOT NULL,
     PRIMARY KEY (mailbox, uid)
 );
--- A Delete the server has yet to see or that this run may still Undo,
--- with the row it took out of `message`: docs/adr/0012-delete-and-undo.md.
+-- A Message a Delete took out of `message`, with its row, while the
+-- server or an Undo may still move it: docs/adr/0012-delete-and-undo.md.
 CREATE TABLE moved (
     id INTEGER PRIMARY KEY,
     -- One per Delete, shared by its Messages.
     batch INTEGER NOT NULL,
-    -- 0 queued, 1 in Trash, 2 queued back by an Undo, 3 undone while queued,
-    -- 4 back under `back_uid` while the row keeps `uid` until a resync.
-    state INTEGER NOT NULL,
-    -- Where the server put it, once it says.
+    -- Whether the Message is wanted in Trash and whether the server has it
+    -- there, under `at_uid` there or in `mailbox`; NULL when never said.
+    want_trash INTEGER NOT NULL,
+    at_trash INTEGER NOT NULL,
+    at_uid INTEGER,
     trash TEXT,
-    trash_uid INTEGER,
-    back_uid INTEGER,
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
     body_key INTEGER NOT NULL,
@@ -107,6 +106,12 @@ CREATE TABLE moved (
     text_charset TEXT,
     text_html INTEGER
 );
+-- What the server holds in `mailbox` that the Message List leaves out.
+CREATE VIEW deleted AS
+    SELECT mailbox, at_uid AS uid FROM moved WHERE want_trash AND NOT at_trash;
+-- Rows an Undo put back under `uid`, with where the server has the Message.
+CREATE VIEW undone AS
+    SELECT mailbox, uid, at_trash, at_uid FROM moved WHERE NOT want_trash;
 ";
 
 /// Why an existing Cache file cannot be used as it is.

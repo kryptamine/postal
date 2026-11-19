@@ -12,7 +12,7 @@ use rusqlite::{
     params,
 };
 
-use super::{Changes, Error, schema};
+use super::{Changes, Error, moves, schema};
 use crate::{
     folder::{Folder, Role},
     inbox::Inbox,
@@ -41,8 +41,7 @@ pub struct Cache {
 impl Cache {
     pub fn open(dir: &Path) -> Result<Self, Error> {
         let (connection, rebuilt) = schema::open(dir)?;
-        // An Undo reaches only the Deletes of its own run.
-        connection.execute("DELETE FROM moved WHERE state IN (1, 3)", [])?;
+        moves::forget_settled(&connection)?;
         Ok(Self {
             connection: RefCell::new(connection),
             rebuilt,
@@ -353,9 +352,9 @@ impl Cache {
     pub fn uids(&self, folder: &str) -> Result<Vec<u32>, Error> {
         let connection = self.connection.borrow();
         let mut statement = connection.prepare_cached(
-            "SELECT uid FROM message WHERE mailbox = ?1 AND NOT EXISTS (SELECT 1 FROM moved
-                 WHERE mailbox = ?1 AND uid = message.uid AND state IN (2, 4))
-             UNION SELECT uid FROM moved WHERE mailbox = ?1 AND state = 0
+            "SELECT uid FROM message WHERE mailbox = ?1 AND NOT EXISTS (SELECT 1 FROM undone u
+                 WHERE u.mailbox = ?1 AND u.uid = message.uid AND (u.at_trash OR u.at_uid != u.uid))
+             UNION SELECT uid FROM deleted WHERE mailbox = ?1
              ORDER BY uid",
         )?;
         let uids = statement
@@ -511,23 +510,11 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     }
 
     insert(&transaction, folder, &changes.new)?;
-    // An Undo's row gives way once its new UID is in.
-    let returned = "SELECT 1 FROM message n WHERE n.mailbox = ?1 AND n.uid = moved.back_uid";
-    transaction.execute(
-        &format!(
-            "DELETE FROM message WHERE mailbox = ?1 AND uid IN
-                 (SELECT uid FROM moved WHERE mailbox = ?1 AND state = 4 AND EXISTS ({returned}))"
-        ),
-        [folder],
-    )?;
-    transaction.execute(
-        &format!("DELETE FROM moved WHERE mailbox = ?1 AND state = 4 AND EXISTS ({returned})"),
-        [folder],
-    )?;
+    moves::settle(&transaction, folder)?;
     // A row an Undo put back stays: the expunge is its move's.
     let mut delete = transaction.prepare_cached(
-        "DELETE FROM message WHERE mailbox = ?1 AND uid = ?2 AND NOT EXISTS
-             (SELECT 1 FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state IN (2, 3, 4))",
+        "DELETE FROM message WHERE mailbox = ?1 AND uid = ?2
+           AND NOT EXISTS (SELECT 1 FROM undone WHERE mailbox = ?1 AND uid = ?2)",
     )?;
     for uid in &changes.expunged {
         delete.execute(params![folder, uid])?;
@@ -612,7 +599,7 @@ fn mark(
     connection
         .prepare_cached(
             "INSERT OR REPLACE INTO flag_change (mailbox, uid, unread) VALUES (?1, coalesce(
-                 (SELECT back_uid FROM moved WHERE mailbox = ?1 AND uid = ?2 AND state = 4), ?2
+                 (SELECT at_uid FROM undone WHERE mailbox = ?1 AND uid = ?2 AND NOT at_trash), ?2
              ), ?3)",
         )?
         .execute(params![folder, uid, unread])?;
@@ -652,7 +639,7 @@ fn insert(connection: &Connection, folder: &str, rows: &[NewMessage]) -> rusqlit
          (uid, body_key, received, received_offset, unread, sender, subject, snippet,
           text_section, text_encoding, text_charset, text_html, mailbox, thread, from_me)
          SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
-         WHERE NOT EXISTS (SELECT 1 FROM moved WHERE mailbox = ?13 AND uid = ?1 AND state = 0)",
+         WHERE NOT EXISTS (SELECT 1 FROM deleted WHERE mailbox = ?13 AND uid = ?1)",
     )?;
     for new in rows {
         let (m, part) = (&new.row, new.text_part.as_ref());

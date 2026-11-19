@@ -421,14 +421,22 @@ fn without_a_trash_folder_the_delete_is_taken_back() {
     assert!(moves(&server).is_empty(), "{screen}");
 }
 
-/// The states of the Deletes the Cache holds, by id.
-fn moved(home: &Home) -> Vec<i64> {
+/// Where each Delete the Cache holds stands, by id.
+fn moved(home: &Home) -> Vec<&'static str> {
     let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
     let mut statement = cache
-        .prepare("SELECT state FROM moved ORDER BY id")
+        .prepare("SELECT want_trash, at_trash, at_uid IS uid FROM moved ORDER BY id")
         .unwrap();
-    let states = statement.query_map([], |row| row.get(0)).unwrap();
-    states.collect::<Result<_, _>>().unwrap()
+    let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)));
+    rows.unwrap()
+        .map(|row| match row.unwrap() {
+            (true, false, _) => "queued",
+            (true, true, _) => "in Trash",
+            (false, true, _) => "queued back",
+            (false, false, true) => "undone unsent",
+            (false, false, false) => "back under a new UID",
+        })
+        .collect()
 }
 
 // Between an Undo and the resync after it, the restored row still has the
@@ -439,12 +447,12 @@ fn a_delete_right_after_an_undo_reaches_the_restored_message() {
     let home = Home::for_server(&server);
     let mut t = ready(&server, &home, "Newest");
     t.send(Key::Backspace).unwrap();
-    wait_for(|| moved(&home) == [1]);
+    wait_for(|| moved(&home) == ["in Trash"]);
     server.stall(Stall::Fetch);
 
     t.send(Key::Char('u')).unwrap();
     t.wait_until(|s| list(s).contains("Newest")).unwrap();
-    wait_for(|| moved(&home) == [4]);
+    wait_for(|| moved(&home) == ["back under a new UID"]);
     t.send(Key::Backspace).unwrap();
     t.wait_until(|s| !list(s).contains("Newest")).unwrap();
     server.release();
@@ -488,7 +496,7 @@ fn a_delete_before_the_undo_is_sent_keeps_the_message_in_trash() {
     let home = Home::for_server(&server);
     let mut t = ready(&server, &home, "Newest");
     t.send(Key::Backspace).unwrap();
-    wait_for(|| moved(&home) == [1]);
+    wait_for(|| moved(&home) == ["in Trash"]);
     server.fail(Outage::Offline);
 
     t.send(Key::Char('u')).unwrap();
@@ -510,7 +518,7 @@ fn a_delete_while_the_undo_is_under_way_follows_it_to_trash() {
     let home = Home::for_server(&server);
     let mut t = ready(&server, &home, "Newest");
     t.send(Key::Backspace).unwrap();
-    wait_for(|| moved(&home) == [1]);
+    wait_for(|| moved(&home) == ["in Trash"]);
     server.stall(Stall::Move);
 
     t.send(Key::Char('u')).unwrap();

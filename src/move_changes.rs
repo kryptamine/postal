@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    cache::{Cache, PendingMove},
+    cache::{Cache, Destination, PendingMove},
     folder::Role,
     imap::MailServer,
     sync::{self, Error},
@@ -29,16 +29,23 @@ pub async fn send(
     let (mut trash, mut reselected) = (None, false);
     for group in pending.chunk_by(|a, b| (&a.from, &a.to) == (&b.from, &b.to)) {
         let first = &group[0];
-        if first.to.is_none() && trash.is_none() {
-            trash = find_trash(server, cache, send).await?;
-        }
+        let to = match &first.to {
+            Destination::Back(folder) => Some(Arc::clone(folder)),
+            Destination::Trash => {
+                if trash.is_none() {
+                    trash = find_trash(server, cache, send).await?;
+                }
 
-        let Some(to) = first.to.clone().or_else(|| trash.clone()) else {
+                trash.clone()
+            }
+        };
+
+        let Some(to) = to else {
             tracing::warn!(
                 "no Folder has the Trash role: {} Deletes taken back",
                 group.len()
             );
-            group.iter().try_for_each(|m| cache.unmove(m.id))?;
+            refused(cache, group, send)?;
             send(Update::NoTrash);
             continue;
         };
@@ -76,32 +83,27 @@ pub async fn send(
     Ok(selected.filter(|_| !reselected))
 }
 
-/// Writes what the server made of `group`, moved to `to` under the UIDs
-/// `moved` names; false when an Undo found its Message out of reach.
+/// Writes where the server put `group`, into `to` under the UIDs `moved`
+/// names; false when an Undo's Message is out of reach.
 fn record(
     cache: &Cache,
     group: &[PendingMove],
     to: &str,
     moved: &[(u32, u32)],
 ) -> Result<bool, Error> {
+    // A server with UIDPLUS names each Message it moved.
     let there = |uid| {
         moved
             .iter()
             .find(|&&(from, _)| from == uid)
             .map(|&(_, to)| to)
     };
-    let mut restored = true;
+    let mut reached = true;
     for m in group {
-        // A server with UIDPLUS names each Message it moved.
-        if m.to.is_some() {
-            restored &= there(m.uid).is_some();
-            cache.moved_back(m.id, there(m.uid))?;
-        } else {
-            restored &= cache.moved(m.id, to, there(m.uid))?;
-        }
+        reached &= cache.arrived(m, to, there(m.uid))?;
     }
 
-    Ok(restored)
+    Ok(reached)
 }
 
 /// The Folder with the Trash role, listing the Folders first when the
@@ -132,18 +134,14 @@ async fn find_trash(
     trash(cache)
 }
 
-/// Takes back the Deletes of `group`, or drops its Undos: the Messages
-/// they would restore are out of reach.
+/// Leaves every Message of `group` where the server has it.
 fn refused(cache: &Cache, group: &[PendingMove], send: &impl Fn(Update)) -> Result<(), Error> {
+    let mut reached = true;
     for m in group {
-        if m.to.is_some() {
-            cache.moved_back(m.id, None)?;
-        } else {
-            cache.unmove(m.id)?;
-        }
+        reached &= cache.refused(m)?;
     }
 
-    if group.iter().any(|m| m.to.is_some()) {
+    if !reached {
         send(Update::Unrestored);
     }
 

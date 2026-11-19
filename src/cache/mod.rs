@@ -9,6 +9,6 @@ mod store;
 
 pub use changes::Changes;
 pub use error::Error;
-pub use moves::PendingMove;
+pub use moves::{Destination, PendingMove};
 pub use schema::delete;
 pub use store::Cache;
