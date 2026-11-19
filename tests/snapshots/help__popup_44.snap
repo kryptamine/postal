@@ -13,11 +13,11 @@ size: 44x18  cursor: hidden
 │ ^d / ^u  PgDn / PgUp  scroll the Preview │
 │ Enter    l            read the Message f │
 │ |                     open the Message i │
+│ U                     mark the Message U │
 │                                          │
 │ Links                                    │
 │ o                     label the links in │
 │                                          │
-│ View                                     │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help

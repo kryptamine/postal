@@ -60,7 +60,8 @@ fn messages() -> Vec<FakeMessage> {
             };
 
             let message = FakeMessage::new("Sender", &subject, &date.to_rfc3339()).body(body);
-            if i % 3 == 0 {
+            // The oldest stays read: a Dwell on it would mark it mid-count.
+            if i % 3 == 1 {
                 message.unread()
             } else {
                 message
@@ -90,8 +91,10 @@ fn wait_for(condition: impl Fn() -> bool) {
     }
 }
 
-/// The frames logged once no new one has come for a while.
+/// The frames logged once no new one has come for a while, and past a
+/// Dwell, so a Mark Read of the row stopped on is drawn before.
 fn settled_frames(home: &Home) -> Vec<u64> {
+    std::thread::sleep(Duration::from_millis(1100));
     let mut seen = frames(home);
     loop {
         std::thread::sleep(Duration::from_millis(300));

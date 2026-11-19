@@ -13,17 +13,17 @@ size: 80x24  cursor: hidden
 │           │ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │           │
 │           │ Enter    l            read the Message full screen   │           │
 └───────────│ |                     open the Message in $PAGER     │───────────┘
-┌ Inbox · 1/│                                                      │───────────┐
-│ From    Bo│ Links                                                │           │
-│ Subject Ne│ o                     label the links in the Preview │           │
-│ Date    Mo│                                                      │           │
-├───────────│ View                                                 │───────────┤
-│ Newer body│ v                     rendered / text view of HTML   │           │
+┌ Inbox · 1/│ U                     mark the Message Unread        │───────────┐
+│ From    Bo│                                                      │           │
+│ Subject Ne│ Links                                                │           │
+│ Date    Mo│ o                     label the links in the Preview │           │
+├───────────│                                                      │───────────┤
+│ Newer body│ View                                                 │           │
+│           │ v                     rendered / text view of HTML   │           │
 │           │                                                      │           │
 │           │ App                                                  │           │
 │           │ ?                     this help                      │           │
 │           │ q        ^c           quit                           │           │
-│           │ ^z                    suspend to the shell           │           │
 │           │                                                      │           │
 └───────────└──────────────────────────────────────────────────────┘───────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

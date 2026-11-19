@@ -12,7 +12,7 @@ below.
 Reading a Thread asks the sync connection for the rest of it: IDLE ends
 with `DONE`, Postal examines the Folder `LIST` marks `\All`, sends
 `UID SEARCH X-GM-THRID <id>`, fetches the rows, whole bodies and Snippets
-of what it finds, then examines and resyncs the shown Folder and idles on it
+of what it finds, then selects and resyncs the shown Folder and idles on it
 again (ADR 0008). Gmail keeps Trash and Spam out of All Mail, so their
 Messages never join, and a Thread read in either is not looked up.
 

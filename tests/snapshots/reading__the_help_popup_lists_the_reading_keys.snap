@@ -14,16 +14,16 @@ size: 80x24  cursor: hidden
 │ Line 04   │ |                     open the Message in $PAGER     │           │
 │ Line 05   │ q / Esc  h / ←        back to the list               │           │
 │ Line 06   │                                                      │           │
-│ Line 07   │ Links                                                │           │
-│ Line 08   │ o                     label the links in the Preview │           │
+│ Line 07   │ Message                                              │           │
+│ Line 08   │ U                     mark the Message Unread        │           │
 │ Line 09   │                                                      │           │
-│ Line 10   │ View                                                 │           │
-│ Line 11   │ v                     rendered / text view of HTML   │           │
+│ Line 10   │ Links                                                │           │
+│ Line 11   │ o                     label the links in the Preview │           │
 │ Line 12   │                                                      │           │
-│ Line 13   │ App                                                  │           │
-│ Line 14   │ ?                     this help                      │           │
-│ Line 15   │ ^c                    quit                           │           │
-│ Line 16   │ ^z                    suspend to the shell           │           │
+│ Line 13   │ View                                                 │           │
+│ Line 14   │ v                     rendered / text view of HTML   │           │
+│ Line 15   │                                                      │           │
+│ Line 16   │ App                                                  │           │
 │ Line 17   │                                                      │           │
 └───────────└──────────────────────────────────────────────────────┘───────────┘
  j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

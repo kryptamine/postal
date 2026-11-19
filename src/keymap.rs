@@ -16,6 +16,9 @@ pub enum Action {
     Fold,
     /// The selected Message in `$PAGER`; in Reading, the one at the cursor.
     Page,
+    /// Mark Unread: the selected Thread's newest Message, or in Reading the
+    /// one at the cursor.
+    MarkUnread,
     /// Hint mode on the links in the Preview window.
     Links,
     /// The other View of HTML mail: rendered or text.
@@ -104,7 +107,7 @@ const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 25] = [
+const BINDINGS: [Binding; 26] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -238,6 +241,15 @@ const BINDINGS: [Binding; 25] = [
         keys: "|",
         aliases: "",
         description: "open the Message in $PAGER",
+        hint: None,
+    },
+    Binding {
+        group: "Message",
+        modes: BOTH,
+        signed_out: false,
+        keys: "U",
+        aliases: "",
+        description: "mark the Message Unread",
         hint: None,
     },
     Binding {
@@ -434,6 +446,7 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (Mode::List, KeyCode::Enter | KeyCode::Char('l')) => Some(Action::Read),
         (Mode::List, KeyCode::Char('q')) => Some(Action::Quit),
         (Mode::List, KeyCode::Char('/')) => Some(Action::Search),
+        (Mode::List | Mode::Reading, KeyCode::Char('U')) => Some(Action::MarkUnread),
         (Mode::List, KeyCode::Esc) => Some(Action::EndSearch { restore: false }),
         (Mode::Reading, KeyCode::Char('j') | KeyCode::Down) => {
             Some(scroll(Direction::Down, By::Line))

@@ -15,6 +15,7 @@ use crate::{
     body::Body,
     browser,
     cache::{self, Cache},
+    dwell::Dwell,
     folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
@@ -145,11 +146,11 @@ pub async fn run(
             continue;
         }
 
-        let change = screen.changes_at(Instant::now());
+        let change = next_change(&view, &mut screen, previews, text);
         tokio::select! {
             () = tokio::time::sleep_until(change.unwrap_or_else(Instant::now)), if change.is_some() => {
                 frame_start = alloc_count::count();
-                screen.expire(Instant::now());
+                expire(&mut view, &mut screen, cache, &asks)?;
             }
             result = &mut work, if !work.is_terminated() => {
                 frame_start = alloc_count::count();
@@ -167,7 +168,7 @@ pub async fn run(
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
-                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Thread(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
+                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
@@ -177,6 +178,36 @@ pub async fn run(
             }
         }
     }
+}
+
+/// Follows the Dwell, then says when the screen next changes on its own.
+fn next_change(
+    view: &InboxView,
+    screen: &mut Screen,
+    previews: &Previews,
+    text: Option<Rect>,
+) -> Option<Instant> {
+    let target = dwelling(view, screen, previews, text);
+    screen
+        .dwell
+        .follow(view.selected_key(), target, Instant::now());
+    screen.changes_at(Instant::now())
+}
+
+/// Drops the Toast and ends the Dwell when their time is up.
+fn expire(
+    view: &mut InboxView,
+    screen: &mut Screen,
+    cache: &Cache,
+    asks: &UnboundedSender<Ask>,
+) -> Result<(), Error> {
+    let now = Instant::now();
+    screen.expire(now);
+    if screen.dwell.ended(now) {
+        mark_read(view, screen, cache, asks)?;
+    }
+
+    Ok(())
 }
 
 /// Rows a half-page scroll moves the Preview `text` by.
@@ -384,6 +415,7 @@ struct Screen {
     mode: Mode,
     /// While `mode` is `Reading`.
     reading: Option<Reading>,
+    dwell: Dwell,
 }
 
 impl Screen {
@@ -423,11 +455,11 @@ impl Screen {
         }
     }
 
-    /// When the Toast goes or the Status's countdown ticks, whichever is
-    /// first; `None` while neither will.
+    /// When the Toast goes, the Status's countdown ticks or the Dwell ends,
+    /// whichever is first; `None` while none will.
     fn changes_at(&self, now: Instant) -> Option<Instant> {
         let toast = self.toast.as_ref().map(|toast| toast.until);
-        [toast, self.status().ticks_at(now)]
+        [toast, self.status().ticks_at(now), self.dwell.due()]
             .into_iter()
             .flatten()
             .min()
@@ -447,8 +479,10 @@ enum Step {
     Folders,
     Show(Folder),
     Search,
-    /// The Messages of this Gmail Thread in other Folders are asked for.
-    Thread(u64),
+    /// Reading opened, on the Gmail Thread with this ID if it has one: its
+    /// Messages in other Folders are asked for.
+    Read(Option<u64>),
+    MarkUnread,
     Browse(Arc<str>),
     Page,
     Suspend,
@@ -507,8 +541,9 @@ fn act(
     match action {
         Some(Action::Quit) => Step::Quit,
         Some(action @ (Action::Read | Action::Step(_) | Action::Fold)) => {
-            read(action, view, screen).map_or(Step::Stay, Step::Thread)
+            read(action, view, screen)
         }
+        Some(Action::MarkUnread) => Step::MarkUnread,
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
             Step::Stay
@@ -563,30 +598,115 @@ fn act(
     }
 }
 
-/// Opens the selected Thread in Reading, or moves through it there. Returns
-/// the Gmail ID of a Thread just opened, for its other Folders to be read.
-fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Option<u64> {
+/// Opens the selected Thread in Reading, or moves through it there.
+fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
     match (action, &mut screen.reading) {
         (Action::Read, _) => {
-            let reading = Reading::open(view.stack())?;
+            let Some(reading) = Reading::open(view.stack()) else {
+                return Step::Stay;
+            };
+
             screen.mode = Mode::Reading;
             screen.reading = Some(reading);
             // Gmail keeps Trash and Spam out of All Mail, and their Threads
             // apart; a Search never shows theirs.
             let apart =
                 view.search.is_none() && matches!(view.folder.role, Some(Role::Trash | Role::Spam));
-            if let Some(Key::Gmail(id)) = view.selected_key()
-                && !apart
-            {
-                return Some(id);
-            }
+            let gmail = match view.selected_key() {
+                Some(Key::Gmail(id)) if !apart => Some(id),
+                _ => None,
+            };
+
+            return Step::Read(gmail);
         }
         (Action::Step(direction), Some(reading)) => reading.step(direction, view.stack()),
         (Action::Fold, Some(reading)) => reading.fold(),
         _ => {}
     }
 
-    None
+    Step::Stay
+}
+
+/// The selected Thread and its newest body key, while a Dwell may run on
+/// it: listed, Unread, and its body shown in the Preview `text`.
+fn dwelling(
+    view: &InboxView,
+    screen: &Screen,
+    previews: &Previews,
+    text: Option<Rect>,
+) -> Option<(Key, i64)> {
+    let listed = matches!(screen.mode, Mode::List | Mode::Query) && screen.picker.is_none();
+    let text = text.filter(|_| listed && !screen.help && view.selected_unread())?;
+    previews.get(view, text.width)?;
+    Some((view.selected_key()?, view.selected_body()?))
+}
+
+/// Mark Read on the selected Thread's Messages in their Folders.
+fn mark_read(
+    view: &mut InboxView,
+    screen: &mut Screen,
+    cache: &Cache,
+    asks: &UnboundedSender<Ask>,
+) -> Result<(), Error> {
+    let unread: Vec<_> = view
+        .stack()
+        .filter(|m| m.unread)
+        .filter_map(|m| Some((Arc::clone(m.folder.as_ref()?), m.uid)))
+        .collect();
+    mark((view, screen), cache, asks, (&unread, false)).map(drop)
+}
+
+/// Mark Unread on the selected Thread's newest Message, or in Reading on
+/// the one at the cursor.
+fn mark_unread(
+    view: &mut InboxView,
+    screen: &mut Screen,
+    cache: &Cache,
+    asks: &UnboundedSender<Ask>,
+) -> Result<(), Error> {
+    let message = screen.reading.as_ref().map_or_else(
+        || view.selected_message(),
+        |reading| view.stack().find(|m| m.body_key == reading.cursor),
+    );
+
+    let Some(message) = message else {
+        return Ok(());
+    };
+
+    let Some(folder) = message.folder.as_ref() else {
+        screen.toast = Some(Toast::new("only in another Folder"));
+        return Ok(());
+    };
+
+    let marked = [(Arc::clone(folder), message.uid)];
+    if let Some(key) = view.selected_key() {
+        screen.dwell.spare(key);
+    }
+
+    if mark((view, screen), cache, asks, (&marked, true))? {
+        screen.toast = Some(Toast::new("marked Unread"));
+    }
+
+    Ok(())
+}
+
+/// Sets Unread on `messages` in the Cache and the screen, and asks the
+/// sync connection to tell the server; false when none changed.
+fn mark(
+    (view, screen): (&mut InboxView, &mut Screen),
+    cache: &Cache,
+    asks: &UnboundedSender<Ask>,
+    (messages, unread): (&[(Arc<str>, u32)], bool),
+) -> Result<bool, Error> {
+    if !cache.mark(messages, unread).map_err(Error::Cache)? {
+        return Ok(false);
+    }
+
+    show(view, cache, None)?;
+    relist(screen, view, cache)?;
+    // The send fails only while signed out; the change waits in the Cache.
+    asks.unbounded_send(Ask::Flags).ok();
+    Ok(true)
 }
 
 /// Acts on one key in the Folder Picker, which takes them all.
@@ -635,7 +755,8 @@ fn switch(
 }
 
 /// Opens the Folder Picker as the Cache last saw the Folders, starts a
-/// Search, or shows the Folder picked, asking the sync connection to follow.
+/// Search, shows the Folder picked, or marks Messages read or Unread,
+/// asking the sync connection to follow.
 fn steer(
     step: Step,
     view: &mut InboxView,
@@ -656,7 +777,15 @@ fn steer(
 
             Ask::Show(Arc::clone(&view.folder.name))
         }
-        Step::Thread(id) => Ask::Thread(id),
+        Step::Read(thread) => {
+            mark_read(view, screen, cache, asks)?;
+            let Some(id) = thread else {
+                return Ok(());
+            };
+
+            Ask::Thread(id)
+        }
+        Step::MarkUnread => return mark_unread(view, screen, cache, asks),
         Step::Search => return start_search(view, screen, cache),
         _ => return Ok(()),
     };

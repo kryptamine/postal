@@ -9,7 +9,7 @@ pub struct SequenceNumbers {
 }
 
 impl SequenceNumbers {
-    /// `exists` is the count `EXAMINE` saw, before any Message at or past
+    /// `exists` is the count `SELECT` saw, before any Message at or past
     /// `uid_next` arrived; `None` counts every cached UID as seen by it.
     pub fn new(exists: u32, uid_next: Option<u32>, uids: Vec<u32>) -> Self {
         let examined = uids

@@ -20,6 +20,7 @@ use imap_next::{
         envelope::{Address, Envelope},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
         flag::{Flag, FlagFetch, FlagNameAttribute},
+        flag::{StoreResponse, StoreType},
         mailbox::Mailbox,
         response::{
             Capability, Code, CodeOther, CommandContinuationRequest, Data, Greeting, Status,
@@ -394,6 +395,17 @@ impl FakeImap {
         drop(state);
     }
 
+    /// Whether the Message with this UID in `folder` has `\Seen`.
+    pub fn seen(&self, folder: &str, uid: u32) -> bool {
+        self.inbox
+            .lock()
+            .unwrap()
+            .folder_mut(folder)
+            .stored(uid)
+            .message
+            .seen
+    }
+
     /// The `X-GM-MSGID` of the Message with this UID.
     pub fn msgid(&self, uid: u32) -> u64 {
         self.inbox.lock().unwrap().inbox().stored(uid).msgid
@@ -572,14 +584,15 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     let bye = outage == Some(Outage::Bye);
     let mut server = Server::new(Options::default(), greeting(bye));
     let mut view = Vec::new();
-    let mut selected = INBOX.to_owned();
+    // With whether it was `SELECT`ed: only then is a `STORE` accepted.
+    let mut opened = (INBOX.to_owned(), false);
     let mut idling = None;
     let mut authenticating = None;
     loop {
         let next = tokio::select! {
             next = stream.next(&mut server) => next,
             () = tokio::time::sleep(Duration::from_millis(10)) => {
-                if !tick(&mut server, (&mut view, &selected), &inbox, cut, idling.is_some()) {
+                if !tick(&mut server, (&mut view, &opened.0), &inbox, cut, idling.is_some()) {
                     return;
                 }
 
@@ -612,7 +625,7 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
             }
             Event::CommandReceived { command } => {
                 if let Some(examined) = examined(&command.body, &inbox) {
-                    (selected, view) = examined;
+                    (opened, view) = examined;
                 }
 
                 if let CommandBody::Fetch {
@@ -624,22 +637,27 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                     wait_unless_fetch_stalled(&inbox, macro_or_item_names, *uid).await;
                 }
 
-                respond(&mut server, command, &inbox.lock().unwrap(), &selected);
+                respond(&mut server, command, &mut inbox.lock().unwrap(), &opened);
             }
             _ => {}
         }
     }
 }
 
-/// The Folder an `EXAMINE` opens, and what an idling client is told of it.
-fn examined(body: &CommandBody<'_>, inbox: &Mutex<Inbox>) -> Option<(String, Vec<(u32, bool)>)> {
+/// A Folder's name, and whether it was `SELECT`ed rather than `EXAMINE`d.
+type Opened = (String, bool);
+
+/// The Folder an `EXAMINE` or a `SELECT` opens, with whether it was a
+/// `SELECT`, and what an idling client is told of it.
+fn examined(body: &CommandBody<'_>, inbox: &Mutex<Inbox>) -> Option<(Opened, Vec<(u32, bool)>)> {
     let (CommandBody::Examine { mailbox, .. } | CommandBody::Select { mailbox, .. }) = body else {
         return None;
     };
 
     let name = mailbox_name(mailbox);
     let view = inbox.lock().unwrap().folder(&name).map(seen);
-    Some((name, view.unwrap_or_default()))
+    let writable = matches!(body, CommandBody::Select { .. });
+    Some(((name, writable), view.unwrap_or_default()))
 }
 
 fn greeting(bye: bool) -> Greeting<'static> {
@@ -816,9 +834,15 @@ fn selected_folder<'a>(
     }
 }
 
-fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox, selected: &str) {
+fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, opened: &Opened) {
+    if let CommandBody::Store { .. } = command.body {
+        server.enqueue_status(store(inbox, command, opened));
+        return;
+    }
+
+    let inbox = &*inbox;
     let tag = Some(command.tag);
-    let Some(folder) = selected_folder(&command.body, inbox, selected) else {
+    let Some(folder) = selected_folder(&command.body, inbox, &opened.0) else {
         let status = Status::no(tag, Some(code("NONEXISTENT")), "Unknown Mailbox");
         server.enqueue_status(status.unwrap());
         return;
@@ -844,10 +868,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox, select
             server.enqueue_status(status);
         }
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
-            examine(server, folder);
-            server.enqueue_status(
-                Status::ok(tag, Some(Code::ReadOnly), "EXAMINE completed").unwrap(),
-            );
+            examine(server, folder, (tag, opened.1));
         }
         CommandBody::Search {
             criteria,
@@ -871,6 +892,58 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &Inbox, select
             server.enqueue_status(Status::bad(tag, None, "not faked").unwrap());
         }
     }
+}
+
+/// Applies a `UID STORE` of `\Seen` to the Folder `opened`, and to each
+/// copy of its Messages in other Folders, as Gmail shares the flag; refused
+/// unless it was `SELECT`ed.
+fn store(inbox: &mut Inbox, command: Command<'static>, opened: &Opened) -> Status<'static> {
+    let tag = Some(command.tag);
+    let CommandBody::Store {
+        sequence_set,
+        kind,
+        response: StoreResponse::Silent,
+        flags,
+        uid: true,
+        ..
+    } = command.body
+    else {
+        return Status::bad(tag, None, "not faked").unwrap();
+    };
+
+    let Some(folder) = inbox.folder(&opened.0).filter(|_| opened.1) else {
+        return Status::no(tag, None, "STORE needs a Folder selected read-write").unwrap();
+    };
+
+    let has_seen = flags.contains(&Flag::Seen);
+    let seen = match kind {
+        StoreType::Add if has_seen => true,
+        StoreType::Remove if has_seen => false,
+        StoreType::Replace => has_seen,
+        StoreType::Add | StoreType::Remove => {
+            return Status::ok(tag, None, "STORE completed").unwrap();
+        }
+    };
+
+    let msgids: Vec<u64> = fetched(folder, &sequence_set, true, None)
+        .map(|(_, stored)| stored.msgid)
+        .collect();
+    for folder in &mut inbox.folders {
+        let copies: Vec<u32> = folder
+            .messages
+            .iter()
+            .filter(|m| msgids.contains(&m.msgid) && m.message.seen != seen)
+            .map(|m| m.uid)
+            .collect();
+        for uid in copies {
+            let modseq = folder.bump();
+            let stored = folder.stored(uid);
+            stored.modseq = modseq;
+            stored.message.seen = seen;
+        }
+    }
+
+    Status::ok(tag, None, "STORE completed").unwrap()
 }
 
 /// Enqueues what a `LIST` or a `STATUS` asks for and returns its tagged status.
@@ -955,7 +1028,8 @@ fn listed(folder: &Folder) -> Data<'static> {
     }
 }
 
-fn examine(server: &mut Server, inbox: &Folder) {
+/// Answers `tag` with `READ-WRITE` when `writable`, as for a `SELECT`.
+fn examine(server: &mut Server, inbox: &Folder, (tag, writable): (Option<Tag<'static>>, bool)) {
     let exists = u32::try_from(inbox.messages.len()).unwrap();
     server.enqueue_data(Data::Exists(exists));
     server.enqueue_data(Data::Flags(vec![Flag::Seen]));
@@ -970,6 +1044,13 @@ fn examine(server: &mut Server, inbox: &Folder) {
     for code in codes {
         server.enqueue_status(Status::ok(None, Some(code), "fake").unwrap());
     }
+
+    let code = if writable {
+        Code::ReadWrite
+    } else {
+        Code::ReadOnly
+    };
+    server.enqueue_status(Status::ok(tag, Some(code), "opened").unwrap());
 }
 
 /// The UIDs a `UID SEARCH` matches; `None` for criteria the fake does not know.

@@ -14,16 +14,17 @@ size: 80x36  cursor: hidden
 │           │ ^d / ^u  PgDn / PgUp  scroll the Preview half a page │           │
 │           │ Enter    l            read the Message full screen   │           │
 │           │ |                     open the Message in $PAGER     │           │
+│           │ U                     mark the Message Unread        │           │
 │           │                                                      │           │
 │           │ Links                                                │           │
-│           │ o                     label the links in the Preview │           │
-└───────────│                                                      │───────────┘
-┌ Inbox · 1/│ View                                                 │───────────┐
-│ From    Bo│ v                     rendered / text view of HTML   │           │
-│ Subject Ne│                                                      │           │
-│ Date    Mo│ App                                                  │           │
-├───────────│ ?                     this help                      │───────────┤
-│ Newer body│ q        ^c           quit                           │           │
+└───────────│ o                     label the links in the Preview │───────────┘
+┌ Inbox · 1/│                                                      │───────────┐
+│ From    Bo│ View                                                 │           │
+│ Subject Ne│ v                     rendered / text view of HTML   │           │
+│ Date    Mo│                                                      │           │
+├───────────│ App                                                  │───────────┤
+│ Newer body│ ?                     this help                      │           │
+│           │ q        ^c           quit                           │           │
 │           │ ^z                    suspend to the shell           │           │
 │           │                                                      │           │
 │           │ Search                                               │           │
@@ -36,6 +37,5 @@ size: 80x36  cursor: hidden
 │           │ f                     pick the Folder to show        │           │
 │           │                                                      │           │
 │           └──────────────────────────────────────────────────────┘           │
-│                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

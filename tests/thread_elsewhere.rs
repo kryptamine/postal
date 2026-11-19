@@ -175,7 +175,7 @@ fn idle_resumes_on_the_shown_folder_after_the_thread_is_fetched() {
     let search = at(&|c| c.starts_with("UID SEARCH X-GM-THRID")).unwrap();
     let inbox = commands
         .iter()
-        .rposition(|c| c == "EXAMINE \"INBOX\"")
+        .rposition(|c| c == "SELECT \"INBOX\"")
         .unwrap();
     let idle = commands.iter().rposition(|c| c == "IDLE").unwrap();
     assert!(

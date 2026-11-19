@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     cache::{Cache, Changes},
+    flag_changes,
     folder::INBOX,
     folder_list,
     imap::{MailServer, Pushed},
@@ -37,13 +38,26 @@ pub async fn listen<S: MailServer>(
         return Ok(());
     };
 
+    // Before the resync, so it reads the flags they set.
+    flag_changes::send(&mut server, cache, None).await?;
     let mut sequence = shown(&mut server, cache, steering, send, report).await?;
+    // `None` while the Folder selected on the server is not known.
+    let mut selected = Some(Arc::clone(&steering.folder));
     // What came during the resync and the Snippets goes first.
     let mut pushed = server.pushed();
     loop {
-        // The switch goes first, so `STATUS` never reaches the examined Folder.
+        // Ahead of a switch, while `selected` is still the Folder selected.
+        if std::mem::take(&mut asked.flags) {
+            selected = flag_changes::send(&mut server, cache, selected.take()).await?;
+            asked.switched |= selected.as_deref() != Some(&*steering.folder);
+            pushed.extend(server.pushed());
+            continue;
+        }
+
+        // The switch goes first, so `STATUS` never reaches the selected Folder.
         if std::mem::take(&mut asked.switched) {
             sequence = shown(&mut server, cache, steering, send, report).await?;
+            selected = Some(Arc::clone(&steering.folder));
             pushed = server.pushed();
             continue;
         }
@@ -60,7 +74,8 @@ pub async fn listen<S: MailServer>(
 
         if let Some(id) = asked.thread.take() {
             thread_fetch::fetch(&mut server, cache, id, send).await?;
-            // All Mail is examined now, so the shown Folder is examined again.
+            // All Mail is examined now, so the shown Folder is selected again.
+            selected = None;
             asked.switched = true;
             continue;
         }
@@ -83,30 +98,45 @@ pub async fn listen<S: MailServer>(
             continue;
         }
 
-        let Some(changes) = changes(&mut server, cache, (&folder, &mut sequence), pushed).await?
-        else {
-            pushed = server.pushed();
-            continue;
-        };
-
-        cache.apply(&folder, &changes)?;
-        tracing::debug!(
-            "IDLE: {} new, {} expunged, {} flag changes",
-            changes.new.len(),
-            changes.expunged.len(),
-            changes.flags.len()
-        );
-        send(Update::Inbox);
-        if !changes.new.is_empty() {
-            snippets::fetch(&mut server, cache, &folder, None, || send(Update::Inbox)).await?;
-        }
-
+        take_in(&mut server, cache, (&folder, &mut sequence), pushed, send).await?;
         pushed = server.pushed();
     }
 }
 
+/// Writes what `pushed` changed in `folder` to the Cache, with the Snippets
+/// of new rows.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn take_in(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    (folder, sequence): (&str, &mut SequenceNumbers),
+    pushed: Vec<Pushed>,
+    send: &impl Fn(Update),
+) -> Result<(), Error> {
+    let Some(changes) = changes(server, cache, (folder, sequence), pushed).await? else {
+        return Ok(());
+    };
+
+    cache.apply(folder, &changes)?;
+    tracing::debug!(
+        "IDLE: {} new, {} expunged, {} flag changes",
+        changes.new.len(),
+        changes.expunged.len(),
+        changes.flags.len()
+    );
+    send(Update::Inbox);
+    if !changes.new.is_empty() {
+        snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
+    }
+
+    Ok(())
+}
+
 /// Resyncs the Folder `steering` follows, dropping what the server
-/// announced of the one examined before; back to the Inbox when it is gone.
+/// announced of the one selected before; back to the Inbox when it is gone.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -149,7 +179,7 @@ fn resync_for(
     }
 
     // Rows the fetch connection added below the numbered ones take this
-    // connection's own EXAMINE to number.
+    // connection's own SELECT to number.
     let backfilled = matches!(
         (cache.oldest_uid(folder)?, sequence.oldest()),
         (Some(cached), Some(numbered)) if cached < numbered
@@ -158,7 +188,7 @@ fn resync_for(
 }
 
 /// Resyncs `folder` and cuts its Snippets; numbers the cached UIDs as the
-/// resync's `EXAMINE` did.
+/// resync's `SELECT` did.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"

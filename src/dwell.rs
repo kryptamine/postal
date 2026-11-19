@@ -1,0 +1,56 @@
+use std::time::Duration;
+
+use tokio::time::Instant;
+
+use crate::thread::Key;
+
+/// How long the selection rests on a Thread before a Mark Read: long enough
+/// to scroll past a row without marking it.
+const DELAY: Duration = Duration::from_secs(1);
+
+/// The selection resting on an Unread Thread whose Preview shows its body.
+#[derive(Default)]
+pub struct Dwell {
+    /// The Thread, the body key of its newest Message, and since when.
+    on: Option<(Key, i64, Instant)>,
+    /// Marked Unread by hand: no Dwell on it until the selection leaves it.
+    spared: Option<Key>,
+}
+
+impl Dwell {
+    /// Follows the screen: `selected` is the selected Thread, `target` it
+    /// with its newest body key while it is Unread and its body shows. A
+    /// new newest Message starts the Dwell over.
+    pub fn follow(&mut self, selected: Option<Key>, target: Option<(Key, i64)>, now: Instant) {
+        if self.spared != selected {
+            self.spared = None;
+        }
+
+        let target = target.filter(|&(key, _)| self.spared != Some(key));
+        let same = matches!((self.on, target), (Some((k, b, _)), Some(t)) if (k, b) == t);
+        if !same {
+            self.on = target.map(|(key, body)| (key, body, now));
+        }
+    }
+
+    /// When the Dwell under way ends.
+    pub fn due(&self) -> Option<Instant> {
+        self.on.map(|(_, _, since)| since + DELAY)
+    }
+
+    /// Whether the Dwell under way has ended by `now`; it is over then.
+    pub fn ended(&mut self, now: Instant) -> bool {
+        let ended = self.due().is_some_and(|due| due <= now);
+        if ended {
+            self.on = None;
+        }
+
+        ended
+    }
+
+    /// No Dwell on `key` until the selection leaves it.
+    pub const fn spare(&mut self, key: Key) {
+        self.spared = Some(key);
+        self.on = None;
+    }
+}

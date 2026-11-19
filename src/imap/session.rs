@@ -32,7 +32,7 @@ const GMAIL_ITEMS: &str = concat!(
     "BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])"
 );
 
-/// A Folder as `EXAMINE` reports it.
+/// A Folder as `EXAMINE` or `SELECT` reports it.
 pub struct Examined {
     pub exists: u32,
     pub state: SyncState,
@@ -42,6 +42,12 @@ pub struct Examined {
 pub trait MailServer {
     /// Opens the Folder named `folder` read-only; later commands read it.
     async fn examine(&mut self, folder: &str) -> Result<Examined, Error>;
+
+    /// As `examine`, but `store_unread` may change the Folder's flags.
+    async fn select(&mut self, folder: &str) -> Result<Examined, Error>;
+
+    /// Sets or clears `\Seen` on `uids` of the selected Folder.
+    async fn store_unread(&mut self, uids: &[u32], unread: bool) -> Result<(), Error>;
 
     /// Every Folder the server lists that can be opened.
     async fn folders(&mut self) -> Result<Vec<Folder>, Error>;
@@ -203,6 +209,18 @@ impl ImapSession {
         .await
     }
 
+    fn opened(&mut self, mailbox: &async_imap::types::Mailbox) -> Examined {
+        self.uid_validity = mailbox.uid_validity.unwrap_or_default();
+        Examined {
+            exists: mailbox.exists,
+            state: SyncState {
+                uid_validity: self.uid_validity,
+                uid_next: mailbox.uid_next,
+                highest_modseq: mailbox.highest_modseq,
+            },
+        }
+    }
+
     async fn uid_fetch(&mut self, uids: String, items: &str) -> Result<Vec<Fetch>, Error> {
         let fetches = self.session.uid_fetch(uids, items).await?;
         Ok(fetches.try_collect().await?)
@@ -214,15 +232,34 @@ impl MailServer for ImapSession {
         // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
         // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
         let mailbox = self.session.examine(folder).await?;
-        self.uid_validity = mailbox.uid_validity.unwrap_or_default();
-        Ok(Examined {
-            exists: mailbox.exists,
-            state: SyncState {
-                uid_validity: self.uid_validity,
-                uid_next: mailbox.uid_next,
-                highest_modseq: mailbox.highest_modseq,
-            },
-        })
+        Ok(self.opened(&mailbox))
+    }
+
+    async fn select(&mut self, folder: &str) -> Result<Examined, Error> {
+        let mailbox = self.session.select(folder).await?;
+        Ok(self.opened(&mailbox))
+    }
+
+    async fn store_unread(&mut self, uids: &[u32], unread: bool) -> Result<(), Error> {
+        // SILENT: the server need not echo the flags just set.
+        let query = if unread {
+            "-FLAGS.SILENT (\\Seen)"
+        } else {
+            "+FLAGS.SILENT (\\Seen)"
+        };
+        let echoed: Vec<Fetch> = self
+            .session
+            .uid_store(uid_set(uids), query)
+            .await?
+            .try_collect()
+            .await?;
+        tracing::info!(
+            "marked {} Messages {}",
+            uids.len(),
+            if unread { "Unread" } else { "read" }
+        );
+        drop(echoed);
+        Ok(())
     }
 
     async fn folders(&mut self) -> Result<Vec<Folder>, Error> {

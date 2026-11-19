@@ -164,7 +164,7 @@ fn heads_each_date_group_and_keeps_the_top_one_in_view() {
 }
 
 #[test]
-fn reads_the_inbox_without_changing_it() {
+fn changes_nothing_in_the_inbox_but_the_seen_flag() {
     let server = FakeImap::start(four_messages());
     let home = Home::for_server(&server);
     let mut t = postal(&home);
@@ -172,19 +172,12 @@ fn reads_the_inbox_without_changing_it() {
     quit(t);
 
     let commands = server.commands();
-    for expected in ["EXAMINE \"INBOX\"", "UID SEARCH UNSEEN", FETCH] {
+    for expected in ["SELECT \"INBOX\"", "UID SEARCH UNSEEN", FETCH] {
         assert!(commands.contains(&expected.to_owned()), "{commands:#?}");
     }
 
-    // Postal is read-only: a SELECT would let the server clear \Recent.
-    for forbidden in [
-        "SELECT",
-        "STORE",
-        "EXPUNGE",
-        "COPY",
-        "UID STORE",
-        "UID COPY",
-    ] {
+    // Selected so a Mark Read can be stored, and only that may change.
+    for forbidden in ["EXPUNGE", "COPY", "MOVE", "APPEND", "UID COPY", "UID MOVE"] {
         assert!(
             !commands
                 .iter()
@@ -192,6 +185,12 @@ fn reads_the_inbox_without_changing_it() {
             "sent {forbidden}: {commands:#?}"
         );
     }
+
+    let mut stores = commands.iter().filter(|c| c.contains("STORE"));
+    assert!(
+        stores.all(|c| c.ends_with("FLAGS.SILENT (\\Seen)")),
+        "{commands:#?}"
+    );
 }
 
 fn five_hundred_and_three(unread_outside_the_window: bool) -> Vec<FakeMessage> {

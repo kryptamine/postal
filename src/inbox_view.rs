@@ -194,6 +194,11 @@ impl InboxView {
         self.row(self.selected)
     }
 
+    /// Whether any of the selected Thread's Messages in its Folder is Unread.
+    pub fn selected_unread(&self) -> bool {
+        self.thread_at(self.selected).is_some_and(|t| t.unread)
+    }
+
     pub fn selected_key(&self) -> Option<Key> {
         self.thread_at(self.selected).map(|t| t.key)
     }

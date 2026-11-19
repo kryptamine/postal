@@ -46,7 +46,10 @@ async fn commands(
     while reader.read_line(&mut line).await.is_ok_and(|n| n > 0) {
         let command = line.trim_end_matches(['\r', '\n']);
         let untagged = command.split_once(' ').map_or(command, |(_, rest)| rest);
-        if let Some(name) = untagged.strip_prefix("EXAMINE ") {
+        if let Some(name) = untagged
+            .strip_prefix("EXAMINE ")
+            .or_else(|| untagged.strip_prefix("SELECT "))
+        {
             *examined.lock().unwrap() = unquoted(name);
         }
 

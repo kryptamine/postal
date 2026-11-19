@@ -16,7 +16,7 @@ const WINDOW: u32 = 500;
 pub enum Error {
     Imap(imap::Error),
     Cache(cache::Error),
-    /// `EXAMINE` was refused: the server no longer has the Folder.
+    /// `EXAMINE` or `SELECT` was refused: the server no longer has the Folder.
     Gone(imap::Error),
 }
 
@@ -59,18 +59,26 @@ impl From<cache::Error> for Error {
 
 /// Examines `folder` and returns what it saw; `Gone` when refused.
 pub async fn examine(server: &mut impl MailServer, folder: &str) -> Result<Examined, Error> {
-    server.examine(folder).await.map_err(|error| {
-        if error.refusal().is_some() {
-            Error::Gone(error)
-        } else {
-            Error::Imap(error)
-        }
-    })
+    server.examine(folder).await.map_err(gone)
+}
+
+/// As `examine`, opening `folder` for flag changes too.
+pub async fn select(server: &mut impl MailServer, folder: &str) -> Result<Examined, Error> {
+    server.select(folder).await.map_err(gone)
+}
+
+/// A refusal to open a Folder means the server no longer has it.
+fn gone(error: imap::Error) -> Error {
+    if error.refusal().is_some() {
+        Error::Gone(error)
+    } else {
+        Error::Imap(error)
+    }
 }
 
 /// Brings the Cache up to the server's `folder` and writes the result in one
 /// transaction, so the Message List never shows a half-applied resync. Returns
-/// what its `EXAMINE` saw; `report` follows the first fetch, then says `Live`.
+/// what its `SELECT` saw; `report` follows the first fetch, then says `Live`.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -81,7 +89,8 @@ pub async fn resync(
     folder: &str,
     report: &dyn Fn(Status),
 ) -> Result<Examined, Error> {
-    let examined = examine(server, folder).await?;
+    // Selected, not examined, so a Mark Read can be stored: ADR 0011.
+    let examined = select(server, folder).await?;
     let unread = server.unread_count().await?;
     let known = cache.state(folder)?;
     let cached = cache.uids(folder)?;

@@ -12,6 +12,8 @@ pub enum Ask {
     ListFolders,
     /// The Messages of Gmail's Thread with this ID in other Folders.
     Thread(u64),
+    /// The Cache holds flag changes for the server.
+    Flags,
 }
 
 /// What the asks waiting came to.
@@ -21,6 +23,7 @@ pub struct Asked {
     pub list: bool,
     /// The Thread last asked for, when the Messages of one were.
     pub thread: Option<u64>,
+    pub flags: bool,
 }
 
 /// The Folder the sync connection follows, and the screen's asks of it.
@@ -52,6 +55,7 @@ impl Steering {
                 }
                 Some(Some(Ask::ListFolders)) => asked.list = true,
                 Some(Some(Ask::Thread(id))) => asked.thread = Some(id),
+                Some(Some(Ask::Flags)) => asked.flags = true,
             }
         }
     }

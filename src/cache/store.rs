@@ -26,6 +26,9 @@ use crate::{
 /// The raw bodies kept, in bytes; past it the least recently used go first.
 const BODY_BYTES: i64 = 200 * 1024 * 1024;
 
+/// A Folder's flag changes for the server, each `(uid, unread)`.
+pub type FolderFlags = (Arc<str>, Vec<(u32, bool)>);
+
 /// Once a write to disk fails, the Cache moves into memory for the rest of
 /// the session, so a full disk or a lost permission stops nothing.
 pub struct Cache {
@@ -243,8 +246,7 @@ impl Cache {
                 .iter()
                 .filter(|c| !listed.iter().any(|f| *f.name == **c))
             {
-                transaction.execute("DELETE FROM message WHERE mailbox = ?1", [gone])?;
-                transaction.execute("DELETE FROM mailbox WHERE name = ?1", [gone])?;
+                forget(&transaction, gone)?;
             }
 
             drop(upsert);
@@ -266,8 +268,60 @@ impl Cache {
     pub fn remove_folder(&self, folder: &str) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            transaction.execute("DELETE FROM message WHERE mailbox = ?1", [folder])?;
-            transaction.execute("DELETE FROM mailbox WHERE name = ?1", [folder])?;
+            forget(&transaction, folder)?;
+            transaction.commit()
+        })
+    }
+
+    /// Sets Unread on each `(folder, uid)` and on Gmail's copies of it in
+    /// other Folders, adjusting their Unread counts, and queues the change
+    /// for the server. Returns whether any row changed.
+    pub fn mark(&self, messages: &[(Arc<str>, u32)], unread: bool) -> Result<bool, Error> {
+        self.write(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            let mut changed = false;
+            for (folder, uid) in messages {
+                changed |= mark(&transaction, (folder, *uid), unread)?;
+            }
+
+            transaction.commit()?;
+            Ok(changed)
+        })
+    }
+
+    /// The flag changes the server has not acknowledged, by Folder, each
+    /// as `(uid, unread)`.
+    pub fn pending_flags(&self) -> Result<Vec<FolderFlags>, Error> {
+        let connection = self.connection.borrow();
+        let mut statement = connection
+            .prepare_cached("SELECT mailbox, uid, unread FROM flag_change ORDER BY mailbox, uid")?;
+        let mut pending: Vec<FolderFlags> = Vec::new();
+        for row in statement.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get(1)?, row.get(2)?))
+        })? {
+            let (folder, uid, unread) = row?;
+            match pending.last_mut() {
+                Some((last, changes)) if **last == *folder => changes.push((uid, unread)),
+                _ => pending.push((folder.into(), vec![(uid, unread)])),
+            }
+        }
+
+        Ok(pending)
+    }
+
+    /// Drops `changes` of `folder` from the queue; one changed again since
+    /// stays queued.
+    pub fn flags_sent(&self, folder: &str, changes: &[(u32, bool)]) -> Result<(), Error> {
+        self.write(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            let mut delete = transaction.prepare_cached(
+                "DELETE FROM flag_change WHERE mailbox = ?1 AND uid = ?2 AND unread = ?3",
+            )?;
+            for (uid, unread) in changes {
+                delete.execute(params![folder, uid, unread])?;
+            }
+
+            drop(delete);
             transaction.commit()
         })
     }
@@ -442,6 +496,7 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     let transaction = connection.unchecked_transaction()?;
     if changes.replace {
         transaction.execute("DELETE FROM message WHERE mailbox = ?1", [folder])?;
+        transaction.execute("DELETE FROM flag_change WHERE mailbox = ?1", [folder])?;
     }
 
     insert(&transaction, folder, &changes.new)?;
@@ -451,8 +506,11 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
         delete.execute(params![folder, uid])?;
     }
 
-    let mut flag = transaction
-        .prepare_cached("UPDATE message SET unread = ?3 WHERE mailbox = ?1 AND uid = ?2")?;
+    // The server's flag is older than a change still queued for it.
+    let mut flag = transaction.prepare_cached(
+        "UPDATE message SET unread = ?3 WHERE mailbox = ?1 AND uid = ?2
+           AND NOT EXISTS (SELECT 1 FROM flag_change WHERE mailbox = ?1 AND uid = ?2)",
+    )?;
     for (uid, unread) in &changes.flags {
         flag.execute(params![folder, uid, unread])?;
     }
@@ -474,6 +532,61 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     )?;
     drop((delete, flag));
     transaction.commit()
+}
+
+/// Drops `folder` with its rows and its queued flag changes.
+fn forget(connection: &Connection, folder: &str) -> rusqlite::Result<()> {
+    connection.execute("DELETE FROM message WHERE mailbox = ?1", [folder])?;
+    connection.execute("DELETE FROM flag_change WHERE mailbox = ?1", [folder])?;
+    connection.execute("DELETE FROM mailbox WHERE name = ?1", [folder])?;
+    Ok(())
+}
+
+/// One Message of `Cache::mark`; false when it is not cached or already so.
+fn mark(
+    connection: &Connection,
+    (folder, uid): (&str, u32),
+    unread: bool,
+) -> rusqlite::Result<bool> {
+    let key: Option<i64> = connection
+        .prepare_cached(
+            "SELECT body_key FROM message WHERE mailbox = ?1 AND uid = ?2 AND unread != ?3",
+        )?
+        .query_row(params![folder, uid, unread], |row| row.get(0))
+        .optional()?;
+    let Some(key) = key else {
+        return Ok(false);
+    };
+
+    // Only Gmail's body key names one Message in every Folder, and its
+    // `\Seen` is shared by them all.
+    let copies = "(mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL)";
+    connection
+        .prepare_cached(&format!(
+            "UPDATE mailbox SET unread = max(unread + ?4, 0)
+             WHERE name IN (SELECT mailbox FROM message WHERE ({copies}) AND unread != ?5)"
+        ))?
+        .execute(params![
+            folder,
+            uid,
+            key,
+            if unread { 1 } else { -1 },
+            unread
+        ])?;
+    connection
+        .prepare_cached(&format!(
+            "UPDATE message SET unread = ?4 WHERE ({copies}) AND unread != ?4"
+        ))?
+        .execute(params![folder, uid, key, unread])?;
+    connection
+        .prepare_cached("UPDATE thread_message SET unread = ?2 WHERE key = ?1")?
+        .execute(params![key, unread])?;
+    connection
+        .prepare_cached(
+            "INSERT OR REPLACE INTO flag_change (mailbox, uid, unread) VALUES (?1, ?2, ?3)",
+        )?
+        .execute(params![folder, uid, unread])?;
+    Ok(true)
 }
 
 fn store_bodies(connection: &Connection, bodies: &[(i64, Vec<u8>)]) -> rusqlite::Result<()> {

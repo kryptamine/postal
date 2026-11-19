@@ -1,4 +1,4 @@
-//! `Enter` reads the selected Thread full screen as a stack of Messages,
+//! `Enter` reads the seleted Thread full screen as a stack of Messages,
 //! with keys of its own, until `q` or `Esc` goes back to the list.
 
 #![allow(
@@ -215,8 +215,6 @@ fn reading_unfolds_the_newest_and_the_unread_and_starts_on_the_first_unread() {
     assert!(screen.contains("│ From    Dee"), "{screen}");
     assert!(!screen.contains("From    Ada"), "{screen}");
     assert!(!screen.contains("From    Cid"), "{screen}");
-    // Reading leaves Unread to the server.
-    assert!(!server.commands().iter().any(|c| c.contains("STORE")));
     quit(t);
 }
 

@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 6;
+pub const VERSION: i64 = 7;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -70,6 +70,14 @@ CREATE TABLE body (
     used INTEGER NOT NULL
 );
 CREATE INDEX body_by_use ON body (used);
+-- A Mark Read or Mark Unread the server has not acknowledged yet; a
+-- resync leaves the flag of its row alone. See docs/adr/0011-select-the-shown-folder.md.
+CREATE TABLE flag_change (
+    mailbox TEXT NOT NULL,
+    uid INTEGER NOT NULL,
+    unread INTEGER NOT NULL,
+    PRIMARY KEY (mailbox, uid)
+);
 ";
 
 /// Why an existing Cache file cannot be used as it is.
