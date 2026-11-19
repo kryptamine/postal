@@ -26,7 +26,6 @@ use crate::{
     truncate,
 };
 
-const MARKER: &str = "●";
 /// The marker column and its gap; the subject and Snippet lines indent by the same.
 const INDENT: u16 = 2;
 const CARD_HEIGHT: u16 = 3;
@@ -244,7 +243,7 @@ impl Cards<'_> {
         let text = text_area(card);
         if thread.unread {
             let style = strong.patch(tone(self.theme.marker));
-            buf.set_string(text.x, text.y, MARKER, style);
+            buf.set_string(text.x, text.y, self.theme.icons.unread(), style);
         }
 
         let [senders, subject, snippet] = self.fields(card);

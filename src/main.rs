@@ -37,6 +37,7 @@ mod help_popup;
 mod hint_line;
 mod html_preview;
 mod html_text;
+mod icons;
 mod idle;
 mod imap;
 mod inbox;
@@ -142,6 +143,7 @@ use crate::{
     cache::Cache,
     cli::Command,
     config::{Config, SecretStore},
+    icons::Icons,
     imap::ImapSession,
     oauth::Tokens,
     older_pages::OlderPages,
@@ -308,7 +310,7 @@ fn session(
         let mut terminal = terminal_backend::init()?;
         // A terminal that does not say is taken for a dark one.
         let background = terminal_background::query().unwrap_or(rgb::BLACK);
-        let theme = Theme::from_env(background);
+        let theme = Theme::from_env(background, Icons::choose(config.icons));
         let mut previews = Previews::start(requests, updates_to_previews, theme.mail);
         let work = sign_in.map_or(Work::SignedOut { failed }, |sign_in| {
             Work::Running(

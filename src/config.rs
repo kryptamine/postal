@@ -17,6 +17,7 @@ pub struct Config {
     pub smtp: Smtp,
     pub secrets: SecretStore,
     pub oauth: Endpoints,
+    pub icons: IconChoice,
 }
 
 #[derive(PartialEq, Eq)]
@@ -62,6 +63,16 @@ pub enum SecretStore {
     File,
 }
 
+/// Whether to draw Nerd Font icons: `auto` guesses from the terminal.
+#[derive(Deserialize, Default, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum IconChoice {
+    #[default]
+    Auto,
+    Nerd,
+    None,
+}
+
 #[derive(Debug)]
 pub enum Error {
     Read {
@@ -104,6 +115,12 @@ impl Config {
         let mut text = format!("email = {}\n", toml::Value::from(self.email.as_str()));
         if let Some(name) = &self.name {
             writeln!(text, "name = {}", toml::Value::from(name.as_str())).ok();
+        }
+
+        match self.icons {
+            IconChoice::Auto => {}
+            IconChoice::Nerd => text += "icons = \"nerd\"\n",
+            IconChoice::None => text += "icons = \"none\"\n",
         }
 
         if self.imap != Imap::gmail() {

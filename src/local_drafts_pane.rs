@@ -9,7 +9,7 @@ use crate::{
     border, centred::centred, layout::PADDING, local_drafts::LocalDrafts, theme::Theme, truncate,
 };
 
-/// The kind of a row: `Draft` or `Outbox`, and a gap after it.
+/// The kind of a row, a word or an icon, and a gap after it.
 const KIND: u16 = 8;
 /// The recipients' share of what the kind leaves, in percent.
 const TO_SHARE: u16 = 40;
@@ -60,7 +60,7 @@ impl Widget for LocalDraftsPane<'_> {
                 Rect::new(area.x + 1, y, area.width.saturating_sub(2), 1),
                 style,
             );
-            let kind = if row.queued { "Outbox" } else { "Draft" };
+            let kind = self.theme.icons.local(row.queued);
             let cell = |x: u16, width: u16| Rect::new(x, y, width.min(list.right() - x), 1);
             truncate::draw(buf, cell(list.x, KIND), kind, self.theme.muted.patch(style));
             let to_x = list.x.saturating_add(KIND).min(list.right());

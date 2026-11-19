@@ -82,6 +82,10 @@ impl HintLine<'_> {
         let status = self.status.text(self.now);
         let mut text = StackStr::new();
         // Every text fits, so the writes cannot fail.
+        if let Some(icon) = self.theme.icons.status(self.status) {
+            write!(text, "{icon} ").ok();
+        }
+
         text.write_str(status.as_str()).ok();
         if self.outbox > 0 {
             let gap = if status.as_str().is_empty() {

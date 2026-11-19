@@ -338,12 +338,11 @@ fn tokens_never_reach_the_log() {
 
 // The config is written whole on login, so what it set before must stay.
 #[test]
-fn a_login_keeps_the_name_and_the_smtp_server() {
+fn a_login_keeps_the_name_the_icons_and_the_smtp_server() {
     let server = FakeImap::start(Vec::new());
     let oauth = FakeOAuth::start();
     let home = seeded(&server, &oauth);
-    let extra =
-        "name = \"Zoë Example\"\n\n[smtp]\nhost = \"127.0.0.1\"\nport = 2525\ntls = false\n";
+    let extra = "name = \"Zoë Example\"\nicons = \"nerd\"\n\n[smtp]\nhost = \"127.0.0.1\"\nport = 2525\ntls = false\n";
     let config = fs::read_to_string(home.config_path()).unwrap();
     fs::write(home.config_path(), format!("{extra}{config}")).unwrap();
     let browser = Browser::new();
@@ -354,6 +353,7 @@ fn a_login_keeps_the_name_and_the_smtp_server() {
 
     let config = fs::read_to_string(home.config_path()).unwrap();
     assert!(config.contains("name = \"Zoë Example\"\n"), "{config}");
+    assert!(config.contains("icons = \"nerd\"\n"), "{config}");
     assert!(
         config.contains("[smtp]\nhost = \"127.0.0.1\"\nport = 2525\ntls = false\n"),
         "{config}"

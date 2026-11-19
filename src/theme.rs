@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::{mail_colours::MailColours, marks::Marks, paint::Paint, rgb::Rgb};
+use crate::{icons::Icons, mail_colours::MailColours, marks::Marks, paint::Paint, rgb::Rgb};
 
 /// The terminal's own palette: named ANSI colours and modifiers, no explicit
 /// background. Muted text is `DIM`, since bright black vanishes in Solarized.
@@ -34,12 +34,13 @@ pub struct Theme {
     coloured: bool,
     /// Mail colours moved onto this terminal's background.
     pub mail: MailColours,
+    pub icons: Icons,
 }
 
 impl Theme {
     /// A non-empty `NO_COLOR` drops every colour and keeps the modifiers,
     /// so the selection and Unread rows stay visible.
-    pub fn from_env(background: Rgb) -> Self {
+    pub fn from_env(background: Rgb, icons: Icons) -> Self {
         let coloured = std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty());
         let fg = |color| {
             if coloured {
@@ -78,6 +79,7 @@ impl Theme {
             underline: Style::new().add_modifier(Modifier::UNDERLINED),
             coloured,
             mail: MailColours::new(background),
+            icons,
         }
     }
 

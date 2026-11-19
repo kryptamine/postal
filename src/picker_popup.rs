@@ -88,6 +88,8 @@ impl Widget for PickerPopup<'_> {
                 ..list
             };
 
+            let icon = self.theme.icons.folder(folder.role);
+            let label = icon.map_or(label, |icon| after_icon(buf, label, icon, style));
             truncate::draw(buf, label, folder.label(), style);
             let count_x = list.right().saturating_sub(count_width);
             buf.set_stringn(count_x, y, count.as_str(), count_width.into(), style);
@@ -105,6 +107,17 @@ impl PickerPopup<'_> {
             .saturating_add(u16::try_from(typed).unwrap_or(u16::MAX))
             .min(inner.right().saturating_sub(1));
         Position::new(x, inner.y)
+    }
+}
+
+/// Draws `icon` and a gap at the start of `label`; returns what is left.
+fn after_icon(buf: &mut Buffer, label: Rect, icon: &str, style: Style) -> Rect {
+    let (x, _) = buf.set_stringn(label.x, label.y, icon, label.width.into(), style);
+    let x = x.saturating_add(1).min(label.right());
+    Rect {
+        x,
+        width: label.right() - x,
+        ..label
     }
 }
 
