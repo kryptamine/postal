@@ -3,6 +3,7 @@
 // are never fetched. See docs/adr/0006-rendered-view-engine.md.
 #include "cell_grid.h"
 
+#include "alignment.h"
 #include "buttons.h"
 #include "colour.h"
 #include "contents.h"
@@ -466,7 +467,8 @@ void lay_out(const document::ptr& doc, grid_container& container)
     // The boxes were built from the styles before they changed.
     doc->rebuild_render_tree();
     doc->render(width);
-    if(container.images.shrink_spilt())
+    bool spilt = container.images.shrink_spilt();
+    if(left_align_paragraphs(doc->root()) || spilt)
     {
         doc->rebuild_render_tree();
         doc->render(width);

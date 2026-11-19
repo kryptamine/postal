@@ -111,6 +111,14 @@ the colour, cell-width and element helpers.
   to the top: on the baseline the columns' bottoms line up, which only
   images of one height kept level.
 
+- Text alignment gives way where one-cell glyphs make it hard to read.
+  Justified text is set left: its lines were padded with whole cells. So is
+  centred text in a list item, which stood apart from its marker. After
+  layout, a centred block whose own words wrap onto three lines or more,
+  not counting the breaks the mail put in, is a paragraph and is set left,
+  and the layout runs again (`alignment.cpp`): a title, a button and an
+  address stay centred. This changed 117 of 539 cached mails.
+
 Four changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
 `document::rebuild_render_tree` is public: the boxes are built from the
 computed styles inside `createFromString`, before the snap, and must be built

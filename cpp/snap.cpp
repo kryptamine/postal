@@ -69,12 +69,18 @@ void one_cell_thick(css_borders& b, bool rule)
     }
 }
 
-// `fill` is the background the nearest ancestor with one is drawn in.
-void snap_box(const element::ptr& el, uint32_t fill)
+// `fill` is the background the nearest ancestor with one is drawn in;
+// `listed`, inside a list item.
+void snap_box(const element::ptr& el, uint32_t fill, bool listed)
 {
     css_properties& css = el->css();
     if(const web_color& own = css.get_bg().m_color; own.alpha) fill = rgb(own);
     top_aligned(el, css);
+    // Justified, a line of one-cell glyphs is padded with whole cells; and
+    // centred in a list item, the words stand apart from their marker.
+    listed = listed || css.get_display() == display_list_item;
+    if(css.get_text_align() == text_align_justify || (listed && css.get_text_align() == text_align_center))
+        css.set_text_align(text_align_left);
 
     css_margins m = css.get_margins();
     snap(m.top, rows_above);
@@ -121,9 +127,9 @@ void snap_box(const element::ptr& el, uint32_t fill)
         css.set_border_spacing_y(css_length(0, css_units_px));
     }
 
-    for(auto& child : el->children()) snap_box(child, fill);
+    for(auto& child : el->children()) snap_box(child, fill, listed);
 }
 } // namespace
 
-void snap_tree(const element::ptr& root) { snap_box(root, 0); }
+void snap_tree(const element::ptr& root) { snap_box(root, 0, false); }
 } // namespace cg

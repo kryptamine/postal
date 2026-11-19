@@ -827,3 +827,58 @@ fn a_run_of_blank_rows_is_one() {
     assert_eq!(row("Inside") - row("Above"), 4, "{}", rows.join("\n"));
     assert_eq!(row("Below") - row("Inside"), 4, "{}", rows.join("\n"));
 }
+
+// Justified, one-cell glyphs are padded with whole cells, which tears
+// holes in a narrow column.
+#[test]
+fn justified_text_is_set_left() {
+    let body = html(
+        "<div style=\"width:200px;text-align:justify\">Order a party of food for three \
+         weeks at a closed sale price today</div>",
+    );
+    let screen = preview(body, &DEFAULT, "today");
+    let rows = pane(&screen);
+    assert!(
+        !rows.iter().any(|r| r.trim().contains("  ")),
+        "{}",
+        rows.join("\n")
+    );
+}
+
+// A centred paragraph starts every line somewhere else. Three wrapped
+// lines are one; a title of two stays centred, and so do lines the mail
+// broke itself.
+#[test]
+fn a_centred_paragraph_is_set_left() {
+    let words = "A long paragraph of the mail that wraps onto three lines of the pane \
+                 at the least, since it holds a good deal more words than one row of \
+                 seventy-four cells can ever take in, and ends here.";
+    let body = html(&format!(
+        "<div style=\"text-align:center\"><h1>Short title</h1><p>{words}</p>\
+         <p>First<br>Second<br>Third</p></div>"
+    ));
+    let screen = preview(body, &DEFAULT, "ends here");
+    let rows = pane(&screen);
+    let indent = |text: &str| {
+        let row = rows.iter().find(|r| r.contains(text)).unwrap();
+        row.len() - row.trim_start().len()
+    };
+
+    assert!(indent("Short title") > 20, "{}", rows.join("\n"));
+    assert!(indent("Second") > 20, "{}", rows.join("\n"));
+    assert_eq!(indent("A long paragraph"), indent("ends here"));
+}
+
+// Centred, a list item's words stand far from the marker that names them
+// an item.
+#[test]
+fn a_centred_list_item_is_set_left() {
+    let body = html("<ul style=\"text-align:center\"><li>Vote for ideas</li></ul>");
+    let screen = preview(body, &DEFAULT, "Vote for ideas");
+    let rows = pane(&screen);
+    assert!(
+        rows.iter().any(|r| r.contains("• Vote for ideas")),
+        "{}",
+        rows.join("\n")
+    );
+}
