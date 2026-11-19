@@ -4,6 +4,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Position, Rect},
     style::Style,
+    symbols::line,
     widgets::{Block, Clear, Widget},
 };
 use unicode_width::UnicodeWidthStr;
@@ -15,13 +16,14 @@ use crate::{
 const TITLE: &str = " Folders ";
 const PROMPT: &str = "> ";
 const WIDTH: u16 = 48;
-/// The border, the Query row and the blank row under it.
+/// The border, the Query row and the rule under it.
 const CHROME: u16 = 4;
 /// Columns between the border and a row's text, each side.
 const PADDING: u16 = 1;
 
-/// The Folder Picker centred over `area`: the Query, then a row per Folder
-/// with its Unread count right-aligned, none for `0` or one not yet counted.
+/// The Folder Picker centred over `area`: the Query, a rule, then a row per
+/// Folder with its Unread count right-aligned, none for `0` or one not yet
+/// counted.
 pub struct PickerPopup<'a> {
     pub theme: &'a Theme,
     pub picker: &'a FolderPicker,
@@ -41,6 +43,13 @@ impl Widget for PickerPopup<'_> {
         let (x, _) = buf.set_stringn(inner.x, inner.y, PROMPT, inner.width.into(), self.theme.key);
         let left = usize::from(inner.right().saturating_sub(x));
         buf.set_stringn(x, inner.y, self.picker.query(), left, Style::new());
+
+        let rule = Rect::new(popup.x, inner.y + 1, popup.width, 1);
+        if rule.width >= 2 && rule.y < popup.bottom().saturating_sub(1) {
+            let middle = line::HORIZONTAL.repeat(usize::from(rule.width.saturating_sub(2)));
+            let joined = format!("{}{middle}{}", line::VERTICAL_RIGHT, line::VERTICAL_LEFT);
+            buf.set_string(rule.x, rule.y, joined, self.theme.border);
+        }
 
         let list = Rect {
             y: inner.y + 2,

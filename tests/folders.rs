@@ -137,10 +137,11 @@ fn picker(screen: &Screen) -> Vec<String> {
 }
 
 /// The picker's Folder rows, each its label and its Unread count if shown.
+/// The first two rows are the Query and the rule under it.
 fn picked(screen: &Screen) -> Vec<String> {
     picker(screen)
         .into_iter()
-        .skip(1)
+        .skip(2)
         .filter(|row| !row.is_empty())
         .map(|row| row.split_whitespace().collect::<Vec<_>>().join(" "))
         .collect()
@@ -177,6 +178,8 @@ fn the_picker_lists_special_use_folders_first_then_the_rest_with_unread_counts()
         ],
         "{screen}"
     );
+    // The Query stands apart from the Folders.
+    assert!(picker(&screen)[1].chars().all(|c| c == '─'), "{screen}");
 
     // IDLE gives way to the listing, and comes back after it. The shown
     // Folder's count is its own, never a `STATUS`.
