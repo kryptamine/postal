@@ -4,6 +4,7 @@
 
 use std::{
     collections::HashMap,
+    fmt::Write,
     net::Ipv4Addr,
     num::{NonZeroU32, NonZeroU64},
     sync::{Arc, Mutex},
@@ -69,6 +70,9 @@ pub struct FakeMessage {
     pub body: FakeBody,
     /// Messages sharing it share an `X-GM-THRID`; `None` starts a Thread of its own.
     pub thread: Option<u64>,
+    /// More header lines of the whole Message, each ending in CRLF.
+    pub headers: String,
+    pub answered: bool,
 }
 
 impl FakeMessage {
@@ -82,7 +86,15 @@ impl FakeMessage {
             seen: true,
             body: FakeBody::plain(""),
             thread: None,
+            headers: String::new(),
+            answered: false,
         }
+    }
+
+    /// Adds `name: value` to the whole Message's header.
+    pub fn header(mut self, name: &str, value: &str) -> Self {
+        write!(self.headers, "{name}: {value}\r\n").unwrap();
+        self
     }
 
     pub fn body(mut self, body: FakeBody) -> Self {
@@ -418,6 +430,17 @@ impl FakeImap {
             .stored(uid)
             .message
             .seen
+    }
+
+    /// Whether the Message with this UID in `folder` has `\Answered`.
+    pub fn answered(&self, folder: &str, uid: u32) -> bool {
+        self.inbox
+            .lock()
+            .unwrap()
+            .folder_mut(folder)
+            .stored(uid)
+            .message
+            .answered
     }
 
     /// The `X-GM-MSGID` of the Message with this UID.
@@ -962,9 +985,9 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
     }
 }
 
-/// Applies a `UID STORE` of `\Seen` to the Folder `opened`, and to each
-/// copy of its Messages in other Folders, as Gmail shares the flag; refused
-/// unless it was `SELECT`ed.
+/// Applies a `UID STORE` of `\Seen` or `\Answered` to the Folder `opened`, and
+/// `\Seen` to each copy of its Messages in other Folders, as Gmail shares it;
+/// refused unless it was `SELECT`ed.
 fn store(inbox: &mut Inbox, command: Command<'static>, opened: &Opened) -> Status<'static> {
     let tag = Some(command.tag);
     let CommandBody::Store {
@@ -983,13 +1006,22 @@ fn store(inbox: &mut Inbox, command: Command<'static>, opened: &Opened) -> Statu
         return Status::no(tag, None, "STORE needs a Folder selected read-write").unwrap();
     };
 
-    if kind == StoreType::Add && flags.contains(&Flag::Deleted) {
+    let added = |flag| kind == StoreType::Add && flags.contains(&flag);
+    let only_here: Option<fn(&mut Stored)> = if added(Flag::Deleted) {
+        Some(|stored| stored.deleted = true)
+    } else if added(Flag::Answered) {
+        Some(|stored| stored.message.answered = true)
+    } else {
+        None
+    };
+
+    if let Some(mark) = only_here {
         let uids: Vec<u32> = fetched(folder, &sequence_set, true, None)
             .map(|(_, stored)| stored.uid)
             .collect();
         let folder = inbox.folder_mut(&opened.0);
         for uid in uids {
-            folder.stored(uid).deleted = true;
+            mark(folder.stored(uid));
         }
 
         return Status::ok(tag, None, "STORE completed").unwrap();
@@ -1277,9 +1309,10 @@ fn body_part_item(body: &FakeBody, asked: &PartAsked) -> MessageDataItem<'static
 
 fn whole_body_item(message: &FakeMessage) -> MessageDataItem<'static> {
     let headers = format!(
-        "From: {}\r\nSubject: {}\r\n",
+        "From: {}\r\nSubject: {}\r\n{}",
         message.sender_header(),
-        message.subject
+        message.subject,
+        message.headers
     );
     let whole = IString::try_from(message.body.message(&headers)).unwrap();
     MessageDataItem::BodyExt {

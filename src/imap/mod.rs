@@ -1,5 +1,5 @@
-//! The IMAP boundary. Postal writes only `\Seen` and the moves of Delete
-//! and Undo; bodies are fetched with `BODY.PEEK`.
+//! The IMAP boundary. Postal writes only `\Seen`, `\Answered` and the moves of
+//! Delete and Undo; bodies are fetched with `BODY.PEEK`.
 
 mod connect;
 mod error;

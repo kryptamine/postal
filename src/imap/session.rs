@@ -14,6 +14,7 @@ use super::{
 };
 use crate::{
     config::Config,
+    flag,
     folder::{Folder, Role},
     new_message::NewMessage,
     sign_in::SignIn,
@@ -43,11 +44,11 @@ pub trait MailServer {
     /// Opens the Folder named `folder` read-only; later commands read it.
     async fn examine(&mut self, folder: &str) -> Result<Examined, Error>;
 
-    /// As `examine`, but `store_unread` may change the Folder's flags.
+    /// As `examine`, but `store` may change the Folder's flags.
     async fn select(&mut self, folder: &str) -> Result<Examined, Error>;
 
-    /// Sets or clears `\Seen` on `uids` of the selected Folder.
-    async fn store_unread(&mut self, uids: &[u32], unread: bool) -> Result<(), Error>;
+    /// Adds `flag` to `uids` of the selected Folder, or removes it.
+    async fn store(&mut self, uids: &[u32], flag: flag::Flag, added: bool) -> Result<(), Error>;
 
     /// Moves `uids` of the selected Folder to the Folder named `to`, and
     /// returns each `(uid, uid there)` the server named.
@@ -254,24 +255,17 @@ impl MailServer for ImapSession {
         Ok(self.opened(&mailbox))
     }
 
-    async fn store_unread(&mut self, uids: &[u32], unread: bool) -> Result<(), Error> {
+    async fn store(&mut self, uids: &[u32], flag: flag::Flag, added: bool) -> Result<(), Error> {
         // SILENT: the server need not echo the flags just set.
-        let query = if unread {
-            "-FLAGS.SILENT (\\Seen)"
-        } else {
-            "+FLAGS.SILENT (\\Seen)"
-        };
+        let sign = if added { '+' } else { '-' };
+        let query = format!("{sign}FLAGS.SILENT ({})", flag.name());
         let echoed: Vec<Fetch> = self
             .session
-            .uid_store(uid_set(uids), query)
+            .uid_store(uid_set(uids), &query)
             .await?
             .try_collect()
             .await?;
-        tracing::info!(
-            "marked {} Messages {}",
-            uids.len(),
-            if unread { "Unread" } else { "read" }
-        );
+        tracing::info!("stored {query} on {} Messages", uids.len());
         drop(echoed);
         Ok(())
     }

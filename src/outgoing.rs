@@ -1,7 +1,9 @@
 use futures::{FutureExt, future::LocalBoxFuture};
 use lettre::message::Mailbox;
 
-use crate::{config::Config, draft::Draft, sign_in::SignIn, smtp, unique_id::unique_id};
+use crate::{
+    answering::Answering, config::Config, draft::Draft, sign_in::SignIn, smtp, unique_id::unique_id,
+};
 
 /// What a Send needs: the Account, and its sign-in while there is one.
 #[derive(Clone, Copy)]
@@ -22,12 +24,16 @@ impl<'a> Outgoing<'a> {
 
     /// Builds `draft` with a fresh `Date` and `Message-ID` and sends it; the
     /// error is what to show in its preview.
-    pub fn send(self, draft: &Draft) -> LocalBoxFuture<'a, Result<(), String>> {
+    pub fn send(
+        self,
+        draft: &Draft,
+        answering: Option<&Answering>,
+    ) -> LocalBoxFuture<'a, Result<(), String>> {
         let built = self
             .sign_in
             .ok_or_else(|| "signed out: nothing was sent".to_owned())
             .and_then(|sign_in| {
-                let message = draft.message(self.from()?, self.message_id())?;
+                let message = draft.message(self.from()?, self.message_id(), answering)?;
                 Ok((sign_in, message))
             });
 

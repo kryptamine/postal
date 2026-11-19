@@ -1,6 +1,6 @@
 use std::{io, sync::Arc};
 
-use crossterm::event::{Event, EventStream};
+use crossterm::event::Event;
 use futures::{
     FutureExt, Stream, StreamExt,
     channel::mpsc::UnboundedSender,
@@ -11,6 +11,7 @@ use tokio::time::Instant;
 
 use crate::{
     alloc_count,
+    awaited_reply::AwaitedReply,
     backfill::Backfill,
     body::Body,
     browser,
@@ -22,9 +23,11 @@ use crate::{
     help_popup::HelpPopup,
     hint_line::HintLine,
     inbox_view::InboxView,
+    input::Input,
     keymap::{self, Action, DraftKey, Pick},
     layout,
     link_hints::{LinkHints, Typed},
+    message::Message,
     message_list::{self, MessageList},
     mode::Mode,
     older_pages::OlderPages,
@@ -36,6 +39,7 @@ use crate::{
     previews::Previews,
     reading::Reading,
     rendered_previews::PreviewKey,
+    reply_fetch::ReplyFetch,
     screen::Screen,
     search::Search,
     stack,
@@ -78,12 +82,13 @@ pub enum Exit {
 }
 
 /// The network work behind the screen, what it reports as it goes, the
-/// pages of older Messages asked of it, what the sync connection is asked,
-/// and what a Send goes out with.
+/// pages of older Messages and the bodies Replies wait on asked of it, what
+/// the sync connection is asked, and what a Send goes out with.
 pub struct Background<'a, W, U> {
     pub work: Work<W>,
     pub updates: U,
     pub older: OlderPages,
+    pub replies: ReplyFetch,
     pub asks: UnboundedSender<Ask>,
     pub outgoing: Outgoing<'a>,
 }
@@ -131,12 +136,13 @@ pub async fn run(
         impl Stream<Item = Update> + Unpin,
     >,
 ) -> Result<Exit, Error> {
-    let mut events = EventStream::new();
+    let mut events = Input::new();
     let mut view = InboxView::loading();
     let rows = first_rows(terminal)?;
     show(&mut view, cache, Some(rows))?;
     let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
-    let outgoing = background.outgoing;
+    let (outgoing, mut replies) = (background.outgoing, background.replies);
+    let account = outgoing.config.email.as_str();
     let from = outgoing.from().map_or_else(
         |_bad| outgoing.config.email.clone(),
         |from| from.to_string(),
@@ -178,13 +184,19 @@ pub async fn run(
             }
             result = &mut sending, if !sending.is_terminated() => {
                 frame_start = alloc_count::count();
-                composing::sent(result, &mut screen, &asks);
+                composing::sent(result, &mut screen, cache, &asks)?;
             }
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
-                match update {
-                    Some(update) => apply(older.notice(update), &mut view, &mut screen, cache, previews)?,
-                    None => listening = false,
+                let Some(update) = update else {
+                    listening = false;
+                    continue;
+                };
+
+                let arrived = replies.notice(&update, screen.replying.as_ref());
+                apply(older.notice(update), &mut view, &mut screen, cache, previews)?;
+                if let Some(result) = arrived {
+                    composing::fetched(result, terminal, &mut events, &mut screen, (cache, account))?;
                 }
             }
             event = events.next() => {
@@ -196,6 +208,12 @@ pub async fn run(
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
                     step @ (Step::Compose | Step::Edit | Step::Send) => draft(&step, terminal, &mut events, &mut screen, (outgoing, &mut sending))?,
+                    Step::Reply(all) => {
+                        if let Some(message) = answered(&view, &screen) {
+                            let awaited = AwaitedReply { message, all };
+                            composing::reply(terminal, &mut events, &mut screen, (cache, &replies), (awaited, account))?;
+                        }
+                    }
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::SignIn => return Ok(Exit::SignIn),
                     Step::Quit => return Ok(Exit::Quit),
@@ -461,6 +479,8 @@ enum Step {
     Browse(Arc<str>),
     Page,
     Compose,
+    /// Reply, or Reply All when true.
+    Reply(bool),
     /// The shown Draft in the editor again.
     Edit,
     Send,
@@ -527,6 +547,7 @@ fn act(
         Some(Action::Delete) => Step::Delete,
         Some(Action::Undo) => Step::Undo,
         Some(Action::Compose) => Step::Compose,
+        Some(Action::Reply { all }) => Step::Reply(all),
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
             Step::Stay
@@ -608,6 +629,21 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
     }
 
     Step::Stay
+}
+
+/// What a Reply answers: the newest Message of the selected Thread not from
+/// the Account, else its newest; in Reading, the one at the cursor.
+fn answered(view: &InboxView, screen: &Screen) -> Option<Message> {
+    let message = screen.reading.as_ref().map_or_else(
+        || {
+            view.stack()
+                .rfind(|m| !m.from_me)
+                .or_else(|| view.selected_message())
+        },
+        |reading| view.stack().find(|m| m.body_key == reading.cursor),
+    );
+
+    message.cloned()
 }
 
 /// The selected Thread and its newest body key, while a Dwell may run on
@@ -748,8 +784,8 @@ fn undo(
     asks: &UnboundedSender<Ask>,
 ) -> Result<(), Error> {
     let folders = match screen.undo.pop() {
-        Some(Undo::Discard(path, text)) => {
-            composing::restore(screen, path, text);
+        Some(Undo::Discard(path, text, answering)) => {
+            composing::restore(screen, (path, text, answering));
             return Ok(());
         }
         Some(Undo::Delete(batch, thread)) => {
@@ -807,7 +843,7 @@ fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 fn draft<'a>(
     step: &Step,
     terminal: &mut Terminal<TerminalBackend>,
-    events: &mut EventStream,
+    events: &mut Input,
     screen: &mut Screen,
     (outgoing, sending): (Outgoing<'a>, &mut Sending<'a>),
 ) -> Result<(), Error> {
@@ -815,7 +851,7 @@ fn draft<'a>(
         Step::Compose => composing::compose(terminal, events, screen)?,
         Step::Edit => {
             if let Some(preview) = screen.draft.take() {
-                composing::edit(terminal, events, screen, preview.path)?;
+                composing::edit(terminal, events, screen, (preview.path, preview.answering))?;
             }
         }
         Step::Send => {
@@ -987,12 +1023,12 @@ fn browse(url: &str) -> Option<Toast> {
 /// takes the terminal again. A failure of `program` alone is only logged.
 pub fn outside(
     terminal: &mut Terminal<TerminalBackend>,
-    events: &mut EventStream,
+    events: &mut Input,
     program: impl FnOnce() -> io::Result<()>,
 ) -> Result<(), Error> {
     // A live EventStream keeps reading the terminal, and would take the
     // pager's keys; dropping it stops its reader thread.
-    *events = EventStream::new();
+    events.restart();
     terminal_backend::leave(terminal).map_err(Error::Terminal)?;
     let result = program();
     terminal_backend::resume(terminal).map_err(Error::Terminal)?;
@@ -1007,7 +1043,7 @@ pub fn outside(
 /// instead while its body is not in the Cache; `None` drops any shown.
 fn open(
     terminal: &mut Terminal<TerminalBackend>,
-    events: &mut EventStream,
+    events: &mut Input,
     theme: &Theme,
     cache: &Cache,
     (view, reading): (&InboxView, Option<&Reading>),

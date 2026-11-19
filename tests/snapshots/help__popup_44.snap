@@ -17,7 +17,7 @@ size: 44x18  cursor: hidden
 │ Backspace               delete: move to  │
 │ u                       undo a delete or │
 │ c                       compose a new Me │
-│                                          │
+│ r                       reply to the sen │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help

@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 10;
+pub const VERSION: i64 = 11;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -70,13 +70,15 @@ CREATE TABLE body (
     used INTEGER NOT NULL
 );
 CREATE INDEX body_by_use ON body (used);
--- A Mark Read or Mark Unread the server has not acknowledged yet; a
--- resync leaves the flag of its row alone. See docs/adr/0011-select-the-shown-folder.md.
+-- A flag change the server has not acknowledged yet; a resync leaves the
+-- Unread of a row with a queued `\\Seen` alone. See docs/adr/0011-select-the-shown-folder.md.
 CREATE TABLE flag_change (
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
-    unread INTEGER NOT NULL,
-    PRIMARY KEY (mailbox, uid)
+    -- As IMAP names it: `\\Seen` or `\\Answered`.
+    flag TEXT NOT NULL,
+    added INTEGER NOT NULL,
+    PRIMARY KEY (mailbox, uid, flag)
 );
 -- A Message a Delete took out of `message`, with its row, while the
 -- server or an Undo may still move it: docs/adr/0012-delete-and-undo.md.

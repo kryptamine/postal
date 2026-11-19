@@ -17,13 +17,13 @@ size: 80x24  cursor: hidden
 │ From    B│ Backspace               delete: move to Trash          │          │
 │ Subject N│ u                       undo a delete or discard       │          │
 │ Date    M│ c                       compose a new Message          │          │
-├──────────│                                                        │──────────┤
-│ Newer bod│ Links                                                  │          │
+├──────────│ r                       reply to the sender            │──────────┤
+│ Newer bod│ R                       reply to all                   │          │
+│          │                                                        │          │
+│          │ Links                                                  │          │
 │          │ o                       label the links in the Preview │          │
 │          │                                                        │          │
 │          │ View                                                   │          │
-│          │ v                       rendered / text view of HTML   │          │
-│          │                                                        │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

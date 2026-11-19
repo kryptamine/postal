@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     cache::Cache,
+    flag::Flag,
     imap::MailServer,
     sync::{self, Error},
 };
@@ -33,21 +34,23 @@ pub async fn send(
             }
         }
 
-        for unread in [false, true] {
-            let uids: Vec<u32> = changes
-                .iter()
-                .filter(|&&(_, u)| u == unread)
-                .map(|&(uid, _)| uid)
-                .collect();
-            if uids.is_empty() {
-                continue;
-            }
-
-            match server.store_unread(&uids, unread).await {
-                Err(error) if error.refusal().is_some() => {
-                    tracing::warn!("storing flags in {folder} was refused: {error}");
+        for flag in [Flag::Seen, Flag::Answered] {
+            for added in [true, false] {
+                let uids: Vec<u32> = changes
+                    .iter()
+                    .filter(|c| c.flag == flag && c.added == added)
+                    .map(|c| c.uid)
+                    .collect();
+                if uids.is_empty() {
+                    continue;
                 }
-                result => result?,
+
+                match server.store(&uids, flag, added).await {
+                    Err(error) if error.refusal().is_some() => {
+                        tracing::warn!("storing flags in {folder} was refused: {error}");
+                    }
+                    result => result?,
+                }
             }
         }
 

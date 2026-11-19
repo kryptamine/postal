@@ -14,6 +14,8 @@ use rusqlite::{
 
 use super::{Changes, Error, moves, schema};
 use crate::{
+    flag::Flag,
+    flag_change::FlagChange,
     folder::{Folder, Role},
     inbox::Inbox,
     message::Message,
@@ -26,8 +28,8 @@ use crate::{
 /// The raw bodies kept, in bytes; past it the least recently used go first.
 const BODY_BYTES: i64 = 200 * 1024 * 1024;
 
-/// A Folder's flag changes for the server, each `(uid, unread)`.
-pub type FolderFlags = (Arc<str>, Vec<(u32, bool)>);
+/// A Folder's flag changes for the server.
+pub type FolderFlags = (Arc<str>, Vec<FlagChange>);
 
 /// Once a write to disk fails, the Cache moves into memory for the rest of
 /// the session, so a full disk or a lost permission stops nothing.
@@ -296,20 +298,35 @@ impl Cache {
         })
     }
 
-    /// The flag changes the server has not acknowledged, by Folder, each
-    /// as `(uid, unread)`.
+    /// Queues `\Answered` for `uid` of `folder`, for the server.
+    pub fn answer(&self, folder: &str, uid: u32) -> Result<(), Error> {
+        self.write(|connection| queue_flag(connection, (folder, uid), Flag::Answered, true))
+    }
+
+    /// The flag changes the server has not acknowledged, by Folder.
     pub fn pending_flags(&self) -> Result<Vec<FolderFlags>, Error> {
         let connection = self.connection.borrow();
-        let mut statement = connection
-            .prepare_cached("SELECT mailbox, uid, unread FROM flag_change ORDER BY mailbox, uid")?;
+        let mut statement = connection.prepare_cached(
+            "SELECT mailbox, uid, flag, added FROM flag_change ORDER BY mailbox, uid, flag",
+        )?;
         let mut pending: Vec<FolderFlags> = Vec::new();
         for row in statement.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get(1)?, row.get(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get(1)?,
+                row.get::<_, String>(2)?,
+                row.get(3)?,
+            ))
         })? {
-            let (folder, uid, unread) = row?;
+            let (folder, uid, flag, added) = row?;
+            let Some(flag) = Flag::from_name(&flag) else {
+                continue;
+            };
+
+            let change = FlagChange { uid, flag, added };
             match pending.last_mut() {
-                Some((last, changes)) if **last == *folder => changes.push((uid, unread)),
-                _ => pending.push((folder.into(), vec![(uid, unread)])),
+                Some((last, changes)) if **last == *folder => changes.push(change),
+                _ => pending.push((folder.into(), vec![change])),
             }
         }
 
@@ -318,14 +335,20 @@ impl Cache {
 
     /// Drops `changes` of `folder` from the queue; one changed again since
     /// stays queued.
-    pub fn flags_sent(&self, folder: &str, changes: &[(u32, bool)]) -> Result<(), Error> {
+    pub fn flags_sent(&self, folder: &str, changes: &[FlagChange]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let mut delete = transaction.prepare_cached(
-                "DELETE FROM flag_change WHERE mailbox = ?1 AND uid = ?2 AND unread = ?3",
+                "DELETE FROM flag_change WHERE mailbox = ?1 AND uid = ?2 AND flag = ?3
+                   AND added = ?4",
             )?;
-            for (uid, unread) in changes {
-                delete.execute(params![folder, uid, unread])?;
+            for change in changes {
+                delete.execute(params![
+                    folder,
+                    change.uid,
+                    change.flag.name(),
+                    change.added
+                ])?;
             }
 
             drop(delete);
@@ -529,10 +552,11 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     // The server's flag is older than a change still queued for it.
     let mut flag = transaction.prepare_cached(
         "UPDATE message SET unread = ?3 WHERE mailbox = ?1 AND uid = ?2
-           AND NOT EXISTS (SELECT 1 FROM flag_change WHERE mailbox = ?1 AND uid = ?2)",
+           AND NOT EXISTS (SELECT 1 FROM flag_change WHERE mailbox = ?1 AND uid = ?2
+                             AND flag = ?4)",
     )?;
     for (uid, unread) in &changes.flags {
-        flag.execute(params![folder, uid, unread])?;
+        flag.execute(params![folder, uid, unread, Flag::Seen.name()])?;
     }
 
     let state = &changes.state;
@@ -602,14 +626,26 @@ fn mark(
     connection
         .prepare_cached("UPDATE thread_message SET unread = ?2 WHERE key = ?1")?
         .execute(params![key, unread])?;
+    queue_flag(connection, (folder, uid), Flag::Seen, !unread)?;
+    Ok(true)
+}
+
+/// Queues `flag` on `uid` of `folder` for the server, under the UID the
+/// server holds it by after an Undo.
+fn queue_flag(
+    connection: &Connection,
+    (folder, uid): (&str, u32),
+    flag: Flag,
+    added: bool,
+) -> rusqlite::Result<()> {
     connection
         .prepare_cached(
-            "INSERT OR REPLACE INTO flag_change (mailbox, uid, unread) VALUES (?1, coalesce(
+            "INSERT OR REPLACE INTO flag_change (mailbox, uid, flag, added) VALUES (?1, coalesce(
                  (SELECT at_uid FROM undone WHERE mailbox = ?1 AND uid = ?2 AND NOT at_trash), ?2
-             ), ?3)",
+             ), ?3, ?4)",
         )?
-        .execute(params![folder, uid, unread])?;
-    Ok(true)
+        .execute(params![folder, uid, flag.name(), added])?;
+    Ok(())
 }
 
 fn store_bodies(connection: &Connection, bodies: &[(i64, Vec<u8>)]) -> rusqlite::Result<()> {

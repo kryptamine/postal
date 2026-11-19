@@ -3,6 +3,8 @@ use lettre::{
     message::{Mailbox, Mailboxes, header::ContentType},
 };
 
+use crate::answering::Answering;
+
 /// A Draft's file as read: `To`, `Cc` and `Subject` lines, a blank line,
 /// then the body. Postal adds every other header itself.
 pub struct Draft {
@@ -44,13 +46,26 @@ impl Draft {
     }
 
     /// The Message as sent: plain UTF-8 text, its lines as written, and
-    /// non-ASCII headers RFC 2047-encoded.
-    pub fn message(&self, from: Mailbox, id: String) -> Result<Message, String> {
+    /// non-ASCII headers RFC 2047-encoded; in its Thread when `answering`.
+    pub fn message(
+        &self,
+        from: Mailbox,
+        id: String,
+        answering: Option<&Answering>,
+    ) -> Result<Message, String> {
         let mut message = Message::builder()
             .from(from)
             .subject(&self.subject)
             .date_now()
             .message_id(Some(id));
+        if let Some(in_reply_to) = answering.and_then(|a| a.in_reply_to.clone()) {
+            message = message.in_reply_to(in_reply_to);
+        }
+
+        if let Some(references) = answering.and_then(|a| a.references.clone()) {
+            message = message.references(references);
+        }
+
         for to in self.to.iter() {
             message = message.to(to.clone());
         }

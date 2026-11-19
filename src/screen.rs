@@ -1,9 +1,9 @@
 use tokio::time::Instant;
 
 use crate::{
-    cache::Cache, draft_preview::DraftPreview, dwell::Dwell, folder_picker::FolderPicker,
-    inbox_view::InboxView, link_hints::LinkHints, mode::Mode, reading::Reading, run::Work,
-    status::Status, thread::Key, toast::Toast, undo::Undo,
+    awaited_reply::AwaitedReply, cache::Cache, draft_preview::DraftPreview, dwell::Dwell,
+    folder_picker::FolderPicker, inbox_view::InboxView, link_hints::LinkHints, mode::Mode,
+    reading::Reading, run::Work, status::Status, thread::Key, toast::Toast, undo::Undo,
 };
 
 /// What the main screen shows over and beside the panes.
@@ -25,6 +25,7 @@ pub struct Screen {
     pub undo: Vec<Undo>,
     /// Over the whole screen, taking every key, while open.
     pub draft: Option<DraftPreview>,
+    pub replying: Option<AwaitedReply>,
 }
 
 impl Screen {
@@ -70,9 +71,11 @@ impl Screen {
         }
     }
 
-    /// The sync connection's Status, or the backfill's while that one is live.
+    /// The sync connection's Status, or while that one is live, a Reply's
+    /// fetch, else the backfill's.
     pub const fn status(&self) -> Status {
         match (self.status, self.backfill) {
+            (Status::Live, _) if self.replying.is_some() => Status::Fetching,
             (Status::Live, Some(backfill)) => backfill,
             (status, _) => status,
         }

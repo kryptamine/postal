@@ -16,6 +16,37 @@ pub enum Request {
     Bodies(BodyRequest),
     /// The page of Messages of this Folder older than every cached one.
     Backfill(Arc<str>),
+    /// The body of this UID in this Folder, which a Reply waits on: served
+    /// first, and never passed over for a later request.
+    Reply(Arc<str>, u32),
+}
+
+/// The requests received and not yet served.
+#[derive(Default)]
+struct Pending {
+    bodies: Option<BodyRequest>,
+    older: Option<Arc<str>>,
+    reply: Option<(Arc<str>, u32)>,
+}
+
+impl Pending {
+    const fn is_empty(&self) -> bool {
+        self.bodies.is_none() && self.older.is_none() && self.reply.is_none()
+    }
+
+    fn take(&mut self, request: Request) {
+        match request {
+            Request::Bodies(bodies) => self.bodies = Some(bodies),
+            Request::Backfill(folder) => self.older = Some(folder),
+            Request::Reply(folder, uid) => self.reply = Some((folder, uid)),
+        }
+    }
+
+    fn receive(&mut self, requests: &mut UnboundedReceiver<Request>) {
+        while let Ok(more) = requests.try_recv() {
+            self.take(more);
+        }
+    }
 }
 
 /// Bodies the Preview needs, by UID in `folder`. Each request replaces the
@@ -36,8 +67,9 @@ pub enum Fetched {
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each went:
-/// bodies, then a page of older Messages, then one batch of its Snippets, each
-/// in its own Folder. Only a failure other than a refusal ends the serving.
+/// a Reply's body, bodies, then a page of older Messages, then one batch of
+/// its Snippets, each in its own Folder. Only a failure other than a refusal
+/// ends the serving.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -48,20 +80,24 @@ pub async fn serve(
     (requests, mut examined): (&mut UnboundedReceiver<Request>, Option<Arc<str>>),
     send: impl Fn(Update),
 ) -> Result<(), Error> {
-    let mut waiting = None;
-    let mut older = None;
+    let mut pending = Pending::default();
     // Rows of this Folder below this UID still wait for their Snippets.
     let mut snippets_below: Option<(Arc<str>, u32)> = None;
     loop {
-        if waiting.is_none() && older.is_none() && snippets_below.is_none() {
+        if pending.is_empty() && snippets_below.is_none() {
             let Some(first) = requests.next().await else {
                 return Ok(());
             };
 
-            take(first, &mut waiting, &mut older);
+            pending.take(first);
         }
 
-        while let Some(request) = latest(requests, &mut waiting, &mut older) {
+        pending.receive(requests);
+        if let Some(reply) = pending.reply.take() {
+            fetch_reply(server, cache, (&mut examined, reply), &send).await?;
+        }
+
+        while let Some(request) = pending.bodies.take() {
             if !open(server, &mut examined, &request.folder).await? {
                 continue;
             }
@@ -76,13 +112,22 @@ pub async fn serve(
             }
 
             // The neighbours of a selection already left behind are not fetched.
-            receive(requests, &mut waiting, &mut older);
-            if waiting.is_none() && !neighbours.is_empty() {
+            pending.receive(requests);
+            if pending.bodies.is_none() && !neighbours.is_empty() {
                 fetch_each(server, cache, &folder, neighbours, &send).await?;
+            }
+
+            pending.receive(requests);
+            if pending.reply.is_some() {
+                break;
             }
         }
 
-        if let Some(folder) = older.take() {
+        if pending.reply.is_some() {
+            continue;
+        }
+
+        if let Some(folder) = pending.older.take() {
             let report = |backfill| send(Update::Backfill(backfill));
             let written = || send(Update::Inbox);
             // The page examines the Folder itself, and may find it gone.
@@ -108,25 +153,28 @@ pub async fn serve(
     }
 }
 
-/// The request last received, if not yet served; the ones before it were
-/// passed over while scrolling.
-fn latest(
-    requests: &mut UnboundedReceiver<Request>,
-    waiting: &mut Option<BodyRequest>,
-    older: &mut Option<Arc<str>>,
-) -> Option<BodyRequest> {
-    receive(requests, waiting, older);
-    waiting.take()
-}
-
-fn receive(
-    requests: &mut UnboundedReceiver<Request>,
-    waiting: &mut Option<BodyRequest>,
-    older: &mut Option<Arc<str>>,
-) {
-    while let Ok(more) = requests.try_recv() {
-        take(more, waiting, older);
+/// Fetches the body a Reply waits on; one whose Folder is gone is refused.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn fetch_reply(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    (examined, (folder, uid)): (&mut Option<Arc<str>>, (Arc<str>, u32)),
+    send: &impl Fn(Update),
+) -> Result<(), Error> {
+    if open(server, examined, &folder).await? {
+        return fetch_each(server, cache, &folder, vec![uid], send).await;
     }
+
+    let gone = Fetched::Refused {
+        uids: vec![uid],
+        reason: "its Folder is gone".to_owned(),
+    };
+
+    send(Update::Bodies(folder, gone));
+    Ok(())
 }
 
 /// Fetches `uids` and says how it went. A `NO` names no UID: they are asked
@@ -153,13 +201,6 @@ async fn fetch_each(
     }
 
     Ok(())
-}
-
-fn take(request: Request, waiting: &mut Option<BodyRequest>, older: &mut Option<Arc<str>>) {
-    match request {
-        Request::Bodies(bodies) => *waiting = Some(bodies),
-        Request::Backfill(folder) => *older = Some(folder),
-    }
 }
 
 /// Examines `folder` unless it is `examined` already; false when the

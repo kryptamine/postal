@@ -93,7 +93,7 @@ A short notice in the right slot of the hint line, shown for three seconds; a ne
 _Avoid_: notification, flash, alert
 
 **Status**:
-The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), connecting, or a countdown to the next reconnect. A Toast covers it while shown.
+The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), fetching the body a Reply waits on, connecting, or a countdown to the next reconnect. A Toast covers it while shown.
 _Avoid_: indicator, banner, connection bar
 
 **Hint mode**:
@@ -117,7 +117,7 @@ Writing a new Message with `c`: Postal opens `$EDITOR` on a Draft holding its he
 _Avoid_: new mail, write
 
 **Reply**:
-Writing a Message in answer to one with `r`, to its sender, in its Thread, with its body quoted. **Reply All** (`R`) adds everyone else it was sent to, but the Account.
+Writing a Message in answer to one with `r`, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`.
 _Avoid_: respond, answer
 
 **Draft**:

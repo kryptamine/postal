@@ -19,11 +19,11 @@ size: 80x24  cursor: hidden
 │ Line 09  │ Backspace               delete: move to Trash          │          │
 │ Line 10  │ u                       undo a delete or discard       │          │
 │ Line 11  │ c                       compose a new Message          │          │
-│ Line 12  │                                                        │          │
-│ Line 13  │ Links                                                  │          │
-│ Line 14  │ o                       label the links in the Preview │          │
-│ Line 15  │                                                        │          │
-│ Line 16  │ View                                                   │          │
+│ Line 12  │ r                       reply to the sender            │          │
+│ Line 13  │ R                       reply to all                   │          │
+│ Line 14  │                                                        │          │
+│ Line 15  │ Links                                                  │          │
+│ Line 16  │ o                       label the links in the Preview │          │
 │ Line 17  │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

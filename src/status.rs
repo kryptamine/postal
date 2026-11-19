@@ -15,6 +15,8 @@ pub enum Status {
         total: u32,
     },
     Connecting,
+    /// The body of the Message a Reply answers, before the editor opens.
+    Fetching,
     /// Down for `outage`, the next attempt at `retry`.
     Retrying {
         outage: Outage,
@@ -33,6 +35,7 @@ impl Status {
             Self::Live => Ok(()),
             Self::Syncing { done, total } => write!(text, "syncing {done}/{total}"),
             Self::Connecting => text.write_str("connecting…"),
+            Self::Fetching => text.write_str("fetching the Message…"),
             Self::Retrying { outage, retry } => {
                 let label = match outage {
                     Outage::Offline => "offline",

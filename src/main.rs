@@ -1,6 +1,8 @@
 mod alloc_count;
 mod ansi;
+mod answering;
 mod atomic_file;
+mod awaited_reply;
 mod backfill;
 mod backoff;
 mod body;
@@ -23,6 +25,8 @@ mod draft_pane;
 mod draft_preview;
 mod dwell;
 mod editor;
+mod flag;
+mod flag_change;
 mod flag_changes;
 mod folder;
 mod folder_list;
@@ -37,6 +41,7 @@ mod idle;
 mod imap;
 mod inbox;
 mod inbox_view;
+mod input;
 mod keychain;
 mod keymap;
 mod layout;
@@ -78,6 +83,8 @@ mod region;
 mod render_process;
 mod rendered_previews;
 mod rendered_view;
+mod reply_draft;
+mod reply_fetch;
 mod rgb;
 mod run;
 mod screen;
@@ -134,6 +141,7 @@ use crate::{
     older_pages::OlderPages,
     outgoing::Outgoing,
     previews::Previews,
+    reply_fetch::ReplyFetch,
     run::{Background, Exit, Work},
     sign_in::SignIn,
     status::Status,
@@ -285,6 +293,7 @@ fn session(
     let (requests, requested) = futures::channel::mpsc::unbounded();
     let (asks, asked) = futures::channel::mpsc::unbounded();
     let older = OlderPages::new(requests.clone());
+    let replies = ReplyFetch::new(requests.clone());
     let updates_to_previews = sender.clone();
     let send = move |update| {
         // The send fails only once the event loop has stopped listening.
@@ -316,6 +325,7 @@ fn session(
             work,
             updates,
             older,
+            replies,
             asks,
             outgoing: Outgoing { config, sign_in },
         };
@@ -355,7 +365,7 @@ async fn bodies(
         Status::Live => send(Update::BodyLink(true)),
         Status::Retrying { .. } => send(Update::BodyLink(false)),
         Status::SignedOut => send(Update::Status(status)),
-        Status::Syncing { .. } | Status::Connecting => {}
+        Status::Syncing { .. } | Status::Connecting | Status::Fetching => {}
     })
     .await
 }

@@ -26,6 +26,11 @@ pub enum Action {
     Undo,
     /// A new Draft in `$EDITOR`.
     Compose,
+    /// A Reply's Draft in `$EDITOR`, to everyone the Message went to when
+    /// `all`.
+    Reply {
+        all: bool,
+    },
     /// Hint mode on the links in the Preview window.
     Links,
     /// The other View of HTML mail: rendered or text.
@@ -126,7 +131,7 @@ const ANY: &[Mode] = &[Mode::List, Mode::Reading, Mode::Draft];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 32] = [
+const BINDINGS: [Binding; 34] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -296,6 +301,24 @@ const BINDINGS: [Binding; 32] = [
         keys: "c",
         aliases: "",
         description: "compose a new Message",
+        hint: None,
+    },
+    Binding {
+        group: "Message",
+        modes: BOTH,
+        signed_out: false,
+        keys: "r",
+        aliases: "",
+        description: "reply to the sender",
+        hint: None,
+    },
+    Binding {
+        group: "Message",
+        modes: BOTH,
+        signed_out: false,
+        keys: "R",
+        aliases: "",
+        description: "reply to all",
         hint: None,
     },
     Binding {
@@ -528,10 +551,6 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (Mode::List, KeyCode::Enter | KeyCode::Char('l')) => Some(Action::Read),
         (Mode::List, KeyCode::Char('q')) => Some(Action::Quit),
         (Mode::List, KeyCode::Char('/')) => Some(Action::Search),
-        (Mode::List | Mode::Reading, KeyCode::Char('U')) => Some(Action::MarkUnread),
-        (Mode::List | Mode::Reading, KeyCode::Backspace) => Some(Action::Delete),
-        (Mode::List | Mode::Reading, KeyCode::Char('u')) => Some(Action::Undo),
-        (Mode::List | Mode::Reading, KeyCode::Char('c')) => Some(Action::Compose),
         (Mode::List, KeyCode::Esc) => Some(Action::EndSearch { restore: false }),
         (Mode::Reading, KeyCode::Char('j') | KeyCode::Down) => {
             Some(scroll(Direction::Down, By::Line))
@@ -547,6 +566,20 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (Mode::Reading, KeyCode::Char('q' | 'h') | KeyCode::Esc | KeyCode::Left) => {
             Some(Action::Back)
         }
+        (Mode::List | Mode::Reading, code) => on_message(code),
+        _ => None,
+    }
+}
+
+/// What `code` does to a Message, in the list and in Reading alike.
+const fn on_message(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Char('U') => Some(Action::MarkUnread),
+        KeyCode::Backspace => Some(Action::Delete),
+        KeyCode::Char('u') => Some(Action::Undo),
+        KeyCode::Char('c') => Some(Action::Compose),
+        KeyCode::Char('r') => Some(Action::Reply { all: false }),
+        KeyCode::Char('R') => Some(Action::Reply { all: true }),
         _ => None,
     }
 }

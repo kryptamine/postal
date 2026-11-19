@@ -13,8 +13,8 @@ const TEMPLATE: &str = "To: \nCc: \nSubject: \n\n";
 /// Only the user may read their own writing.
 const MODE: u32 = 0o600;
 
-/// A new Draft's file in `drafts`, holding the template.
-pub fn create(drafts: &Path) -> io::Result<PathBuf> {
+/// A new Draft's file in `drafts`, holding the template, or `text` when given.
+pub fn create(drafts: &Path, text: Option<&str>) -> io::Result<PathBuf> {
     std::fs::create_dir_all(drafts)?;
     let path = drafts.join(format!("{}.eml", unique_id()));
     let mut file = OpenOptions::new()
@@ -22,7 +22,7 @@ pub fn create(drafts: &Path) -> io::Result<PathBuf> {
         .create_new(true)
         .mode(MODE)
         .open(&path)?;
-    file.write_all(TEMPLATE.as_bytes())?;
+    file.write_all(text.unwrap_or(TEMPLATE).as_bytes())?;
     Ok(path)
 }
 

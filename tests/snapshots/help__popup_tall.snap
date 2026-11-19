@@ -17,13 +17,15 @@ size: 80x36  cursor: hidden
 │          │ Backspace               delete: move to Trash          │          │
 │          │ u                       undo a delete or discard       │          │
 │          │ c                       compose a new Message          │          │
-└──────────│                                                        │──────────┘
-┌ Inbox · 1│ Links                                                  │──────────┐
-│ From    B│ o                       label the links in the Preview │          │
-│ Subject N│                                                        │          │
-│ Date    M│ View                                                   │          │
-├──────────│ v                       rendered / text view of HTML   │──────────┤
-│ Newer bod│                                                        │          │
+└──────────│ r                       reply to the sender            │──────────┘
+┌ Inbox · 1│ R                       reply to all                   │──────────┐
+│ From    B│                                                        │          │
+│ Subject N│ Links                                                  │          │
+│ Date    M│ o                       label the links in the Preview │          │
+├──────────│                                                        │──────────┤
+│ Newer bod│ View                                                   │          │
+│          │ v                       rendered / text view of HTML   │          │
+│          │                                                        │          │
 │          │ App                                                    │          │
 │          │ ?                       this help                      │          │
 │          │ q          ^c           quit                           │          │
@@ -34,8 +36,6 @@ size: 80x36  cursor: hidden
 │          │ ^j / ^k    ↓ / ↑        move, while typing the Query   │          │
 │          │ Enter                   keep the Query                 │          │
 │          │ Esc                     end the Search                 │          │
-│          │                                                        │          │
-│          │ Folders                                                │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

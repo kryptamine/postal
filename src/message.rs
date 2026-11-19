@@ -3,6 +3,7 @@ use std::sync::Arc;
 use chrono::{DateTime, FixedOffset};
 
 /// One Message as the Message List knows it.
+#[derive(Clone)]
 pub struct Message {
     pub uid: u32,
     /// Where the Message's body is cached, from `body_key::body_key`.
