@@ -29,4 +29,18 @@ element::ptr table_of(const element::ptr& el)
     while(p && !tag_is(p, "table")) p = p->parent();
     return p;
 }
+
+void leaf_boxes(const element::ptr& el, std::vector<position>& out)
+{
+    if(el->children().empty())
+    {
+        if(el->get_render_item())
+        {
+            position p = el->get_placement();
+            if(float(p.width) > 0 && float(p.height) > 0) out.push_back(p);
+        }
+        return;
+    }
+    for(auto& child : el->children()) leaf_boxes(child, out);
+}
 } // namespace cg

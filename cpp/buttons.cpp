@@ -4,12 +4,18 @@
 #include "colour.h"
 #include "dom.h"
 
+#include <algorithm>
+#include <cstdint>
+
 using namespace litehtml;
 
 namespace cg
 {
 namespace
 {
+// The cells of a button's fill at each side of its label.
+const int BUTTON_PAD = 2;
+
 // The fill of a button whose border and label are both too light to be one.
 const web_color NEUTRAL(128, 128, 128);
 
@@ -77,7 +83,78 @@ void flatten(const element::ptr& el, const Contents& contents, std::vector<eleme
     }
     for(auto& child : el->children()) flatten(child, contents, out);
 }
+
+// The cell shows `fill` and nothing else, and no row over or under the
+// button carries the fill on: that would be a section it lies in.
+bool fill_only(Grid& grid, const Box& button, int r, int c, uint32_t fill)
+{
+    auto filled = [&](int row) {
+        return row >= 0 && row < grid.rows() && (grid.at(row, c)->bg & ~CG_BG_PANEL) == fill;
+    };
+    return fill && filled(r) && grid.at(r, c)->flags == 0 && !filled(button.r0 - 1) && !filled(button.r1 + 1);
+}
+
+// The cells the words of `button` stand in: an inline one has no box of
+// its own to ask for. Empty when it shows none.
+Box words_of(const element::ptr& button, Grid& grid)
+{
+    std::vector<position> words;
+    leaf_boxes(button, words);
+    Box box{INT32_MAX, -1, INT32_MAX, -1};
+    for(auto& p : words)
+    {
+        Box word = cells_of(p);
+        box = {std::min(box.r0, word.r0), std::max(box.r1, word.r1), std::min(box.c0, word.c0),
+               std::max(box.c1, word.c1)};
+    }
+    return {std::max(box.r0, 0), std::min(box.r1, grid.rows() - 1), std::max(box.c0, 0),
+            std::min(box.c1, grid.cols - 1)};
+}
+
+// `box` holds the button's words; the fill round them is cut back or let
+// out to BUTTON_PAD cells past the first and the last glyph of any row.
+void shape(Grid& grid, const Box& box)
+{
+    int first = INT32_MAX, last = -1;
+    for(int r = box.r0; r <= box.r1; r++)
+        for(int c = box.c0; c <= box.c1; c++)
+            if(cg_cell& cell = *grid.at(r, c); (cell.flags & CG_TEXT) && !is(cell, " "))
+            {
+                first = std::min(first, c);
+                last  = std::max(last, c);
+            }
+    if(last < 0) return;
+    int from = first - BUTTON_PAD, to = last + BUTTON_PAD, end = grid.cols - 1;
+    for(int r = box.r0; r <= box.r1; r++)
+    {
+        uint32_t fill = 0;
+        for(int c = box.c0; c <= box.c1 && !fill; c++)
+            if(grid.at(r, c)->flags & CG_TEXT) fill = grid.at(r, c)->bg & ~CG_BG_PANEL;
+        // A box round the button in its own fill is part of its shape.
+        int c0 = box.c0, c1 = box.c1;
+        while(c0 > 0 && fill_only(grid, box, r, c0 - 1, fill)) c0--;
+        while(c1 < end && fill_only(grid, box, r, c1 + 1, fill)) c1++;
+        uint32_t left  = c0 > 0 ? grid.at(r, c0 - 1)->bg : 0;
+        uint32_t right = c1 < end ? grid.at(r, c1 + 1)->bg : 0;
+        for(int c = std::max(std::min(c0, from), 0); c <= std::min(std::max(c1, to), end); c++)
+        {
+            cg_cell& cell = *grid.at(r, c);
+            if(c < from) cell.bg = left;
+            else if(c > to) cell.bg = right;
+            else if(c >= c0 && c <= c1) cell.bg = fill;
+            // Outside its box the fill takes only cells that show nothing.
+            else if(cell.flags == 0 && is(cell, " ")) cell.bg = fill;
+            // The fill says it can be pressed; a link's underline is noise.
+            if(cell.flags & CG_TEXT) cell.flags = (cell.flags | CG_BOLD) & ~uint32_t(CG_UNDERLINE);
+        }
+    }
+}
 } // namespace
+
+void shape_buttons(const std::vector<element::ptr>& buttons, Grid& grid)
+{
+    for(auto& button : buttons) shape(grid, words_of(button, grid));
+}
 
 std::vector<element::ptr> flatten_buttons(const element::ptr& root, const Contents& contents)
 {

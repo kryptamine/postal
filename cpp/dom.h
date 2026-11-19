@@ -5,6 +5,7 @@
 #include <litehtml.h>
 
 #include <string>
+#include <vector>
 
 namespace cg
 {
@@ -16,6 +17,8 @@ void shown_text(const litehtml::element::ptr& el, std::string& out);
 litehtml::element::ptr link_of(const litehtml::element::ptr& el);
 // The nearest table around `el`; null outside one.
 litehtml::element::ptr table_of(const litehtml::element::ptr& el);
+// Where the layout put what `el` shows: each word, or image, under it.
+void leaf_boxes(const litehtml::element::ptr& el, std::vector<litehtml::position>& out);
 } // namespace cg
 
 #endif

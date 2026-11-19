@@ -7,7 +7,9 @@
 #include "buttons.h"
 #include "colour.h"
 #include "contents.h"
+#include "dom.h"
 #include "geometry.h"
+#include "grid.h"
 #include "image_labels.h"
 #include "loosen.h"
 #include "picture_boxes.h"
@@ -55,22 +57,6 @@ void append_glyph(cg_cell& c, const char* g, size_t n)
     }
 }
 
-bool is(const cg_cell& c, const char* g) { return std::strcmp(c.glyph, g) == 0; }
-
-// Cells from row r0 to r1 and column c0 to c1; empty when r1 < r0.
-struct Box
-{
-    int r0, r1, c0, c1;
-
-    bool holds(const Box& in) const
-    {
-        return in.r0 <= in.r1 && r0 <= in.r0 && r1 >= in.r1 && c0 <= in.c0 && c1 >= in.c1;
-    }
-};
-
-// The cells of a button's fill at each side of its label.
-const int BUTTON_PAD = 2;
-
 struct Frame
 {
     Box                   box;
@@ -78,11 +64,9 @@ struct Frame
     std::vector<position> clips;
 };
 
-class grid_container : public document_container
+class grid_container : public document_container, public Grid
 {
   public:
-    int                                cols;
-    std::vector<cg_cell>               grid;
     std::vector<position>              clips;
     std::vector<Frame>                 frames;
     ImageLabels                        images;
@@ -91,7 +75,7 @@ class grid_container : public document_container
     // Long words are parsed in pieces a line may break between.
     bool                               break_words;
 
-    grid_container(int cols, bool break_words) : cols(cols), break_words(break_words) {}
+    grid_container(int cols, bool break_words) : Grid(cols), break_words(break_words) {}
 
     void split_text(const char* text, const std::function<void(const char*)>& on_word,
                     const std::function<void(const char*)>& on_space) override
@@ -106,25 +90,10 @@ class grid_container : public document_container
     // Back to an empty grid, to draw a layout that changed.
     void wipe()
     {
-        grid.clear();
+        drawn.clear();
         frames.clear();
         clips.clear();
         lost_text = false;
-    }
-
-    int rows() const { return cols ? int(grid.size()) / cols : 0; }
-
-    cg_cell* at(int row, int col)
-    {
-        if(row < 0 || col < 0 || col >= cols) return nullptr;
-        if(row >= rows())
-        {
-            cg_cell blank{};
-            blank.glyph[0] = ' ';
-            grid.resize(size_t(row + 1) * size_t(cols), blank);
-        }
-
-        return &grid[size_t(row) * size_t(cols) + size_t(col)];
     }
 
     bool visible(int row, int col, const position* extra = nullptr) const
@@ -241,9 +210,7 @@ class grid_container : public document_container
     {
         const std::string* label = images.of(url);
         if(!label) return;
-        int r0, r1, c0, c1;
-        span(layer.border_box.y, layer.border_box.height, CH, r0, r1);
-        span(layer.border_box.x, layer.border_box.width, CW, c0, c1);
+        auto [r0, r1, c0, c1] = cells_of(layer.border_box);
         if(r1 < r0 || c1 < c0) return;
         std::string alt = fit(*label, c1 - c0 + 1);
         int         len = cells(alt.c_str());
@@ -253,9 +220,7 @@ class grid_container : public document_container
     void draw_solid_fill(uint_ptr, const background_layer& layer, const web_color& color) override
     {
         if(color.alpha == 0) return;
-        int r0, r1, c0, c1;
-        span(layer.border_box.y, layer.border_box.height, CH, r0, r1);
-        span(layer.border_box.x, layer.border_box.width, CW, c0, c1);
+        auto [r0, r1, c0, c1] = cells_of(layer.border_box);
         if(layer.is_root) { c0 = 0; c1 = cols - 1; }
         // A button or a badge is short and narrow; a section is neither.
         uint32_t panel = layer.is_root || r1 - r0 >= 3 || (c1 - c0 + 1) * 2 >= cols ? CG_BG_PANEL : 0;
@@ -283,9 +248,7 @@ class grid_container : public document_container
     // rather than cross it.
     void draw_borders(uint_ptr, const borders& b, const position& pos, bool) override
     {
-        int r0, r1, c0, c1;
-        span(pos.y, pos.height, CH, r0, r1);
-        span(pos.x, pos.width, CW, c0, c1);
+        auto [r0, r1, c0, c1] = cells_of(pos);
         if(r1 < r0) r0 = r1 = int(std::floor(float(pos.y) / CH));
         if(c1 < c0) c0 = c1 = int(std::floor(float(pos.x) / CW));
         frames.push_back({{r0, r1, c0, c1}, b, clips});
@@ -306,7 +269,7 @@ class grid_container : public document_container
         if(row < 0 || row >= rows()) return false;
         for(int c = std::max(c0, 0); c <= std::min(c1, cols - 1); c++)
         {
-            const cg_cell& cell = grid[size_t(row) * size_t(cols) + size_t(c)];
+            const cg_cell& cell = drawn[size_t(row) * size_t(cols) + size_t(c)];
             if((cell.flags & CG_TEXT) && !is(cell, " ")) return true;
         }
         return false;
@@ -317,8 +280,8 @@ class grid_container : public document_container
     Box content_box() const
     {
         Box box{INT32_MAX, -1, INT32_MAX, -1};
-        for(int i = 0; i < int(grid.size()); i++)
-            if(!is(grid[size_t(i)], " "))
+        for(int i = 0; i < int(drawn.size()); i++)
+            if(!is(drawn[size_t(i)], " "))
             {
                 box.r0 = std::min(box.r0, i / cols), box.r1 = std::max(box.r1, i / cols);
                 box.c0 = std::min(box.c0, i % cols), box.c1 = std::max(box.c1, i % cols);
@@ -368,55 +331,6 @@ class grid_container : public document_container
         clips.clear();
     }
 
-    // The cell shows `fill` and nothing else, and no row over or under the
-    // button carries the fill on: that would be a section it lies in.
-    bool fill_only(const Box& button, int r, int c, uint32_t fill)
-    {
-        auto filled = [&](int row) { return row >= 0 && row < rows() && (at(row, c)->bg & ~CG_BG_PANEL) == fill; };
-        return fill && filled(r) && at(r, c)->flags == 0 && !filled(button.r0 - 1) && !filled(button.r1 + 1);
-    }
-
-    // A button is its label with BUTTON_PAD cells of its fill at each side,
-    // in bold, whatever width and padding the mail gave it: `box` holds its
-    // words, and the fill round them is cut back or let out to that.
-    void shape_button(Box box)
-    {
-        box = {std::max(box.r0, 0), std::min(box.r1, rows() - 1), std::max(box.c0, 0), std::min(box.c1, cols - 1)};
-        int first = INT32_MAX, last = -1;
-        for(int r = box.r0; r <= box.r1; r++)
-            for(int c = box.c0; c <= box.c1; c++)
-                if(cg_cell& cell = *at(r, c); (cell.flags & CG_TEXT) && !is(cell, " "))
-                {
-                    first = std::min(first, c);
-                    last  = std::max(last, c);
-                }
-        if(last < 0) return;
-        int from = first - BUTTON_PAD, to = last + BUTTON_PAD;
-        for(int r = box.r0; r <= box.r1; r++)
-        {
-            uint32_t fill = 0;
-            for(int c = box.c0; c <= box.c1 && !fill; c++)
-                if(at(r, c)->flags & CG_TEXT) fill = at(r, c)->bg & ~CG_BG_PANEL;
-            // A box round the button in its own fill is part of its shape.
-            int c0 = box.c0, c1 = box.c1;
-            while(c0 > 0 && fill_only(box, r, c0 - 1, fill)) c0--;
-            while(c1 < cols - 1 && fill_only(box, r, c1 + 1, fill)) c1++;
-            uint32_t left  = c0 > 0 ? at(r, c0 - 1)->bg : 0;
-            uint32_t right = c1 < cols - 1 ? at(r, c1 + 1)->bg : 0;
-            for(int c = std::max(std::min(c0, from), 0); c <= std::min(std::max(c1, to), cols - 1); c++)
-            {
-                cg_cell& cell = *at(r, c);
-                if(c < from) cell.bg = left;
-                else if(c > to) cell.bg = right;
-                else if(c >= c0 && c <= c1) cell.bg = fill;
-                // Outside its box the fill takes only cells that show nothing.
-                else if(cell.flags == 0 && is(cell, " ")) cell.bg = fill;
-                // The fill says it can be pressed; a link's underline is noise.
-                if(cell.flags & CG_TEXT) cell.flags = (cell.flags | CG_BOLD) & ~uint32_t(CG_UNDERLINE);
-            }
-        }
-    }
-
     void set_clip(const position& pos, const border_radiuses&) override { clips.push_back(pos); }
     void del_clip() override
     {
@@ -461,20 +375,6 @@ class grid_container : public document_container
 // line. litehtml leaves a table under `align=center` or `<center>` on the left.
 const char* const user_css = "* { line-height: normal !important; background-clip: padding-box !important; } "
                              "[align=center] > table, center > table { margin-left: auto; margin-right: auto; }";
-
-void leaf_boxes(const element::ptr& el, std::vector<position>& out)
-{
-    if(el->children().empty())
-    {
-        if(el->get_render_item())
-        {
-            position p = el->get_placement();
-            if(float(p.width) > 0 && float(p.height) > 0) out.push_back(p);
-        }
-        return;
-    }
-    for(auto& child : el->children()) leaf_boxes(child, out);
-}
 } // namespace
 
 struct cg_grid
@@ -498,9 +398,7 @@ struct cg_grid
                 auto id = uint32_t(hrefs.size());
                 for(auto& p : boxes)
                 {
-                    int r0, r1, c0, c1;
-                    span(p.y, p.height, CH, r0, r1);
-                    span(p.x, p.width, CW, c0, c1);
+                    auto [r0, r1, c0, c1] = cells_of(p);
                     for(int r = r0; r <= r1 && r < container.rows(); r++)
                         for(int c = c0; c <= c1; c++)
                             if(cg_cell* cell = container.at(r, c)) cell->link = id;
@@ -513,7 +411,8 @@ struct cg_grid
 
 namespace
 {
-void lay_out(const document::ptr& doc, grid_container& container)
+// Lays `doc` out as its styles now stand and draws it on an empty grid.
+void draw(const document::ptr& doc, grid_container& container)
 {
     float width = float(container.cols) * CW;
     // The boxes were built from the styles before they changed.
@@ -525,14 +424,10 @@ void lay_out(const document::ptr& doc, grid_container& container)
         doc->rebuild_render_tree();
         doc->render(width);
     }
-}
-
-void draw(const document::ptr& doc, grid_container& container)
-{
     container.wipe();
     // Wider than the pane: litehtml skips a box wholly outside the clip, and
     // text there must be drawn to count as lost.
-    position clip(0, 0, std::max(float(container.cols) * CW, float(doc->width())), doc->height());
+    position clip(0, 0, std::max(width, float(doc->width())), doc->height());
     doc->draw(0, 0, 0, &clip);
     container.apply_borders();
 }
@@ -557,28 +452,9 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
     }
     snap_tree(doc->root());
     if(loose) loosen(doc->root());
-    lay_out(doc, container);
     draw(doc, container);
-    if(loose && container.lost_text && stack_spilt_tables(doc->root(), float(cols) * CW))
-    {
-        lay_out(doc, container);
-        draw(doc, container);
-    }
-    for(auto& button : buttons)
-    {
-        // Its words: an inline button has no box of its own to ask for.
-        std::vector<position> words;
-        leaf_boxes(button, words);
-        Box box{INT32_MAX, -1, INT32_MAX, -1};
-        for(auto& p : words)
-        {
-            int r0, r1, c0, c1;
-            span(p.y, p.height, CH, r0, r1);
-            span(p.x, p.width, CW, c0, c1);
-            box = {std::min(box.r0, r0), std::max(box.r1, r1), std::min(box.c0, c0), std::max(box.c1, c1)};
-        }
-        container.shape_button(box);
-    }
+    if(loose && container.lost_text && stack_spilt_tables(doc->root(), float(cols) * CW)) draw(doc, container);
+    shape_buttons(buttons, container);
     grid->mark_links(doc->root());
     return grid.release();
 }
@@ -603,7 +479,7 @@ extern "C" void cg_free(cg_grid* grid) { delete grid; }
 extern "C" const cg_cell* cg_cells(const cg_grid* grid, size_t* rows)
 {
     *rows = size_t(grid->container.rows());
-    return grid->container.grid.data();
+    return grid->container.drawn.data();
 }
 
 extern "C" int32_t cg_fits(const cg_grid* grid) { return grid->container.lost_text ? 0 : 1; }
