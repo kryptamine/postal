@@ -6,13 +6,13 @@ use crate::{
     marks::Marks,
     outlines::{self, Outline},
     paint::Paint,
-    render_process,
+    render_process, spacer_rows,
     styled_line::StyledLine,
 };
 
-/// An HTML part laid out as a mail client shows it, `width` cells wide,
-/// in `colours`; `None` when the engine fails on it, or when it is too wide
-/// to show whole. Blank rows at the ends are dropped.
+/// An HTML part laid out as a mail client shows it, `width` cells wide, in
+/// `colours`; `None` when the engine fails on it or it is too wide to show
+/// whole. Blank rows at the ends are dropped, and a run of them inside is one.
 pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<StyledLine>> {
     let grid = render_process::lay_out(html, width).filter(CellGrid::fits)?;
     let mut hrefs: HashMap<u32, Arc<str>> = HashMap::new();
@@ -57,6 +57,7 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
     lines.truncate(end);
     let start = lines.iter().position(|line| !blank(line)).unwrap_or(0);
     lines.drain(..start);
+    spacer_rows::squeeze(&mut lines);
     Some(lines)
 }
 

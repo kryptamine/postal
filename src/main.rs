@@ -72,6 +72,7 @@ mod shown;
 mod sign_in;
 mod snippet;
 mod snippets;
+mod spacer_rows;
 mod stack;
 mod stack_str;
 mod status;

@@ -196,6 +196,15 @@ changed 7. Blanking the box round the whole mail changed 8 at 74 columns and
 Deciding a section by the size of the merged region, not of each box, was
 tried: it framed chart bars and footer gutters and improved nothing.
 
+### Blank rows
+
+Mail spaces its blocks with padding, margins and empty cells, rows of
+nothing each. After the frames are drawn, a run of equal rows that show
+only the sides of the frames they cross becomes one (`src/spacer_rows.rs`):
+one blank row sets two blocks apart as well as five. A row with a fill left
+on it stays, since those rows are a drawing. On 539 cached mails at 74
+columns this cut the rows from 41594 to 34668.
+
 ## Measurements
 
 Release build, Apple M2 Max, 76 columns, median of 10, spawn included (about

@@ -4,11 +4,13 @@ use crate::{marks::Marks, paint::Paint};
 
 /// One line of a Preview body: its text, and the runs that cover it end to
 /// end, each with its marks, its colours and the URL of the link it is in.
+#[derive(PartialEq, Eq)]
 pub struct StyledLine {
     pub text: String,
     runs: Vec<Run>,
 }
 
+#[derive(PartialEq, Eq)]
 struct Run {
     /// In bytes of `text`.
     len: usize,
