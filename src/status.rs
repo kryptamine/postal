@@ -29,7 +29,7 @@ impl Status {
     pub fn text(self, now: Instant) -> StackStr<40> {
         let mut text = StackStr::new();
         // Every text fits, so the write cannot fail.
-        let _ = match self {
+        (match self {
             Self::Live => Ok(()),
             Self::Syncing { done, total } => write!(text, "syncing {done}/{total}"),
             Self::Connecting => text.write_str("connecting…"),
@@ -42,7 +42,8 @@ impl Status {
                 write!(text, "{label} · retry in {}s", seconds_left(retry, now))
             }
             Self::SignedOut => text.write_str("signed out · L sign in"),
-        };
+        })
+        .ok();
 
         text
     }

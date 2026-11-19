@@ -261,7 +261,7 @@ fn session(
     let updates_to_previews = sender.clone();
     let send = move |update| {
         // The send fails only once the event loop has stopped listening.
-        let _ = sender.unbounded_send(update);
+        sender.unbounded_send(update).ok();
     };
 
     runtime.block_on(async {

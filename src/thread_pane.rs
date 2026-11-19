@@ -76,7 +76,7 @@ impl StatefulWidget for ThreadPane<'_> {
 
         // Drawn over the border rather than as a Block title, which allocates.
         let mut title = StackStr::<24>::new();
-        let _ = write!(title, " {}/{count} ", cursor + 1);
+        write!(title, " {}/{count} ", cursor + 1).ok();
         let room = usize::from(area.width.saturating_sub(2));
         buf.set_stringn(area.x + 1, area.y, title.as_str(), room, self.theme.title);
     }
@@ -94,7 +94,7 @@ impl ThreadPane<'_> {
         // body loads.
         let mut date = StackStr::<40>::new();
         if offset == DATE_ROW {
-            let _ = write!(date, "{}", message.received.format(preview_render::DATE));
+            write!(date, "{}", message.received.format(preview_render::DATE)).ok();
         }
 
         let values = [

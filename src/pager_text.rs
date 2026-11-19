@@ -8,7 +8,7 @@ use crate::{ansi, browser, preview::Preview, preview_pane::LABELS, theme::Theme}
 pub fn ansi(preview: &Preview, theme: &Theme) -> Vec<u8> {
     let mut out = Vec::new();
     // Writing to a `Vec` cannot fail.
-    let _ = write(&mut out, preview, theme);
+    write(&mut out, preview, theme).ok();
     out
 }
 

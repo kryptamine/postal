@@ -650,7 +650,7 @@ fn steer(
     };
 
     // The send fails only while signed out, when nothing syncs.
-    let _ = asks.unbounded_send(ask);
+    asks.unbounded_send(ask).ok();
     Ok(())
 }
 

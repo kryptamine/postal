@@ -78,7 +78,7 @@ fn quoted_sections(line: &[u8]) -> Vec<u8> {
         };
 
         let size = quoted_len(quoted).unwrap_or(quoted.len());
-        let _ = write!(out, " <{size} bytes>");
+        write!(out, " <{size} bytes>").ok();
         rest = quoted.get(size + 1..).unwrap_or_default();
     }
 
@@ -128,7 +128,7 @@ impl Lines {
 
             if let Some((start, size)) = literal(&self.line) {
                 self.line.truncate(start);
-                let _ = write!(self.line, "<{size} bytes>");
+                write!(self.line, "<{size} bytes>").ok();
                 self.skipping = size;
             } else {
                 on_line(&self.line);

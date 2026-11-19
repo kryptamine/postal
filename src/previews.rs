@@ -273,7 +273,7 @@ impl Previews {
         self.fetching
             .extend(request.selected.iter().chain(&request.neighbours));
         // The send fails only once the body fetch has stopped.
-        let _ = self.requests.unbounded_send(Request::Bodies(request));
+        self.requests.unbounded_send(Request::Bodies(request)).ok();
     }
 
     fn render(&mut self, key: PreviewKey, body: Vec<u8>, message: &Message) {
@@ -288,7 +288,7 @@ impl Previews {
         };
 
         // The send fails only once the render thread is gone.
-        let _ = self.jobs.send(job);
+        self.jobs.send(job).ok();
     }
 
     /// Keeps the header of `selected` from its row while its body cannot come.

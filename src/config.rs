@@ -115,10 +115,11 @@ impl Config {
             let host = toml::Value::from(self.imap.host.as_str());
             let Imap { port, tls, .. } = self.imap;
             // Writing to a String cannot fail.
-            let _ = write!(
+            write!(
                 text,
                 "\n[imap]\nhost = {host}\nport = {port}\ntls = {tls}\n"
-            );
+            )
+            .ok();
         }
 
         if matches!(self.secrets, SecretStore::File) {
@@ -132,13 +133,14 @@ impl Config {
                 redirect_timeout,
             } = &self.oauth;
 
-            let _ = write!(
+            write!(
                 text,
                 "\n[oauth]\nauthorization-url = {}\ntoken-url = {}\nredirect-timeout = {}\n",
                 toml::Value::from(authorization_url.as_str()),
                 toml::Value::from(token_url.as_str()),
                 redirect_timeout.as_secs()
-            );
+            )
+            .ok();
         }
 
         text

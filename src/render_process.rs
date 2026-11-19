@@ -34,7 +34,7 @@ pub fn lay_out(html: &str, cols: u16) -> Option<CellGrid> {
     thread::spawn(move || {
         let mut bytes = Vec::new();
         let read = stdout.read_to_end(&mut bytes).map(|_| bytes);
-        let _ = done.send(read);
+        done.send(read).ok();
     });
 
     // The child reads all of it before it writes anything, and dropping
@@ -45,7 +45,7 @@ pub fn lay_out(html: &str, cols: u16) -> Option<CellGrid> {
         .map(|mut stdin| stdin.write_all(html.as_bytes()));
     let bytes = output.recv_timeout(TIMEOUT).ok().and_then(Result::ok);
     if bytes.is_none() {
-        let _ = child.kill();
+        child.kill().ok();
     }
 
     let status = child.wait().ok()?;

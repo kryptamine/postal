@@ -58,7 +58,7 @@ impl StatefulWidget for PreviewPane<'_> {
 
         // Drawn over the border rather than as a Block title, which allocates.
         let mut title = StackStr::<24>::new();
-        let _ = write!(title, " {}/{count} ", view.selected + 1);
+        write!(title, " {}/{count} ", view.selected + 1).ok();
         let room = usize::from(area.width.saturating_sub(2));
         buf.set_stringn(area.x + 1, area.y, title.as_str(), room, self.theme.title);
         let text = text_area(area);

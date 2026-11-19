@@ -67,7 +67,7 @@ impl Widget for PickerPopup<'_> {
 
             let mut count = StackStr::<24>::new();
             if let Some(unread) = folder.unread.filter(|&n| n > 0) {
-                let _ = write!(count, "{unread}");
+                write!(count, "{unread}").ok();
             }
 
             let count_width = u16::try_from(count.as_str().width()).unwrap_or(0);

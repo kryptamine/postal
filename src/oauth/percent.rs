@@ -8,7 +8,7 @@ pub fn encode(text: &str) -> String {
             out.push(char::from(byte));
         } else {
             // Writing to a String cannot fail.
-            let _ = write!(out, "%{byte:02X}");
+            write!(out, "%{byte:02X}").ok();
         }
     }
 

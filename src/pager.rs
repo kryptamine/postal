@@ -21,7 +21,7 @@ pub fn page(text: &[u8]) -> io::Result<()> {
         // A pager quit before reading everything closes the pipe early.
         match stdin.write_all(text) {
             Err(error) if error.kind() != io::ErrorKind::BrokenPipe => {
-                let _ = child.wait();
+                child.wait().ok();
                 return Err(error);
             }
             _ => {}

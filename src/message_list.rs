@@ -60,11 +60,12 @@ impl StatefulWidget for MessageList<'_> {
         // Drawn over the border rather than as a Block title, which allocates.
         let label = view.folder.label();
         let mut count = StackStr::<40>::new();
-        let _ = if view.messages.is_some() {
+        (if view.messages.is_some() {
             write!(count, "  {} unread ", view.unread)
         } else {
             count.write_str(" ")
-        };
+        })
+        .ok();
 
         let mut x = inner.x;
         for part in [" ", label, count.as_str()] {
@@ -264,7 +265,7 @@ impl Cards<'_> {
 fn count(thread: &Thread) -> StackStr<24> {
     let mut count = StackStr::new();
     if thread.stack.len() > 1 {
-        let _ = write!(count, " ({})", thread.stack.len());
+        write!(count, " ({})", thread.stack.len()).ok();
     }
 
     count

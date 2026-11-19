@@ -124,6 +124,6 @@ async fn respond(stream: &mut TcpStream, status: &str, page: &str) {
         "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
         page.len()
     );
-    let _ = stream.write_all(response.as_bytes()).await;
-    let _ = stream.shutdown().await;
+    stream.write_all(response.as_bytes()).await.ok();
+    stream.shutdown().await.ok();
 }

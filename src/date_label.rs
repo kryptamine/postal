@@ -20,7 +20,7 @@ impl DateLabel {
     pub fn new(received: &DateTime<FixedOffset>, now: &DateTime<FixedOffset>) -> Self {
         let mut label = StackStr::new();
         // Every form fits WIDTH, so the write cannot fail.
-        let _ = if received.date_naive() == now.date_naive() {
+        (if received.date_naive() == now.date_naive() {
             write!(label, "{:02}:{:02}", received.hour(), received.minute())
         } else if received.year() == now.year() {
             write!(
@@ -37,7 +37,8 @@ impl DateLabel {
                 received.month(),
                 received.day()
             )
-        };
+        })
+        .ok();
 
         Self(label)
     }

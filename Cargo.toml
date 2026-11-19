@@ -53,12 +53,16 @@ termlens = "0.11.10"
 name = "frame_allocations"
 required-features = ["alloc-count"]
 
+[lints.rust]
+let_underscore_drop = "deny"
+
 [lints.clippy]
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 undocumented_unsafe_blocks = "deny"
 string_slice = "deny"
+let_underscore_must_use = "deny"
 
 [build-dependencies]
 cc = { version = "1.11.2", features = ["parallel"] }

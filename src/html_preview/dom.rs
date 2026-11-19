@@ -74,7 +74,7 @@ pub fn replace(dom: &RcDom, old: &Handle, new: Handle) {
 pub fn text(node: &Handle) -> String {
     let mut html = Vec::new();
     // Writing to a Vec cannot fail.
-    let _ = node.serialize(&mut html);
+    node.serialize(&mut html).ok();
     let text = html_text::strip(&String::from_utf8_lossy(&html));
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

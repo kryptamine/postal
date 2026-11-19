@@ -112,7 +112,7 @@ fn a_one_letter_label_opens_its_url() {
 fn a_two_letter_label_opens_its_url() {
     let mut body = String::new();
     for i in 0..12 {
-        let _ = write!(body, "<a href=\"https://example.com/{i}\">link {i}</a><br>");
+        write!(body, "<a href=\"https://example.com/{i}\">link {i}</a><br>").ok();
     }
 
     let (_server, home, browser) = start(vec![html("Twelve links", 18, &body)]);

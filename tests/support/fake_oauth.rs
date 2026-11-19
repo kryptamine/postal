@@ -108,7 +108,7 @@ fn answer(stream: TcpStream, grants: &Mutex<Grants>) {
         "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{json}",
         json.len()
     );
-    let _ = reader.into_inner().write_all(response.as_bytes());
+    reader.into_inner().write_all(response.as_bytes()).ok();
 }
 
 fn grant(form: &Form, grants: &Mutex<Grants>) -> (&'static str, String) {

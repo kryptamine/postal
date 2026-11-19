@@ -75,10 +75,10 @@ impl LinkHints {
             .position(|t| t.part == part && t.line == line && t.run == run)?;
         let mut label = StackStr::new();
         if self.two_letters() {
-            let _ = label.write_char(ALPHABET[index / ALPHABET.len()]);
+            label.write_char(ALPHABET[index / ALPHABET.len()]).ok();
         }
 
-        let _ = label.write_char(ALPHABET[index % ALPHABET.len()]);
+        label.write_char(ALPHABET[index % ALPHABET.len()]).ok();
         Some(label)
     }
 

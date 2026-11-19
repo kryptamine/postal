@@ -71,7 +71,7 @@ async fn commands(
         line.clear();
     }
 
-    let _ = to.shutdown().await;
+    to.shutdown().await.ok();
 }
 
 async fn responses(
@@ -116,7 +116,7 @@ async fn responses(
         line.clear();
     }
 
-    let _ = to.shutdown().await;
+    to.shutdown().await.ok();
 }
 
 /// The UID of a `* n FETCH (UID u ...` line, as the fake writes it.

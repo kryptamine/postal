@@ -20,7 +20,7 @@ mod counting {
     struct Counting;
 
     fn bump() {
-        let _ = COUNT.try_with(|count| count.set(count.get() + 1));
+        COUNT.try_with(|count| count.set(count.get() + 1)).ok();
     }
 
     // SAFETY: every call is forwarded unchanged to the system allocator.

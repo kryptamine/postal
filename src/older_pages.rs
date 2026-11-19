@@ -58,9 +58,9 @@ impl OlderPages {
 
         self.asked = true;
         // The send fails only once the fetch connection has stopped.
-        let _ = self
-            .requests
-            .unbounded_send(Request::Backfill(Arc::clone(folder)));
+        self.requests
+            .unbounded_send(Request::Backfill(Arc::clone(folder)))
+            .ok();
     }
 
     /// Follows the fetch connection, and passes `update` on. A request in
