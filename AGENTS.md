@@ -65,6 +65,8 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   `clang-format -i cpp/*` before the commit. `vendor/` keeps upstream's style.
 - **`clang-tidy cpp/*.cpp` passes** with `bugprone`, `performance` and
   `modernize` as errors (`.clang-tidy`, flags in `compile_flags.txt`).
+- **`scripts/sanitize.sh` passes after a change to `cpp/` or `vendor/`**: it
+  lays out every cached HTML mail under ASan and UBSan.
 - **A review finding a linter could have caught becomes a rule.** Where a lint
   checks it, turn it on in the same change and fix every place it flags.
 - A linter exception states its reason: `#[allow(..., reason = "...")]`.
