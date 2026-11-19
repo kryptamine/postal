@@ -52,6 +52,18 @@ _Avoid_: mark seen, read receipt
 Making a Message Unread again with `U`: the newest of the selected Thread, or the one under the cursor in Reading. It shows at once, and no Dwell starts on that Thread until the selection leaves it and comes back.
 _Avoid_: unmark, keep unread
 
+**Trash**:
+The Folder the server names for deleted Messages; Postal never erases a Message for good.
+_Avoid_: bin, deleted items
+
+**Delete**:
+Moving Messages to Trash with `Backspace`: in the Message List or a Search, those of the selected Thread in its Folder; in Reading, the one under the cursor. It shows at once, reaches the server once connected, and does nothing in Trash.
+_Avoid_: remove, erase, trash (as a verb)
+
+**Undo**:
+Taking back the latest Delete not yet taken back, with `u`, as many times as this run has made one: its Messages return to the Folder they left.
+_Avoid_: restore, revert
+
 **Preview**:
 The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View.
 _Avoid_: reader, viewer, body pane
