@@ -168,8 +168,8 @@ async fn update(
     let expunged = expunged(server, older, cached).await?;
     let flags = match (known.highest_modseq, examined.state.highest_modseq) {
         (Some(before), Some(now)) if before == now => Vec::new(),
-        (Some(before), Some(_)) => server.unread_flags(first, last, Some(before)).await?,
-        _ => server.unread_flags(first, last, None).await?,
+        (Some(before), Some(_)) => server.flags(first, last, Some(before)).await?,
+        _ => server.flags(first, last, None).await?,
     };
 
     Ok(Changes {

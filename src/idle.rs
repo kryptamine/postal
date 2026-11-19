@@ -285,10 +285,10 @@ async fn changes(
             Pushed::Flags {
                 sequence: number,
                 uid,
-                unread,
+                flags: pushed,
             } => flags.extend(
                 uid.or_else(|| sequence.uid(number))
-                    .map(|uid| (uid, unread)),
+                    .map(|uid| (uid, pushed)),
             ),
             // `listen` resyncs instead of reading these.
             Pushed::Lost => {}

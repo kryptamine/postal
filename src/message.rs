@@ -11,6 +11,7 @@ pub struct Message {
     /// The server's `INTERNALDATE`: both the sort key and the date column.
     pub received: DateTime<FixedOffset>,
     pub unread: bool,
+    pub answered: bool,
     pub sender: String,
     pub subject: String,
     /// Empty until the second fetch phase reaches the Message, and for good

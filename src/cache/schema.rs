@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 11;
+pub const VERSION: i64 = 12;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -30,6 +30,7 @@ CREATE TABLE message (
     received INTEGER NOT NULL,
     received_offset INTEGER NOT NULL,
     unread INTEGER NOT NULL,
+    answered INTEGER NOT NULL,
     sender TEXT NOT NULL,
     subject TEXT NOT NULL,
     -- Gmail's `X-GM-THRID`; NULL on another server.
@@ -54,6 +55,7 @@ CREATE TABLE thread_message (
     received INTEGER NOT NULL,
     received_offset INTEGER NOT NULL,
     unread INTEGER NOT NULL,
+    answered INTEGER NOT NULL,
     sender TEXT NOT NULL,
     subject TEXT NOT NULL,
     from_me INTEGER NOT NULL,
@@ -70,8 +72,8 @@ CREATE TABLE body (
     used INTEGER NOT NULL
 );
 CREATE INDEX body_by_use ON body (used);
--- A flag change the server has not acknowledged yet; a resync leaves the
--- Unread of a row with a queued `\\Seen` alone. See docs/adr/0011-select-the-shown-folder.md.
+-- A flag change the server has not acknowledged yet; a resync leaves that
+-- flag of the row alone. See docs/adr/0011-select-the-shown-folder.md.
 CREATE TABLE flag_change (
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
@@ -98,6 +100,7 @@ CREATE TABLE moved (
     received INTEGER NOT NULL,
     received_offset INTEGER NOT NULL,
     unread INTEGER NOT NULL,
+    answered INTEGER NOT NULL,
     sender TEXT NOT NULL,
     subject TEXT NOT NULL,
     thread INTEGER,

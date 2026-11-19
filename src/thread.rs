@@ -39,6 +39,8 @@ pub struct Thread {
     /// One Message per distinct sender name, in order of first appearance.
     pub senders: Vec<usize>,
     pub unread: bool,
+    /// Any Message of it has `\\Answered`, here or elsewhere.
+    pub answered: bool,
 }
 
 impl Thread {
@@ -74,6 +76,7 @@ pub fn threads(messages: &[Message], elsewhere: &[Message]) -> Vec<Thread> {
                 stack: Vec::new(),
                 senders: Vec::new(),
                 unread: false,
+                answered: false,
             });
             threads.len() - 1
         });
@@ -81,11 +84,13 @@ pub fn threads(messages: &[Message], elsewhere: &[Message]) -> Vec<Thread> {
         let thread = &mut threads[at];
         thread.messages.push(index);
         thread.unread |= message.unread;
+        thread.answered |= message.answered;
     }
 
     for (index, message) in elsewhere.iter().enumerate() {
         if let Some(&at) = by_key.get(&Key::of(message)) {
             threads[at].stack.push(Place::Elsewhere(index));
+            threads[at].answered |= message.answered;
         }
     }
 

@@ -244,6 +244,8 @@ impl Cards<'_> {
         if thread.unread {
             let style = strong.patch(tone(self.theme.marker));
             buf.set_string(text.x, text.y, self.theme.icons.unread(), style);
+        } else if let Some(icon) = self.theme.icons.answered().filter(|_| thread.answered) {
+            buf.set_string(text.x, text.y, icon, tone(self.theme.muted));
         }
 
         let [senders, subject, snippet] = self.fields(card);

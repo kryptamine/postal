@@ -1,4 +1,4 @@
-use crate::{new_message::NewMessage, sync_state::SyncState};
+use crate::{message_flags::MessageFlags, new_message::NewMessage, sync_state::SyncState};
 
 /// What one resync learnt, written to the Cache in one transaction.
 pub struct Changes {
@@ -9,6 +9,6 @@ pub struct Changes {
     pub replace: bool,
     pub new: Vec<NewMessage>,
     pub expunged: Vec<u32>,
-    /// Unread per UID; a UID not in the Cache is ignored.
-    pub flags: Vec<(u32, bool)>,
+    /// A UID not in the Cache is ignored.
+    pub flags: Vec<(u32, MessageFlags)>,
 }

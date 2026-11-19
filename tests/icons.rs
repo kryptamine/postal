@@ -24,6 +24,7 @@ use termlens::{Key, Screen, Terminal};
 const UNREAD: &str = "\u{f01ee}";
 const OUTBOX: &str = "\u{f048a}";
 const OFFLINE: &str = "\u{f0319}";
+const ANSWERED: &str = "\u{f045a}";
 
 fn home(icons: &str, imap: &FakeImap, smtp: &FakeSmtp) -> Home {
     Home::new(&format!(
@@ -65,6 +66,7 @@ fn quit(mut t: Terminal) {
 
 fn inbox() -> FakeImap {
     let server = FakeImap::start(vec![
+        FakeMessage::new("Cy", "Old plans", "2024-11-17T09:00:00Z").answered(),
         FakeMessage::new("Ada", "Weekly notes", "2024-11-18T09:00:00Z").unread(),
     ]);
     server.add_folder("[Gmail]/Trash", &["\\Trash"], vec![]);
@@ -116,6 +118,7 @@ fn auto_keeps_the_plain_look_elsewhere_and_none_keeps_it_everywhere() {
         let mut t = postal(&home, terminal);
         let screen = t.snapshot_after(|s| s.contains("Weekly notes")).unwrap();
         assert!(screen.contains("●") && !screen.contains(UNREAD), "{screen}");
+        assert!(!screen.contains(ANSWERED), "{screen}");
 
         let (rows, screen) = picker_rows(&mut t);
         assert_eq!(
@@ -161,5 +164,47 @@ fn nerd_marks_an_outbox_message_and_an_outage() {
         hint.contains(&format!("{OFFLINE} offline · retry in"))
     })
     .unwrap();
+    quit(t);
+}
+
+/// The senders whose card carries the `\\Answered` mark.
+fn answered(screen: &Screen) -> Vec<String> {
+    (0..screen.rows())
+        .map(|row| screen.row_text(row))
+        .filter(|text| text.contains(ANSWERED))
+        .filter_map(|text| {
+            Some(
+                text.split(ANSWERED)
+                    .nth(1)?
+                    .split_whitespace()
+                    .next()?
+                    .to_owned(),
+            )
+        })
+        .collect()
+}
+
+// A Reply sent from Postal marks its Thread too, not only one answered elsewhere.
+#[test]
+fn nerd_marks_a_thread_answered_on_the_server_or_by_a_sent_reply() {
+    let imap = FakeImap::start(vec![
+        FakeMessage::new("Cy", "Old plans", "2024-11-17T09:00:00Z").answered(),
+        FakeMessage::new("Bob", "Lunch", "2024-11-18T09:00:00Z"),
+    ]);
+    let smtp = FakeSmtp::start();
+    let home = home("icons = \"nerd\"", &imap, &smtp);
+    let mut t = postal(&home, None);
+    let screen = t
+        .snapshot_after(|s| s.contains("Lunch") && s.contains("Old plans"))
+        .unwrap();
+    assert_eq!(answered(&screen), ["Cy"], "{screen}");
+
+    t.send(Key::Char('r')).unwrap();
+    t.wait_until(|s| s.contains("y send")).unwrap();
+    t.send(Key::Char('y')).unwrap();
+    let screen = t
+        .snapshot_after(|s| s.contains("Sent") && answered(s).len() == 2)
+        .unwrap();
+    assert_eq!(answered(&screen), ["Bob", "Cy"], "{screen}");
     quit(t);
 }

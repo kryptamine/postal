@@ -36,6 +36,14 @@ impl Icons {
         }
     }
 
+    /// On a read card whose Thread has a Reply sent; `None` in the plain look.
+    pub const fn answered(self) -> Option<&'static str> {
+        match self {
+            Self::Nerd => Some("\u{f045a}"),
+            Self::Plain => None,
+        }
+    }
+
     /// Before a Folder's name; `None` in the plain look.
     pub const fn folder(self, role: Option<Role>) -> Option<&'static str> {
         if matches!(self, Self::Plain) {

@@ -16,6 +16,7 @@ use crate::{
     config::Config,
     flag,
     folder::{Folder, Role},
+    message_flags::MessageFlags,
     new_message::NewMessage,
     oauth::Tokens,
     snippet,
@@ -99,14 +100,14 @@ pub trait MailServer {
     /// The UIDs in `first..=last` still in the Folder.
     async fn uids(&mut self, first: u32, last: u32) -> Result<HashSet<u32>, Error>;
 
-    /// Unread per UID in `first..=last`; with `changed_since`, only for the
+    /// The flags per UID in `first..=last`; with `changed_since`, only for the
     /// Messages whose flags changed after that CONDSTORE mod-sequence.
-    async fn unread_flags(
+    async fn flags(
         &mut self,
         first: u32,
         last: u32,
         changed_since: Option<u64>,
-    ) -> Result<Vec<(u32, bool)>, Error>;
+    ) -> Result<Vec<(u32, MessageFlags)>, Error>;
 
     /// Unread Messages in the whole examined Folder.
     async fn unread_count(&mut self) -> Result<usize, Error>;
@@ -419,12 +420,12 @@ impl MailServer for ImapSession {
             .await?)
     }
 
-    async fn unread_flags(
+    async fn flags(
         &mut self,
         first: u32,
         last: u32,
         changed_since: Option<u64>,
-    ) -> Result<Vec<(u32, bool)>, Error> {
+    ) -> Result<Vec<(u32, MessageFlags)>, Error> {
         let items = changed_since.map_or_else(
             || "(UID FLAGS)".to_owned(),
             |modseq| format!("(UID FLAGS) (CHANGEDSINCE {modseq})"),
@@ -432,7 +433,7 @@ impl MailServer for ImapSession {
         let fetches = self.uid_fetch(format!("{first}:{last}"), &items).await?;
         let flags: Vec<_> = fetches
             .iter()
-            .filter_map(|f| Some((f.uid?, unread(f))))
+            .filter_map(|f| Some((f.uid?, flags(f))))
             .collect();
         tracing::info!("fetched flags of {} Messages", flags.len());
         Ok(flags)
@@ -576,6 +577,9 @@ fn uid_set(uids: &[u32]) -> String {
         .join(",")
 }
 
-fn unread(fetch: &Fetch) -> bool {
-    !fetch.flags().any(|flag| flag == Flag::Seen)
+fn flags(fetch: &Fetch) -> MessageFlags {
+    MessageFlags {
+        unread: !fetch.flags().any(|flag| flag == Flag::Seen),
+        answered: fetch.flags().any(|flag| flag == Flag::Answered),
+    }
 }

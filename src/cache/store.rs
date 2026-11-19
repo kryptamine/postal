@@ -79,7 +79,7 @@ impl Cache {
         let limit = limit.map_or(-1, |n| i64::try_from(n).unwrap_or(i64::MAX));
         let mut statement = connection.prepare_cached(
             "SELECT uid, body_key, received, received_offset, unread, sender, subject,
-                    coalesce(snippet, ''), thread, from_me
+                    coalesce(snippet, ''), thread, from_me, answered
              FROM message WHERE mailbox = ?1
              ORDER BY received DESC, uid DESC LIMIT ?2",
         )?;
@@ -95,7 +95,7 @@ impl Cache {
         // Only those whose body is cached: that body comes with the Thread alone.
         let mut statement = connection.prepare_cached(
             "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
-                    t.snippet, t.thread, t.from_me
+                    t.snippet, t.thread, t.from_me, t.answered
              FROM thread_message t JOIN body ON body.key = t.key
              WHERE t.thread IN (SELECT thread FROM message WHERE mailbox = ?1)
                AND t.key NOT IN (SELECT body_key FROM message WHERE mailbox = ?1)
@@ -120,7 +120,7 @@ impl Cache {
         let connection = self.connection.borrow();
         let mut statement = connection.prepare_cached(
             "SELECT uid, body_key, received, received_offset, unread, sender, subject,
-                    coalesce(snippet, ''), thread, from_me
+                    coalesce(snippet, ''), thread, from_me, answered
              FROM message WHERE mailbox = ?1",
         )?;
         let (mut messages, mut keys) = (Vec::new(), HashSet::new());
@@ -140,7 +140,7 @@ impl Cache {
         let threads: HashSet<u64> = messages.iter().filter_map(|m| m.thread).collect();
         let mut statement = connection.prepare_cached(
             "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
-                    t.snippet, t.thread, t.from_me
+                    t.snippet, t.thread, t.from_me, t.answered
              FROM thread_message t JOIN body ON body.key = t.key
              ORDER BY t.received, t.key",
         )?;
@@ -174,8 +174,8 @@ impl Cache {
             let mut insert = transaction.prepare_cached(
                 "INSERT OR REPLACE INTO thread_message
                  (key, thread, received, received_offset, unread, sender, subject, from_me,
-                  snippet)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                  snippet, answered)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             )?;
             for m in messages {
                 insert.execute(params![
@@ -188,6 +188,7 @@ impl Cache {
                     m.subject,
                     m.from_me,
                     m.snippet,
+                    m.answered,
                 ])?;
             }
 
@@ -298,9 +299,30 @@ impl Cache {
         })
     }
 
-    /// Queues `\Answered` for `uid` of `folder`, for the server.
+    /// Sets `\Answered` on `uid` of `folder` and on Gmail's copies of it,
+    /// and queues it for the server.
     pub fn answer(&self, folder: &str, uid: u32) -> Result<(), Error> {
-        self.write(|connection| queue_flag(connection, (folder, uid), Flag::Answered, true))
+        self.write(|connection| {
+            let transaction = connection.unchecked_transaction()?;
+            let key: Option<i64> = transaction
+                .prepare_cached("SELECT body_key FROM message WHERE mailbox = ?1 AND uid = ?2")?
+                .query_row(params![folder, uid], |row| row.get(0))
+                .optional()?;
+            if let Some(key) = key {
+                transaction
+                    .prepare_cached(
+                        "UPDATE message SET answered = 1 WHERE (mailbox = ?1 AND uid = ?2)
+                           OR (body_key = ?3 AND thread IS NOT NULL)",
+                    )?
+                    .execute(params![folder, uid, key])?;
+                transaction
+                    .prepare_cached("UPDATE thread_message SET answered = 1 WHERE key = ?1")?
+                    .execute([key])?;
+            }
+
+            queue_flag(&transaction, (folder, uid), Flag::Answered, true)?;
+            transaction.commit()
+        })
     }
 
     /// The flag changes the server has not acknowledged, by Folder.
@@ -550,13 +572,17 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
     }
 
     // The server's flag is older than a change still queued for it.
-    let mut flag = transaction.prepare_cached(
-        "UPDATE message SET unread = ?3 WHERE mailbox = ?1 AND uid = ?2
-           AND NOT EXISTS (SELECT 1 FROM flag_change WHERE mailbox = ?1 AND uid = ?2
-                             AND flag = ?4)",
-    )?;
-    for (uid, unread) in &changes.flags {
-        flag.execute(params![folder, uid, unread, Flag::Seen.name()])?;
+    let flag = |column: &str| {
+        transaction.prepare_cached(&format!(
+            "UPDATE message SET {column} = ?3 WHERE mailbox = ?1 AND uid = ?2
+               AND NOT EXISTS (SELECT 1 FROM flag_change WHERE mailbox = ?1 AND uid = ?2
+                                 AND flag = ?4)"
+        ))
+    };
+    let (mut seen, mut answered) = (flag("unread")?, flag("answered")?);
+    for (uid, flags) in &changes.flags {
+        seen.execute(params![folder, uid, flags.unread, Flag::Seen.name()])?;
+        answered.execute(params![folder, uid, flags.answered, Flag::Answered.name()])?;
     }
 
     let state = &changes.state;
@@ -574,7 +600,7 @@ fn apply(connection: &Connection, folder: &str, changes: &Changes) -> rusqlite::
             changes.unread,
         ],
     )?;
-    drop((delete, flag));
+    drop((delete, seen, answered));
     transaction.commit()
 }
 
@@ -679,8 +705,9 @@ fn insert(connection: &Connection, folder: &str, rows: &[NewMessage]) -> rusqlit
     let mut insert = connection.prepare_cached(
         "INSERT OR REPLACE INTO message
          (uid, body_key, received, received_offset, unread, sender, subject, snippet,
-          text_section, text_encoding, text_charset, text_html, mailbox, thread, from_me)
-         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
+          text_section, text_encoding, text_charset, text_html, mailbox, thread, from_me,
+          answered)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16
          WHERE NOT EXISTS (SELECT 1 FROM deleted WHERE mailbox = ?13 AND uid = ?1)",
     )?;
     for new in rows {
@@ -701,6 +728,7 @@ fn insert(connection: &Connection, folder: &str, rows: &[NewMessage]) -> rusqlit
             folder,
             m.thread.map(u64::cast_signed),
             m.from_me,
+            m.answered,
         ])?;
     }
 
@@ -722,6 +750,7 @@ fn message(row: &Row<'_>) -> rusqlite::Result<Message> {
         snippet: row.get(7)?,
         thread: row.get::<_, Option<i64>>(8)?.map(i64::cast_unsigned),
         from_me: row.get(9)?,
+        answered: row.get(10)?,
         folder: None,
     })
 }

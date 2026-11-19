@@ -59,6 +59,7 @@ mod mail_colours;
 mod marks;
 mod matched;
 mod message;
+mod message_flags;
 mod message_list;
 mod mode;
 mod modified_utf7;

@@ -106,6 +106,11 @@ impl FakeMessage {
         self
     }
 
+    pub const fn answered(mut self) -> Self {
+        self.answered = true;
+        self
+    }
+
     pub const fn in_thread(mut self, thread: u64) -> Self {
         self.thread = Some(thread);
         self
@@ -813,7 +818,7 @@ fn seen(folder: &Folder) -> Vec<(u32, bool)> {
 
 /// Tells an idling client what changed since its `view`, as a server does:
 /// expunges lowest first, each renumbering the rest, then flags without the
-/// UID, then the new count.
+/// UID, then the new count. Only a change of `\Seen` is announced.
 fn announce(server: &mut Server, view: &mut Vec<(u32, bool)>, folder: &Folder) {
     let now = seen(folder);
     let current: HashMap<_, _> = now.iter().copied().collect();
@@ -833,9 +838,13 @@ fn announce(server: &mut Server, view: &mut Vec<(u32, bool)>, folder: &Folder) {
         let current = current[uid];
         if current != *seen {
             *seen = current;
+            let answered = folder
+                .messages
+                .iter()
+                .any(|m| m.uid == *uid && m.message.answered);
             server.enqueue_data(Data::Fetch {
                 seq: NonZeroU32::new(number).unwrap(),
-                items: Vec1::from(MessageDataItem::Flags(flags(current))),
+                items: Vec1::from(MessageDataItem::Flags(flags(current, answered))),
             });
         }
     }
@@ -848,12 +857,12 @@ fn announce(server: &mut Server, view: &mut Vec<(u32, bool)>, folder: &Folder) {
     }
 }
 
-fn flags(seen: bool) -> Vec<FlagFetch<'static>> {
-    if seen {
-        vec![FlagFetch::Flag(Flag::Seen)]
-    } else {
-        vec![]
-    }
+fn flags(seen: bool, answered: bool) -> Vec<FlagFetch<'static>> {
+    [(seen, Flag::Seen), (answered, Flag::Answered)]
+        .into_iter()
+        .filter(|&(set, _)| set)
+        .map(|(_, flag)| FlagFetch::Flag(flag))
+        .collect()
 }
 
 /// A response code imap-types has no variant for, such as Gmail's.
@@ -1369,7 +1378,7 @@ fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
     let received = chrono::DateTime::parse_from_rfc3339(&message.internal_date).unwrap();
     let mut items = vec![
         MessageDataItem::Uid(NonZeroU32::new(stored.uid).unwrap()),
-        MessageDataItem::Flags(flags(message.seen)),
+        MessageDataItem::Flags(flags(message.seen, message.answered)),
         MessageDataItem::InternalDate(DateTime::try_from(received).unwrap()),
         MessageDataItem::Envelope(envelope),
         MessageDataItem::ModSeq(NonZeroU64::new(stored.modseq).unwrap()),

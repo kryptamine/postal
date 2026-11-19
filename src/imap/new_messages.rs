@@ -5,7 +5,10 @@ use async_imap::{
 use chrono::DateTime;
 
 use super::{Error, Pushed, connect::Transport, tagged, text_part};
-use crate::{body_key::body_key, header, message::Message, new_message::NewMessage};
+use crate::{
+    body_key::body_key, header, message::Message, message_flags::MessageFlags,
+    new_message::NewMessage,
+};
 
 /// Messages between two progress reports, each a redraw.
 const PROGRESS_EVERY: u32 = 50;
@@ -75,10 +78,15 @@ fn message(
             _ => None,
         })
         .unwrap_or_default();
-    let unread = !attributes.iter().any(|a| match a {
-        AttributeValue::Flags(flags) => flags.iter().any(|f| f.eq_ignore_ascii_case("\\Seen")),
-        _ => false,
-    });
+    let flags = MessageFlags::from_names(
+        attributes
+            .iter()
+            .flat_map(|a| match a {
+                AttributeValue::Flags(flags) => flags.as_slice(),
+                _ => &[],
+            })
+            .map(|f| &**f),
+    );
 
     let envelope = envelope(attributes);
     let subject = envelope
@@ -90,7 +98,8 @@ fn message(
         uid,
         body_key: body_key(gmail_id, uid_validity, uid),
         received,
-        unread,
+        unread: flags.unread,
+        answered: flags.answered,
         sender: envelope
             .and_then(sender)
             .unwrap_or_else(|| raw_from(attributes)),

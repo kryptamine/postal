@@ -5,7 +5,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use super::{Cache, Error};
 
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
-const ROW: &str = "body_key, received, received_offset, unread, sender, subject, thread,
+const ROW: &str = "body_key, received, received_offset, unread, answered, sender, subject, thread,
     from_me, snippet, text_section, text_encoding, text_charset, text_html";
 
 /// One Message the server is to move, from the Folder to select.

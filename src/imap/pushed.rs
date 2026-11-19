@@ -3,6 +3,8 @@ use async_imap::{
     types::UnsolicitedResponse,
 };
 
+use crate::message_flags::MessageFlags;
+
 /// A change the server announced on its own, by sequence number.
 pub enum Pushed {
     /// The Inbox now holds this many Messages.
@@ -12,7 +14,7 @@ pub enum Pushed {
         sequence: u32,
         /// Sent only by some servers.
         uid: Option<u32>,
-        unread: bool,
+        flags: MessageFlags,
     },
     /// The library's queue filled up and may have dropped announcements:
     /// the sequence numbers no longer say which Message is which.
@@ -39,7 +41,7 @@ impl Pushed {
                 Some(Self::Flags {
                     sequence,
                     uid,
-                    unread: !flags.iter().any(|f| f.eq_ignore_ascii_case("\\Seen")),
+                    flags: MessageFlags::from_names(flags.iter().map(|f| &**f)),
                 })
             }
             _ => None,
