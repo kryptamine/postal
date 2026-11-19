@@ -15,9 +15,9 @@ size: 44x18  cursor: hidden
 │ |                       open the Message │
 │ U                       mark the Message │
 │ Backspace               delete: move to  │
-│ u                       undo the last de │
+│ u                       undo a delete or │
+│ c                       compose a new Me │
 │                                          │
-│ Links                                    │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help

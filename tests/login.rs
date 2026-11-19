@@ -113,6 +113,30 @@ fn a_verified_app_password_writes_config_and_secret() {
     assert!(t.wait_exit().unwrap().success());
 }
 
+// The config is written whole on login, so what it set before must stay.
+#[test]
+fn a_login_keeps_the_name_and_the_smtp_server() {
+    let server = FakeImap::start(Vec::new());
+    let home = seeded(&server);
+    let extra =
+        "name = \"Zoë Example\"\n\n[smtp]\nhost = \"127.0.0.1\"\nport = 2525\ntls = false\n";
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    fs::write(home.config_path(), format!("{extra}{config}")).unwrap();
+    let browser = Browser::new();
+    let mut t = login(&home, &browser);
+    give_email(&mut t);
+    give_password(&mut t, PASTED);
+    t.wait_until(|s| s.contains("Signed in")).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    assert!(config.contains("name = \"Zoë Example\"\n"), "{config}");
+    assert!(
+        config.contains("[smtp]\nhost = \"127.0.0.1\"\nport = 2525\ntls = false\n"),
+        "{config}"
+    );
+}
+
 #[test]
 fn a_rejected_password_prompts_again_and_writes_nothing() {
     let server = FakeImap::start(Vec::new());

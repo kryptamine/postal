@@ -22,8 +22,10 @@ pub enum Action {
     /// Delete: the selected Thread's Messages in their Folders, or in
     /// Reading the one at the cursor.
     Delete,
-    /// Undo of the latest Delete not yet taken back.
+    /// Undo of the latest Delete or Draft discard not yet taken back.
     Undo,
+    /// A new Draft in `$EDITOR`.
+    Compose,
     /// Hint mode on the links in the Preview window.
     Links,
     /// The other View of HTML mail: rendered or text.
@@ -45,6 +47,16 @@ pub enum Action {
     SignIn,
     Folders,
     Suspend,
+    Quit,
+}
+
+/// What a key does while a Draft's preview is open.
+#[derive(Clone, Copy)]
+pub enum DraftKey {
+    Send,
+    Edit,
+    Discard,
+    Help,
     Quit,
 }
 
@@ -109,10 +121,12 @@ pub struct Hint {
 const LIST: &[Mode] = &[Mode::List];
 const READING: &[Mode] = &[Mode::Reading];
 const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
+const DRAFT: &[Mode] = &[Mode::Draft];
+const ANY: &[Mode] = &[Mode::List, Mode::Reading, Mode::Draft];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 28] = [
+const BINDINGS: [Binding; 32] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -272,7 +286,16 @@ const BINDINGS: [Binding; 28] = [
         signed_out: false,
         keys: "u",
         aliases: "",
-        description: "undo the last delete",
+        description: "undo a delete or discard",
+        hint: None,
+    },
+    Binding {
+        group: "Message",
+        modes: BOTH,
+        signed_out: false,
+        keys: "c",
+        aliases: "",
+        description: "compose a new Message",
         hint: None,
     },
     Binding {
@@ -310,7 +333,7 @@ const BINDINGS: [Binding; 28] = [
     },
     Binding {
         group: "App",
-        modes: BOTH,
+        modes: ANY,
         signed_out: false,
         keys: "?",
         aliases: "",
@@ -331,7 +354,7 @@ const BINDINGS: [Binding; 28] = [
     },
     Binding {
         group: "App",
-        modes: READING,
+        modes: &[Mode::Reading, Mode::Draft],
         signed_out: false,
         keys: "^c",
         aliases: "",
@@ -407,6 +430,42 @@ const BINDINGS: [Binding; 28] = [
             description: "folders",
         }),
     },
+    Binding {
+        group: "Draft",
+        modes: DRAFT,
+        signed_out: false,
+        keys: "y",
+        aliases: "",
+        description: "send the Draft",
+        hint: Some(Hint {
+            keys: "y",
+            description: "send",
+        }),
+    },
+    Binding {
+        group: "Draft",
+        modes: DRAFT,
+        signed_out: false,
+        keys: "e",
+        aliases: "",
+        description: "edit it again",
+        hint: Some(Hint {
+            keys: "e",
+            description: "edit",
+        }),
+    },
+    Binding {
+        group: "Draft",
+        modes: DRAFT,
+        signed_out: false,
+        keys: "q",
+        aliases: "",
+        description: "discard it; u brings it back",
+        hint: Some(Hint {
+            keys: "q",
+            description: "discard",
+        }),
+    },
 ];
 
 /// The bindings listed in `mode` now, in `BINDINGS` order.
@@ -472,6 +531,7 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (Mode::List | Mode::Reading, KeyCode::Char('U')) => Some(Action::MarkUnread),
         (Mode::List | Mode::Reading, KeyCode::Backspace) => Some(Action::Delete),
         (Mode::List | Mode::Reading, KeyCode::Char('u')) => Some(Action::Undo),
+        (Mode::List | Mode::Reading, KeyCode::Char('c')) => Some(Action::Compose),
         (Mode::List, KeyCode::Esc) => Some(Action::EndSearch { restore: false }),
         (Mode::Reading, KeyCode::Char('j') | KeyCode::Down) => {
             Some(scroll(Direction::Down, By::Line))
@@ -487,6 +547,28 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (Mode::Reading, KeyCode::Char('q' | 'h') | KeyCode::Esc | KeyCode::Left) => {
             Some(Action::Back)
         }
+        _ => None,
+    }
+}
+
+/// What `key` does in a Draft's preview, which takes them all.
+pub const fn draft(key: KeyEvent) -> Option<DraftKey> {
+    if !pressed(key) {
+        return None;
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return match key.code {
+            KeyCode::Char('c') => Some(DraftKey::Quit),
+            _ => None,
+        };
+    }
+
+    match key.code {
+        KeyCode::Char('y') => Some(DraftKey::Send),
+        KeyCode::Char('e') => Some(DraftKey::Edit),
+        KeyCode::Char('q') => Some(DraftKey::Discard),
+        KeyCode::Char('?') => Some(DraftKey::Help),
         _ => None,
     }
 }

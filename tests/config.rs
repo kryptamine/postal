@@ -88,6 +88,17 @@ fn plaintext_is_refused_for_a_remote_host() {
 }
 
 #[test]
+fn plaintext_smtp_is_refused_for_a_remote_host() {
+    let home = Home::new(&format!(
+        "{VALID_HEAD}[smtp]\nhost = \"smtp.gmail.com\"\ntls = false\n[secrets]\nstore = \"file\"\n"
+    ));
+    let stderr = failure(&home);
+    let at = format!("{}:5:7:", home.config_path().display());
+    assert!(stderr.contains(&at), "{stderr}");
+    assert!(stderr.contains("loopback"), "{stderr}");
+}
+
+#[test]
 fn a_secret_other_users_can_read_is_refused() {
     let home = Home::new(&format!("{VALID_HEAD}[secrets]\nstore = \"file\"\n"));
     let secret = home.xdg_config_home().join("postal/secret");

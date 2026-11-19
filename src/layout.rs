@@ -39,7 +39,7 @@ pub fn split(area: Rect, mode: Mode) -> Panes {
             let (list, preview) = panes(body);
             (Some(list), preview)
         }
-        Mode::Reading => (None, Some(body)),
+        Mode::Reading | Mode::Draft => (None, Some(body)),
     };
 
     Panes {

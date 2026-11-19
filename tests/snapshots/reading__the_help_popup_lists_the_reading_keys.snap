@@ -17,13 +17,13 @@ size: 80x24  cursor: hidden
 │ Line 07  │ Message                                                │          │
 │ Line 08  │ U                       mark the Message Unread        │          │
 │ Line 09  │ Backspace               delete: move to Trash          │          │
-│ Line 10  │ u                       undo the last delete           │          │
-│ Line 11  │                                                        │          │
-│ Line 12  │ Links                                                  │          │
-│ Line 13  │ o                       label the links in the Preview │          │
-│ Line 14  │                                                        │          │
-│ Line 15  │ View                                                   │          │
-│ Line 16  │ v                       rendered / text view of HTML   │          │
+│ Line 10  │ u                       undo a delete or discard       │          │
+│ Line 11  │ c                       compose a new Message          │          │
+│ Line 12  │                                                        │          │
+│ Line 13  │ Links                                                  │          │
+│ Line 14  │ o                       label the links in the Preview │          │
+│ Line 15  │                                                        │          │
+│ Line 16  │ View                                                   │          │
 │ Line 17  │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

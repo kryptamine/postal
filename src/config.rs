@@ -11,8 +11,11 @@ use crate::{oauth::Endpoints, partial_config::PartialConfig};
 /// The Account settings read from `config.toml`.
 pub struct Config {
     pub email: String,
+    /// The display name of `From`; without it, the bare address.
+    pub name: Option<String>,
     pub auth: Auth,
     pub imap: Imap,
+    pub smtp: Smtp,
     pub secrets: SecretStore,
     pub oauth: Endpoints,
 }
@@ -39,6 +42,24 @@ impl Imap {
         Self {
             host: "imap.gmail.com".to_owned(),
             port: 993,
+            tls: true,
+        }
+    }
+}
+
+/// Implicit TLS only: there is no STARTTLS.
+#[derive(PartialEq, Eq)]
+pub struct Smtp {
+    pub host: String,
+    pub port: u16,
+    pub tls: bool,
+}
+
+impl Smtp {
+    pub fn gmail() -> Self {
+        Self {
+            host: "smtp.gmail.com".to_owned(),
+            port: 465,
             tls: true,
         }
     }
@@ -107,10 +128,12 @@ impl Config {
     pub fn to_toml(&self) -> String {
         #[expect(clippy::unreachable, reason = "serializing a unit variant cannot fail")]
         let auth = toml::Value::try_from(self.auth).unwrap_or_else(|_| unreachable!());
-        let mut text = format!(
-            "email = {}\nauth = {auth}\n",
-            toml::Value::from(self.email.as_str())
-        );
+        let mut text = format!("email = {}\n", toml::Value::from(self.email.as_str()));
+        if let Some(name) = &self.name {
+            writeln!(text, "name = {}", toml::Value::from(name.as_str())).ok();
+        }
+
+        writeln!(text, "auth = {auth}").ok();
         if self.imap != Imap::gmail() {
             let host = toml::Value::from(self.imap.host.as_str());
             let Imap { port, tls, .. } = self.imap;
@@ -118,6 +141,16 @@ impl Config {
             write!(
                 text,
                 "\n[imap]\nhost = {host}\nport = {port}\ntls = {tls}\n"
+            )
+            .ok();
+        }
+
+        if self.smtp != Smtp::gmail() {
+            let host = toml::Value::from(self.smtp.host.as_str());
+            let Smtp { port, tls, .. } = self.smtp;
+            write!(
+                text,
+                "\n[smtp]\nhost = {host}\nport = {port}\ntls = {tls}\n"
             )
             .ok();
         }

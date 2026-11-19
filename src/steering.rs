@@ -14,11 +14,14 @@ pub enum Ask {
     Thread(u64),
     /// The Cache holds flag changes or moves for the server.
     Changes,
+    /// Resync the shown Folder, as after a Send.
+    Resync,
 }
 
 /// What the asks waiting came to.
 #[derive(Default)]
 pub struct Asked {
+    /// The shown Folder changed, or a resync of it was asked.
     pub switched: bool,
     pub list: bool,
     /// The Thread last asked for, when the Messages of one were.
@@ -56,6 +59,7 @@ impl Steering {
                 Some(Some(Ask::ListFolders)) => asked.list = true,
                 Some(Some(Ask::Thread(id))) => asked.thread = Some(id),
                 Some(Some(Ask::Changes)) => asked.changes = true,
+                Some(Some(Ask::Resync)) => asked.switched = true,
             }
         }
     }

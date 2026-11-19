@@ -4,9 +4,9 @@ use crossterm::event::{Event, EventStream};
 use futures::{
     FutureExt, Stream, StreamExt,
     channel::mpsc::UnboundedSender,
-    future::{Fuse, FusedFuture},
+    future::{Fuse, FusedFuture, LocalBoxFuture},
 };
-use ratatui::{Terminal, layout::Rect};
+use ratatui::{Frame, Terminal, layout::Rect};
 use tokio::time::Instant;
 
 use crate::{
@@ -15,17 +15,20 @@ use crate::{
     body::Body,
     browser,
     cache::{self, Cache},
+    composing,
+    draft_pane::DraftPane,
     folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
     inbox_view::InboxView,
-    keymap::{self, Action, Pick},
+    keymap::{self, Action, DraftKey, Pick},
     layout,
     link_hints::{LinkHints, Typed},
     message_list::{self, MessageList},
     mode::Mode,
     older_pages::OlderPages,
+    outgoing::Outgoing,
     pager, pager_text,
     picker_popup::PickerPopup,
     preview_pane::{self, PreviewPane},
@@ -44,6 +47,7 @@ use crate::{
     thread::Key,
     thread_pane::ThreadPane,
     toast::Toast,
+    undo::Undo,
     update::Update,
 };
 
@@ -74,13 +78,18 @@ pub enum Exit {
 }
 
 /// The network work behind the screen, what it reports as it goes, the
-/// pages of older Messages asked of it, and what the sync connection is asked.
-pub struct Background<W, U> {
+/// pages of older Messages asked of it, what the sync connection is asked,
+/// and what a Send goes out with.
+pub struct Background<'a, W, U> {
     pub work: Work<W>,
     pub updates: U,
     pub older: OlderPages,
     pub asks: UnboundedSender<Ask>,
+    pub outgoing: Outgoing<'a>,
 }
+
+/// A Send under way.
+type Sending<'a> = Fuse<LocalBoxFuture<'a, Result<(), String>>>;
 
 pub enum Work<W> {
     Running(W),
@@ -107,12 +116,17 @@ impl<W: Future> Work<W> {
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one select over every source of change, whose state its arms share"
+)]
 pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
     theme: &Theme,
     cache: &Cache,
     previews: &mut Previews,
     background: Background<
+        '_,
         impl Future<Output = Result<(), sync::Error>>,
         impl Stream<Item = Update> + Unpin,
     >,
@@ -122,6 +136,12 @@ pub async fn run(
     let rows = first_rows(terminal)?;
     show(&mut view, cache, Some(rows))?;
     let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
+    let outgoing = background.outgoing;
+    let from = outgoing.from().map_or_else(
+        |_bad| outgoing.config.email.clone(),
+        |from| from.to_string(),
+    );
+    let mut sending: Sending = Fuse::terminated();
     let mut screen = Screen::opening(cache, &background.work);
     (screen.status == Status::SignedOut).then(|| previews.link(false));
     let mut work = std::pin::pin!(background.work.fused());
@@ -137,7 +157,7 @@ pub async fn run(
         want(previews, cache, (&view, &screen), text.filter(|_| whole))?;
         whole.then(|| older.want(&view));
         screen.notice_write_failure(cache);
-        draw(terminal, theme, &mut view, previews, &mut screen)?;
+        draw(terminal, (theme, &from), &mut view, previews, &mut screen)?;
         alloc_count::report(frame_start);
         if !whole {
             whole = true;
@@ -156,6 +176,10 @@ pub async fn run(
                 frame_start = alloc_count::count();
                 finished(result)?;
             }
+            result = &mut sending, if !sending.is_terminated() => {
+                frame_start = alloc_count::count();
+                composing::sent(result, &mut screen, &asks);
+            }
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
                 match update {
@@ -171,6 +195,7 @@ pub async fn run(
                     step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
+                    step @ (Step::Compose | Step::Edit | Step::Send) => draft(&step, terminal, &mut events, &mut screen, (outgoing, &mut sending))?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::SignIn => return Ok(Exit::SignIn),
                     Step::Quit => return Ok(Exit::Quit),
@@ -262,9 +287,10 @@ fn panes(terminal: &Terminal<TerminalBackend>, mode: Mode) -> Result<layout::Pan
     ))
 }
 
+/// `from` is the `From` a Send adds, for a Draft's preview.
 fn draw(
     terminal: &mut Terminal<TerminalBackend>,
-    theme: &Theme,
+    (theme, from): (&Theme, &str),
     view: &mut InboxView,
     previews: &Previews,
     screen: &mut Screen,
@@ -298,12 +324,17 @@ fn draw(
                 frame.render_stateful_widget(widget, pane, view);
             }
 
+            let keys = screen.keys();
             let hint_line = HintLine {
                 theme,
                 toast: screen.toast.as_ref(),
                 status: screen.status(),
-                mode: screen.mode,
-                query: view.search.as_ref().map(Search::query),
+                mode: keys,
+                query: view
+                    .search
+                    .as_ref()
+                    .map(Search::query)
+                    .filter(|_| keys != Mode::Draft),
                 now: Instant::now(),
             };
 
@@ -312,26 +343,40 @@ fn draw(
             }
 
             frame.render_widget(hint_line, panes.hint);
-            if let Some(picker) = &screen.picker {
-                let popup = PickerPopup { theme, picker };
-                frame.set_cursor_position(popup.cursor(panes.body));
-                frame.render_widget(popup, panes.body);
-            }
-
-            if screen.help {
-                let signed_out = screen.status == Status::SignedOut;
-                let mode = screen.mode;
-                let popup = HelpPopup {
-                    theme,
-                    mode,
-                    signed_out,
-                };
-
-                frame.render_widget(popup, panes.body);
-            }
+            popups(frame, (theme, from), panes.body, screen);
         })
         .map_err(Error::Terminal)?;
     Ok(())
+}
+
+/// What shows over the panes in `body`: the Folder Picker, a Draft's
+/// preview, then the `?` popup over either.
+fn popups(frame: &mut Frame, (theme, from): (&Theme, &str), body: Rect, screen: &Screen) {
+    if let Some(picker) = &screen.picker {
+        let popup = PickerPopup { theme, picker };
+        frame.set_cursor_position(popup.cursor(body));
+        frame.render_widget(popup, body);
+    }
+
+    if let Some(preview) = &screen.draft {
+        let pane = DraftPane {
+            theme,
+            preview,
+            from,
+        };
+
+        frame.render_widget(pane, body);
+    }
+
+    if screen.help {
+        let popup = HelpPopup {
+            theme,
+            mode: screen.keys(),
+            signed_out: screen.status == Status::SignedOut,
+        };
+
+        frame.render_widget(popup, body);
+    }
 }
 
 fn apply(
@@ -415,6 +460,10 @@ enum Step {
     Undo,
     Browse(Arc<str>),
     Page,
+    Compose,
+    /// The shown Draft in the editor again.
+    Edit,
+    Send,
     Suspend,
     SignIn,
     Quit,
@@ -435,6 +484,7 @@ fn handle(
             Ok(Step::Stay)
         }
         Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
+        Some(Ok(Event::Key(key))) if screen.draft.is_some() => Ok(on_draft(key, screen)),
         Some(Ok(Event::Key(key))) if screen.picker.is_some() => Ok(pick(key, screen)),
         Some(Ok(Event::Key(key))) if screen.hints.is_some() => {
             let typed = screen.hints.as_mut().map_or(Typed::Cancel, |h| h.key(key));
@@ -476,6 +526,7 @@ fn act(
         Some(Action::MarkUnread) => Step::MarkUnread,
         Some(Action::Delete) => Step::Delete,
         Some(Action::Undo) => Step::Undo,
+        Some(Action::Compose) => Step::Compose,
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
             Step::Stay
@@ -567,7 +618,9 @@ fn dwelling(
     previews: &Previews,
     text: Option<Rect>,
 ) -> Option<(Key, i64)> {
-    let listed = matches!(screen.mode, Mode::List | Mode::Query) && screen.picker.is_none();
+    let listed = matches!(screen.mode, Mode::List | Mode::Query)
+        && screen.picker.is_none()
+        && screen.draft.is_none();
     let text = text.filter(|_| listed && !screen.help && view.selected_unread())?;
     previews.get(view, text.width)?;
     Some((view.selected_key()?, view.selected_body()?))
@@ -674,7 +727,7 @@ fn delete(
         return Ok(());
     };
 
-    screen.undo.push((batch, thread));
+    screen.undo.push(Undo::Delete(batch, thread));
     show(view, cache, None)?;
     screen.hints = None;
     screen.follow(view, thread);
@@ -686,7 +739,8 @@ fn delete(
     Ok(())
 }
 
-/// Undo of the latest Delete not yet taken back, selecting its Thread.
+/// Undo of the latest Delete not yet taken back, selecting its Thread, or
+/// of the latest Draft discarded, showing it again.
 fn undo(
     view: &mut InboxView,
     screen: &mut Screen,
@@ -694,7 +748,11 @@ fn undo(
     asks: &UnboundedSender<Ask>,
 ) -> Result<(), Error> {
     let folders = match screen.undo.pop() {
-        Some((batch, thread)) => {
+        Some(Undo::Discard(path, text)) => {
+            composing::restore(screen, path, text);
+            return Ok(());
+        }
+        Some(Undo::Delete(batch, thread)) => {
             let folders = cache.undo(batch).map_err(Error::Cache)?;
             (!folders.is_empty()).then_some((folders, thread))
         }
@@ -722,6 +780,52 @@ fn undo(
         let folder = cache.folder(&folders[0]).map_err(Error::Cache)?;
         Toast::new(format!("restored to {}", folder.label()))
     });
+    Ok(())
+}
+
+/// Acts on one key in a Draft's preview; while it sends, only quitting does.
+fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
+    let sending = screen.draft.as_ref().is_some_and(|draft| draft.sending);
+    match keymap::draft(key) {
+        Some(DraftKey::Quit) => Step::Quit,
+        Some(DraftKey::Help) => {
+            screen.help = true;
+            Step::Stay
+        }
+        _ if sending => Step::Stay,
+        Some(DraftKey::Send) => Step::Send,
+        Some(DraftKey::Edit) => Step::Edit,
+        Some(DraftKey::Discard) => {
+            composing::discard(screen);
+            Step::Stay
+        }
+        None => Step::Stay,
+    }
+}
+
+/// Compose, the editor again on the shown Draft, or its Send.
+fn draft<'a>(
+    step: &Step,
+    terminal: &mut Terminal<TerminalBackend>,
+    events: &mut EventStream,
+    screen: &mut Screen,
+    (outgoing, sending): (Outgoing<'a>, &mut Sending<'a>),
+) -> Result<(), Error> {
+    match step {
+        Step::Compose => composing::compose(terminal, events, screen)?,
+        Step::Edit => {
+            if let Some(preview) = screen.draft.take() {
+                composing::edit(terminal, events, screen, preview.path)?;
+            }
+        }
+        Step::Send => {
+            if let Some(send) = composing::send(screen, outgoing) {
+                *sending = send.fuse();
+            }
+        }
+        _ => {}
+    }
+
     Ok(())
 }
 
@@ -881,7 +985,7 @@ fn browse(url: &str) -> Option<Toast> {
 
 /// Runs `program` in the foreground with the terminal handed back, then
 /// takes the terminal again. A failure of `program` alone is only logged.
-fn outside(
+pub fn outside(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut EventStream,
     program: impl FnOnce() -> io::Result<()>,

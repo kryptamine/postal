@@ -15,15 +15,16 @@ size: 80x36  cursor: hidden
 │          │ |                       open the Message in $PAGER     │          │
 │          │ U                       mark the Message Unread        │          │
 │          │ Backspace               delete: move to Trash          │          │
-│          │ u                       undo the last delete           │          │
-│          │                                                        │          │
-└──────────│ Links                                                  │──────────┘
-┌ Inbox · 1│ o                       label the links in the Preview │──────────┐
-│ From    B│                                                        │          │
-│ Subject N│ View                                                   │          │
-│ Date    M│ v                       rendered / text view of HTML   │          │
-├──────────│                                                        │──────────┤
-│ Newer bod│ App                                                    │          │
+│          │ u                       undo a delete or discard       │          │
+│          │ c                       compose a new Message          │          │
+└──────────│                                                        │──────────┘
+┌ Inbox · 1│ Links                                                  │──────────┐
+│ From    B│ o                       label the links in the Preview │          │
+│ Subject N│                                                        │          │
+│ Date    M│ View                                                   │          │
+├──────────│ v                       rendered / text view of HTML   │──────────┤
+│ Newer bod│                                                        │          │
+│          │ App                                                    │          │
 │          │ ?                       this help                      │          │
 │          │ q          ^c           quit                           │          │
 │          │ ^z                      suspend to the shell           │          │
@@ -35,7 +36,6 @@ size: 80x36  cursor: hidden
 │          │ Esc                     end the Search                 │          │
 │          │                                                        │          │
 │          │ Folders                                                │          │
-│          │ f                       pick the Folder to show        │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

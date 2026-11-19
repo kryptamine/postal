@@ -15,15 +15,15 @@ size: 80x24  cursor: hidden
 └──────────│ |                       open the Message in $PAGER     │──────────┘
 ┌ Inbox · 1│ U                       mark the Message Unread        │──────────┐
 │ From    B│ Backspace               delete: move to Trash          │          │
-│ Subject N│ u                       undo the last delete           │          │
-│ Date    M│                                                        │          │
-├──────────│ Links                                                  │──────────┤
-│ Newer bod│ o                       label the links in the Preview │          │
+│ Subject N│ u                       undo a delete or discard       │          │
+│ Date    M│ c                       compose a new Message          │          │
+├──────────│                                                        │──────────┤
+│ Newer bod│ Links                                                  │          │
+│          │ o                       label the links in the Preview │          │
 │          │                                                        │          │
 │          │ View                                                   │          │
 │          │ v                       rendered / text view of HTML   │          │
 │          │                                                        │          │
-│          │ App                                                    │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

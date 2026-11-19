@@ -4,7 +4,7 @@ use serde::Deserialize;
 use toml::Spanned;
 
 use crate::{
-    config::{Auth, Config, Error, Imap, SecretStore},
+    config::{Auth, Config, Error, Imap, SecretStore, Smtp},
     oauth::Endpoints,
 };
 
@@ -12,8 +12,10 @@ use crate::{
 /// already, and a missing file is the Gmail defaults.
 pub struct PartialConfig {
     pub email: Option<String>,
+    pub name: Option<String>,
     pub auth: Option<Auth>,
     pub imap: Imap,
+    pub smtp: Smtp,
     pub secrets: SecretStore,
     pub oauth: Endpoints,
 }
@@ -22,9 +24,12 @@ pub struct PartialConfig {
 #[serde(deny_unknown_fields)]
 struct RawConfig {
     email: Option<String>,
+    name: Option<String>,
     auth: Option<Auth>,
     #[serde(default)]
     imap: RawImap,
+    #[serde(default)]
+    smtp: RawSmtp,
     #[serde(default)]
     secrets: Secrets,
     #[serde(default)]
@@ -44,6 +49,25 @@ struct RawImap {
     host: String,
     port: u16,
     tls: Spanned<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, default)]
+struct RawSmtp {
+    host: String,
+    port: u16,
+    tls: Spanned<bool>,
+}
+
+impl Default for RawSmtp {
+    fn default() -> Self {
+        let gmail = Smtp::gmail();
+        Self {
+            host: gmail.host,
+            port: gmail.port,
+            tls: Spanned::new(0..0, gmail.tls),
+        }
+    }
 }
 
 /// Undocumented: only a test points Postal at a fake Google.
@@ -84,8 +108,10 @@ impl PartialConfig {
             Ok(text) => Self::parse(path, &text),
             Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(Self {
                 email: None,
+                name: None,
                 auth: None,
                 imap: Imap::gmail(),
+                smtp: Smtp::gmail(),
                 secrets: SecretStore::default(),
                 oauth: Endpoints::google(),
             }),
@@ -109,21 +135,31 @@ impl PartialConfig {
 
         let raw: RawConfig =
             toml::from_str(text).map_err(|e| invalid(e.span().unwrap_or(0..0), e.message()))?;
-        let tls = *raw.imap.tls.get_ref();
-        if !tls && !is_loopback(&raw.imap.host) {
-            return Err(invalid(
-                raw.imap.tls.span(),
-                "`tls = false` is allowed only for a loopback host",
-            ));
+        for (host, tls) in [
+            (&raw.imap.host, &raw.imap.tls),
+            (&raw.smtp.host, &raw.smtp.tls),
+        ] {
+            if !tls.get_ref() && !is_loopback(host) {
+                return Err(invalid(
+                    tls.span(),
+                    "`tls = false` is allowed only for a loopback host",
+                ));
+            }
         }
 
         Ok(Self {
             email: raw.email,
+            name: raw.name,
             auth: raw.auth,
             imap: Imap {
                 host: raw.imap.host,
                 port: raw.imap.port,
-                tls,
+                tls: *raw.imap.tls.get_ref(),
+            },
+            smtp: Smtp {
+                host: raw.smtp.host,
+                port: raw.smtp.port,
+                tls: *raw.smtp.tls.get_ref(),
             },
             secrets: raw.secrets.store,
             oauth: Endpoints {
@@ -145,8 +181,10 @@ impl PartialConfig {
     pub fn account(self, email: String, auth: Auth) -> Config {
         Config {
             email,
+            name: self.name,
             auth,
             imap: self.imap,
+            smtp: self.smtp,
             secrets: self.secrets,
             oauth: self.oauth,
         }

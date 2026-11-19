@@ -1,9 +1,9 @@
 use tokio::time::Instant;
 
 use crate::{
-    cache::Cache, dwell::Dwell, folder_picker::FolderPicker, inbox_view::InboxView,
-    link_hints::LinkHints, mode::Mode, reading::Reading, run::Work, status::Status, thread::Key,
-    toast::Toast,
+    cache::Cache, draft_preview::DraftPreview, dwell::Dwell, folder_picker::FolderPicker,
+    inbox_view::InboxView, link_hints::LinkHints, mode::Mode, reading::Reading, run::Work,
+    status::Status, thread::Key, toast::Toast, undo::Undo,
 };
 
 /// What the main screen shows over and beside the panes.
@@ -21,9 +21,10 @@ pub struct Screen {
     /// While `mode` is `Reading`.
     pub reading: Option<Reading>,
     pub dwell: Dwell,
-    /// The Deletes an Undo may take back, the latest last, each with the
-    /// Thread selected when it was made.
-    pub undo: Vec<(i64, Option<Key>)>,
+    /// What an Undo may take back, the latest last.
+    pub undo: Vec<Undo>,
+    /// Over the whole screen, taking every key, while open.
+    pub draft: Option<DraftPreview>,
 }
 
 impl Screen {
@@ -58,6 +59,15 @@ impl Screen {
         }
 
         left
+    }
+
+    /// What the keys act on: a Draft's preview takes them all while open.
+    pub const fn keys(&self) -> Mode {
+        if self.draft.is_some() {
+            Mode::Draft
+        } else {
+            self.mode
+        }
     }
 
     /// The sync connection's Status, or the backfill's while that one is live.

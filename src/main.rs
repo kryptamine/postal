@@ -12,11 +12,17 @@ mod cache;
 mod cell_grid;
 mod centred;
 mod cli;
+mod composing;
 mod config;
 mod credential;
 mod date_group;
 mod date_label;
+mod draft;
+mod draft_file;
+mod draft_pane;
+mod draft_preview;
 mod dwell;
+mod editor;
 mod flag_changes;
 mod folder;
 mod folder_list;
@@ -52,6 +58,7 @@ mod new_message;
 mod oauth;
 mod older_pages;
 mod outage;
+mod outgoing;
 mod outlines;
 mod pager;
 mod pager_text;
@@ -80,6 +87,7 @@ mod senders;
 mod sequence_numbers;
 mod shown;
 mod sign_in;
+mod smtp;
 mod snippet;
 mod snippets;
 mod stack;
@@ -100,6 +108,8 @@ mod thread_pane;
 mod toast;
 mod transfer_encoding;
 mod truncate;
+mod undo;
+mod unique_id;
 mod update;
 mod view;
 mod wake;
@@ -122,6 +132,7 @@ use crate::{
     imap::ImapSession,
     oauth::Tokens,
     older_pages::OlderPages,
+    outgoing::Outgoing,
     previews::Previews,
     run::{Background, Exit, Work},
     sign_in::SignIn,
@@ -306,6 +317,7 @@ fn session(
             updates,
             older,
             asks,
+            outgoing: Outgoing { config, sign_in },
         };
 
         let result = run::run(&mut terminal, &theme, &cache, &mut previews, background).await;

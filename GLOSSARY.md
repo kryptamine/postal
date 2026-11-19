@@ -61,7 +61,7 @@ Moving Messages to Trash with `Backspace`: in the Message List or a Search, thos
 _Avoid_: remove, erase, trash (as a verb)
 
 **Undo**:
-Taking back the latest Delete not yet taken back, with `u`, as many times as this run has made one: its Messages return to the Folder they left.
+Taking back the latest Delete or Draft discard not yet taken back, with `u`, as many times as this run has made one: a Delete's Messages return to the Folder they left, and a discarded Draft returns to its preview.
 _Avoid_: restore, revert
 
 **Preview**:

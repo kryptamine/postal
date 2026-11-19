@@ -1,5 +1,6 @@
-//! A throwaway `$XDG_CONFIG_HOME` holding Postal's config and secret, and an
-//! `$XDG_STATE_HOME` for its log and an `$XDG_CACHE_HOME` for its Cache.
+//! A throwaway `$XDG_CONFIG_HOME` holding Postal's config and secret, an
+//! `$XDG_STATE_HOME` for its log, an `$XDG_CACHE_HOME` for its Cache and an
+//! `$XDG_DATA_HOME` for its Drafts.
 
 use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
@@ -43,6 +44,14 @@ impl Home {
 
     pub fn xdg_cache_home(&self) -> PathBuf {
         self.dir.path().join("cache")
+    }
+
+    pub fn xdg_data_home(&self) -> PathBuf {
+        self.dir.path().join("data")
+    }
+
+    pub fn drafts_dir(&self) -> PathBuf {
+        self.xdg_data_home().join("postal/drafts")
     }
 
     pub fn cache_path(&self) -> PathBuf {

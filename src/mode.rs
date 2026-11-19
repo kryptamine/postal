@@ -8,4 +8,7 @@ pub enum Mode {
     Reading,
     /// The Message List, while the Query is typed in the hint line.
     Query,
+    /// A Draft's preview over the screen. It names the keys only: the
+    /// screen under it keeps its own mode.
+    Draft,
 }
