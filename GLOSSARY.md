@@ -37,8 +37,20 @@ The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on anoth
 _Avoid_: conversation, chain
 
 **Unread**:
-A Message the server has not marked as seen. Postal shows this state and never changes it.
+A Message the server has not marked as seen. Postal clears it by a Mark Read.
 _Avoid_: new, unseen
+
+**Dwell**:
+The selection resting on one Thread for a second after its Preview shows the body; moving on first cancels it.
+_Avoid_: hover, linger, debounce
+
+**Mark Read**:
+Clearing Unread on every Unread Message of a Thread in its Folder: after a Dwell in the Message List or a Search, at once on entering Reading. It shows at once and reaches the server once connected.
+_Avoid_: mark seen, read receipt
+
+**Mark Unread**:
+Making a Message Unread again with `U`: the newest of the selected Thread, or the one under the cursor in Reading. It shows at once, and no Dwell starts on that Thread until the selection leaves it and comes back.
+_Avoid_: unmark, keep unread
 
 **Preview**:
 The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View.
