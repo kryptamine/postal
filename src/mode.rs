@@ -11,4 +11,8 @@ pub enum Mode {
     /// A Draft's preview over the screen. It names the keys only: the
     /// screen under it keeps its own mode.
     Draft,
+    /// Local Drafts over the screen.
+    LocalDrafts,
+    /// An Outbox Message over the screen, read-only.
+    Queued,
 }

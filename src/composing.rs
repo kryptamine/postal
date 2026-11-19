@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::path::PathBuf;
 
 use futures::channel::mpsc::UnboundedSender;
 use ratatui::Terminal;
@@ -11,6 +11,7 @@ use crate::{
     draft_preview::DraftPreview,
     editor,
     input::Input,
+    message::Message,
     notes::{self, Notes},
     outbox::Outbox,
     outgoing::Outgoing,
@@ -23,7 +24,6 @@ use crate::{
     terminal_backend::TerminalBackend,
     toast::Toast,
     undo::Undo,
-    xdg,
 };
 
 /// Compose: a new Draft's file in the editor, then its preview.
@@ -48,6 +48,10 @@ pub fn reply(
 ) -> Result<(), Error> {
     screen.replying = None;
     let message = &awaited.message;
+    if let Some(path) = answered_by(message) {
+        return edit(terminal, events, screen, (path, None));
+    }
+
     if let Some(raw) = cache.body(message.body_key).map_err(Error::Cache)? {
         return answer(terminal, events, screen, (&raw, &awaited, account));
     }
@@ -62,6 +66,17 @@ pub fn reply(
     }
 
     Ok(())
+}
+
+/// The Draft already answering `message`, which a Reply takes up again.
+fn answered_by(message: &Message) -> Option<PathBuf> {
+    let folder = message.folder.as_deref()?;
+    let found =
+        draft_file::dir().and_then(|dir| draft_file::answering(&dir, (folder, message.uid)));
+    found.unwrap_or_else(|error| {
+        tracing::error!("looking for a Draft answering the Message failed: {error}");
+        None
+    })
 }
 
 /// The end of the fetch a Reply waits on: its editor, or why not.
@@ -100,17 +115,22 @@ fn answer(
     (raw, awaited, account): (&[u8], &AwaitedReply, &str),
 ) -> Result<(), Error> {
     let (text, answering) = reply_draft::reply(raw, &awaited.message, account, awaited.all);
-    create(screen, Some(&text)).map_or(Ok(()), |path| {
-        edit(terminal, events, screen, (path, Some(answering)))
-    })
+    let Some(path) = create(screen, Some(&text)) else {
+        return Ok(());
+    };
+
+    // Without its notes, the Draft no longer answers once its preview closes.
+    if let Err(error) = draft_file::note(&path, &answering) {
+        tracing::error!("noting what a Draft answers failed: {error}");
+    }
+
+    edit(terminal, events, screen, (path, Some(answering)))
 }
 
 /// A new Draft's file holding `text`, else the template; `None` once the
 /// failure is toasted.
 fn create(screen: &mut Screen, text: Option<&str>) -> Option<PathBuf> {
-    let created = xdg::data_dir()
-        .map_err(io::Error::other)
-        .and_then(|dir| draft_file::create(&dir.join("drafts"), text));
+    let created = draft_file::dir().and_then(|dir| draft_file::create(&dir, text));
     match created {
         Ok(path) => Some(path),
         Err(error) => {
@@ -186,6 +206,27 @@ pub fn send(
     asks.unbounded_send(Ask::Send).ok();
 }
 
+/// Closes the shown Draft's preview, its file kept for Local Drafts.
+pub fn keep(screen: &mut Screen) {
+    if screen.draft.take().is_some() {
+        screen.toast = Some(Toast::new("Saved to Drafts"));
+    }
+}
+
+/// Discard of the Draft at `path`, as from its preview.
+pub fn discard_file(screen: &mut Screen, path: PathBuf) {
+    match DraftPreview::read(path, None) {
+        Ok(preview) => {
+            screen.draft = Some(preview);
+            discard(screen);
+        }
+        Err(error) => {
+            tracing::error!("reading the Draft failed: {error}");
+            screen.toast = Some(Toast::error("could not read the Draft"));
+        }
+    }
+}
+
 /// Deletes the shown Draft's file, for an Undo to write back.
 pub fn discard(screen: &mut Screen) {
     let Some(preview) = screen.draft.take() else {
@@ -207,7 +248,7 @@ pub fn discard(screen: &mut Screen) {
 
 /// Undo of a discard: the file as it was, and its preview again.
 pub fn restore(screen: &mut Screen, (path, text, answering): (PathBuf, String, Option<Answering>)) {
-    if let Err(error) = draft_file::restore(&path, &text) {
+    if let Err(error) = draft_file::restore(&path, &text, answering.as_ref()) {
         tracing::error!("restoring the Draft failed: {error}");
         screen.toast = Some(Toast::error("could not restore the Draft"));
         screen.undo.push(Undo::Discard(path, text, answering));

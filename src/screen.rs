@@ -2,8 +2,9 @@ use tokio::time::Instant;
 
 use crate::{
     awaited_reply::AwaitedReply, cache::Cache, draft_preview::DraftPreview, dwell::Dwell,
-    folder_picker::FolderPicker, inbox_view::InboxView, link_hints::LinkHints, mode::Mode,
-    reading::Reading, run::Work, status::Status, thread::Key, toast::Toast, undo::Undo,
+    folder_picker::FolderPicker, inbox_view::InboxView, link_hints::LinkHints,
+    local_drafts::LocalDrafts, mode::Mode, reading::Reading, run::Work, status::Status,
+    thread::Key, toast::Toast, undo::Undo,
 };
 
 /// What the main screen shows over and beside the panes.
@@ -25,6 +26,8 @@ pub struct Screen {
     pub undo: Vec<Undo>,
     /// Over the whole screen, taking every key, while open.
     pub draft: Option<DraftPreview>,
+    /// Under `draft`, taking every key it leaves.
+    pub local: Option<LocalDrafts>,
     pub replying: Option<AwaitedReply>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
@@ -64,12 +67,14 @@ impl Screen {
         left
     }
 
-    /// What the keys act on: a Draft's preview takes them all while open.
+    /// What the keys act on: a Draft's preview takes them all while open,
+    /// then Local Drafts.
     pub const fn keys(&self) -> Mode {
-        if self.draft.is_some() {
-            Mode::Draft
-        } else {
-            self.mode
+        match (&self.draft, &self.local) {
+            (Some(preview), _) if preview.queued => Mode::Queued,
+            (Some(_), _) => Mode::Draft,
+            (None, Some(_)) => Mode::LocalDrafts,
+            (None, None) => self.mode,
         }
     }
 

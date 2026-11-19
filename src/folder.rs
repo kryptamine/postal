@@ -11,12 +11,15 @@ pub enum Role {
     Starred,
     Sent,
     Drafts,
+    /// Postal's own Folder of Drafts and the Outbox, never on the server.
+    LocalDrafts,
     All,
     Spam,
     Trash,
 }
 
 impl Role {
+    /// The server's roles: the Cache never stores `LocalDrafts`.
     const ALL: [Self; 7] = [
         Self::Inbox,
         Self::Starred,
@@ -37,6 +40,7 @@ impl Role {
             Self::All => "All Mail",
             Self::Spam => "Spam",
             Self::Trash => "Trash",
+            Self::LocalDrafts => "Local Drafts",
         }
     }
 
@@ -60,6 +64,11 @@ pub struct Folder {
 impl Folder {
     pub fn inbox() -> Self {
         Self::new(INBOX, None)
+    }
+
+    /// Local Drafts, as the Folder Picker lists it among the server's.
+    pub fn local_drafts() -> Self {
+        Self::new(Role::LocalDrafts.label(), Some(Role::LocalDrafts))
     }
 
     /// The Inbox is known by its name alone (RFC 3501).

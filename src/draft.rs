@@ -81,6 +81,17 @@ impl Draft {
     }
 }
 
+/// Header `name` as written, from a Draft that need not parse.
+pub fn header(text: &str, name: &str) -> Option<String> {
+    let text = text.replace("\r\n", "\n");
+    let head = text.split_once("\n\n").map_or(&*text, |(head, _)| head);
+    let fields = fields(head).ok()?;
+    let (_, value) = fields
+        .into_iter()
+        .find(|(field, _)| field.eq_ignore_ascii_case(name))?;
+    Some(value)
+}
+
 /// Each header's name and value, a folded line joined to the one before.
 fn fields(head: &str) -> Result<Vec<(&str, String)>, String> {
     let mut fields: Vec<(&str, String)> = Vec::new();

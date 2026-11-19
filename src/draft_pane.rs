@@ -23,13 +23,13 @@ impl Widget for DraftPane<'_> {
         Block::bordered()
             .border_style(self.theme.border)
             .render(area, buf);
-        border::label(
-            buf,
-            area,
-            (area.x + 1, area.y),
-            &[" Draft "],
-            self.theme.title,
-        );
+        let title = if self.preview.queued {
+            " Outbox "
+        } else {
+            " Draft "
+        };
+
+        border::label(buf, area, (area.x + 1, area.y), &[title], self.theme.title);
         let text = Rect {
             x: area.x.saturating_add(1 + PADDING),
             y: area.y.saturating_add(1),

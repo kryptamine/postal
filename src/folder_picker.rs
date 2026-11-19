@@ -38,16 +38,18 @@ impl FolderPicker {
         picker
     }
 
-    /// Lists `folders` anew, the Query and the selected Folder kept; `shown`
-    /// is listed even before the Cache knows it.
+    /// Lists `folders` anew, with Local Drafts, the Query and the selected
+    /// Folder kept; `shown` is listed even before the Cache knows it.
     pub fn reload(&mut self, mut folders: Vec<Folder>, shown: &Folder) {
         let selected = self
             .chosen()
             .map_or_else(|| Arc::clone(&shown.name), |f| Arc::clone(&f.name));
         if !folders.iter().any(|f| f.name == shown.name) {
             folders.push(shown.clone());
-            folders.sort_by(Folder::order);
         }
+
+        folders.push(Folder::local_drafts());
+        folders.sort_by(Folder::order);
 
         self.haystacks = folders.iter().map(haystack).collect();
         self.folders = folders;

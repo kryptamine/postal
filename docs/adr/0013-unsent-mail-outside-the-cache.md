@@ -24,7 +24,8 @@ The sync connection sends the Outbox, as it knows whether the server is
 Gmail and holds the connection an `APPEND` needs: on each connect, on each
 Send, on each Folder switch, and after each `IDLE` the server's news or its
 period ends, while the Outbox is not empty. A network error or a `4xx`
-reply keeps the Message in the Outbox, to be retried on the next sync. A
+reply keeps the Message in the Outbox, to be retried on the next sync, its
+error kept in the JSON file for Local Drafts to show. A
 `5xx` reply moves it back to `drafts/`, with the server's answer shown when
 the Draft is opened; a `53x` refuses the sign-in, not the Message, and keeps
 it.

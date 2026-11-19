@@ -162,9 +162,13 @@ fn a_reply_from_the_list_answers_the_newest_message_not_from_the_account() {
 
     // In-Reply-To and References are Postal's, and stay out of the file;
     // a name with a comma stays quoted, one address.
-    let drafts: Vec<_> = fs::read_dir(home.drafts_dir()).unwrap().collect();
+    let drafts: Vec<_> = fs::read_dir(home.drafts_dir())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|e| e == "eml"))
+        .collect();
     assert_eq!(drafts.len(), 1);
-    let file = fs::read_to_string(drafts[0].as_ref().unwrap().path()).unwrap();
+    let file = fs::read_to_string(&drafts[0]).unwrap();
     assert_eq!(
         file,
         format!(

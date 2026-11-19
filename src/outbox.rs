@@ -114,6 +114,16 @@ impl Queued {
         Ok(())
     }
 
+    /// Keeps `error`, why the last Send failed, in the Message's `notes`.
+    pub fn note_failure(&self, notes: Notes, error: String) -> io::Result<()> {
+        let notes = Notes {
+            error: Some(error),
+            ..notes
+        };
+
+        notes.write(&self.path, MODE)
+    }
+
     /// Takes the Message out of the Outbox, with its notes.
     pub fn remove(&self) -> io::Result<()> {
         notes::remove_message(&self.path)

@@ -18,15 +18,18 @@ use crate::{
     cache::{self, Cache},
     composing,
     draft_pane::DraftPane,
+    draft_preview::DraftPreview,
     folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
     inbox_view::InboxView,
     input::Input,
-    keymap::{self, Action, DraftKey, Pick},
+    keymap::{self, Action, DraftKey, LocalKey, Pick, QueuedKey},
     layout,
     link_hints::{LinkHints, Typed},
+    local_drafts::LocalDrafts,
+    local_drafts_pane::LocalDraftsPane,
     message::Message,
     message_list::{self, MessageList},
     mode::Mode,
@@ -197,6 +200,8 @@ pub async fn run(
             }
             event = events.next() => {
                 frame_start = alloc_count::count();
+                // A Draft opened, closed, discarded or brought back changes the list.
+                let drafts_before = (screen.draft.is_some(), screen.undo.len());
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
@@ -210,9 +215,14 @@ pub async fn run(
                             composing::reply(terminal, &mut events, &mut screen, (cache, &replies), (awaited, account))?;
                         }
                     }
+                    Step::LocalDrafts => open_local(&mut screen, outbox),
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::SignIn => return Ok(Exit::SignIn),
                     Step::Quit => return Ok(Exit::Quit),
+                }
+
+                if drafts_before != (screen.draft.is_some(), screen.undo.len()) {
+                    relist_local(&mut screen, outbox);
                 }
             }
         }
@@ -339,19 +349,18 @@ fn draw(
             }
 
             let keys = screen.keys();
-            let hint_line = HintLine {
-                theme,
-                toast: screen.toast.as_ref(),
-                status: screen.status(),
-                outbox: screen.outbox,
-                mode: keys,
-                query: view
-                    .search
-                    .as_ref()
-                    .map(Search::query)
-                    .filter(|_| keys != Mode::Draft),
-                now: Instant::now(),
-            };
+            let hint_line =
+                HintLine {
+                    theme,
+                    toast: screen.toast.as_ref(),
+                    status: screen.status(),
+                    outbox: screen.outbox,
+                    mode: keys,
+                    query: view.search.as_ref().map(Search::query).filter(|_| {
+                        !matches!(keys, Mode::Draft | Mode::LocalDrafts | Mode::Queued)
+                    }),
+                    now: Instant::now(),
+                };
 
             if let Some(cursor) = hint_line.cursor(panes.hint) {
                 frame.set_cursor_position(cursor);
@@ -364,13 +373,17 @@ fn draw(
     Ok(())
 }
 
-/// What shows over the panes in `body`: the Folder Picker, a Draft's
-/// preview, then the `?` popup over either.
+/// What shows over the panes in `body`: the Folder Picker, Local Drafts, a
+/// Draft's preview, then the `?` popup over any.
 fn popups(frame: &mut Frame, (theme, from): (&Theme, &str), body: Rect, screen: &Screen) {
     if let Some(picker) = &screen.picker {
         let popup = PickerPopup { theme, picker };
         frame.set_cursor_position(popup.cursor(body));
         frame.render_widget(popup, body);
+    }
+
+    if let Some(local) = &screen.local {
+        frame.render_widget(LocalDraftsPane { theme, local }, body);
     }
 
     if let Some(preview) = &screen.draft {
@@ -456,10 +469,12 @@ fn apply(
         Update::NoTrash => screen.toast = Some(Toast::error("no Trash Folder")),
         Update::Unrestored => screen.toast = Some(Toast::error("nothing to undo")),
         Update::Sent => {
+            relist_local(screen, outbox);
             screen.outbox = outbox.count();
             screen.toast = Some(Toast::new("Sent"));
         }
         Update::Refused => {
+            relist_local(screen, outbox);
             screen.outbox = outbox.count();
             screen.toast = Some(Toast::error("refused · back in Drafts"));
         }
@@ -483,6 +498,7 @@ enum Step {
     Undo,
     Browse(Arc<str>),
     Page,
+    LocalDrafts,
     Compose,
     /// Reply, or Reply All when true.
     Reply(bool),
@@ -510,6 +526,7 @@ fn handle(
         }
         Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
         Some(Ok(Event::Key(key))) if screen.draft.is_some() => Ok(on_draft(key, screen)),
+        Some(Ok(Event::Key(key))) if screen.local.is_some() => Ok(on_local(key, screen)),
         Some(Ok(Event::Key(key))) if screen.picker.is_some() => Ok(pick(key, screen)),
         Some(Ok(Event::Key(key))) if screen.hints.is_some() => {
             let typed = screen.hints.as_mut().map_or(Typed::Cancel, |h| h.key(key));
@@ -661,6 +678,7 @@ fn dwelling(
 ) -> Option<(Key, i64)> {
     let listed = matches!(screen.mode, Mode::List | Mode::Query)
         && screen.picker.is_none()
+        && screen.local.is_none()
         && screen.draft.is_none();
     let text = text.filter(|_| listed && !screen.help && view.selected_unread())?;
     previews.get(view, text.width)?;
@@ -824,8 +842,19 @@ fn undo(
     Ok(())
 }
 
-/// Acts on one key in a Draft's preview.
+/// Acts on one key in a Draft's preview, or an Outbox Message's.
 fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
+    if screen.draft.as_ref().is_some_and(|preview| preview.queued) {
+        match keymap::queued(key) {
+            Some(QueuedKey::Close) => screen.draft = None,
+            Some(QueuedKey::Help) => screen.help = true,
+            Some(QueuedKey::Quit) => return Step::Quit,
+            None => {}
+        }
+
+        return Step::Stay;
+    }
+
     match keymap::draft(key) {
         Some(DraftKey::Quit) => Step::Quit,
         Some(DraftKey::Help) => {
@@ -834,11 +863,75 @@ fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
         }
         Some(DraftKey::Send) => Step::Send,
         Some(DraftKey::Edit) => Step::Edit,
+        Some(DraftKey::Keep) => {
+            composing::keep(screen);
+            Step::Stay
+        }
         Some(DraftKey::Discard) => {
             composing::discard(screen);
             Step::Stay
         }
         None => Step::Stay,
+    }
+}
+
+fn on_local(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
+    let Some(local) = screen.local.as_mut() else {
+        return Step::Stay;
+    };
+
+    match keymap::local(key) {
+        Some(LocalKey::Down) => local.down(),
+        Some(LocalKey::Up) => local.up(),
+        Some(LocalKey::Open) => {
+            let Some(row) = local.chosen() else {
+                return Step::Stay;
+            };
+
+            let path = row.path.clone();
+            let read = if row.queued {
+                DraftPreview::queued(path)
+            } else {
+                DraftPreview::read(path, None)
+            };
+
+            match read {
+                Ok(preview) => screen.draft = Some(preview),
+                Err(error) => {
+                    tracing::error!("reading the Draft failed: {error}");
+                    screen.toast = Some(Toast::error("could not read the Draft"));
+                }
+            }
+        }
+        Some(LocalKey::Discard) => {
+            let draft = local.chosen().filter(|row| !row.queued);
+            if let Some(path) = draft.map(|row| row.path.clone()) {
+                composing::discard_file(screen, path);
+            }
+        }
+        Some(LocalKey::Undo) => return Step::Undo,
+        Some(LocalKey::Close) => screen.local = None,
+        Some(LocalKey::Help) => screen.help = true,
+        Some(LocalKey::Quit) => return Step::Quit,
+        None => {}
+    }
+
+    Step::Stay
+}
+
+fn open_local(screen: &mut Screen, outbox: &Outbox) {
+    match LocalDrafts::open(outbox) {
+        Ok(local) => screen.local = Some(local),
+        Err(error) => {
+            tracing::error!("listing Local Drafts failed: {error}");
+            screen.toast = Some(Toast::error("could not list Local Drafts"));
+        }
+    }
+}
+
+fn relist_local(screen: &mut Screen, outbox: &Outbox) {
+    if let Some(Err(error)) = screen.local.as_mut().map(|local| local.reload(outbox)) {
+        tracing::error!("listing Local Drafts failed: {error}");
     }
 }
 
@@ -879,6 +972,10 @@ fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
             let chosen = picker.chosen().cloned();
             if let Some(folder) = chosen {
                 screen.picker = None;
+                if folder.role == Some(Role::LocalDrafts) {
+                    return Step::LocalDrafts;
+                }
+
                 return Step::Show(folder);
             }
         }

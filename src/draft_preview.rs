@@ -2,8 +2,8 @@ use std::{io, path::PathBuf};
 
 use crate::{answering::Answering, draft::Draft, notes::Notes};
 
-/// A Draft shown after the editor exits, for `y` to send, `e` to edit again
-/// or `q` to discard.
+/// A Draft shown after the editor exits, for `y` to send, `e` to edit again,
+/// `d` to keep or `q` to discard.
 pub struct DraftPreview {
     pub path: PathBuf,
     /// The file as written, kept for an Undo of its discard.
@@ -14,6 +14,8 @@ pub struct DraftPreview {
     pub failure: Option<String>,
     /// For a Reply.
     pub answering: Option<Answering>,
+    /// An Outbox Message, shown read-only.
+    pub queued: bool,
 }
 
 impl DraftPreview {
@@ -27,6 +29,16 @@ impl DraftPreview {
         Ok(preview)
     }
 
+    /// The Outbox Message at `path`, as its Draft was written, with the
+    /// last Send's error.
+    pub fn queued(path: PathBuf) -> io::Result<Self> {
+        let notes = Notes::read(&path)?.unwrap_or_default();
+        let text = notes.draft.unwrap_or_default();
+        let mut preview = Self::new(path, text, notes.answering);
+        (preview.failure, preview.queued) = (notes.error, true);
+        Ok(preview)
+    }
+
     pub fn new(path: PathBuf, text: String, answering: Option<Answering>) -> Self {
         Self {
             draft: Draft::parse(&text),
@@ -34,6 +46,7 @@ impl DraftPreview {
             text,
             failure: None,
             answering,
+            queued: false,
         }
     }
 }

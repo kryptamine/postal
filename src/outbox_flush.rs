@@ -117,6 +117,10 @@ async fn submit(
                 Err(error) if error.refused() => error.to_string(),
                 Err(error) => {
                     tracing::warn!("sending {} failed: {error}", queued.path.display());
+                    if let Err(error) = queued.note_failure(notes, error.to_string()) {
+                        tracing::error!("keeping the error of the Send failed: {error}");
+                    }
+
                     return Ok(Submitted::Unreachable);
                 }
             }

@@ -60,7 +60,31 @@ pub enum Action {
 pub enum DraftKey {
     Send,
     Edit,
+    /// Closes the preview, the Draft kept in Local Drafts.
+    Keep,
     Discard,
+    Help,
+    Quit,
+}
+
+/// What a key does in Local Drafts.
+#[derive(Clone, Copy)]
+pub enum LocalKey {
+    Down,
+    Up,
+    /// A Draft's preview, or an Outbox Message read-only.
+    Open,
+    Discard,
+    Undo,
+    Close,
+    Help,
+    Quit,
+}
+
+/// What a key does while an Outbox Message is shown read-only.
+#[derive(Clone, Copy)]
+pub enum QueuedKey {
+    Close,
     Help,
     Quit,
 }
@@ -127,11 +151,18 @@ const LIST: &[Mode] = &[Mode::List];
 const READING: &[Mode] = &[Mode::Reading];
 const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 const DRAFT: &[Mode] = &[Mode::Draft];
-const ANY: &[Mode] = &[Mode::List, Mode::Reading, Mode::Draft];
+const LOCAL: &[Mode] = &[Mode::LocalDrafts];
+const ANY: &[Mode] = &[
+    Mode::List,
+    Mode::Reading,
+    Mode::Draft,
+    Mode::LocalDrafts,
+    Mode::Queued,
+];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 34] = [
+const BINDINGS: [Binding; 41] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -377,7 +408,7 @@ const BINDINGS: [Binding; 34] = [
     },
     Binding {
         group: "App",
-        modes: &[Mode::Reading, Mode::Draft],
+        modes: &[Mode::Reading, Mode::Draft, Mode::LocalDrafts, Mode::Queued],
         signed_out: false,
         keys: "^c",
         aliases: "",
@@ -487,6 +518,84 @@ const BINDINGS: [Binding; 34] = [
         hint: Some(Hint {
             keys: "q",
             description: "discard",
+        }),
+    },
+    Binding {
+        group: "Draft",
+        modes: DRAFT,
+        signed_out: false,
+        keys: "d",
+        aliases: "",
+        description: "keep it in Local Drafts",
+        hint: Some(Hint {
+            keys: "d",
+            description: "keep",
+        }),
+    },
+    Binding {
+        group: "Local Drafts",
+        modes: LOCAL,
+        signed_out: false,
+        keys: "j / k",
+        aliases: "↓ / ↑",
+        description: "next / previous",
+        hint: Some(Hint {
+            keys: "j/k",
+            description: "move",
+        }),
+    },
+    Binding {
+        group: "Local Drafts",
+        modes: LOCAL,
+        signed_out: false,
+        keys: "Enter",
+        aliases: "",
+        description: "open the Draft or the Outbox Message",
+        hint: Some(Hint {
+            keys: "Enter",
+            description: "open",
+        }),
+    },
+    Binding {
+        group: "Local Drafts",
+        modes: LOCAL,
+        signed_out: false,
+        keys: "Backspace",
+        aliases: "",
+        description: "discard the Draft",
+        hint: None,
+    },
+    Binding {
+        group: "Local Drafts",
+        modes: LOCAL,
+        signed_out: false,
+        keys: "u",
+        aliases: "",
+        description: "undo a discard",
+        hint: None,
+    },
+    Binding {
+        group: "Local Drafts",
+        modes: LOCAL,
+        signed_out: false,
+        keys: "q",
+        aliases: "Esc",
+        description: "back to the Message List",
+        hint: Some(Hint {
+            keys: "q",
+            description: "back",
+        }),
+    },
+    Binding {
+        group: "Outbox",
+        modes: &[Mode::Queued],
+        signed_out: false,
+        keys: "q",
+        aliases: "Esc",
+        description: "back to Local Drafts",
+        hint: Some(Hint {
+            keys: "q",
+            description: "back",
         }),
     },
 ];
@@ -600,8 +709,51 @@ pub const fn draft(key: KeyEvent) -> Option<DraftKey> {
     match key.code {
         KeyCode::Char('y') => Some(DraftKey::Send),
         KeyCode::Char('e') => Some(DraftKey::Edit),
+        KeyCode::Char('d') => Some(DraftKey::Keep),
         KeyCode::Char('q') => Some(DraftKey::Discard),
         KeyCode::Char('?') => Some(DraftKey::Help),
+        _ => None,
+    }
+}
+
+/// What `key` does in Local Drafts, which takes them all.
+pub const fn local(key: KeyEvent) -> Option<LocalKey> {
+    if !pressed(key) {
+        return None;
+    }
+
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        return match key.code {
+            KeyCode::Char('c') => Some(LocalKey::Quit),
+            _ => None,
+        };
+    }
+
+    match key.code {
+        KeyCode::Char('j') | KeyCode::Down => Some(LocalKey::Down),
+        KeyCode::Char('k') | KeyCode::Up => Some(LocalKey::Up),
+        KeyCode::Enter => Some(LocalKey::Open),
+        KeyCode::Backspace => Some(LocalKey::Discard),
+        KeyCode::Char('u') => Some(LocalKey::Undo),
+        KeyCode::Char('q') | KeyCode::Esc => Some(LocalKey::Close),
+        KeyCode::Char('?') => Some(LocalKey::Help),
+        _ => None,
+    }
+}
+
+/// What `key` does while an Outbox Message is shown, which takes them all.
+pub const fn queued(key: KeyEvent) -> Option<QueuedKey> {
+    if !pressed(key) {
+        return None;
+    }
+
+    match key.code {
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            Some(QueuedKey::Quit)
+        }
+        _ if key.modifiers.contains(KeyModifiers::CONTROL) => None,
+        KeyCode::Char('q') | KeyCode::Esc => Some(QueuedKey::Close),
+        KeyCode::Char('?') => Some(QueuedKey::Help),
         _ => None,
     }
 }

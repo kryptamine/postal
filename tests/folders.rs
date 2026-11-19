@@ -126,6 +126,7 @@ fn the_picker_lists_special_use_folders_first_then_the_rest_with_unread_counts()
             "Starred",
             "Sent",
             "Drafts",
+            "Local Drafts",
             "All Mail",
             "Spam",
             "Trash",
@@ -365,7 +366,7 @@ fn offline_the_picker_and_a_cached_folder_come_from_the_cache() {
     let screen = t
         .snapshot_after(|s| picked(s).iter().any(|row| row == "Work/Clients 1"))
         .unwrap();
-    assert_eq!(picked(&screen).len(), 10, "{screen}");
+    assert_eq!(picked(&screen).len(), 11, "{screen}");
     t.send_str("work").unwrap();
     t.wait_until(|s| picked(s).first().is_some_and(|f| f == "Work 2"))
         .unwrap();
