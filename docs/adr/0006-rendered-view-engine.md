@@ -35,7 +35,9 @@ the colour, cell-width and element helpers.
   a row rounds up above a box and down below it, so the 8 px under a paragraph
   and the 8 px over the next make one row. Collapsed table borders become
   separate ones with no spacing: litehtml gives each cell half a collapsed
-  border, which puts the rule between two rows.
+  border, which puts the rule between two rows. A height or min-height in
+  per cent goes: a mail has no page height, and litehtml took the share of
+  its 1000-row viewport.
 - Backgrounds fill the cells whose centre lies in the box; text rows use the
   same rule. A box's own background stops inside its border
   (`background-clip: padding-box`), as a 1px border looks; a cell thick, it

@@ -733,3 +733,18 @@ fn a_cover_band_left_with_its_title_is_a_title() {
     );
     assert_eq!(frames(&screen), 2, "{}", rows.join("\n"));
 }
+
+// A mail has no page height to take a share of: `height: 100%` took the
+// layout's viewport, and the box stood a thousand rows high.
+#[test]
+fn a_percentage_height_is_the_height_of_what_it_holds() {
+    let body = html(
+        "<html style=\"height:100%\"><body style=\"height:100%\">\
+         <div style=\"height:100%;min-height:100%;border:1px solid #cc0000\"><p>Inside</p></div>\
+         <p>After</p></body></html>",
+    );
+    let screen = preview(body, &DEFAULT, "After");
+    let rows = pane(&screen);
+    let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
+    assert_eq!(row("After") - row("Inside"), 4, "{}", rows.join("\n"));
+}

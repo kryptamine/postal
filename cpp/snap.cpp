@@ -26,6 +26,8 @@ void snap(css_length& l, float (*to)(float))
     if(!l.is_predefined() && l.units() == css_units_px) l.set_value(to(l.val()), css_units_px);
 }
 
+bool share(const css_length& l) { return !l.is_predefined() && l.units() == css_units_percentage; }
+
 bool under_a_row(const css_length& l) { return !l.is_predefined() && l.units() == css_units_px && l.val() < CH; }
 
 // A transparent border, or one the colour of the fill under it, takes no
@@ -96,10 +98,14 @@ void snap_box(const element::ptr& el, uint32_t fill)
     one_cell_thick(b, tag_is(el, "hr"));
     css.set_borders(b);
 
+    // A share of the page's height has no base: a mail has no page to
+    // fill, and `height: 100%` took the 1000-row viewport instead.
     css_length h = css.get_height();
+    if(share(h)) h = css_length::predef_value(sizing_auto);
     snap(h, rows_above);
     css.set_height(h);
     css_length min_h = css.get_min_height();
+    if(share(min_h)) min_h = css_length(0, css_units_px);
     snap(min_h, rows_above);
     css.set_min_height(min_h);
 
