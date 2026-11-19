@@ -450,6 +450,7 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
         buttons = flatten_buttons(doc->root(), contents);
         unframe_titles(doc->root(), contents);
     }
+    left_align_spread(doc->root());
     snap_tree(doc->root());
     if(loose) loosen(doc->root());
     draw(doc, container);

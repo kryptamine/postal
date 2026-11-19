@@ -6,6 +6,10 @@
 
 namespace cg
 {
+// Before layout: justified text is set left, since a line of one-cell
+// glyphs is padded with whole cells, and so is centred text in a list
+// item, which stood apart from its marker.
+void left_align_spread(const litehtml::element::ptr& root);
 // After layout: a centred block whose words wrap onto three lines or more
 // is a paragraph, hard to read from a ragged left edge. Each is set left;
 // true when one was, and the layout must run again.

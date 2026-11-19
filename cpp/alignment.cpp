@@ -34,7 +34,18 @@ void lines(const element::ptr& el, std::set<float>& rows, size_t& breaks)
         else if(in_flow(child)) lines(child, rows, breaks);
     }
 }
+
+void spread(const element::ptr& el, bool listed)
+{
+    css_properties& css = el->css();
+    listed              = listed || css.get_display() == display_list_item;
+    if(css.get_text_align() == text_align_justify || (listed && css.get_text_align() == text_align_center))
+        css.set_text_align(text_align_left);
+    for(auto& child : el->children()) spread(child, listed);
+}
 } // namespace
+
+void left_align_spread(const element::ptr& root) { spread(root, false); }
 
 bool left_align_paragraphs(const element::ptr& root)
 {
