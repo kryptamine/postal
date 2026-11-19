@@ -243,6 +243,10 @@ fn shows_the_three_date_forms() {
     let home = Home::for_server(&server);
     let mut t = postal(&home);
     let screen = t.snapshot_after(loaded).unwrap();
+    // The Preview's header names today, which the snapshot cannot hold.
+    let screen = screen
+        .to_string()
+        .replace(&today.format("%a, %-d %b %Y").to_string(), "[today]");
     insta::assert_snapshot!(screen);
     quit(t);
 }
