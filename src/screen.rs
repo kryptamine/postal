@@ -1,0 +1,93 @@
+use tokio::time::Instant;
+
+use crate::{
+    cache::Cache, dwell::Dwell, folder_picker::FolderPicker, inbox_view::InboxView,
+    link_hints::LinkHints, mode::Mode, reading::Reading, run::Work, status::Status, thread::Key,
+    toast::Toast,
+};
+
+/// What the main screen shows over and beside the panes.
+#[derive(Default)]
+pub struct Screen {
+    pub help: bool,
+    pub picker: Option<FolderPicker>,
+    pub toast: Option<Toast>,
+    /// The sync connection's.
+    pub status: Status,
+    /// A page of older Messages under way on the fetch connection.
+    pub backfill: Option<Status>,
+    pub hints: Option<LinkHints>,
+    pub mode: Mode,
+    /// While `mode` is `Reading`.
+    pub reading: Option<Reading>,
+    pub dwell: Dwell,
+    /// The Deletes an Undo may take back, the latest last, each with the
+    /// Thread selected when it was made.
+    pub undo: Vec<(i64, Option<Key>)>,
+}
+
+impl Screen {
+    pub fn opening<W>(cache: &Cache, work: &Work<W>) -> Self {
+        let (status, toast) = match work {
+            Work::Running(_) => (Status::Live, None),
+            Work::SignedOut { failed } => (
+                Status::SignedOut,
+                failed.then(|| Toast::error("sign-in failed")),
+            ),
+        };
+
+        Self {
+            status,
+            toast: toast.or_else(|| cache.rebuilt().then(|| Toast::new("cache rebuilt"))),
+            ..Self::default()
+        }
+    }
+
+    pub fn list(&mut self) {
+        self.mode = Mode::List;
+        self.reading = None;
+    }
+
+    /// Back to the list once the selection left `thread`, the Thread Reading
+    /// was opened on; true when it did.
+    pub fn follow(&mut self, view: &InboxView, thread: Option<Key>) -> bool {
+        let left = self.reading.is_some() && view.selected_key() != thread;
+        if left {
+            self.hints = None;
+            self.list();
+        }
+
+        left
+    }
+
+    /// The sync connection's Status, or the backfill's while that one is live.
+    pub const fn status(&self) -> Status {
+        match (self.status, self.backfill) {
+            (Status::Live, Some(backfill)) => backfill,
+            (status, _) => status,
+        }
+    }
+
+    /// A failure is toasted once: the Cache stays in memory after it.
+    pub fn notice_write_failure(&mut self, cache: &Cache) {
+        if cache.take_write_failure() {
+            self.toast = Some(Toast::error("cache write failed"));
+        }
+    }
+
+    /// When the Toast goes, the Status's countdown ticks or the Dwell ends,
+    /// whichever is first; `None` while none will.
+    pub fn changes_at(&self, now: Instant) -> Option<Instant> {
+        let toast = self.toast.as_ref().map(|toast| toast.until);
+        [toast, self.status().ticks_at(now), self.dwell.due()]
+            .into_iter()
+            .flatten()
+            .min()
+    }
+
+    pub fn expire(&mut self, now: Instant) {
+        if self.toast.as_ref().is_some_and(|toast| toast.until <= now) {
+            self.toast = None;
+        }
+    }
+}

@@ -15,7 +15,6 @@ use crate::{
     body::Body,
     browser,
     cache::{self, Cache},
-    dwell::Dwell,
     folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
@@ -34,6 +33,7 @@ use crate::{
     previews::Previews,
     reading::Reading,
     rendered_previews::PreviewKey,
+    screen::Screen,
     search::Search,
     stack,
     status::Status,
@@ -356,10 +356,7 @@ fn apply(
                 if view.selected_body() != selected {
                     screen.hints = None;
                 }
-            } else if view.selected_key() != thread {
-                screen.hints = None;
-                screen.list();
-            } else if !view.stack().map(|m| m.body_key).eq(stack) {
+            } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
                 screen.hints = None;
                 if let Some(reading) = &mut screen.reading {
                     reading.hold = true;
@@ -401,80 +398,6 @@ fn apply(
     }
 
     Ok(())
-}
-
-/// What the main screen shows over and beside the panes.
-#[derive(Default)]
-struct Screen {
-    help: bool,
-    picker: Option<FolderPicker>,
-    toast: Option<Toast>,
-    /// The sync connection's.
-    status: Status,
-    /// A page of older Messages under way on the fetch connection.
-    backfill: Option<Status>,
-    hints: Option<LinkHints>,
-    mode: Mode,
-    /// While `mode` is `Reading`.
-    reading: Option<Reading>,
-    dwell: Dwell,
-    /// The Deletes an Undo may take back, the latest last, each with the
-    /// Thread selected when it was made.
-    undo: Vec<(i64, Option<Key>)>,
-}
-
-impl Screen {
-    fn opening<W>(cache: &Cache, work: &Work<W>) -> Self {
-        let (status, toast) = match work {
-            Work::Running(_) => (Status::Live, None),
-            Work::SignedOut { failed } => (
-                Status::SignedOut,
-                failed.then(|| Toast::error("sign-in failed")),
-            ),
-        };
-
-        Self {
-            status,
-            toast: toast.or_else(|| cache.rebuilt().then(|| Toast::new("cache rebuilt"))),
-            ..Self::default()
-        }
-    }
-
-    fn list(&mut self) {
-        self.mode = Mode::List;
-        self.reading = None;
-    }
-
-    /// The sync connection's Status, or the backfill's while that one is live.
-    const fn status(&self) -> Status {
-        match (self.status, self.backfill) {
-            (Status::Live, Some(backfill)) => backfill,
-            (status, _) => status,
-        }
-    }
-
-    /// A failure is toasted once: the Cache stays in memory after it.
-    fn notice_write_failure(&mut self, cache: &Cache) {
-        if cache.take_write_failure() {
-            self.toast = Some(Toast::error("cache write failed"));
-        }
-    }
-
-    /// When the Toast goes, the Status's countdown ticks or the Dwell ends,
-    /// whichever is first; `None` while none will.
-    fn changes_at(&self, now: Instant) -> Option<Instant> {
-        let toast = self.toast.as_ref().map(|toast| toast.until);
-        [toast, self.status().ticks_at(now), self.dwell.due()]
-            .into_iter()
-            .flatten()
-            .min()
-    }
-
-    fn expire(&mut self, now: Instant) {
-        if self.toast.as_ref().is_some_and(|toast| toast.until <= now) {
-            self.toast = None;
-        }
-    }
 }
 
 /// What the event loop does after one input event.
@@ -754,9 +677,7 @@ fn delete(
     screen.undo.push((batch, thread));
     show(view, cache, None)?;
     screen.hints = None;
-    if view.selected_key() != thread {
-        screen.list();
-    }
+    screen.follow(view, thread);
 
     relist(screen, view, cache)?;
     // The send fails only while signed out; the move waits in the Cache.
@@ -788,10 +709,7 @@ fn undo(
     show(view, cache, None)?;
     screen.hints = None;
     if let Some(key) = thread {
-        if screen.reading.is_some() && view.selected_key() != thread {
-            screen.list();
-        }
-
+        screen.follow(view, thread);
         view.select(key);
     }
 
@@ -801,15 +719,8 @@ fn undo(
     screen.toast = Some(if here {
         Toast::new("restored")
     } else {
-        let known = cache.folders().map_err(Error::Cache)?;
-        let label = |name: &Arc<str>| {
-            known.iter().find(|f| f.name == *name).map_or_else(
-                || Folder::new(name, None).label().to_owned(),
-                |f| f.label().to_owned(),
-            )
-        };
-
-        Toast::new(format!("restored to {}", label(&folders[0])))
+        let folder = cache.folder(&folders[0]).map_err(Error::Cache)?;
+        Toast::new(format!("restored to {}", folder.label()))
     });
     Ok(())
 }

@@ -226,6 +226,12 @@ impl Cache {
         Ok(folders)
     }
 
+    /// The Folder named `name` as last listed; without a role when it never was.
+    pub fn folder(&self, name: &str) -> Result<Folder, Error> {
+        let listed = self.folders()?.into_iter().find(|f| *f.name == *name);
+        Ok(listed.unwrap_or_else(|| Folder::new(name, None)))
+    }
+
     /// Writes what `LIST` answered: a Folder not in `listed` leaves the
     /// Cache with its rows, and the rest keep what they had.
     pub fn list_folders(&self, listed: &[Folder]) -> Result<(), Error> {

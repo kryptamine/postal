@@ -73,6 +73,7 @@ mod rendered_previews;
 mod rendered_view;
 mod rgb;
 mod run;
+mod screen;
 mod search;
 mod secret;
 mod senders;
