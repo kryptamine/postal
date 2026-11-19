@@ -167,7 +167,7 @@ pub async fn run(
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
-                    step @ (Step::Folders | Step::Show(_) | Step::Reveal(..) | Step::Search | Step::Thread(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
+                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Thread(_)) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
@@ -446,8 +446,6 @@ enum Step {
     Links,
     Folders,
     Show(Folder),
-    /// A Search ended on a Thread of this Folder, not the shown one.
-    Reveal(Arc<str>, Key),
     Search,
     /// The Messages of this Gmail Thread in other Folders are asked for.
     Thread(u64),
@@ -545,9 +543,9 @@ fn act(
             Step::Stay
         }
         Some(Action::EndSearch { restore }) => {
-            let elsewhere = view.end_search(restore);
+            view.end_search(restore);
             screen.list();
-            elsewhere.map_or(Step::Stay, |(folder, key)| Step::Reveal(folder, key))
+            Step::Stay
         }
         Some(Action::Move(movement)) => {
             view.apply(movement);
@@ -637,8 +635,7 @@ fn switch(
 }
 
 /// Opens the Folder Picker as the Cache last saw the Folders, starts a
-/// Search, or shows the Folder picked or found, asking the sync connection
-/// to follow.
+/// Search, or shows the Folder picked, asking the sync connection to follow.
 fn steer(
     step: Step,
     view: &mut InboxView,
@@ -654,22 +651,6 @@ fn steer(
         }
         Step::Show(folder) => {
             if !switch(view, screen, cache, folder)? {
-                return Ok(());
-            }
-
-            Ask::Show(Arc::clone(&view.folder.name))
-        }
-        Step::Reveal(name, key) => {
-            let folders = cache.folders().map_err(Error::Cache)?;
-            let folder = folders.into_iter().find(|f| f.name == name);
-            let switched = switch(
-                view,
-                screen,
-                cache,
-                folder.unwrap_or_else(|| Folder::new(&name, None)),
-            )?;
-            view.select(key);
-            if !switched {
                 return Ok(());
             }
 

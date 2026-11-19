@@ -422,28 +422,24 @@ fn a_search_finds_messages_in_every_cached_folder_but_trash() {
 }
 
 #[test]
-fn ending_a_search_on_a_match_elsewhere_shows_its_folder() {
+fn ending_a_search_on_a_match_elsewhere_stays_in_the_shown_folder() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
     let mut t = gmail(&server, &home);
+    t.send(Key::Char('j')).unwrap();
+    t.send(Key::Char('j')).unwrap();
+    wait_selected(&mut t, "Lunch");
 
     t.send(Key::Char('/')).unwrap();
     t.send_str("seat").unwrap();
     wait_selected(&mut t, "Flight booking");
     t.send(Key::Enter).unwrap();
     t.send(Key::Esc).unwrap();
+    // The Inbox lacks the match's Thread: back where `/` was pressed.
     let screen = t
-        .snapshot_after(|s| s.row_text(0).contains(" Sent · ") && list(s).contains("Rent"))
+        .snapshot_after(|s| list(s).contains("Holiday photos"))
         .unwrap();
-    assert_eq!(selected_subject(&screen).as_deref(), Some("Flight booking"));
-
-    // Esc while typing goes back to where `/` was pressed instead.
-    t.send(Key::Char('/')).unwrap();
-    t.send_str("1042").unwrap();
-    wait_selected(&mut t, "Invoice 1042");
-    t.send(Key::Esc).unwrap();
-    let screen = t.snapshot_after(|s| list(s).contains("Rent")).unwrap();
-    assert!(screen.row_text(0).contains(" Sent · "), "{screen}");
-    assert_eq!(selected_subject(&screen).as_deref(), Some("Flight booking"));
+    assert!(screen.row_text(0).contains(" Inbox · "), "{screen}");
+    assert_eq!(selected_subject(&screen).as_deref(), Some("Lunch"));
     quit(t);
 }

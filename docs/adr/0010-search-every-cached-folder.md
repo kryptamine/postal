@@ -12,9 +12,8 @@ without Gmail's extensions copies in two Folders have different keys and both
 match.
 
 A match from another Folder has its body fetched from that Folder. Ending the
-Search with `Esc` from the list shows the match's Folder when the shown one
-does not hold its Thread; `Esc` while typing still goes back to where `/` was
-pressed.
+Search always stays in the shown Folder: on the match when that Folder holds
+its Thread, else back where `/` was pressed.
 
 Only the Cache is searched: a Folder never opened, or the pages of one never
 backfilled, are not found. Every keypress stays in process (ADR 0007); the

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 use crate::{
@@ -93,14 +91,6 @@ impl InboxView {
         self.preview_scroll = 0;
     }
 
-    /// Selects the Thread `key`, if shown.
-    pub fn select(&mut self, key: Key) {
-        if let Some(row) = self.position(key) {
-            self.selected = row;
-            self.preview_scroll = 0;
-        }
-    }
-
     /// Starts a Search over what `everywhere` reads, or resumes the one
     /// under way; false before any rows. Either way, Esc while typing comes
     /// back to the selection now.
@@ -140,28 +130,24 @@ impl InboxView {
         }
     }
 
-    /// Back to the full list, on the Thread selected before the last `/`
-    /// when `restore`, else on the one selected now. Returns the Folder
-    /// that one is in and its Thread, when the shown Folder has no such Thread.
-    pub fn end_search(&mut self, restore: bool) -> Option<(Arc<str>, Key)> {
+    /// Back to the shown Folder's list, on the Thread selected before the
+    /// last `/` when `restore` or when the Folder lacks the one selected now,
+    /// else on that one.
+    pub fn end_search(&mut self, restore: bool) {
         let (selected, body) = (self.selected_key(), self.selected_body());
-        let shown = &self.folder.name;
-        let folder = self.selected_message().and_then(|m| m.folder.clone());
-        let folder = folder.filter(|f| f != shown);
-        let search = self.search.take()?;
-        let keep = if restore { search.before } else { selected };
-        let here = keep.and_then(|key| self.position(key));
-        if let (false, None, Some(folder), Some(key)) = (restore, here, folder, keep) {
-            return Some((folder, key));
-        }
+        let Some(search) = self.search.take() else {
+            return;
+        };
 
-        self.selected = here.unwrap_or(0);
+        let found = selected
+            .filter(|_| !restore)
+            .and_then(|key| self.position(key));
+        let before = || search.before.and_then(|key| self.position(key));
+        self.selected = found.or_else(before).unwrap_or(0);
         self.offset = 0;
         if self.selected_body() != body {
             self.preview_scroll = 0;
         }
-
-        None
     }
 
     pub fn now(&self) -> DateTime<FixedOffset> {
