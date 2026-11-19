@@ -59,15 +59,13 @@ impl Cache {
     /// before its first resync has written it.
     pub fn inbox(&self, folder: &str, limit: Option<usize>) -> Result<Option<Inbox>, Error> {
         let connection = self.connection.borrow();
-        let unread: Option<Option<usize>> = connection
-            .prepare_cached(
-                "SELECT unread FROM mailbox WHERE name = ?1 AND uid_validity IS NOT NULL",
-            )?
-            .query_row([folder], |row| row.get(0))
+        let synced = connection
+            .prepare_cached("SELECT 1 FROM mailbox WHERE name = ?1 AND uid_validity IS NOT NULL")?
+            .query_row([folder], |_| Ok(()))
             .optional()?;
-        let Some(unread) = unread else {
+        if synced.is_none() {
             return Ok(None);
-        };
+        }
 
         // SQLite reads a negative LIMIT as no limit.
         let limit = limit.map_or(-1, |n| i64::try_from(n).unwrap_or(i64::MAX));
@@ -100,7 +98,6 @@ impl Cache {
         Ok(Some(Inbox {
             messages,
             elsewhere,
-            unread: unread.unwrap_or_default(),
         }))
     }
 

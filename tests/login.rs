@@ -108,7 +108,7 @@ fn a_verified_app_password_writes_config_and_secret() {
 
     // The written config must be one Postal starts from.
     let mut t = spawn(&home, &browser, &[]);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 }

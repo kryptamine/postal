@@ -16,6 +16,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    picker::wait_picked,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -154,17 +155,13 @@ fn a_thread_is_unread_while_any_of_its_messages_is() {
     let home = Home::for_server(&server);
     let mut t = ready(&server, &home, "Count me in");
     server.set_seen(104, true);
-    let screen = t
-        .snapshot_after(|s| s.contains(" Inbox  0 unread "))
-        .unwrap();
-    assert!(!unread(&screen, "Alice, me, Bob"), "{screen}");
+    t.wait_until(|s| !unread(s, "Alice, me, Bob")).unwrap();
+    wait_picked(&mut t, "Inbox");
 
     server.set_seen(101, false);
-    let screen = t
-        .snapshot_after(|s| s.contains(" Inbox  1 unread "))
-        .unwrap();
+    t.wait_until(|s| unread(s, "Alice, me, Bob")).unwrap();
+    wait_picked(&mut t, "Inbox 1");
     quit(t);
-    assert!(unread(&screen, "Alice, me, Bob"), "{screen}");
 }
 
 #[test]

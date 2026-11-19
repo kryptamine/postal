@@ -8,14 +8,15 @@ use ratatui::{
 };
 
 use crate::{
-    centred::centred, inbox_view::InboxView, layout::PADDING, link_hints::LinkHints,
+    border, centred::centred, inbox_view::InboxView, layout::PADDING, link_hints::LinkHints,
     preview::Preview, shown::Shown, stack_str::StackStr, theme::Theme, truncate,
 };
 
 /// The header labels, padded so the values line up.
 pub const LABELS: [&str; 3] = ["From    ", "Subject ", "Date    "];
 const LABEL_WIDTH: u16 = 8;
-/// The header rows and the blank row under them.
+/// The header rows and the row under them: a rule in the Preview, blank
+/// in a stack.
 pub const HEADER_ROWS: usize = LABELS.len() + 1;
 
 /// Where a Preview's text goes in `pane`: inside the border, padded each
@@ -29,15 +30,27 @@ pub const fn text_area(pane: Rect) -> Rect {
     }
 }
 
-/// The body lines that `text` shows from scroll position `scroll`.
-pub fn body_lines(scroll: usize, text: Rect) -> Range<usize> {
-    let end = scroll.saturating_add(usize::from(text.height));
-    scroll.saturating_sub(HEADER_ROWS)..end.saturating_sub(HEADER_ROWS)
+/// Where the body goes in a Preview's `text`: under the header, which
+/// stays put while the body scrolls.
+pub fn body_area(text: Rect) -> Rect {
+    let header = u16::try_from(HEADER_ROWS)
+        .unwrap_or(u16::MAX)
+        .min(text.height);
+    Rect {
+        y: text.y + header,
+        height: text.height - header,
+        ..text
+    }
 }
 
-/// The selected Message's Preview inside a border titled `i/N`: the header,
-/// then the body from the scroll position on, or a placeholder in its
-/// place. In hint mode, `hints` labels its links.
+/// The body lines that `text` shows from scroll position `scroll`.
+pub fn body_lines(scroll: usize, text: Rect) -> Range<usize> {
+    scroll..scroll.saturating_add(usize::from(body_area(text).height))
+}
+
+/// The selected Message's Preview inside a border titled with the Folder
+/// and `i/N`: the header and a rule, then the body from the scroll position
+/// on, or a placeholder in its place. In hint mode, `hints` labels its links.
 pub struct PreviewPane<'a> {
     pub theme: &'a Theme,
     pub preview: Shown<'a>,
@@ -51,16 +64,23 @@ impl StatefulWidget for PreviewPane<'_> {
         Block::bordered()
             .border_style(self.theme.border)
             .render(area, buf);
-        // No rows, as when a Search matches none, leave the pane empty.
-        let Some(count) = Some(view.rows()).filter(|&n| n > 0) else {
-            return;
-        };
+        let rows = view.rows();
+        let mut position = StackStr::<32>::new();
+        (if rows > 0 {
+            write!(position, " · {}/{rows} ", view.selected + 1)
+        } else {
+            position.write_str(" ")
+        })
+        .ok();
 
-        // Drawn over the border rather than as a Block title, which allocates.
-        let mut title = StackStr::<24>::new();
-        write!(title, " {}/{count} ", view.selected + 1).ok();
-        let room = usize::from(area.width.saturating_sub(2));
-        buf.set_stringn(area.x + 1, area.y, title.as_str(), room, self.theme.title);
+        let title = [" ", view.folder.label(), position.as_str()];
+        border::label(buf, area, (area.x + 1, area.y), &title, self.theme.title);
+
+        // No rows, as when a Search matches none, leave the pane empty.
+        if rows == 0 {
+            return;
+        }
+
         let text = text_area(area);
         // An unavailable body leaves the header with no body lines under it.
         let (preview, placeholder) = match self.preview {
@@ -69,35 +89,39 @@ impl StatefulWidget for PreviewPane<'_> {
             Shown::Unavailable { header, why } => (header, Some(why)),
         };
 
-        let rows = HEADER_ROWS + preview.body.len();
-        let last_top = rows.saturating_sub(usize::from(text.height));
-        view.preview_scroll = view.preview_scroll.min(last_top);
         let values = [
             (&preview.from, self.theme.sender),
             (&preview.subject, self.theme.subject),
             (&preview.date, self.theme.date),
         ];
 
-        for (y, index) in (text.y..text.bottom()).zip(view.preview_scroll..rows) {
+        let rows = text.y..text.bottom();
+        for (y, (label, &(value, style))) in rows.zip(LABELS.iter().zip(&values)) {
             let row = Rect::new(text.x, y, text.width, 1);
-            if let Some(&(value, style)) = values.get(index) {
-                header(self.theme, buf, row, LABELS[index], (value, style));
-            } else if let Some(index) = index.checked_sub(HEADER_ROWS) {
-                let hints = self.hints.map(|hints| (hints, 0));
-                line(self.theme, hints, buf, row, (preview, index));
-            }
+            header(self.theme, buf, row, label, (value, style));
+        }
+
+        let body = body_area(text);
+        if usize::from(text.height) >= HEADER_ROWS {
+            border::rule(buf, area, body.y - 1, self.theme.border);
         }
 
         if let Some(placeholder) = placeholder {
-            let header = u16::try_from(HEADER_ROWS).unwrap_or(u16::MAX);
-            let top = text.y.saturating_add(header).min(text.bottom());
-            let below = Rect {
-                y: top,
-                height: text.bottom() - top,
-                ..text
-            };
+            return centred(placeholder, body, buf);
+        }
 
-            centred(placeholder, below, buf);
+        let last_top = preview.body.len().saturating_sub(usize::from(body.height));
+        view.preview_scroll = view.preview_scroll.min(last_top);
+        let lines = view.preview_scroll..preview.body.len();
+        for (y, index) in (body.y..body.bottom()).zip(lines) {
+            let hints = self.hints.map(|hints| (hints, 0));
+            line(
+                self.theme,
+                hints,
+                buf,
+                Rect::new(text.x, y, text.width, 1),
+                (preview, index),
+            );
         }
     }
 }

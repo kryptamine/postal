@@ -22,7 +22,7 @@ use termlens::{Key, Screen, Terminal};
 
 fn postal(home: &Home, args: &[&str]) -> Terminal {
     Terminal::builder()
-        .size(80, 46)
+        .size(80, 48)
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())

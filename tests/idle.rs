@@ -13,6 +13,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage},
     home::Home,
+    picker::wait_picked,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -99,8 +100,9 @@ fn new_mail_appears_above_and_the_selection_stays_on_its_message() {
 
     let uid = server.deliver(message("Erin", "Brand new", "2024-06-01T00:00:00Z").unread());
     let screen = t
-        .snapshot_after(|s| s.contains("Body of Brand new") && s.contains(" Inbox  2 unread "))
+        .snapshot_after(|s| s.contains("Body of Brand new"))
         .unwrap();
+    wait_picked(&mut t, "Inbox 2");
     quit(t);
 
     assert_eq!(card(&screen, "Erin"), Some(true), "{screen}");
@@ -154,12 +156,12 @@ fn expunges_in_one_burst_each_renumber_the_rest() {
     let screen = t
         .snapshot_after(|s| !s.contains("Alice") && !s.contains("Carol"))
         .unwrap();
+    wait_picked(&mut t, "Inbox");
     quit(t);
     for kept in ["Bob", "Dave"] {
         assert!(screen.contains(kept), "{kept}: {screen}");
     }
 
-    assert!(screen.contains(" Inbox  0 unread "), "{screen}");
     assert_eq!(
         selected_subject(&screen).as_deref(),
         Some("Third"),
@@ -178,8 +180,8 @@ fn a_flag_change_updates_unread_and_the_count() {
     let screen = t
         .snapshot_after(|s| card(s, "Carol") == Some(false) && card(s, "Bob") == Some(true))
         .unwrap();
+    wait_picked(&mut t, "Inbox 1");
     quit(t);
-    assert!(screen.contains(" Inbox  1 unread "), "{screen}");
     assert_eq!(card(&screen, "Alice"), Some(false), "{screen}");
 }
 
@@ -201,13 +203,13 @@ fn an_expunge_older_than_the_cache_renumbers_the_cached_rows() {
     server.expunge(FIRST_UID);
     wait_for(|| idles(&server) > 1);
     server.set_seen(FIRST_UID + 502, false);
-    let screen = t
-        .snapshot_after(|s| s.contains(" Inbox  1 unread "))
-        .unwrap();
+    wait_picked(&mut t, "Inbox 1");
+    let screen = t.snapshot_after(|s| s.contains("Message 503")).unwrap();
     quit(t);
 
     let marked = |subject: &str| {
-        let row = (0..screen.rows()).find(|&row| screen.row_text(row).contains(subject));
+        let card = format!("│   {subject}");
+        let row = (0..screen.rows()).find(|&row| screen.row_text(row).starts_with(&card));
         row.and_then(|row| screen.cell(row - 1, 2))
             .map(|cell| cell.contents() == "●")
     };

@@ -3,11 +3,11 @@ source: tests/rendered_view.rs
 expression: screen.with_styles()
 ---
 size: 120x40  cursor: hidden
-┌ Inbox  0 unread ───────────────────────┐┌ 1/1 ───────────────────────────────────────────────────────────────────────┐
+┌─ 2024 ─────────────────────────────────┐┌ Inbox · 1/1 ───────────────────────────────────────────────────────────────┐
 │   Sender                    2024-11-18 ││ From    Sender                                                             │
 │   Subject                              ││ Subject Subject                                                            │
 │   Monthly statement Here is a summary… ││ Date    Mon, 18 Nov 2024 09:00                                             │
-│                                        ││                                                                            │
+│                                        │├────────────────────────────────────────────────────────────────────────────┤
 │                                        ││ ┌────────────────────────────────────────────────────────────────────────┐ │
 │                                        ││ │  Monthly statement                                                     │ │
 │                                        ││ └────────────────────────────────────────────────────────────────────────┘ │
@@ -45,11 +45,11 @@ size: 120x40  cursor: hidden
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  f folders  ?: help
 
 styles:
-0: 0 dim; 1-17 bold; 18-42 dim; 43-47 bold; 48-119 dim
+0: 0-1 dim; 2-7 bold; 8-42 dim; 43-55 bold; 56-119 dim
 1: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
 2: 0 dim; 1-40 reverse; 41-42 dim; 52-58 bold; 119 dim
 3: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
-4: 0 dim; 41-42 dim; 119 dim
+4: 0 dim; 41-119 dim
 5: 0 dim; 41-42 dim; 119 dim
 6: 0 dim; 41-42 dim; 47-116 bold; 119 dim
 7: 0 dim; 41-42 dim; 119 dim

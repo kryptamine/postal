@@ -9,6 +9,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     body::Body,
+    border,
     date_label::DateLabel,
     inbox_view::InboxView,
     link_hints::LinkHints,
@@ -74,11 +75,10 @@ impl StatefulWidget for ThreadPane<'_> {
             }
         }
 
-        // Drawn over the border rather than as a Block title, which allocates.
         let mut title = StackStr::<24>::new();
         write!(title, " {}/{count} ", cursor + 1).ok();
-        let room = usize::from(area.width.saturating_sub(2));
-        buf.set_stringn(area.x + 1, area.y, title.as_str(), room, self.theme.title);
+        let title = [title.as_str()];
+        border::label(buf, area, (area.x + 1, area.y), &title, self.theme.title);
     }
 }
 

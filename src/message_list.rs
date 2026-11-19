@@ -3,14 +3,16 @@ use std::fmt::Write;
 use chrono::{DateTime, FixedOffset};
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Margin, Rect},
     style::{Modifier, Style},
     widgets::{Block, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    border,
     centred::centred,
+    date_group::DateGroup,
     date_label::DateLabel,
     inbox_view::InboxView,
     layout::PADDING,
@@ -28,6 +30,8 @@ const MARKER: &str = "●";
 /// The marker column and its gap; the subject and Snippet lines indent by the same.
 const INDENT: u16 = 2;
 const CARD_HEIGHT: u16 = 3;
+/// A blank row and the rule naming a Date Group, above all but the top one.
+const GROUP_GAP: u16 = 2;
 /// Below this list width the date is dropped. The list beside the Preview
 /// is never narrower than this.
 const MIN_WIDTH_WITH_DATE: u16 = 29;
@@ -35,13 +39,15 @@ const MIN_WIDTH_WITH_DATE: u16 = 29;
 const DATE_ROOM: u16 = 11;
 pub const MIN_WIDTH: u16 = 20;
 
-/// How many cards fit a list `height` rows tall, its border included.
+/// How many cards a list `height` rows tall shows at most, its border and
+/// a cut last card included; Date Group headers can leave room for fewer.
 pub fn capacity(height: u16) -> usize {
-    usize::from(height.saturating_sub(2) / CARD_HEIGHT).max(1)
+    usize::from(height.saturating_sub(2).div_ceil(CARD_HEIGHT)).max(1)
 }
 
 /// One three-line card per Thread, `● senders (n) … date` / subject / Snippet,
-/// inside a border titled with the Folder and its Unread count.
+/// under Date Group headers, inside a border; the Preview's title names the
+/// Folder.
 pub struct MessageList<'a> {
     pub theme: &'a Theme,
 }
@@ -57,22 +63,7 @@ impl StatefulWidget for MessageList<'_> {
         let block = Block::bordered().border_style(self.theme.border);
         let inner = block.inner(area);
         block.render(area, buf);
-        // Drawn over the border rather than as a Block title, which allocates.
         let label = view.folder.label();
-        let mut count = StackStr::<40>::new();
-        (if view.messages.is_some() {
-            write!(count, "  {} unread ", view.unread)
-        } else {
-            count.write_str(" ")
-        })
-        .ok();
-
-        let mut x = inner.x;
-        for part in [" ", label, count.as_str()] {
-            let room = usize::from(inner.right().saturating_sub(x));
-            x = buf.set_stringn(x, area.y, part, room, self.theme.title).0;
-        }
-
         let mut text = StackStr::<160>::new();
         let Some(messages) = view.messages.as_deref() else {
             let loading = write!(text, "Loading {label}…").map_or("Loading…", |()| text.as_str());
@@ -89,39 +80,120 @@ impl StatefulWidget for MessageList<'_> {
             return centred("no matches", inner, buf);
         }
 
-        let fitting = capacity(area.height);
+        let now = view.now();
+        let dated = view.search.is_none().then_some(&now);
         if view.selected < view.offset {
             view.offset = view.selected;
-        } else if view.selected >= view.offset + fitting {
-            view.offset = view.selected + 1 - fitting;
+        } else {
+            view.offset = view.offset.max(first_fitting(view, dated, inner.height));
+        }
+
+        // The top group is named on the border itself, as a title.
+        if let Some(group) = group(view, dated, view.offset) {
+            name_group(self.theme, buf, area, area.y, group);
         }
 
         let cards = Cards {
             theme: self.theme,
-            now: (area.width >= MIN_WIDTH_WITH_DATE).then(|| view.now()),
+            now: (area.width >= MIN_WIDTH_WITH_DATE).then_some(now),
         };
 
-        let visible = (view.offset..rows).take(fitting);
-        for (y, row) in (inner.y..).step_by(CARD_HEIGHT.into()).zip(visible) {
-            let index = view.search.as_ref().map_or(Some(row), |s| s.row(row));
-            let Some(thread) = index.and_then(|i| view.threads.get(i)) else {
-                continue;
-            };
+        draw_rows(view, &cards, dated, area, buf);
+    }
+}
 
-            let matched = view.search.as_mut().zip(index).map(|(s, i)| s.matched(i));
-            let card = Rect::new(inner.x, y, inner.width, CARD_HEIGHT).intersection(inner);
-            let shown = Shown {
-                messages,
-                thread,
-                selected: row == view.selected,
-            };
+/// The cards from `view.offset` down inside the bordered `area`, each
+/// group's first under a rule naming it.
+fn draw_rows(
+    view: &mut InboxView,
+    cards: &Cards<'_>,
+    dated: Option<&DateTime<FixedOffset>>,
+    area: Rect,
+    buf: &mut Buffer,
+) {
+    let Some(messages) = view.messages.as_deref() else {
+        return;
+    };
 
-            cards.draw(&shown, card, buf);
-            if let Some(matched) = &matched {
-                cards.highlight(&shown, matched, card, buf);
-            }
+    let inner = area.inner(Margin::new(1, 1));
+    let mut y = inner.y;
+    for row in view.offset..view.rows() {
+        let starts = (row > view.offset)
+            .then(|| starts_group(view, dated, row))
+            .flatten();
+        let gap = if starts.is_some() { GROUP_GAP } else { 0 };
+        // The last card may be cut short; the selected one never is.
+        if y + gap >= inner.bottom() {
+            break;
+        }
+
+        if let Some(group) = starts {
+            y += gap;
+            border::rule(buf, area, y - 1, cards.theme.border);
+            name_group(cards.theme, buf, area, y - 1, group);
+        }
+
+        let index = view.search.as_ref().map_or(Some(row), |s| s.row(row));
+        let Some(thread) = index.and_then(|i| view.threads.get(i)) else {
+            continue;
+        };
+
+        let matched = view.search.as_mut().zip(index).map(|(s, i)| s.matched(i));
+        let card = Rect::new(inner.x, y, inner.width, CARD_HEIGHT).intersection(inner);
+        y += CARD_HEIGHT;
+        let shown = Shown {
+            messages,
+            thread,
+            selected: row == view.selected,
+        };
+
+        cards.draw(&shown, card, buf);
+        if let Some(matched) = &matched {
+            cards.highlight(&shown, matched, card, buf);
         }
     }
+}
+
+/// `─ Today ─` on border row `y` of `pane`, over a rule or the top border.
+fn name_group(theme: &Theme, buf: &mut Buffer, pane: Rect, y: u16, group: DateGroup) {
+    let label = group.label();
+    let parts = [" ", label.as_str(), " "];
+    border::label(buf, pane, (pane.x + 2, y), &parts, theme.title);
+}
+
+/// The Date Group of the Thread at `row`; `None` while undated, as a
+/// Search is, whose rows are ranked by match rather than by date.
+fn group(view: &InboxView, dated: Option<&DateTime<FixedOffset>>, row: usize) -> Option<DateGroup> {
+    let received = &view.row(row)?.received;
+    dated.map(|now| DateGroup::new(received, now))
+}
+
+/// The Date Group that the Thread at `row` starts, below one of another.
+fn starts_group(
+    view: &InboxView,
+    dated: Option<&DateTime<FixedOffset>>,
+    row: usize,
+) -> Option<DateGroup> {
+    let above = group(view, dated, row.checked_sub(1)?);
+    group(view, dated, row).filter(|&group| Some(group) != above)
+}
+
+/// The lowest first row that keeps the selected card whole on a list
+/// `height` rows tall, a gap above each group but the top one.
+fn first_fitting(view: &InboxView, dated: Option<&DateTime<FixedOffset>>, height: u16) -> usize {
+    let mut used = CARD_HEIGHT;
+    let mut first = view.selected;
+    while first > 0 {
+        let gap = starts_group(view, dated, first).map_or(0, |_| GROUP_GAP);
+        if used + CARD_HEIGHT + gap > height {
+            break;
+        }
+
+        used += CARD_HEIGHT + gap;
+        first -= 1;
+    }
+
+    first
 }
 
 /// One card's Thread, among the Folder's Messages.

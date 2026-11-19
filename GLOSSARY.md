@@ -28,6 +28,10 @@ _Avoid_: mail, letter, email
 The ordered rows of the shown Folder, one row per Thread, by its newest arrival first. A row names the senders in order of first appearance (the Account as `me`), counts the Messages when more than one, and shows the oldest subject with the newest Snippet and date.
 _Avoid_: index, table, thread list
 
+**Date Group**:
+A run of Message List rows whose newest Message arrived in the same span of local time: Today, Yesterday, This Week (from Monday), Last Week, then each earlier month of this year, then each older year. Each is headed by its name, and the top one's header stays in view while scrolling. A Search has none.
+_Avoid_: section, bucket, separator
+
 **Thread**:
 The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, each Message is a Thread of its own. In the Message List, those in the shown Folder and the Cache, joined in its count by those found in other Folders once it has been read. Unread while any of its Messages in the shown Folder is.
 _Avoid_: conversation, chain

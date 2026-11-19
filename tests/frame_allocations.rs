@@ -140,7 +140,7 @@ fn scrolling_the_whole_list_from_the_cache_allocates_nothing_per_frame() {
     let server = FakeImap::start(messages());
     let home = Home::for_server(&server);
     let mut t = postal(&home);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains(" · 1/")).unwrap();
     wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());

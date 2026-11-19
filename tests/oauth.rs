@@ -121,7 +121,7 @@ fn postal_refreshes_the_access_token_at_start() {
     let home = signed_in(&server, &oauth);
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &[]);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 
@@ -174,7 +174,7 @@ fn a_revoked_refresh_token_at_start_signs_in_again_as_the_account() {
     assert!(server.commands().is_empty(), "{:?}", server.commands());
 
     grant(&consent);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
     assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
@@ -188,7 +188,7 @@ fn an_access_token_near_its_expiry_is_refreshed_before_a_connection() {
     let home = signed_in(&server, &oauth);
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &[]);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 
@@ -256,7 +256,7 @@ fn a_granted_consent_writes_config_and_refresh_token() {
 
     // The written config must be one Postal starts from.
     let mut t = spawn(&home, &browser, &[]);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 }
@@ -317,7 +317,7 @@ fn tokens_never_reach_the_log() {
     t.wait_until(|s| s.contains("Signed in")).unwrap();
     assert!(t.wait_exit().unwrap().success());
     let mut t = spawn(&home, &browser, &["-vv"]);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 

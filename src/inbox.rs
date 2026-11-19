@@ -6,6 +6,4 @@ pub struct Inbox {
     pub messages: Vec<Message>,
     /// Messages of their Threads found in other Folders, oldest first.
     pub elsewhere: Vec<Message>,
-    /// Unread Messages in the whole Inbox, not only in `messages`.
-    pub unread: usize,
 }

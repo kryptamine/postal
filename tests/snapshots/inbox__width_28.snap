@@ -3,7 +3,7 @@ source: tests/inbox.rs
 expression: screen
 ---
 size: 28x32  cursor: hidden
-┌ Inbox  1 unread ─────────┐
+┌─ 2024 ───────────────────┐
 │ ● Александр              │
 │   Café menu for the wee… │
 │                          │
@@ -13,14 +13,14 @@ size: 28x32  cursor: hidden
 │   Events Team            │
 │   🎉 Launch party on Fr… │
 │                          │
-│                          │
-│                          │
+│   Café Bot <broken       │
+│   (no subject)           │
 └──────────────────────────┘
-┌ 1/4 ─────────────────────┐
+┌ Inbox · 1/4 ─────────────┐
 │ From    Александр        │
 │ Subject Café menu for t… │
 │ Date    Sun, 17 Nov 202… │
-│                          │
+├──────────────────────────┤
 │                          │
 │                          │
 │                          │

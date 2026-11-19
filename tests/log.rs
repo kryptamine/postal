@@ -59,7 +59,7 @@ fn run(
     let idles = || server.commands().iter().filter(|c| *c == "IDLE").count();
     let before = idles();
     let mut t = spawn(home, args, env);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains(" · 1/")).unwrap();
     wait_for(|| idles() > before);
     for &key in keys {
         t.send(key).unwrap();

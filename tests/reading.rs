@@ -121,7 +121,7 @@ fn the_help_popup_lists_the_reading_keys() {
         .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains(" · 1/")).unwrap();
     t.send(Key::Enter).unwrap();
     t.wait_until(reading).unwrap();
     t.send(Key::Char('?')).unwrap();

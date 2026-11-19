@@ -285,8 +285,14 @@ fn top(screen: &Screen) -> String {
     screen.row_text(14).trim_matches(['│', ' ']).to_owned()
 }
 
+/// Waits for `expected` on the body's first row, under a header that
+/// stays put.
 fn wait_top(t: &mut Terminal, expected: &str) {
-    t.wait_until(|s| top(s) == expected).unwrap();
+    t.wait_until(|s| {
+        let body = s.row_text(18).trim_matches(['│', ' ']).to_owned();
+        top(s).starts_with("From") && body == expected
+    })
+    .unwrap();
 }
 
 #[test]
@@ -302,21 +308,22 @@ fn scrolls_half_a_page_and_back_to_the_top_on_another_message() {
     t.wait_until(|s| top(s).starts_with("From") && s.row_text(18).contains("Line 1"))
         .unwrap();
 
-    // 14 rows of text: half a page is 7, past the 4 header rows.
+    // 14 rows of text: half a page is 7, scrolling the 10 body rows under
+    // the header and its rule.
     t.send(Key::Ctrl('d')).unwrap();
-    wait_top(&mut t, "Line 4");
+    wait_top(&mut t, "Line 8");
     t.send(Key::PageDown).unwrap();
-    wait_top(&mut t, "Line 11");
+    wait_top(&mut t, "Line 15");
     t.send(Key::Ctrl('u')).unwrap();
-    wait_top(&mut t, "Line 4");
+    wait_top(&mut t, "Line 8");
     // Scrolling stops with the last line at the bottom.
     for _ in 0..10 {
         t.send(Key::Ctrl('d')).unwrap();
     }
 
-    wait_top(&mut t, "Line 27");
+    wait_top(&mut t, "Line 31");
     t.send(Key::PageUp).unwrap();
-    wait_top(&mut t, "Line 20");
+    wait_top(&mut t, "Line 24");
 
     t.send(Key::Char('j')).unwrap();
     t.wait_until(|s| s.contains("Short body")).unwrap();

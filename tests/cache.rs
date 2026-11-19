@@ -19,6 +19,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
+    picker::wait_picked,
 };
 use termlens::{Color, Key, Screen, Terminal};
 
@@ -26,7 +27,7 @@ const ITEMS: &str = "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID X-GM-THRID BODY
 
 fn postal(home: &Home) -> Terminal {
     Terminal::builder()
-        .size(80, 33)
+        .size(80, 38)
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
@@ -45,7 +46,7 @@ fn quit(mut t: Terminal) {
 /// Runs Postal until the server's rows are on screen, then quits.
 fn first_run(home: &Home, server: &FakeImap) {
     let mut t = postal(home);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains(" · 1/")).unwrap();
     wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     quit(t);
     server.clear_commands();
@@ -89,10 +90,11 @@ fn a_second_run_shows_the_cache_before_the_server_answers() {
     server.stall(Stall::Greeting);
     let mut t = postal(&home);
     let screen = t
-        .snapshot_after(|s| s.contains("Oldest") && s.contains(" Inbox  1 unread "))
+        .snapshot_after(|s| s.contains("Oldest") && s.contains(" Inbox · 1/4 "))
         .unwrap();
-    assert!(server.commands().is_empty(), "{:#?}", server.commands());
     assert_eq!(card(&screen, "Carol"), Some(true), "{screen}");
+    wait_picked(&mut t, "Inbox 1");
+    assert!(server.commands().is_empty(), "{:#?}", server.commands());
     quit(t);
 }
 
@@ -111,9 +113,9 @@ fn resync_picks_up_new_expunged_and_flag_changed_messages() {
     let screen = t
         .snapshot_after(|s| s.contains("Brand new") && !s.contains("Oldest"))
         .unwrap();
+    wait_picked(&mut t, "Inbox 2");
     quit(t);
 
-    assert!(screen.contains(" Inbox  2 unread "), "{screen}");
     assert_eq!(card(&screen, "Erin"), Some(true), "{screen}");
     assert_eq!(card(&screen, "Carol"), Some(false), "{screen}");
     assert_eq!(card(&screen, "Alice"), Some(true), "{screen}");
@@ -212,8 +214,8 @@ fn flags_are_fetched_in_full_without_condstore() {
 
     server.set_seen(FIRST_UID + 2, true);
     let mut t = postal(&home);
-    t.wait_until(|s| s.contains(" Inbox  0 unread ") && card(s, "Carol") == Some(false))
-        .unwrap();
+    t.wait_until(|s| card(s, "Carol") == Some(false)).unwrap();
+    wait_picked(&mut t, "Inbox");
     quit(t);
     assert!(
         server
@@ -243,11 +245,10 @@ fn a_uidvalidity_change_keeps_the_old_rows_until_the_refetch() {
     assert!(waiting.contains("Newest"), "{waiting}");
 
     server.release();
-    let screen = t
-        .snapshot_after(|s| s.contains("Renumbered") && !s.contains("Newest"))
+    t.wait_until(|s| s.contains("Renumbered") && !s.contains("Newest"))
         .unwrap();
+    wait_picked(&mut t, "Inbox");
     quit(t);
-    assert!(screen.contains(" Inbox  0 unread "), "{screen}");
 
     // The next run resyncs against the new UIDVALIDITY rather than refetching.
     server.clear_commands();
@@ -268,7 +269,7 @@ fn a_corrupt_cache_is_rebuilt() {
     fs::create_dir_all(home.cache_path().parent().unwrap()).unwrap();
     fs::write(home.cache_path(), "not a database, just bytes ".repeat(100)).unwrap();
     let mut t = postal(&home);
-    t.wait_until(|s| s.contains(" unread ") && hint_line(s).ends_with("cache rebuilt"))
+    t.wait_until(|s| s.contains(" · 1/") && hint_line(s).ends_with("cache rebuilt"))
         .unwrap();
     wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     quit(t);
@@ -277,7 +278,7 @@ fn a_corrupt_cache_is_rebuilt() {
 
     // A Cache that opens as it is says nothing.
     let mut t = postal(&home);
-    t.wait_until(|s| s.contains(" unread ")).unwrap();
+    t.wait_until(|s| s.contains(" · 1/")).unwrap();
     let screen = t.wait_stable(Duration::from_millis(300)).unwrap();
     assert!(!hint_line(&screen).contains("cache rebuilt"), "{screen}");
     quit(t);

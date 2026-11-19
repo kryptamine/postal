@@ -3,7 +3,7 @@ source: tests/help.rs
 expression: screen
 ---
 size: 80x36  cursor: hidden
-┌ Inbox  0 unread ─────────────────────────────────────────────────────────────┐
+┌─ 2024 ───────────────────────────────────────────────────────────────────────┐
 │   Bob     ┌ Help ────────────────────────────────────────────────┐2024-11-18 │
 │   Newer   │                                                      │           │
 │   Newer bo│ Navigate                                             │           │
@@ -18,11 +18,11 @@ size: 80x36  cursor: hidden
 │           │ Links                                                │           │
 │           │ o                     label the links in the Preview │           │
 └───────────│                                                      │───────────┘
-┌ 1/2 ──────│ View                                                 │───────────┐
+┌ Inbox · 1/│ View                                                 │───────────┐
 │ From    Bo│ v                     rendered / text view of HTML   │           │
 │ Subject Ne│                                                      │           │
 │ Date    Mo│ App                                                  │           │
-│           │ ?                     this help                      │           │
+├───────────│ ?                     this help                      │───────────┤
 │ Newer body│ q        ^c           quit                           │           │
 │           │ ^z                    suspend to the shell           │           │
 │           │                                                      │           │

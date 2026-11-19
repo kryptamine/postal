@@ -16,6 +16,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    picker::{picked, picker, wait_picked},
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -103,50 +104,6 @@ fn ready(server: &FakeImap, home: &Home) -> Terminal {
     t
 }
 
-/// The popup's rows inside its border, trimmed: the columns between the
-/// corners of the box titled `Folders`. Empty until the whole box is drawn,
-/// since a snapshot can land between the bytes of one frame.
-fn picker(screen: &Screen) -> Vec<String> {
-    let chars = |row: u16| screen.row_text(row).chars().collect::<Vec<_>>();
-    let Some(top) = (0..screen.rows()).find(|&r| screen.row_text(r).contains("┌ Folders")) else {
-        return Vec::new();
-    };
-
-    let corners = chars(top);
-    let left = corners.iter().position(|&c| c == '┌').unwrap();
-    let Some(right) = corners[left..].iter().position(|&c| c == '┐') else {
-        return Vec::new();
-    };
-
-    let right = left + right;
-    let Some(bottom) = (top + 1..screen.rows()).find(|&r| chars(r).get(left) == Some(&'└'))
-    else {
-        return Vec::new();
-    };
-
-    (top + 1..bottom)
-        .map(chars)
-        .map(|row| {
-            row[left + 1..right]
-                .iter()
-                .collect::<String>()
-                .trim()
-                .to_owned()
-        })
-        .collect()
-}
-
-/// The picker's Folder rows, each its label and its Unread count if shown.
-/// The first two rows are the Query and the rule under it.
-fn picked(screen: &Screen) -> Vec<String> {
-    picker(screen)
-        .into_iter()
-        .skip(2)
-        .filter(|row| !row.is_empty())
-        .map(|row| row.split_whitespace().collect::<Vec<_>>().join(" "))
-        .collect()
-}
-
 fn title(screen: &Screen) -> String {
     screen.row_text(0)
 }
@@ -202,7 +159,7 @@ fn the_picker_lists_special_use_folders_first_then_the_rest_with_unread_counts()
         !statuses.iter().any(|c| c.contains("\"[Gmail]\"")),
         "{commands:?}"
     );
-    assert!(title(&screen).contains("Inbox  1 unread"), "{screen}");
+    assert!(title(&screen).contains(" Inbox · "), "{screen}");
     quit(t);
 }
 
@@ -246,7 +203,7 @@ fn a_query_narrows_the_picker_and_enter_shows_the_folder_live() {
     t.send(Key::Ctrl('n')).unwrap();
     t.send(Key::Enter).unwrap();
     let screen = t
-        .snapshot_after(|s| title(s).contains("Work/Clients  1 unread"))
+        .snapshot_after(|s| title(s).contains(" Work/Clients · "))
         .unwrap();
     assert!(picker(&screen).is_empty(), "{screen}");
     let screen = t.snapshot_after(|s| s.contains("Client brief")).unwrap();
@@ -267,15 +224,14 @@ fn a_query_narrows_the_picker_and_enter_shows_the_folder_live() {
         "Work/Clients",
         message("Grace", "Client reply", "2024-02-04T09:00:00Z").unread(),
     );
-    let screen = t
-        .snapshot_after(|s| s.contains("Client reply") && title(s).contains("2 unread"))
-        .unwrap();
+    let screen = t.snapshot_after(|s| s.contains("Client reply")).unwrap();
     assert!(screen.contains("Client brief"), "{screen}");
+    wait_picked(&mut t, "Work/Clients 2");
 
     // Back to the Inbox by its label.
     show(&mut t, "inbox");
     let screen = t.snapshot_after(|s| s.contains("Inbox newest")).unwrap();
-    assert!(title(&screen).contains("Inbox  1 unread"), "{screen}");
+    assert!(title(&screen).contains(" Inbox · "), "{screen}");
     assert!(!screen.contains("Client brief"), "{screen}");
     quit(t);
 }
@@ -299,7 +255,7 @@ fn from_reading_escape_comes_back_to_the_message_and_enter_goes_to_the_list() {
 
     show(&mut t, "sent");
     let screen = t
-        .snapshot_after(|s| title(s).contains("Sent  0 unread") && s.contains("Sent older"))
+        .snapshot_after(|s| title(s).contains(" Sent · ") && s.contains("Sent older"))
         .unwrap();
     assert_eq!(selected_subject(&screen).as_deref(), Some("Sent newest"));
     quit(t);
@@ -403,7 +359,7 @@ fn offline_the_picker_and_a_cached_folder_come_from_the_cache() {
     let screen = t
         .snapshot_after(|s| s.contains("Inbox newest") && s.contains("offline"))
         .unwrap();
-    assert!(title(&screen).contains("Inbox  1 unread"), "{screen}");
+    assert!(title(&screen).contains(" Inbox · "), "{screen}");
 
     t.send(Key::Char('f')).unwrap();
     let screen = t
@@ -415,7 +371,7 @@ fn offline_the_picker_and_a_cached_folder_come_from_the_cache() {
         .unwrap();
     t.send(Key::Enter).unwrap();
     let screen = t
-        .snapshot_after(|s| title(s).contains("Work  2 unread") && s.contains("Work older"))
+        .snapshot_after(|s| title(s).contains(" Work · ") && s.contains("Work older"))
         .unwrap();
     assert!(screen.contains("offline"), "{screen}");
 

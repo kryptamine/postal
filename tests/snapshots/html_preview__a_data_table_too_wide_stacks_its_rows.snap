@@ -3,7 +3,7 @@ source: tests/html_preview.rs
 expression: screen.with_styles()
 ---
 size: 60x50  cursor: hidden
-┌ Inbox  0 unread ─────────────────────────────────────────┐
+┌─ 2024 ───────────────────────────────────────────────────┐
 │   Sender                                      2024-11-18 │
 │   Subject                                                │
 │   Thanks for your order #4821. Item Qty Price Enamel ca… │
@@ -25,11 +25,11 @@ size: 60x50  cursor: hidden
 │                                                          │
 │                                                          │
 └──────────────────────────────────────────────────────────┘
-┌ 1/1 ─────────────────────────────────────────────────────┐
+┌ Inbox · 1/1 ─────────────────────────────────────────────┐
 │ From    Sender                                           │
 │ Subject Subject                                          │
 │ Date    Mon, 18 Nov 2024 09:00                           │
-│                                                          │
+├──────────────────────────────────────────────────────────┤
 │ Thanks for your order #4821.                             │
 │                                                          │
 │ Item: Enamel camping mug, forest green, 350 ml, set of   │
@@ -55,7 +55,7 @@ size: 60x50  cursor: hidden
  j/k move  ^d/^u scroll  enter read  o links  ?: help
 
 styles:
-0: 0 dim; 1-17 fg=4 bold; 18-59 dim
+0: 0-1 dim; 2-7 fg=4 bold; 8-59 dim
 1: 0 dim; 1-58 fg=4 reverse; 59 dim
 2: 0 dim; 1-58 fg=4 reverse; 59 dim
 3: 0 dim; 1-58 fg=4 reverse; 59 dim
@@ -77,11 +77,11 @@ styles:
 19: 0 dim; 59 dim
 20: 0 dim; 59 dim
 21: 0-59 dim
-22: 0 dim; 1-5 fg=4 bold; 6-59 dim
+22: 0 dim; 1-13 fg=4 bold; 14-59 dim
 23: 0 dim; 2-9 fg=4; 10-15 fg=5; 59 dim
 24: 0 dim; 2-9 fg=4; 10-16 bold; 59 dim
 25: 0 dim; 2-9 fg=4; 10-31 fg=6; 59 dim
-26: 0 dim; 59 dim
+26: 0-59 dim
 27: 0 dim; 59 dim
 28: 0 dim; 59 dim
 29: 0 dim; 2-7 bold; 59 dim

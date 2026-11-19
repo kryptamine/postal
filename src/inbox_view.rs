@@ -23,8 +23,6 @@ pub struct InboxView {
     pub threads: Vec<Thread>,
     /// Narrows the rows shown; `selected` and `offset` index those.
     pub search: Option<Search>,
-    /// The server's count over the whole Folder.
-    pub unread: usize,
     pub selected: usize,
     /// Index of the first visible card; kept by the widget so the selection stays on screen.
     pub offset: usize,
@@ -46,7 +44,6 @@ impl InboxView {
             elsewhere: Vec::new(),
             threads: Vec::new(),
             search: None,
-            unread: 0,
             selected: 0,
             offset: 0,
             preview_scroll: 0,
@@ -78,7 +75,6 @@ impl InboxView {
             self.preview_scroll = 0;
         }
 
-        self.unread = inbox.unread;
         self.zone = Local::now().offset().fix();
     }
 
@@ -90,7 +86,6 @@ impl InboxView {
         self.elsewhere.clear();
         self.threads.clear();
         self.search = None;
-        self.unread = 0;
         self.selected = 0;
         self.offset = 0;
         self.preview_scroll = 0;

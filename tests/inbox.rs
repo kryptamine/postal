@@ -13,6 +13,7 @@ use chrono::{Datelike, Utc};
 use support::{
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    picker::wait_picked,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -56,7 +57,7 @@ fn wait_selected(t: &mut Terminal, subject: &str) {
 }
 
 fn loaded(screen: &Screen) -> bool {
-    screen.contains(" unread ")
+    screen.contains(" · 1/")
 }
 
 fn quit(mut t: Terminal) {
@@ -115,7 +116,7 @@ fn shows_the_newest_messages_first_and_moves_the_selection() {
     wait_selected(&mut t, "Third");
     t.send(Key::Char('k')).unwrap();
     wait_selected(&mut t, "Second newest");
-    // Only three cards fit, so the last one is reached by scrolling.
+    // The last card is off screen, reached by scrolling.
     t.send(Key::Char('G')).unwrap();
     wait_selected(&mut t, "Oldest");
     t.send(Key::Char('j')).unwrap();
@@ -130,6 +131,36 @@ fn shows_the_newest_messages_first_and_moves_the_selection() {
     wait_selected(&mut t, "Third");
     t.send(Key::Home).unwrap();
     wait_selected(&mut t, "Newest");
+    quit(t);
+}
+
+// Scrolled into a group, its header stays on top, and the selected card
+// stays whole below the headers; a Search, ranked by match, has none.
+#[test]
+fn heads_each_date_group_and_keeps_the_top_one_in_view() {
+    let server = FakeImap::start(four_messages());
+    let home = Home::for_server(&server);
+    // Tall enough for Dave and Bob, not for Alice above them.
+    let mut t = postal_with(&home, (80, 28), &[]);
+    t.wait_until(loaded).unwrap();
+
+    t.send(Key::Char('G')).unwrap();
+    let screen = t
+        .snapshot_after(|s| selected_subject(s).as_deref() == Some("Oldest"))
+        .unwrap();
+    let rows: Vec<_> = (0..9).map(|row| screen.row_text(row)).collect();
+    assert!(rows[0].starts_with("┌─ 2024 ─"), "{screen}");
+    assert!(rows[1].contains("Dave"), "{screen}");
+    assert!(rows[4].trim_matches('│').trim().is_empty(), "{screen}");
+    assert!(rows[5].starts_with("├─ 2023 ─"), "{screen}");
+    assert!(rows[7].contains("Oldest"), "{screen}");
+
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("Oldest").unwrap();
+    let screen = t.snapshot_after(|s| !s.contains("Dave")).unwrap();
+    assert!(!screen.contains("─ 2023 ─"), "{screen}");
+    assert!(!screen.contains("─ 2024 ─"), "{screen}");
+    t.send(Key::Esc).unwrap();
     quit(t);
 }
 
@@ -204,10 +235,9 @@ fn counts_unread_over_the_whole_inbox() {
     let server = FakeImap::start(five_hundred_and_three(true));
     let home = Home::for_server(&server);
     let mut t = postal(&home);
-    let screen = t.snapshot_after(loaded).unwrap();
+    t.wait_until(loaded).unwrap();
+    wait_picked(&mut t, "Inbox 4");
     quit(t);
-
-    assert!(screen.row_text(0).contains(" Inbox  4 unread "), "{screen}");
 }
 
 #[test]
@@ -232,8 +262,9 @@ fn draws_cards_at_each_width() {
 #[test]
 fn shows_the_three_date_forms() {
     let today = Utc::now().date_naive();
-    // On 1 January no earlier day of this year exists to show "1 Jan".
-    if today.ordinal() == 1 {
+    // 1 January shows as "1 Jan" under "January" only once it is older
+    // than Last Week, which reaches back at most 13 days.
+    if today.ordinal() <= 14 {
         return;
     }
 
@@ -303,14 +334,22 @@ fn colours_unless_no_color_is_set() {
     assert_eq!(colour(&moved, 1, 2), termlens::Color::Indexed(3));
     assert_eq!(colour(&coloured, 4, 4), termlens::Color::Indexed(5));
     assert_eq!(colour(&coloured, 4, 77), termlens::Color::Indexed(6));
-    assert_eq!(colour(&coloured, 0, 2), termlens::Color::Indexed(4));
+    let title = |s: &Screen| {
+        (0..s.rows())
+            .find(|&row| s.row_text(row).starts_with("┌ Inbox ·"))
+            .unwrap()
+    };
+    assert_eq!(
+        colour(&coloured, title(&coloured), 2),
+        termlens::Color::Indexed(4)
+    );
     for screen in [&coloured, &plain] {
         let newest = style(screen, 1, 4);
         assert!(newest.reverse, "the selection survives NO_COLOR");
         assert!(newest.bold, "the Unread card stays bold");
         assert_eq!(screen.cell(1, 2).unwrap().contents(), "●");
         assert!(style(screen, 0, 0).dim, "the border is muted");
-        assert!(style(screen, 0, 2).bold, "the title is bold");
+        assert!(style(screen, title(screen), 2).bold, "the title is bold");
     }
 
     let plain_cells = (0..plain.rows()).flat_map(|r| (0..plain.cols()).map(move |c| (r, c)));

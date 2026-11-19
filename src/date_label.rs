@@ -2,11 +2,7 @@ use std::fmt::Write;
 
 use chrono::{DateTime, Datelike, FixedOffset, Timelike};
 
-use crate::stack_str::StackStr;
-
-const MONTHS: [&str; 12] = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
+use crate::{date_group::month_of, stack_str::StackStr};
 
 /// The widest form, `2024-11-17`.
 const WIDTH: usize = 10;
@@ -27,7 +23,10 @@ impl DateLabel {
                 label,
                 "{} {}",
                 received.day(),
-                usize::try_from(received.month0()).map_or("", |m| MONTHS[m])
+                month_of(received.date_naive())
+                    .name()
+                    .get(..3)
+                    .unwrap_or_default()
             )
         } else {
             write!(

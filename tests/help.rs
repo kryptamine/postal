@@ -42,7 +42,7 @@ fn two_messages() -> Vec<FakeMessage> {
 }
 
 fn loaded(screen: &Screen) -> bool {
-    screen.contains(" unread ")
+    screen.contains(" · 1/")
 }
 
 fn hint_line(screen: &Screen) -> String {
