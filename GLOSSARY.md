@@ -112,6 +112,26 @@ _Avoid_: filter, find, fzf, lookup
 The text typed into a Search.
 _Avoid_: pattern, search string
 
+**Compose**:
+Writing a new Message with `c`: Postal opens `$EDITOR` on a Draft holding its headers and an empty body.
+_Avoid_: new mail, write
+
+**Reply**:
+Writing a Message in answer to one with `r`, to its sender, in its Thread, with its body quoted. **Reply All** (`R`) adds everyone else it was sent to, but the Account.
+_Avoid_: respond, answer
+
+**Draft**:
+A Message being written, kept on this machine until it is sent or discarded (ADR 0013).
+_Avoid_: unsent mail, composition
+
+**Send**:
+Handing a Draft to the server over SMTP from its preview with `y`; it waits in the Outbox until the server accepts it.
+_Avoid_: submit, deliver
+
+**Outbox**:
+The Messages sent but not yet accepted by the server, retried on each sync (ADR 0013).
+_Avoid_: queue, pending, spool
+
 **Onboarding**:
 The first-run flow that turns an email address into a working Account.
 _Avoid_: setup wizard, registration
