@@ -24,6 +24,7 @@ fn main() {
         .files(sources(Path::new("cpp"), "cpp"))
         .include(litehtml.join("include"))
         .include("cpp")
+        .warnings_into_errors(true)
         .opt_level(2)
         .compile("cell_grid");
 
