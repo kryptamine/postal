@@ -120,7 +120,7 @@ fn a_statement_keeps_its_table_rules_and_centres_its_button() {
 }
 
 // A light terminal keeps the same layout; the near-black button and the
-// grey text darken or lighten only as far as they must to read.
+// yellow rule darken or lighten only as far as they must to show.
 #[test]
 fn a_statement_on_a_light_terminal() {
     let run = Run {
@@ -954,4 +954,56 @@ fn a_copyright_line_in_the_body_is_not_the_footer() {
     ));
     let screen = preview(body, &DEFAULT, "© 2024 Acme");
     assert!(!dim(&screen, "© 2024 Acme"), "{}", screen.with_styles());
+}
+
+// Mail sets its secondary text in any grey it likes; here each is the one
+// muted style, and the mail's ordinary text is the terminal's own.
+#[test]
+fn text_greyer_than_the_ordinary_is_muted() {
+    let body = html(
+        "<p style=\"color:#222222\">Receipt for the month of May, paid in full.</p>\
+         <p style=\"color:#8a8a8a\">Invoice number</p><p style=\"color:#999999\">Paid on</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Paid on");
+    let (row, col) = at(&screen, "Receipt");
+    assert_eq!(fg(&screen, row, col), Color::Default);
+    assert!(!dim(&screen, "Receipt"));
+    for text in ["Invoice number", "Paid on"] {
+        let (row, col) = at(&screen, text);
+        assert!(dim(&screen, text), "{}", screen.with_styles());
+        assert_eq!(fg(&screen, row, col), Color::Default);
+    }
+}
+
+// A mail set whole in a mid grey means it as its ordinary text: muted, the
+// whole body would be hard to read.
+#[test]
+fn a_mail_set_in_grey_is_not_muted() {
+    let body = html(
+        "<div style=\"color:#666666\"><p>The whole body of the mail is set in one grey.</p>\
+         <p style=\"color:#aaaaaa\">A lighter note</p></div>",
+    );
+    let screen = preview(body, &DEFAULT, "A lighter note");
+    assert!(!dim(&screen, "The whole body"), "{}", screen.with_styles());
+    assert!(dim(&screen, "A lighter note"), "{}", screen.with_styles());
+}
+
+// A mail's links, titles and prices come in shades of its one colour, and
+// each drew in its own. A colour of another hue means something else.
+#[test]
+fn shades_of_one_colour_are_one_colour() {
+    let body = html(
+        "<p style=\"color:#1a73e8\">A title in the brand blue, the most used shade</p>\
+         <p style=\"color:#4285f4\">A lighter blue link</p>\
+         <p style=\"color:#d93025\">An overdue amount in red</p>",
+    );
+    let screen = preview(body, &DEFAULT, "overdue");
+    let colour = |text: &str| {
+        let (row, col) = at(&screen, text);
+        fg(&screen, row, col)
+    };
+
+    assert!(matches!(colour("A title"), Color::Rgb(..)));
+    assert_eq!(colour("A lighter blue"), colour("A title"));
+    assert_ne!(colour("An overdue"), colour("A title"));
 }

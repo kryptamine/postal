@@ -51,7 +51,7 @@ styles:
 3: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-73 fg=6; 119 dim
 4: 0 dim; 41-42 dim; 119 dim
 5: 0 dim; 41-42 dim; 44-117 fg=#1a73e8; 119 dim
-6: 0 dim; 41-42 dim; 44-46 fg=#1a73e8; 47-116 fg=#666666 bold; 117 fg=#1a73e8; 119 dim
+6: 0 dim; 41-42 dim; 44-46 fg=#1a73e8; 47-116 bold; 117 fg=#1a73e8; 119 dim
 7: 0 dim; 41-42 dim; 44-117 fg=#1a73e8; 119 dim
 8: 0 dim; 41-42 dim; 119 dim
 9: 0 dim; 41-42 dim; 119 dim
@@ -71,7 +71,7 @@ styles:
 23: 0 dim; 41-42 dim; 71-73 bg=#191c1f; 74-90 fg=#ffffff bg=#191c1f bold; 119 dim
 24: 0 dim; 41-42 dim; 119 dim
 25: 0 dim; 41-42 dim; 44 fg=#b08403; 45-117 dim; 119 dim
-26: 0 dim; 41-42 dim; 44 fg=#b08403; 45-47 dim; 48-116 fg=#5f6368; 117 dim; 119 dim
+26: 0 dim; 41-42 dim; 44 fg=#b08403; 45-117 dim; 119 dim
 27: 0 dim; 41-42 dim; 44 fg=#b08403; 45-117 dim; 119 dim
 28: 0 dim; 41-42 dim; 44-47 dim italic; 119 dim
 29: 0 dim; 41-42 dim; 119 dim

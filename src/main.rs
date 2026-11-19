@@ -49,6 +49,7 @@ mod outlines;
 mod pager;
 mod pager_text;
 mod paint;
+mod palette;
 mod panic_hook;
 mod partial_config;
 mod picker_popup;

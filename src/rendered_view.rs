@@ -7,7 +7,10 @@ use crate::{
     marks::Marks,
     outlines::{self, Outline},
     paint::Paint,
-    render_process, spacer_rows,
+    palette::{Palette, Role},
+    render_process,
+    rgb::{Rgb, WHITE},
+    spacer_rows,
     styled_line::StyledLine,
 };
 
@@ -19,6 +22,13 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
     let mut hrefs: HashMap<u32, Arc<str>> = HashMap::new();
     let mut lines: Vec<StyledLine> = Vec::new();
     let outlines = outlines::of(&grid);
+    let palette = Palette::new(
+        grid.cells()
+            .iter()
+            .zip(&outlines)
+            .filter(|&(cell, &outline)| worded(cell) && shown_bg(cell, outline, colours).is_none())
+            .filter_map(|(cell, _)| Some((cell.fg()?, cell.bg().unwrap_or(WHITE)))),
+    );
     let mut outline = outlines.iter().copied();
     for row in grid.rows() {
         let mut line = StyledLine::new();
@@ -29,7 +39,7 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
                 continue;
             }
 
-            last = look(cell, outline, colours, last);
+            last = look(cell, outline, (colours, &palette), last);
             let (marks, paint) = last;
             let target = match (outline, cell.link()) {
                 (Outline::Line(..), _) | (_, 0) => None,
@@ -63,12 +73,28 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
     Some(lines)
 }
 
+/// A glyph of the mail's own text: not a blank, a border or an alt.
+fn worded(cell: &Cell) -> bool {
+    cell.has(cell_grid::TEXT)
+        && !cell.has(cell_grid::BORDER | cell_grid::ALT | cell_grid::WIDE_TAIL)
+        && cell.glyph() != " "
+}
+
+/// The fill left under `cell`, moved onto the terminal's background.
+fn shown_bg(cell: &Cell, outline: Outline, colours: MailColours) -> Option<Rgb> {
+    if outline == Outline::Fill {
+        colours.background(cell.bg(), cell.panel())
+    } else {
+        None
+    }
+}
+
 /// A blank cell takes the look of the cell before it on the same
 /// background, so the words either side of it stay one run.
 fn look(
     cell: &Cell,
     outline: Outline,
-    colours: MailColours,
+    (colours, palette): (MailColours, &Palette),
     before: (Marks, Paint),
 ) -> (Marks, Paint) {
     if let Outline::Line(_, colour) = outline {
@@ -76,12 +102,7 @@ fn look(
         return (marks, Paint { fg, bg: None });
     }
 
-    let bg = if outline == Outline::Fill {
-        colours.background(cell.bg(), cell.panel())
-    } else {
-        None
-    };
-
+    let bg = shown_bg(cell, outline, colours);
     if cell.has(cell_grid::BORDER) {
         let (fg, marks) = colours.line(cell.fg(), bg);
         return (marks, Paint { fg, bg });
@@ -108,6 +129,16 @@ fn look(
     .into_iter()
     .filter(|&(on, _)| on)
     .fold(Marks::default(), |marks, (_, mark)| marks.with(mark));
-    let fg = colours.text(cell.fg(), bg);
+    // On the terminal's background a colour has a role; on a fill left in
+    // place it is read against that fill.
+    let (fg, marks) = match (cell.fg(), bg) {
+        (Some(fg), None) => match palette.role(fg, cell.bg().unwrap_or(WHITE)) {
+            Role::Ink => (None, marks),
+            Role::Muted => (None, marks.with(Marks::MUTED)),
+            Role::Accent(accent) => (colours.text(Some(accent), None), marks),
+        },
+        (fg, bg) => (colours.text(fg, bg), marks),
+    };
+
     (marks, Paint { fg, bg })
 }

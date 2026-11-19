@@ -5,7 +5,7 @@ use crate::{
 };
 
 /// Text this dark on the page is its ordinary text: the terminal's own fg.
-const INK: f32 = 0.12;
+pub const INK: f32 = 0.12;
 /// The least contrast with what is under it, as WCAG ratios: a block must
 /// stand out from the terminal, text must read, a line must show.
 const BLOCK: f32 = 1.8;

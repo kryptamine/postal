@@ -178,10 +178,27 @@ no wait), takes a dark one when there is no answer, and moves the mail onto it
 and becomes the terminal's own; a grey section too close to the terminal's
 background becomes the terminal's too, or it would be moved into a grey slab,
 while a coloured one, or a box small enough to be a control, moves away from
-it, so a dark button stays visible on a dark terminal; text
-too dark for the page's ordinary ink becomes the terminal's fg, other text
-moves until it reads (WCAG 4.5:1); a grey border on the terminal's background
-is drawn dim like Postal's own. The layout marks a background from a box four
+it, so a dark button stays visible on a dark terminal; text on a fill left
+in place moves until it reads (WCAG 4.5:1); a grey border on the terminal's
+background is drawn dim like Postal's own.
+
+Text on the terminal's background has a role instead of the mail's colour
+(`src/palette.rs`), so every mail reads in the same ink:
+
+- A grey, channels under 40 apart, is ordinary text and takes the
+  terminal's fg when it is set off from what the mail put under it as well
+  as the mail's most used grey is, or 7:1 if that is less. A mail set whole
+  in `#666` means it as ink; muted, its body would be hard to read. A white
+  title on a dark band whose fill went is ink too.
+- A grey less set off than that is secondary text, drawn muted.
+- A colour too dark on a light page to tell from black is ink.
+- Any other colour is drawn as the shade the mail uses most among those
+  within 30° of its hue, moved until it reads: links, titles and prices in
+  three blues are one blue, and a red beside them stays red.
+
+On 539 cached mails this cut the cells of coloured text to a quarter, and
+the text colours of a mail from 2 to 1 at the median, from 5 to 3 at the
+ninth decile. The layout marks a background from a box four
 rows high or half the pane wide as a section. It reads the page and grey
 thresholds too, so they are part of the grid's format in `cpp/cell_grid.h`
 and `src/cell_grid.rs`. `NO_COLOR` keeps the layout and drops every
