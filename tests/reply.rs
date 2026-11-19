@@ -394,3 +394,28 @@ fn a_sent_reply_flags_the_original_answered() {
         .unwrap();
     assert_eq!(message.in_reply_to().as_text(), Some("notes-2@example.com"));
 }
+
+// `\Answered` tells other clients the Message was answered: a Reply still
+// in the Outbox has not been.
+#[test]
+fn a_reply_flags_the_original_answered_only_once_smtp_accepts_it() {
+    let imap = FakeImap::start(vec![from_ada(plain())]);
+    let smtp = FakeSmtp::start();
+    smtp.down();
+    let home = home(&imap, &smtp);
+    let mut t = postal(&home);
+    t.wait_until(listed).unwrap();
+    send_and_wait(&mut t, &[Key::Char('r')]);
+    t.send(Key::Char('y')).unwrap();
+    t.wait_until(|s| listed(s) && s.contains("1 outbox"))
+        .unwrap();
+    wait_for(|| smtp.turned_away() > 0);
+    assert!(!imap.answered(INBOX, FIRST_UID));
+
+    smtp.up();
+    imap.deliver(FakeMessage::new("Bob", "Lunch", "2024-11-19T09:00:00Z"));
+    wait_for(|| imap.answered(INBOX, FIRST_UID));
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(smtp.received().len(), 1);
+}

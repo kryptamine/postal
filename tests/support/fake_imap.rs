@@ -38,6 +38,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use super::{fake_body::FakeBody, relay::relay};
 
+mod appends;
 mod moves;
 
 pub const EMAIL: &str = "me@example.com";
@@ -262,6 +263,10 @@ struct Inbox {
     cut: u64,
     /// The `cut` each connection being served opened under.
     open: Vec<u64>,
+    /// Each `APPEND`'s Folder and Message, in order.
+    appended: Vec<(String, String)>,
+    /// Drops the connection on each `APPEND` instead of answering it.
+    cut_appends: bool,
 }
 
 impl Inbox {
@@ -301,6 +306,8 @@ impl FakeImap {
             refused: Vec::new(),
             cut: 0,
             open: Vec::new(),
+            appended: Vec::new(),
+            cut_appends: false,
         }));
         let server = Self {
             port,
@@ -464,6 +471,16 @@ impl FakeImap {
         folder.bump();
         folder.messages.clear();
         drop(inbox);
+    }
+
+    /// Each Message saved by `APPEND`, with the Folder it was saved to.
+    pub fn appended(&self) -> Vec<(String, String)> {
+        self.inbox.lock().unwrap().appended.clone()
+    }
+
+    /// Drops the connection on each `APPEND` from now on, or answers again.
+    pub fn cut_appends(&self, cut: bool) {
+        self.inbox.lock().unwrap().cut_appends = cut;
     }
 
     /// Serves later connections without `MOVE`, as a `UID COPY`, `\Deleted`
@@ -703,6 +720,11 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                 }
 
                 wait_unless_command_stalled(&inbox, &command.body).await;
+                let appending = matches!(command.body, CommandBody::Append { .. });
+                if appending && inbox.lock().unwrap().cut_appends {
+                    return;
+                }
+
                 answer(&mut server, command, (&inbox, &opened), &mut view);
             }
             _ => {}
@@ -718,7 +740,10 @@ fn answer(
     view: &mut Vec<(u32, bool)>,
 ) {
     let mut inbox = inbox.lock().unwrap();
-    if matches!(
+    if matches!(command.body, CommandBody::Append { .. }) {
+        let status = appends::append(command, &mut inbox);
+        server.enqueue_status(status);
+    } else if matches!(
         command.body,
         CommandBody::Move { .. } | CommandBody::Copy { .. } | CommandBody::ExpungeUid { .. }
     ) {

@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use futures::{channel::mpsc::UnboundedSender, future::LocalBoxFuture};
+use futures::channel::mpsc::UnboundedSender;
 use ratatui::Terminal;
 
 use crate::{
@@ -11,6 +11,8 @@ use crate::{
     draft_preview::DraftPreview,
     editor,
     input::Input,
+    notes::{self, Notes},
+    outbox::Outbox,
     outgoing::Outgoing,
     reply_draft,
     reply_fetch::ReplyFetch,
@@ -139,59 +141,49 @@ pub fn edit(
     Ok(())
 }
 
-/// Starts the Send of the Draft shown, unless it does not parse.
-pub fn send<'a>(
+/// Send: the Draft shown moves to the Outbox, unless it does not parse.
+pub fn send(
     screen: &mut Screen,
-    outgoing: Outgoing<'a>,
-) -> Option<LocalBoxFuture<'a, Result<(), String>>> {
-    let preview = screen.draft.as_mut()?;
+    (outgoing, outbox): (Outgoing, &Outbox),
+    asks: &UnboundedSender<Ask>,
+) {
+    let Some(mut preview) = screen.draft.take() else {
+        return;
+    };
+
     let Ok(draft) = &preview.draft else {
         screen.toast = Some(Toast::error("the Draft does not parse"));
-        return None;
+        screen.draft = Some(preview);
+        return;
     };
 
-    let sending = outgoing.send(draft, preview.answering.as_ref());
-    preview.sending = true;
-    preview.failure = None;
-    Some(sending)
-}
+    let built = outgoing.build(draft, preview.answering.as_ref());
 
-/// A Send's end: the Draft goes, the Message a Reply answers is flagged
-/// `\Answered` and a sync starts; or its preview shows why not.
-pub fn sent(
-    result: Result<(), String>,
-    screen: &mut Screen,
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
-) -> Result<(), Error> {
-    let Err(error) = result else {
-        let Some(preview) = screen.draft.take() else {
-            return Ok(());
-        };
-
-        if let Err(error) = std::fs::remove_file(&preview.path) {
-            tracing::error!("removing the sent Draft failed: {error}");
-        }
-
-        let original = preview.answering.and_then(|answering| answering.original);
-        if let Some((folder, uid)) = original {
-            cache.answer(&folder, uid).map_err(Error::Cache)?;
-            asks.unbounded_send(Ask::Changes).ok();
-        }
-
-        screen.toast = Some(Toast::new("Sent"));
-        // The send fails only once the sync has stopped.
-        asks.unbounded_send(Ask::Resync).ok();
-        return Ok(());
+    let notes = Notes {
+        draft: Some(preview.text.clone()),
+        answering: preview.answering.clone(),
+        error: None,
     };
 
-    tracing::warn!("sending the Draft failed: {error}");
-    if let Some(preview) = &mut screen.draft {
-        preview.sending = false;
+    let queued = built.and_then(|message| {
+        outbox
+            .queue(&preview.path, &message, &notes)
+            .map_err(|error| {
+                tracing::error!("moving the Draft to the Outbox failed: {error}");
+                "could not move the Draft to the Outbox".to_owned()
+            })
+    });
+
+    if let Err(error) = queued {
         preview.failure = Some(error);
+        screen.draft = Some(preview);
+        return;
     }
 
-    Ok(())
+    screen.outbox = outbox.count();
+    screen.toast = Some(Toast::new("Sending"));
+    // The send fails only while signed out: the Outbox waits for a sync.
+    asks.unbounded_send(Ask::Send).ok();
 }
 
 /// Deletes the shown Draft's file, for an Undo to write back.
@@ -200,7 +192,7 @@ pub fn discard(screen: &mut Screen) {
         return;
     };
 
-    if let Err(error) = std::fs::remove_file(&preview.path) {
+    if let Err(error) = notes::remove_message(&preview.path) {
         tracing::error!("discarding the Draft failed: {error}");
         screen.toast = Some(Toast::error("could not discard the Draft"));
         screen.draft = Some(preview);

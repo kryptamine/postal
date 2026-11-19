@@ -7,10 +7,11 @@ use crate::{
     folder_list,
     imap::{MailServer, Pushed},
     move_changes,
+    outbox_flush::{self, Sender},
     sequence_numbers::SequenceNumbers,
     snippets,
     status::Status,
-    steering::Steering,
+    steering::{Asked, Steering},
     sync::{self, Error},
     thread_fetch,
     update::Update,
@@ -22,8 +23,8 @@ use crate::{
 const PERIOD: Duration = Duration::from_secs(10 * 60);
 
 /// Resyncs the Folder `steering` follows, then keeps its Cache live from the
-/// server's announcements until the screen stops asking; IDLE gives way to
-/// each ask (ADR 0008). `send` follows every Cache write, `report` the resyncs.
+/// server's announcements and sends the Outbox until the screen stops
+/// asking; IDLE gives way to each ask (ADR 0008).
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -31,13 +32,16 @@ const PERIOD: Duration = Duration::from_secs(10 * 60);
 pub async fn listen<S: MailServer>(
     mut server: S,
     cache: &Cache,
-    steering: &mut Steering,
+    (steering, sender): (&mut Steering, Sender<'_>),
     send: &impl Fn(Update),
     report: &dyn Fn(Status),
 ) -> Result<(), Error> {
     let Some(mut asked) = steering.take() else {
         return Ok(());
     };
+
+    // What the last connection or run left in the Outbox.
+    asked.send = true;
 
     // Before the resync, so it reads the flags they set and the moves they made.
     send_changes(&mut server, cache, None, send).await?;
@@ -52,6 +56,11 @@ pub async fn listen<S: MailServer>(
             selected = send_changes(&mut server, cache, selected.take(), send).await?;
             asked.switched |= selected.as_deref() != Some(&*steering.folder);
             pushed.extend(server.pushed());
+            continue;
+        }
+
+        if std::mem::take(&mut asked.send) {
+            pushed.extend(send_outbox(&mut server, cache, (sender, &mut asked), send).await?);
             continue;
         }
 
@@ -88,6 +97,7 @@ pub async fn listen<S: MailServer>(
             };
 
             asked = more;
+            asked.send |= asked.quiet() && sender.outbox.count() > 0;
             continue;
         }
 
@@ -119,6 +129,27 @@ async fn send_changes(
 ) -> Result<Option<Arc<str>>, Error> {
     let selected = flag_changes::send(server, cache, selected).await?;
     move_changes::send(server, cache, selected, send).await
+}
+
+/// Sends the Outbox and returns what the server pushed meanwhile. After a
+/// Message SMTP accepted, asks for its `\Answered` and for a resync of the
+/// shown Folder, which shows it in Sent.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn send_outbox(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    (sender, asked): (Sender<'_>, &mut Asked),
+    send: &impl Fn(Update),
+) -> Result<Vec<Pushed>, Error> {
+    if outbox_flush::flush(server, cache, sender, send).await? {
+        asked.changes = true;
+        asked.switched = true;
+    }
+
+    Ok(server.pushed())
 }
 
 /// Writes what `pushed` changed in `folder` to the Cache, with the Snippets

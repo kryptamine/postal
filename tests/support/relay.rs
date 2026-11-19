@@ -67,7 +67,9 @@ async fn commands(
             line.clone()
         };
 
-        if to.write_all(forwarded.as_bytes()).await.is_err() {
+        if to.write_all(forwarded.as_bytes()).await.is_err()
+            || !pass_literals(&mut reader, &mut to, literal_len(line.as_bytes())).await
+        {
             break;
         }
 
@@ -75,6 +77,30 @@ async fn commands(
     }
 
     to.shutdown().await.ok();
+}
+
+/// Passes on a command's literal of `len` bytes, as an `APPEND` sends, and
+/// the rest of its line, none of it recorded; false once either side is gone.
+async fn pass_literals(
+    reader: &mut BufReader<OwnedReadHalf>,
+    to: &mut OwnedWriteHalf,
+    mut len: Option<usize>,
+) -> bool {
+    while let Some(n) = len {
+        let mut bytes = vec![0; n];
+        let mut rest = String::new();
+        if reader.read_exact(&mut bytes).await.is_err()
+            || reader.read_line(&mut rest).await.is_err()
+            || to.write_all(&bytes).await.is_err()
+            || to.write_all(rest.as_bytes()).await.is_err()
+        {
+            return false;
+        }
+
+        len = literal_len(rest.as_bytes());
+    }
+
+    true
 }
 
 async fn responses(

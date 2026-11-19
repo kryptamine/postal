@@ -1,7 +1,8 @@
 use std::fmt;
 
 use lettre::{
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+    AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
+    address::Envelope,
     transport::smtp::{
         self,
         authentication::{Credentials, Mechanism},
@@ -30,13 +31,33 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// Hands `message` to the `[smtp]` server, signed in as the Account: by
-/// `XOAUTH2` with an access token, or by `PLAIN` with an app password.
+impl Error {
+    /// A `5xx` reply: sending the same Message again fails the same way.
+    /// A `53x` refuses the sign-in, which is the Account's to fix.
+    pub fn refused(&self) -> bool {
+        let Self::Smtp(source) = self else {
+            return false;
+        };
+
+        let sign_in = source
+            .status()
+            .is_some_and(|code| code.to_string().starts_with("53"));
+        source.is_permanent() && !sign_in
+    }
+}
+
+/// Hands `message` to the `[smtp]` server for `envelope`, signed in as the
+/// Account: by `XOAUTH2` with an access token, or by `PLAIN` with an app
+/// password.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-pub async fn send(config: &Config, sign_in: &SignIn, message: Message) -> Result<(), Error> {
+pub async fn send(
+    config: &Config,
+    sign_in: &SignIn,
+    (envelope, message): (&Envelope, &[u8]),
+) -> Result<(), Error> {
     let (secret, mechanism) = match sign_in {
         SignIn::Password(password) => (password.expose().to_owned(), Mechanism::Plain),
         SignIn::OAuth(tokens) => {
@@ -59,7 +80,7 @@ pub async fn send(config: &Config, sign_in: &SignIn, message: Message) -> Result
         .credentials(Credentials::new(config.email.clone(), secret))
         .authentication(vec![mechanism])
         .build()
-        .send(message)
+        .send_raw(envelope, message)
         .await
         .map_err(Error::Smtp)?;
     Ok(())

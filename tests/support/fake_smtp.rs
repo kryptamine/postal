@@ -29,6 +29,10 @@ struct State {
     received: Vec<Received>,
     /// The answer to the end of the data, in place of `250`.
     refusal: Option<String>,
+    /// Each connection is closed before the greeting.
+    down: bool,
+    /// Connections closed so, as each try to send makes one.
+    turned_away: usize,
 }
 
 pub struct FakeSmtp {
@@ -45,6 +49,14 @@ impl FakeSmtp {
         thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { return };
+                let mut state = served.lock().unwrap();
+                if state.down {
+                    state.turned_away += 1;
+                    continue;
+                }
+
+                drop(state);
+
                 let served = Arc::clone(&served);
                 thread::spawn(move || serve(stream, &served));
             }
@@ -67,8 +79,17 @@ impl FakeSmtp {
         self.state.lock().unwrap().refusal = Some(reply.to_owned());
     }
 
-    pub fn accept(&self) {
-        self.state.lock().unwrap().refusal = None;
+    /// Closes every connection at once from now on, as a server down would.
+    pub fn down(&self) {
+        self.state.lock().unwrap().down = true;
+    }
+
+    pub fn turned_away(&self) -> usize {
+        self.state.lock().unwrap().turned_away
+    }
+
+    pub fn up(&self) {
+        self.state.lock().unwrap().down = false;
     }
 }
 

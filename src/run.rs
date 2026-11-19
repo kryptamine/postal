@@ -4,7 +4,7 @@ use crossterm::event::Event;
 use futures::{
     FutureExt, Stream, StreamExt,
     channel::mpsc::UnboundedSender,
-    future::{Fuse, FusedFuture, LocalBoxFuture},
+    future::{Fuse, FusedFuture},
 };
 use ratatui::{Frame, Terminal, layout::Rect};
 use tokio::time::Instant;
@@ -31,6 +31,7 @@ use crate::{
     message_list::{self, MessageList},
     mode::Mode,
     older_pages::OlderPages,
+    outbox::Outbox,
     outgoing::Outgoing,
     pager, pager_text,
     picker_popup::PickerPopup,
@@ -83,7 +84,7 @@ pub enum Exit {
 
 /// The network work behind the screen, what it reports as it goes, the
 /// pages of older Messages and the bodies Replies wait on asked of it, what
-/// the sync connection is asked, and what a Send goes out with.
+/// the sync connection is asked, and where a Send leaves from.
 pub struct Background<'a, W, U> {
     pub work: Work<W>,
     pub updates: U,
@@ -91,10 +92,8 @@ pub struct Background<'a, W, U> {
     pub replies: ReplyFetch,
     pub asks: UnboundedSender<Ask>,
     pub outgoing: Outgoing<'a>,
+    pub outbox: &'a Outbox,
 }
-
-/// A Send under way.
-type Sending<'a> = Fuse<LocalBoxFuture<'a, Result<(), String>>>;
 
 pub enum Work<W> {
     Running(W),
@@ -141,14 +140,15 @@ pub async fn run(
     let rows = first_rows(terminal)?;
     show(&mut view, cache, Some(rows))?;
     let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
-    let (outgoing, mut replies) = (background.outgoing, background.replies);
+    let (outgoing, outbox) = (background.outgoing, background.outbox);
+    let mut replies = background.replies;
     let account = outgoing.config.email.as_str();
     let from = outgoing.from().map_or_else(
         |_bad| outgoing.config.email.clone(),
         |from| from.to_string(),
     );
-    let mut sending: Sending = Fuse::terminated();
     let mut screen = Screen::opening(cache, &background.work);
+    screen.outbox = outbox.count();
     (screen.status == Status::SignedOut).then(|| previews.link(false));
     let mut work = std::pin::pin!(background.work.fused());
     let mut whole = false;
@@ -182,10 +182,6 @@ pub async fn run(
                 frame_start = alloc_count::count();
                 finished(result)?;
             }
-            result = &mut sending, if !sending.is_terminated() => {
-                frame_start = alloc_count::count();
-                composing::sent(result, &mut screen, cache, &asks)?;
-            }
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
                 let Some(update) = update else {
@@ -194,7 +190,7 @@ pub async fn run(
                 };
 
                 let arrived = replies.notice(&update, screen.replying.as_ref());
-                apply(older.notice(update), &mut view, &mut screen, cache, previews)?;
+                apply(older.notice(update), &mut view, &mut screen, (cache, outbox), previews)?;
                 if let Some(result) = arrived {
                     composing::fetched(result, terminal, &mut events, &mut screen, (cache, account))?;
                 }
@@ -207,7 +203,7 @@ pub async fn run(
                     step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, cache, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
-                    step @ (Step::Compose | Step::Edit | Step::Send) => draft(&step, terminal, &mut events, &mut screen, (outgoing, &mut sending))?,
+                    step @ (Step::Compose | Step::Edit | Step::Send) => draft(&step, terminal, &mut events, &mut screen, (outgoing, outbox, &asks))?,
                     Step::Reply(all) => {
                         if let Some(message) = answered(&view, &screen) {
                             let awaited = AwaitedReply { message, all };
@@ -347,6 +343,7 @@ fn draw(
                 theme,
                 toast: screen.toast.as_ref(),
                 status: screen.status(),
+                outbox: screen.outbox,
                 mode: keys,
                 query: view
                     .search
@@ -401,7 +398,7 @@ fn apply(
     update: Update,
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
+    (cache, outbox): (&Cache, &Outbox),
     previews: &mut Previews,
 ) -> Result<(), Error> {
     match update {
@@ -458,6 +455,14 @@ fn apply(
         Update::Backfill(Backfill::Paged { .. }) => screen.backfill = None,
         Update::NoTrash => screen.toast = Some(Toast::error("no Trash Folder")),
         Update::Unrestored => screen.toast = Some(Toast::error("nothing to undo")),
+        Update::Sent => {
+            screen.outbox = outbox.count();
+            screen.toast = Some(Toast::new("Sent"));
+        }
+        Update::Refused => {
+            screen.outbox = outbox.count();
+            screen.toast = Some(Toast::error("refused · back in Drafts"));
+        }
     }
 
     Ok(())
@@ -819,16 +824,14 @@ fn undo(
     Ok(())
 }
 
-/// Acts on one key in a Draft's preview; while it sends, only quitting does.
+/// Acts on one key in a Draft's preview.
 fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
-    let sending = screen.draft.as_ref().is_some_and(|draft| draft.sending);
     match keymap::draft(key) {
         Some(DraftKey::Quit) => Step::Quit,
         Some(DraftKey::Help) => {
             screen.help = true;
             Step::Stay
         }
-        _ if sending => Step::Stay,
         Some(DraftKey::Send) => Step::Send,
         Some(DraftKey::Edit) => Step::Edit,
         Some(DraftKey::Discard) => {
@@ -840,12 +843,12 @@ fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 }
 
 /// Compose, the editor again on the shown Draft, or its Send.
-fn draft<'a>(
+fn draft(
     step: &Step,
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    (outgoing, sending): (Outgoing<'a>, &mut Sending<'a>),
+    (outgoing, outbox, asks): (Outgoing, &Outbox, &UnboundedSender<Ask>),
 ) -> Result<(), Error> {
     match step {
         Step::Compose => composing::compose(terminal, events, screen)?,
@@ -854,11 +857,7 @@ fn draft<'a>(
                 composing::edit(terminal, events, screen, (preview.path, preview.answering))?;
             }
         }
-        Step::Send => {
-            if let Some(send) = composing::send(screen, outgoing) {
-                *sending = send.fuse();
-            }
-        }
+        Step::Send => composing::send(screen, (outgoing, outbox), asks),
         _ => {}
     }
 

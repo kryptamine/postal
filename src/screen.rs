@@ -26,6 +26,8 @@ pub struct Screen {
     /// Over the whole screen, taking every key, while open.
     pub draft: Option<DraftPreview>,
     pub replying: Option<AwaitedReply>,
+    /// The Messages in the Outbox not yet accepted.
+    pub outbox: usize,
 }
 
 impl Screen {

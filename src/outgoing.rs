@@ -1,49 +1,38 @@
-use futures::{FutureExt, future::LocalBoxFuture};
-use lettre::message::Mailbox;
+use lettre::{Address, address::Envelope, message::Mailbox};
 
-use crate::{
-    answering::Answering, config::Config, draft::Draft, sign_in::SignIn, smtp, unique_id::unique_id,
-};
+use crate::{answering::Answering, config::Config, draft::Draft, unique_id::unique_id};
 
-/// What a Send needs: the Account, and its sign-in while there is one.
+/// The Account a Message goes out from.
 #[derive(Clone, Copy)]
 pub struct Outgoing<'a> {
     pub config: &'a Config,
-    pub sign_in: Option<&'a SignIn>,
 }
 
-impl<'a> Outgoing<'a> {
+impl Outgoing<'_> {
     /// `From` as Postal adds it: `name <email>`, or the bare address.
     pub fn from(self) -> Result<Mailbox, String> {
-        let email = &self.config.email;
-        let address = email
-            .parse()
-            .map_err(|_bad| format!("the Account's address is not one: {email}"))?;
-        Ok(Mailbox::new(self.config.name.clone(), address))
+        Ok(Mailbox::new(self.config.name.clone(), self.address()?))
     }
 
-    /// Builds `draft` with a fresh `Date` and `Message-ID` and sends it; the
-    /// error is what to show in its preview.
-    pub fn send(
-        self,
-        draft: &Draft,
-        answering: Option<&Answering>,
-    ) -> LocalBoxFuture<'a, Result<(), String>> {
-        let built = self
-            .sign_in
-            .ok_or_else(|| "signed out: nothing was sent".to_owned())
-            .and_then(|sign_in| {
-                let message = draft.message(self.from()?, self.message_id(), answering)?;
-                Ok((sign_in, message))
-            });
+    /// `draft` as it is sent and every retry sends it again, its `Date`
+    /// and `Message-ID` fixed now.
+    pub fn build(self, draft: &Draft, answering: Option<&Answering>) -> Result<Vec<u8>, String> {
+        let message = draft.message(self.from()?, self.message_id(), answering)?;
+        Ok(message.formatted())
+    }
 
-        async move {
-            let (sign_in, message) = built?;
-            smtp::send(self.config, sign_in, message)
-                .await
-                .map_err(|error| error.to_string())
-        }
-        .boxed_local()
+    /// Who `draft` goes to, as SMTP is told.
+    pub fn envelope(self, draft: &Draft) -> Result<Envelope, String> {
+        let to = draft.to.iter().chain(draft.cc.iter());
+        let to = to.map(|mailbox| mailbox.email.clone()).collect();
+        Envelope::new(Some(self.address()?), to).map_err(|error| error.to_string())
+    }
+
+    fn address(self) -> Result<Address, String> {
+        let email = &self.config.email;
+        email
+            .parse()
+            .map_err(|_bad| format!("the Account's address is not one: {email}"))
     }
 
     fn message_id(self) -> String {

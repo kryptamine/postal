@@ -47,10 +47,6 @@ impl DraftPane<'_> {
     fn lines(&self) -> Vec<Line<'_>> {
         let preview = self.preview;
         let mut lines = Vec::new();
-        if preview.sending {
-            lines.push(Line::styled("sending…", self.theme.muted));
-        }
-
         let error = preview.draft.as_ref().err().or(preview.failure.as_ref());
         if let Some(error) = error {
             lines.push(Line::styled(error.as_str(), self.theme.error));

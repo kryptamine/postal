@@ -54,6 +54,12 @@ pub trait MailServer {
     /// returns each `(uid, uid there)` the server named.
     async fn move_to(&mut self, uids: &[u32], to: &str) -> Result<Vec<(u32, u32)>, Error>;
 
+    /// Saves `message` to the Folder named `folder`, flagged `\Seen`.
+    async fn append(&mut self, folder: &str, message: &[u8]) -> Result<(), Error>;
+
+    /// Gmail, which keeps a copy of each Message sent over SMTP itself.
+    fn gmail(&self) -> bool;
+
     /// Every Folder the server lists that can be opened.
     async fn folders(&mut self) -> Result<Vec<Folder>, Error>;
 
@@ -144,6 +150,7 @@ pub struct ImapSession {
     /// What the server lists of `MOVE` (RFC 6851) and `UIDPLUS` (RFC 4315).
     can_move: bool,
     uidplus: bool,
+    gmail: bool,
 }
 
 impl ImapSession {
@@ -198,6 +205,7 @@ impl ImapSession {
             email: config.email.clone(),
             can_move,
             uidplus,
+            gmail,
         })
     }
 
@@ -302,6 +310,18 @@ impl MailServer for ImapSession {
 
         tracing::info!("moved {} Messages", uids.len());
         Ok(moved)
+    }
+
+    async fn append(&mut self, folder: &str, message: &[u8]) -> Result<(), Error> {
+        self.session
+            .append(folder, Some("(\\Seen)"), None, message)
+            .await?;
+        tracing::info!("saved a copy to {folder}");
+        Ok(())
+    }
+
+    fn gmail(&self) -> bool {
+        self.gmail
     }
 
     async fn folders(&mut self) -> Result<Vec<Folder>, Error> {
@@ -477,6 +497,7 @@ impl MailServer for ImapSession {
             email,
             can_move,
             uidplus,
+            gmail,
         } = self;
         let mut handle = session.idle();
         handle.init().await?;
@@ -498,6 +519,7 @@ impl MailServer for ImapSession {
             email,
             can_move,
             uidplus,
+            gmail,
         };
 
         let mut pushed = pending;

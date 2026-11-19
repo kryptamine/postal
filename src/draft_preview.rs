@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use crate::{answering::Answering, draft::Draft};
+use crate::{answering::Answering, draft::Draft, notes::Notes};
 
 /// A Draft shown after the editor exits, for `y` to send, `e` to edit again
 /// or `q` to discard.
@@ -12,15 +12,19 @@ pub struct DraftPreview {
     pub draft: Result<Draft, String>,
     /// The last Send's error, such as the server's answer.
     pub failure: Option<String>,
-    pub sending: bool,
     /// For a Reply.
     pub answering: Option<Answering>,
 }
 
 impl DraftPreview {
+    /// The Draft's file, with the error and the answered Message its notes
+    /// hold; `answering` wins over the notes'.
     pub fn read(path: PathBuf, answering: Option<Answering>) -> io::Result<Self> {
         let text = std::fs::read_to_string(&path)?;
-        Ok(Self::new(path, text, answering))
+        let notes = Notes::read(&path)?.unwrap_or_default();
+        let mut preview = Self::new(path, text, answering.or(notes.answering));
+        preview.failure = notes.error;
+        Ok(preview)
     }
 
     pub fn new(path: PathBuf, text: String, answering: Option<Answering>) -> Self {
@@ -29,7 +33,6 @@ impl DraftPreview {
             path,
             text,
             failure: None,
-            sending: false,
             answering,
         }
     }

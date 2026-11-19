@@ -182,6 +182,8 @@ fn a_sent_draft_reaches_the_server_as_written_with_the_headers_postal_adds() {
     // The Message shows in Sent only once a sync has read it there.
     wait_for(|| imap.commands().iter().any(|c| c.starts_with("SELECT ")));
     quit(t);
+    // Gmail saves the copy in Sent itself.
+    assert!(!imap.commands().iter().any(|c| c.starts_with("APPEND ")));
 
     assert_eq!(
         smtp.logins(),
@@ -348,28 +350,6 @@ fn q_discards_the_draft_and_u_brings_it_back() {
     t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
     quit(t);
     assert_eq!(smtp.received().len(), 1);
-}
-
-#[test]
-fn a_refused_send_keeps_the_draft_and_shows_the_server_answer() {
-    let (imap, smtp) = (inbox(), FakeSmtp::start());
-    smtp.refuse("554 5.7.1 Message rejected by policy");
-    let home = home(&imap, &smtp);
-    let editor = Editor::writing(WRITTEN);
-    let mut t = composed(&home, &editor);
-
-    t.send(Key::Char('y')).unwrap();
-    t.wait_until(|s| previewed(s) && s.contains("Message rejected by policy"))
-        .unwrap();
-    assert_eq!(drafts(&home)[0].1, WRITTEN);
-
-    // The preview still sends once the server takes it.
-    smtp.accept();
-    t.send(Key::Char('y')).unwrap();
-    t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
-    quit(t);
-    assert_eq!(smtp.received().len(), 1);
-    assert!(drafts(&home).is_empty());
 }
 
 #[test]

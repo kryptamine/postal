@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use ratatui::{
     buffer::Buffer,
     layout::{Position, Rect},
@@ -10,6 +12,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::{
     keymap::{self, HELP_HINT, Hint},
     mode::Mode,
+    stack_str::StackStr,
     status::Status,
     theme::Theme,
     toast::Toast,
@@ -17,13 +20,15 @@ use crate::{
 
 const GAP: u16 = 2;
 
-/// The bottom row: key hints on the left, a Toast or else the Status on the
-/// right. Hints that do not fit drop from the right; `?: help` always stays.
+/// The bottom row: key hints on the left, a Toast or else the Status and
+/// Outbox count on the right. Hints that do not fit drop from the right.
 /// A Search's Query leads the hints, and is all the left shows while typed.
 pub struct HintLine<'a> {
     pub theme: &'a Theme,
     pub toast: Option<&'a Toast>,
     pub status: Status,
+    /// The Messages in the Outbox not yet accepted.
+    pub outbox: usize,
     pub mode: Mode,
     pub query: Option<&'a str>,
     /// What the Status's countdown counts from.
@@ -37,7 +42,7 @@ impl Widget for HintLine<'_> {
             return;
         }
 
-        let status = self.status.text(self.now);
+        let status = self.status_text();
         let (right, style) = match self.toast {
             Some(toast) if toast.error => (&*toast.text, self.theme.error),
             Some(toast) => (&*toast.text, Style::new()),
@@ -72,6 +77,25 @@ impl Widget for HintLine<'_> {
 }
 
 impl HintLine<'_> {
+    /// The Status, then the Outbox count while it is not empty.
+    fn status_text(&self) -> StackStr<72> {
+        let status = self.status.text(self.now);
+        let mut text = StackStr::new();
+        // Every text fits, so the writes cannot fail.
+        text.write_str(status.as_str()).ok();
+        if self.outbox > 0 {
+            let gap = if status.as_str().is_empty() {
+                ""
+            } else {
+                " · "
+            };
+
+            write!(text, "{gap}{} outbox", self.outbox).ok();
+        }
+
+        text
+    }
+
     /// Where the terminal's cursor goes: after the Query, while it is typed.
     pub fn cursor(&self, area: Rect) -> Option<Position> {
         let query = self.query.filter(|_| self.mode == Mode::Query)?;

@@ -60,9 +60,12 @@ mod mode;
 mod modified_utf7;
 mod move_changes;
 mod new_message;
+mod notes;
 mod oauth;
 mod older_pages;
 mod outage;
+mod outbox;
+mod outbox_flush;
 mod outgoing;
 mod outlines;
 mod pager;
@@ -140,6 +143,8 @@ use crate::{
     imap::ImapSession,
     oauth::Tokens,
     older_pages::OlderPages,
+    outbox::Outbox,
+    outbox_flush::Sender,
     outgoing::Outgoing,
     previews::Previews,
     reply_fetch::ReplyFetch,
@@ -287,6 +292,9 @@ fn session(
     failed: bool,
 ) -> Result<Exit, Box<dyn std::error::Error>> {
     let cache = Cache::open(&xdg::cache_dir()?)?;
+    // Without one, Compose says so when it is used.
+    let outbox = Outbox::new(xdg::data_dir().ok());
+    let outgoing = Outgoing { config };
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
@@ -312,9 +320,15 @@ fn session(
                 futures::future::try_join(
                     sync(
                         config,
-                        sign_in,
                         &cache,
-                        Steering::new(asked),
+                        (
+                            Steering::new(asked),
+                            Sender {
+                                outbox: &outbox,
+                                outgoing,
+                                sign_in,
+                            },
+                        ),
                         (&send, |status| send(Update::Status(status))),
                     ),
                     bodies(config, sign_in, &cache, requested, &send),
@@ -328,7 +342,8 @@ fn session(
             older,
             replies,
             asks,
-            outgoing: Outgoing { config, sign_in },
+            outgoing,
+            outbox: &outbox,
         };
 
         let result = run::run(&mut terminal, &theme, &cache, &mut previews, background).await;
@@ -375,19 +390,18 @@ async fn bodies(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
-/// Resyncs and IDLEs on one connection, as the sequence numbers IDLE sends
-/// count in its `EXAMINE`, on the Folder `steering` follows. `send` follows
-/// every Cache write, `report` the connection.
+/// Resyncs, IDLEs and sends the Outbox on one connection, as the sequence
+/// numbers IDLE sends count in its `EXAMINE`, on the Folder `steering`
+/// follows. `send` follows every Cache write, `report` the connection.
 async fn sync(
     config: &Config,
-    sign_in: &SignIn,
     cache: &Cache,
-    mut steering: Steering,
+    (mut steering, sender): (Steering, Sender<'_>),
     (send, report): (&impl Fn(Update), impl Fn(Status)),
 ) -> Result<(), sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
-        let session = ImapSession::open(config, sign_in).await?;
-        idle::listen(session, cache, &mut steering, send, report).await
+        let session = ImapSession::open(config, sender.sign_in).await?;
+        idle::listen(session, cache, (&mut steering, sender), send, report).await
     };
 
     reconnect::retry(attempt, report).await

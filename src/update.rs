@@ -23,4 +23,8 @@ pub enum Update {
     NoTrash,
     /// An Undo found its Messages gone from Trash.
     Unrestored,
+    /// SMTP accepted a Message from the Outbox.
+    Sent,
+    /// SMTP refused a Message from the Outbox: it is a Draft again.
+    Refused,
 }

@@ -14,12 +14,16 @@ pub enum Ask {
     Thread(u64),
     /// The Cache holds flag changes or moves for the server.
     Changes,
-    /// Resync the shown Folder, as after a Send.
-    Resync,
+    /// The Outbox holds a Message to send.
+    Send,
 }
 
 /// What the asks waiting came to.
 #[derive(Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each is an ask of its own, taken in the order the loop picks"
+)]
 pub struct Asked {
     /// The shown Folder changed, or a resync of it was asked.
     pub switched: bool,
@@ -27,6 +31,15 @@ pub struct Asked {
     /// The Thread last asked for, when the Messages of one were.
     pub thread: Option<u64>,
     pub changes: bool,
+    pub send: bool,
+}
+
+impl Asked {
+    /// Nothing but a Folder switch: the Outbox is retried on these, and
+    /// not ahead of every Mark Read or Folder Picker.
+    pub const fn quiet(&self) -> bool {
+        !self.changes && !self.list && self.thread.is_none()
+    }
 }
 
 /// The Folder the sync connection follows, and the screen's asks of it.
@@ -59,7 +72,7 @@ impl Steering {
                 Some(Some(Ask::ListFolders)) => asked.list = true,
                 Some(Some(Ask::Thread(id))) => asked.thread = Some(id),
                 Some(Some(Ask::Changes)) => asked.changes = true,
-                Some(Some(Ask::Resync)) => asked.switched = true,
+                Some(Some(Ask::Send)) => asked.send = true,
             }
         }
     }
