@@ -23,7 +23,8 @@ impl Home {
 
         fs::create_dir_all(home.postal_dir()).unwrap();
         fs::write(home.config_path(), config).unwrap();
-        let secret = home.postal_dir().join("secret");
+        let secret = home.secret_path();
+        fs::create_dir_all(secret.parent().unwrap()).unwrap();
         fs::write(&secret, format!("{REFRESH_TOKEN}\n")).unwrap();
         fs::set_permissions(&secret, fs::Permissions::from_mode(0o600)).unwrap();
         home
@@ -76,7 +77,12 @@ impl Home {
     }
 
     pub fn secret_path(&self) -> PathBuf {
-        self.postal_dir().join("secret")
+        self.secret_path_of(EMAIL)
+    }
+
+    /// The file store's secret of the Account `email`.
+    pub fn secret_path_of(&self, email: &str) -> PathBuf {
+        self.postal_dir().join("secrets").join(email.to_lowercase())
     }
 
     fn postal_dir(&self) -> PathBuf {

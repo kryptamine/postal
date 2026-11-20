@@ -4,29 +4,38 @@ use super::Writes;
 use crate::{
     atomic_file, cache,
     config::{Config, SecretStore},
-    keychain, secret,
+    keychain,
+    partial_config::PartialConfig,
+    provider::Provider,
+    secret,
     sign_in::SignIn,
     xdg,
 };
 
 /// A sign-in the IMAP server accepted, not yet written.
 pub struct Granted {
+    pub(super) partial: PartialConfig,
     pub(super) config: Config,
     pub(super) sign_in: SignIn,
     pub(super) writes: Writes,
 }
 
 impl Granted {
-    /// The other Account the config names, which saving replaces.
-    pub fn replaces(&self) -> Option<&str> {
-        match &self.writes {
-            Writes::Account(current) => Some(current),
-            Writes::SecretOnly | Writes::Config => None,
+    /// The other Provider the config names this address at, which saving
+    /// replaces.
+    pub const fn replaces(&self) -> Option<Provider> {
+        match self.writes {
+            Writes::Moved(provider) => Some(provider),
+            Writes::SecretOnly | Writes::Added => None,
         }
     }
 
     pub fn email(&self) -> &str {
         &self.config.email
+    }
+
+    pub const fn provider(&self) -> Provider {
+        self.config.provider
     }
 
     /// Writes the secret, then the config when it changed.
@@ -38,16 +47,19 @@ impl Granted {
             SecretStore::Keychain => {
                 keychain::write(&config.email, self.sign_in.secret(), &config_path)?;
             }
-            SecretStore::File => secret::write(&dir.join("secret"), self.sign_in.secret())?,
+            SecretStore::File => {
+                secret::write(&secret::path(dir, &config.email), self.sign_in.secret())?;
+            }
         }
 
-        // Before the config, so the new Account never opens the old one's Cache.
-        if matches!(self.writes, Writes::Account(_)) {
+        // Before the config, so the Account never opens the old Provider's Cache.
+        if matches!(self.writes, Writes::Moved(_)) {
             cache::delete(&xdg::cache_dir()?)?;
         }
 
         if !matches!(self.writes, Writes::SecretOnly) {
-            atomic_file::write(&config_path, config.to_toml().as_bytes(), 0o644)?;
+            let text = self.partial.with(&config.email, config.provider);
+            atomic_file::write(&config_path, text.as_bytes(), 0o644)?;
         }
 
         Ok(())

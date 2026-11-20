@@ -70,19 +70,19 @@ impl std::error::Error for Error {}
 enum Writes {
     /// The config names this Account already.
     SecretOnly,
-    Config,
-    /// The config named this other Account, whose Cache goes with it.
-    Account(String),
+    /// The Account is added to the config.
+    Added,
+    /// The config names this address at this other Provider, whose Cache
+    /// goes with it.
+    Moved(Provider),
 }
 
 /// The same address at another Provider is another Account, with another Cache.
 fn writes(partial: &PartialConfig, email: &str, provider: Provider) -> Writes {
-    match &partial.email {
-        Some(current) if current.eq_ignore_ascii_case(email) && partial.provider == provider => {
-            Writes::SecretOnly
-        }
-        Some(current) => Writes::Account(current.clone()),
-        None => Writes::Config,
+    match partial.provider_of(email) {
+        Some(written) if written == provider => Writes::SecretOnly,
+        Some(written) => Writes::Moved(written),
+        None => Writes::Added,
     }
 }
 

@@ -72,7 +72,7 @@ Usage: postal [-v | -vv]
        postal login [-v | -vv]
 
 Commands:
-  login       choose a mail provider and sign in
+  login       choose a mail provider and sign in, adding an account
 
 Options:
   -v          log debug events

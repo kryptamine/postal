@@ -248,7 +248,7 @@ fn login() -> Result<(), Box<dyn Error>> {
 fn try_main() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
     on_screen(async |slot| {
-        let (mut config, sign_in) = signed_in(slot, &dir).await?;
+        let (mut config, sign_in) = signed_in(slot, &dir).await?.swap_remove(0);
         let mut sign_in = Some(sign_in);
         let mut failed = false;
         loop {
@@ -261,7 +261,7 @@ fn try_main() -> Result<(), Box<dyn Error>> {
                     let again = Start::again(&config);
                     match onboarding::run(terminal, &theme, &dir, again).await? {
                         Outcome::SignedIn(_) => {
-                            let (signed_in_as, fresh) = signed_in(slot, &dir).await?;
+                            let (signed_in_as, fresh) = signed_in(slot, &dir).await?.swap_remove(0);
                             (config, sign_in, failed) = (signed_in_as, Some(fresh), false);
                         }
                         Outcome::Quit(error) => {
@@ -311,7 +311,9 @@ async fn onboard(
     }
 }
 
-/// The Account the TUI opens as; with none yet, the Onboarding runs first.
+/// The Accounts the TUI opens with; with none yet, the Onboarding runs
+/// first. A lost secret shows it for that Account alone, and leaving it
+/// runs without the Account, unless none is left.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -319,39 +321,65 @@ async fn onboard(
 async fn signed_in(
     slot: &mut TerminalSlot,
     dir: &Path,
-) -> Result<(Config, SignIn), Box<dyn Error>> {
+) -> Result<Vec<(Config, SignIn)>, Box<dyn Error>> {
     let config_path = dir.join("config.toml");
-    loop {
-        let Some(config) = Config::load(&config_path)? else {
-            onboard(slot, dir, Start::Choose).await?;
-            continue;
-        };
-
-        let secret = match config.secrets {
-            SecretStore::Keychain => keychain::read(&config.email, &config_path)?,
-            SecretStore::File => secret::read(&dir.join("secret"))?,
-        };
-
-        let Some(secret) = secret else {
-            onboard(slot, dir, Start::again(&config)).await?;
-            continue;
-        };
-
-        let sign_in = match config.provider {
-            Provider::ICloud => SignIn::Password(secret),
-            Provider::Google => match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
-                Ok(tokens) => SignIn::OAuth(tokens),
-                Err(error) if error.signed_out() => {
-                    tracing::warn!("{error}");
-                    onboard(slot, dir, Start::again(&config)).await?;
-                    continue;
-                }
-                Err(error) => return Err(error.into()),
-            },
-        };
-
-        return Ok((config, sign_in));
+    let mut configs = Config::load(&config_path)?;
+    if configs.is_empty() {
+        onboard(slot, dir, Start::Choose).await?;
+        configs = Config::load(&config_path)?;
     }
+
+    let mut accounts = Vec::new();
+    let mut left = None;
+    for config in configs {
+        loop {
+            if let Some(sign_in) = read_sign_in(&config, dir)? {
+                accounts.push((config, sign_in));
+                break;
+            }
+
+            let (terminal, background) = slot.take()?;
+            let theme = onboarding_theme(dir, background)?;
+            match onboarding::run(terminal, &theme, dir, Start::again(&config)).await? {
+                Outcome::SignedIn(_) => {}
+                Outcome::Quit(error) => {
+                    tracing::info!("running without {}", config.email);
+                    left = error;
+                    break;
+                }
+            }
+        }
+    }
+
+    if accounts.is_empty() {
+        return Err(left.unwrap_or_else(|| login::Error::Cancelled.into()));
+    }
+
+    Ok(accounts)
+}
+
+/// How `config` signs in, from its secret; `None` once that is lost.
+fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn Error>> {
+    let secret = match config.secrets {
+        SecretStore::Keychain => keychain::read(&config.email, &dir.join("config.toml"))?,
+        SecretStore::File => secret::read(&secret::path(dir, &config.email))?,
+    };
+
+    let Some(secret) = secret else {
+        return Ok(None);
+    };
+
+    Ok(Some(match config.provider {
+        Provider::ICloud => SignIn::Password(secret),
+        Provider::Google => match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
+            Ok(tokens) => SignIn::OAuth(tokens),
+            Err(error) if error.signed_out() => {
+                tracing::warn!("{error}");
+                return Ok(None);
+            }
+            Err(error) => return Err(error.into()),
+        },
+    }))
 }
 
 /// The TUI until it exits, signed out without `sign_in`; `failed` when the

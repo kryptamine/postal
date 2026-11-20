@@ -55,6 +55,12 @@ pub fn read(path: &Path) -> Result<Option<Credential>, Error> {
     Ok(Some(Credential::new(secret.trim().to_owned())))
 }
 
+/// Where the file secret store under `dir` keeps the credential of `email`.
+pub fn path(dir: &Path, email: &str) -> PathBuf {
+    dir.join("secrets")
+        .join(email.to_lowercase().replace('/', "%2F"))
+}
+
 /// Stores the credential in the file secret store, readable by the owner only.
 pub fn write(path: &Path, secret: &Credential) -> Result<(), Error> {
     atomic_file::write(path, format!("{}\n", secret.expose()).as_bytes(), 0o600).map_err(|source| {

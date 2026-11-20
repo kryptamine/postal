@@ -112,7 +112,7 @@ fn an_unknown_provider_names_the_known_ones() {
 #[test]
 fn a_secret_other_users_can_read_is_refused() {
     let home = Home::new(&format!("{VALID_HEAD}[secrets]\nstore = \"file\"\n"));
-    let secret = home.xdg_config_home().join("postal/secret");
+    let secret = home.secret_path();
     fs::set_permissions(&secret, fs::Permissions::from_mode(0o644)).unwrap();
     let stderr = failure(&home);
     assert!(stderr.contains(&secret.display().to_string()), "{stderr}");

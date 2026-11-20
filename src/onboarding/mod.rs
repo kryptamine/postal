@@ -404,10 +404,12 @@ where
         }
     };
 
-    if let Some(current) = granted.replaces() {
+    if let Some(written) = granted.replaces() {
         let question = format!(
-            "Signed in as {current}. Sign in as {} instead and delete the Cache?",
-            granted.email()
+            "{} is signed in at {}. Sign in at {} instead and delete the Cache?",
+            granted.email(),
+            written.service(),
+            granted.provider().service()
         );
         if !screen.replaces(&question).await? {
             return Ok(Attempt::Cancelled);

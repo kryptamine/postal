@@ -432,12 +432,54 @@ fn a_login_with_the_same_email_replaces_only_the_secret() {
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), config);
 }
 
-/// An Account signed in before as someone else, with a Cache of its own.
-fn another_account(server: &FakeImap, oauth: &FakeOAuth) -> (Home, String) {
+/// Another address signed in before, with a secret and a Cache of its own.
+fn another_account(server: &FakeImap, oauth: &FakeOAuth) -> Home {
     let home = signed_in(server, oauth);
     let config = fs::read_to_string(home.config_path())
         .unwrap()
         .replace(EMAIL, "old@example.com");
+    fs::write(home.config_path(), &config).unwrap();
+    fs::rename(home.secret_path(), home.secret_path_of("old@example.com")).unwrap();
+    fs::create_dir_all(home.cache_path().parent().unwrap()).unwrap();
+    fs::write(home.cache_path(), "old Account").unwrap();
+    home
+}
+
+#[test]
+fn a_login_as_another_address_adds_an_account() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = another_account(&server, &oauth);
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
+    grant(&query::of_url(&consent_url(&browser)));
+
+    t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
+        .unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
+    let old = fs::read_to_string(home.secret_path_of("old@example.com")).unwrap();
+    assert_eq!(old.trim_end(), REFRESH_TOKEN);
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    assert!(
+        config.starts_with("email = \"old@example.com\"\n"),
+        "{config}"
+    );
+    assert!(
+        config.contains(&format!("\n[[account]]\nemail = \"{EMAIL}\"\n")),
+        "{config}"
+    );
+    assert!(home.cache_path().exists());
+}
+
+/// This Account written at iCloud, with a Cache of its own.
+fn at_icloud(server: &FakeImap, oauth: &FakeOAuth) -> (Home, String) {
+    let home = signed_in(server, oauth);
+    let config = fs::read_to_string(home.config_path()).unwrap().replace(
+        &format!("email = \"{EMAIL}\"\n"),
+        &format!("email = \"{EMAIL}\"\nprovider = \"icloud\"\n"),
+    );
     fs::write(home.config_path(), &config).unwrap();
     fs::create_dir_all(home.cache_path().parent().unwrap()).unwrap();
     fs::write(home.cache_path(), "old Account").unwrap();
@@ -445,22 +487,22 @@ fn another_account(server: &FakeImap, oauth: &FakeOAuth) -> (Home, String) {
 }
 
 /// Grants the consent as `EMAIL` and answers the replacement question.
-fn sign_in_as_another(t: &mut Terminal, browser: &Browser, answer: &str) {
+fn sign_in_at_google(t: &mut Terminal, browser: &Browser, answer: &str) {
     grant(&query::of_url(&consent_url(browser)));
-    t.wait_until(|s| s.contains("old@example.com") && s.contains("y replace"))
+    t.wait_until(|s| s.contains("signed in at iCloud") && s.contains("y replace"))
         .unwrap();
     t.send_str(answer).unwrap();
 }
 
 #[test]
-fn a_login_as_another_account_replaces_it_and_deletes_the_cache() {
+fn a_login_at_another_provider_replaces_the_account_and_deletes_the_cache() {
     let server = FakeImap::start(Vec::new());
     let oauth = FakeOAuth::start();
-    let (home, _) = another_account(&server, &oauth);
+    let (home, _) = at_icloud(&server, &oauth);
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
     choose_google(&mut t);
-    sign_in_as_another(&mut t, &browser, "y");
+    sign_in_at_google(&mut t, &browser, "y");
 
     t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
         .unwrap();
@@ -468,6 +510,7 @@ fn a_login_as_another_account_replaces_it_and_deletes_the_cache() {
     assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
     let config = fs::read_to_string(home.config_path()).unwrap();
     assert!(config.contains(&format!("email = \"{EMAIL}\"")), "{config}");
+    assert!(!config.contains("icloud"), "{config}");
     assert!(!home.cache_path().exists());
 }
 
@@ -475,12 +518,12 @@ fn a_login_as_another_account_replaces_it_and_deletes_the_cache() {
 fn a_declined_replacement_writes_nothing() {
     let server = FakeImap::start(Vec::new());
     let oauth = FakeOAuth::start();
-    let (home, config) = another_account(&server, &oauth);
+    let (home, config) = at_icloud(&server, &oauth);
     fs::write(home.secret_path(), "1//old\n").unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &["login"]);
     choose_google(&mut t);
-    sign_in_as_another(&mut t, &browser, "n");
+    sign_in_at_google(&mut t, &browser, "n");
 
     t.wait_until(|s| s.contains("login cancelled")).unwrap();
     assert!(!t.wait_exit().unwrap().success());
