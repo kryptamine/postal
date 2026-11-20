@@ -107,6 +107,8 @@ mod secret;
 mod secret_store;
 mod senders;
 mod sequence_numbers;
+mod settings;
+mod settings_popup;
 mod shown;
 mod sign_in;
 mod smtp;
@@ -133,6 +135,7 @@ mod transfer_encoding;
 mod truncate;
 mod undo;
 mod unique_id;
+mod unlink;
 mod update;
 mod view;
 mod wake;
@@ -250,40 +253,87 @@ fn login() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// The TUI, left for the Onboarding on `L` and opened again after it.
+/// The TUI, left for the Onboarding on `L` or from Settings, and opened
+/// again after it; after Settings, with the Accounts the config names now.
 fn try_main() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
     on_screen(async |slot| {
-        let (configs, sign_ins): (Vec<_>, Vec<_>) =
-            signed_in(slot, &dir).await?.into_iter().unzip();
-        let mut sign_ins: Vec<_> = sign_ins.into_iter().map(Some).collect();
-        let mut failed = false;
+        let (mut configs, mut sign_ins) = opened(slot, &dir).await?;
+        let mut failure = None;
         loop {
-            let exit = Box::pin(session(slot, (&configs, &sign_ins), failed)).await?;
-            let account = match exit {
+            let exit = Box::pin(session((slot, &dir), (&configs, &sign_ins), failure)).await?;
+            failure = None;
+            match exit {
                 Exit::Quit => return Ok(()),
-                Exit::SignIn(account) => account,
-            };
+                Exit::SignIn(account) => {
+                    if let (Some(config), Some(sign_in)) =
+                        (configs.get(account), sign_ins.get_mut(account))
+                    {
+                        failure = sign_in_again(slot, &dir, config, sign_in).await?;
+                    }
 
-            let (Some(config), Some(sign_in)) = (configs.get(account), sign_ins.get_mut(account))
-            else {
-                continue;
-            };
-
-            let (terminal, background) = slot.take()?;
-            let theme = onboarding_theme(&dir, background)?;
-            match onboarding::run(terminal, &theme, &dir, Start::again(config)).await? {
-                Outcome::SignedIn(_) => {
-                    *sign_in = read_sign_in(config, &dir)?;
-                    failed = sign_in.is_none();
+                    continue;
                 }
-                Outcome::Quit(error) => {
-                    *sign_in = None;
-                    failed = error.is_some();
+                Exit::AddAccount => {
+                    let (terminal, background) = slot.take()?;
+                    let theme = onboarding_theme(&dir, background)?;
+                    let outcome = onboarding::run(terminal, &theme, &dir, Start::Choose).await?;
+                    if let Outcome::Quit(Some(_)) = outcome {
+                        failure = Some("sign-in failed");
+                    }
                 }
+                Exit::Unlink(email) => {
+                    if let Err(error) = unlink::unlink(&dir, &email) {
+                        tracing::error!("unlinking {email}: {error}");
+                        failure = Some("unlink failed");
+                    }
+                }
+                Exit::Reload => {}
             }
+
+            (configs, sign_ins) = opened(slot, &dir).await?;
         }
     })
+}
+
+/// The Accounts the config names, each with its sign-in.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn opened(
+    slot: &mut TerminalSlot,
+    dir: &Path,
+) -> Result<(Vec<Config>, Vec<Option<SignIn>>), Box<dyn Error>> {
+    let (configs, sign_ins): (Vec<_>, Vec<_>) = signed_in(slot, dir).await?.into_iter().unzip();
+    Ok((configs, sign_ins.into_iter().map(Some).collect()))
+}
+
+/// The Onboarding for `config` alone; what failed, if it did.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn sign_in_again(
+    slot: &mut TerminalSlot,
+    dir: &Path,
+    config: &Config,
+    sign_in: &mut Option<SignIn>,
+) -> Result<Option<&'static str>, Box<dyn Error>> {
+    let (terminal, background) = slot.take()?;
+    let theme = onboarding_theme(dir, background)?;
+    let failed = match onboarding::run(terminal, &theme, dir, Start::again(config)).await? {
+        Outcome::SignedIn(_) => {
+            *sign_in = read_sign_in(config, dir)?;
+            sign_in.is_none()
+        }
+        Outcome::Quit(error) => {
+            *sign_in = None;
+            error.is_some()
+        }
+    };
+
+    Ok(failed.then_some("sign-in failed"))
 }
 
 /// Runs `work`, which takes the terminal once it draws, and hands the
@@ -389,15 +439,15 @@ fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn E
 }
 
 /// The TUI until it exits, each Account of `configs` signed out without
-/// its sign-in; `failed` when the last sign-in did.
+/// its sign-in; `failure` toasts what failed before it.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
 async fn session(
-    slot: &mut TerminalSlot,
+    (slot, dir): (&mut TerminalSlot, &Path),
     (configs, sign_ins): (&[Config], &[Option<SignIn>]),
-    failed: bool,
+    failure: Option<&'static str>,
 ) -> Result<Exit, Box<dyn Error>> {
     let emails: Vec<&str> = configs.iter().map(|config| config.email.as_str()).collect();
     let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
@@ -445,7 +495,7 @@ async fn session(
     let icons = configs
         .first()
         .map_or(IconChoice::Auto, |config| config.icons);
-    let theme = Theme::from_env(background, Icons::choose(icons));
+    let mut theme = Theme::from_env(background, Icons::choose(icons));
     let to_previews = (configs.len(), sender);
     let mut previews = Previews::start(requests, to_previews, theme.mail);
     let background = Background {
@@ -457,10 +507,11 @@ async fn session(
         accounts: Accounts(configs),
         outbox: &outbox,
         statuses: sign_ins.iter().map(Option::as_ref).map(starting).collect(),
-        failed,
+        failure,
+        config_dir: dir,
     };
 
-    Ok(run::run(terminal, &theme, &caches, &mut previews, background).await?)
+    Ok(run::run(terminal, &mut theme, &caches, &mut previews, background).await?)
 }
 
 /// The Status an Account starts in.

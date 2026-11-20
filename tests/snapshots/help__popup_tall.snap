@@ -2,7 +2,7 @@
 source: tests/help.rs
 expression: screen
 ---
-size: 80x36  cursor: hidden
+size: 80x37  cursor: hidden
 ┌─ 2024 ───┌ Help ──────────────────────────────────────────────────┐──────────┐
 │   Bob    │                                                        │024-11-18 │
 │   Newer  │ Navigate                                               │          │
@@ -17,16 +17,17 @@ size: 80x36  cursor: hidden
 │          │ Backspace               delete: move to Trash          │          │
 │          │ u                       undo a delete or discard       │          │
 │          │ c                       compose a new Message          │          │
-└──────────│ r                       reply to the sender            │──────────┘
-┌ Inbox · 1│ R                       reply to all                   │──────────┐
-│ From    B│                                                        │          │
-│ Subject N│ Links                                                  │          │
-│ Date    M│ o                       label the links in the Preview │          │
-├──────────│                                                        │──────────┤
-│ Newer bod│ View                                                   │          │
-│          │ v                       rendered / text view of HTML   │          │
+│          │ r                       reply to the sender            │          │
+└──────────│ R                       reply to all                   │──────────┘
+┌ Inbox · 1│                                                        │──────────┐
+│ From    B│ Links                                                  │          │
+│ Subject N│ o                       label the links in the Preview │          │
+│ Date    M│                                                        │          │
+├──────────│ View                                                   │──────────┤
+│ Newer bod│ v                       rendered / text view of HTML   │          │
 │          │                                                        │          │
 │          │ App                                                    │          │
+│          │ ,                       settings and Accounts          │          │
 │          │ ?                       this help                      │          │
 │          │ q          ^c           quit                           │          │
 │          │ ^z                      suspend to the shell           │          │

@@ -70,3 +70,14 @@ pub fn write(path: &Path, secret: &Credential) -> Result<(), Error> {
         }
     })
 }
+
+/// Removes the credential from the file secret store; there being none is no error.
+pub fn delete(path: &Path) -> Result<(), Error> {
+    match std::fs::remove_file(path) {
+        Err(source) if source.kind() != io::ErrorKind::NotFound => Err(Error::Write {
+            path: path.to_owned(),
+            source,
+        }),
+        _ => Ok(()),
+    }
+}

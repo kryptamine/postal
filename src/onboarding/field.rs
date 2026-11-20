@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-/// What a key does to a text field on the Onboarding.
+/// What a key does to a text field.
 pub enum Edit {
     Changed,
     Submit,

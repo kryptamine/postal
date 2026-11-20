@@ -3,8 +3,8 @@ use tokio::time::Instant;
 use crate::{
     awaited_reply::AwaitedReply, cache::Cache, draft_preview::DraftPreview, dwell::Dwell,
     folder_picker::FolderPicker, inbox_view::InboxView, link_hints::LinkHints,
-    local_drafts::LocalDrafts, mode::Mode, reading::Reading, status::Status, thread::Key,
-    toast::Toast, undo::Undo,
+    local_drafts::LocalDrafts, mode::Mode, reading::Reading, settings::Settings, status::Status,
+    thread::Key, toast::Toast, undo::Undo,
 };
 
 /// What the main screen shows over and beside the panes.
@@ -29,15 +29,17 @@ pub struct Screen {
     /// Under `draft`, taking every key it leaves.
     pub local: Option<LocalDrafts>,
     pub replying: Option<AwaitedReply>,
+    /// Over the whole screen, taking every key, while open.
+    pub settings: Option<Settings>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
 }
 
 impl Screen {
-    /// `rebuilt` when opening replaced the Cache, `failed` when the last
-    /// sign-in did.
-    pub fn opening(rebuilt: bool, statuses: Vec<Status>, failed: bool) -> Self {
-        let toast = failed.then(|| Toast::error("sign-in failed"));
+    /// `rebuilt` when opening replaced the Cache; `failure` toasts what
+    /// failed before it opened.
+    pub fn opening(rebuilt: bool, statuses: Vec<Status>, failure: Option<&'static str>) -> Self {
+        let toast = failure.map(Toast::error);
         Self {
             statuses,
             toast: toast.or_else(|| rebuilt.then(|| Toast::new("cache rebuilt"))),
@@ -62,9 +64,13 @@ impl Screen {
         left
     }
 
-    /// What the keys act on: a Draft's preview takes them all while open,
-    /// then Local Drafts.
+    /// What the keys act on: Settings or a Draft's preview takes them all
+    /// while open, then Local Drafts.
     pub const fn keys(&self) -> Mode {
+        if self.settings.is_some() {
+            return Mode::Settings;
+        }
+
         match (&self.draft, &self.local) {
             (Some(preview), _) if preview.queued => Mode::Queued,
             (Some(_), _) => Mode::Draft,

@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::{io, path::Path, sync::Arc};
 
 use crossterm::event::Event;
 use futures::{FutureExt, Stream, StreamExt, future::FusedFuture};
@@ -14,12 +14,14 @@ use crate::{
     browser,
     cache::{self, Cache},
     composing,
+    config::IconChoice,
     draft_pane::DraftPane,
     draft_preview::DraftPreview,
     folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
+    icons::Icons,
     inbox::Inbox,
     inbox_view::InboxView,
     input::Input,
@@ -44,6 +46,8 @@ use crate::{
     routes::Routes,
     screen::Screen,
     search::Search,
+    settings::{self, Settings},
+    settings_popup::SettingsPopup,
     stack,
     status::Status,
     steering::Ask,
@@ -82,6 +86,12 @@ pub enum Exit {
     /// `L` asked for the login flow of this Account, run with the terminal
     /// handed back.
     SignIn(usize),
+    /// Settings asked for the Onboarding from the Provider list.
+    AddAccount,
+    /// Settings asked to unlink the Account of this address.
+    Unlink(String),
+    /// Settings changed what the Accounts read at start.
+    Reload,
 }
 
 /// The network work behind the screen, what it reports as it goes, the
@@ -96,10 +106,12 @@ pub struct Background<'a, W, U> {
     pub asks: Routes<Ask>,
     pub accounts: Accounts<'a>,
     pub outbox: &'a Outbox,
+    /// Where `config.toml` is, which Settings writes.
+    pub config_dir: &'a Path,
     /// Each Account's at the start: signed out until `L` signs it in again.
     pub statuses: Vec<Status>,
-    /// The last sign-in failed.
-    pub failed: bool,
+    /// What failed before the TUI opened again, toasted.
+    pub failure: Option<&'static str>,
 }
 
 /// The one event loop: input, and each `Update` from the background work,
@@ -115,7 +127,7 @@ pub struct Background<'a, W, U> {
 )]
 pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
-    theme: &Theme,
+    theme: &mut Theme,
     caches: &[Cache],
     previews: &mut Previews,
     background: Background<
@@ -131,10 +143,10 @@ pub async fn run(
     let rows = first_rows(terminal)?;
     show(&mut view, caches, Some(rows))?;
     let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
-    let outbox = background.outbox;
+    let (outbox, config_dir) = (background.outbox, background.config_dir);
     let mut replies = background.replies;
     let rebuilt = caches.iter().any(Cache::rebuilt);
-    let mut screen = Screen::opening(rebuilt, background.statuses, background.failed);
+    let mut screen = Screen::opening(rebuilt, background.statuses, background.failure);
     screen.outbox = outbox.count();
     for (account, &status) in screen.statuses.iter().enumerate() {
         (status == Status::SignedOut).then(|| previews.link(account, false));
@@ -214,6 +226,14 @@ pub async fn run(
                     Step::LocalDrafts => open_local(&mut screen, outbox),
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::SignIn(account) => return Ok(Exit::SignIn(account)),
+                    Step::Settings => match Settings::open(config_dir) {
+                        Ok(settings) => screen.settings = Some(settings),
+                        Err(error) => screen.toast = Some(Toast::error(error.to_string())),
+                    },
+                    Step::Icons(choice) => theme.icons = Icons::choose(choice),
+                    Step::AddAccount => return Ok(Exit::AddAccount),
+                    Step::Unlink(email) => return Ok(Exit::Unlink(email)),
+                    Step::Reload => return Ok(Exit::Reload),
                     Step::Quit => return Ok(Exit::Quit),
                 }
 
@@ -371,7 +391,7 @@ fn draw(
 }
 
 /// What shows over the panes in `body`: the Folder Picker, Local Drafts, a
-/// Draft's preview, then the `?` popup over any.
+/// Draft's preview, Settings, then the `?` popup over any.
 fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, screen: &Screen) {
     if let Some(picker) = &screen.picker {
         let popup = PickerPopup { theme, picker };
@@ -406,6 +426,15 @@ fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, 
         };
 
         frame.render_widget(pane, body);
+    }
+
+    if let Some(settings) = &screen.settings {
+        let popup = SettingsPopup { theme, settings };
+        if let Some(cursor) = popup.cursor(body) {
+            frame.set_cursor_position(cursor);
+        }
+
+        frame.render_widget(popup, body);
     }
 
     if screen.help {
@@ -546,6 +575,11 @@ enum Step {
     Suspend,
     /// The sign-in of this Account, signed out.
     SignIn(usize),
+    Settings,
+    Icons(IconChoice),
+    AddAccount,
+    Unlink(String),
+    Reload,
     Quit,
 }
 
@@ -564,6 +598,7 @@ fn handle(
             Ok(Step::Stay)
         }
         Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
+        Some(Ok(Event::Key(key))) if screen.settings.is_some() => Ok(on_settings(key, screen)),
         Some(Ok(Event::Key(key))) if screen.draft.is_some() => Ok(on_draft(key, screen)),
         Some(Ok(Event::Key(key))) if screen.local.is_some() => Ok(on_local(key, screen)),
         Some(Ok(Event::Key(key))) if screen.picker.is_some() => Ok(pick(key, screen)),
@@ -616,6 +651,7 @@ fn act(
         Some(Action::Page) => Step::Page,
         Some(Action::Suspend) => Step::Suspend,
         Some(Action::SignIn) => screen.signed_out().map_or(Step::Stay, Step::SignIn),
+        Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
         Some(Action::Folders) => Step::Folders,
         Some(Action::SwitchView) => {
@@ -899,6 +935,28 @@ fn undo(
 }
 
 /// Acts on one key in a Draft's preview, or an Outbox Message's.
+fn on_settings(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
+    let Some(settings) = &mut screen.settings else {
+        return Step::Stay;
+    };
+
+    match settings.key(key) {
+        settings::Step::Stay => Step::Stay,
+        settings::Step::Close { reload } => {
+            screen.settings = None;
+            if reload { Step::Reload } else { Step::Stay }
+        }
+        settings::Step::Help => {
+            screen.help = true;
+            Step::Stay
+        }
+        settings::Step::Icons(choice) => Step::Icons(choice),
+        settings::Step::AddAccount => Step::AddAccount,
+        settings::Step::Unlink(email) => Step::Unlink(email),
+        settings::Step::Quit => Step::Quit,
+    }
+}
+
 fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
     if screen.draft.as_ref().is_some_and(|preview| preview.queued) {
         match keymap::queued(key) {

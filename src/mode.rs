@@ -15,4 +15,6 @@ pub enum Mode {
     LocalDrafts,
     /// An Outbox Message over the screen, read-only.
     Queued,
+    /// Settings over the screen.
+    Settings,
 }

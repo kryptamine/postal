@@ -31,4 +31,27 @@ impl SecretStore {
 
         Ok(())
     }
+
+    pub fn delete(self, dir: &Path, email: &str) -> Result<(), Box<dyn Error>> {
+        match self {
+            Self::Keychain => keychain::delete(email, &dir.join("config.toml"))?,
+            Self::File => secret::delete(&secret::path(dir, email))?,
+        }
+
+        Ok(())
+    }
+
+    pub const fn other(self) -> Self {
+        match self {
+            Self::Keychain => Self::File,
+            Self::File => Self::Keychain,
+        }
+    }
+
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Keychain => "keychain",
+            Self::File => "file",
+        }
+    }
 }

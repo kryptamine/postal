@@ -14,7 +14,8 @@ use crate::{
 /// server set nowhere is the Provider's.
 pub struct PartialConfig {
     accounts: Vec<RawAccount>,
-    name: Option<String>,
+    /// The display name of `From` every Account shares, unless it sets its own.
+    pub name: Option<String>,
     imap: RawImap,
     smtp: RawSmtp,
     pub secrets: SecretStore,
@@ -308,6 +309,19 @@ impl PartialConfig {
         self.to_toml()
     }
 
+    /// Every Account named, in the order written.
+    pub fn accounts(&self) -> impl Iterator<Item = (&str, Provider)> {
+        self.accounts
+            .iter()
+            .map(|account| (account.email.as_str(), account.provider))
+    }
+
+    pub fn remove(&mut self, email: &str) {
+        if let Some(at) = self.find(email) {
+            self.accounts.remove(at);
+        }
+    }
+
     fn find(&self, email: &str) -> Option<usize> {
         self.accounts
             .iter()
@@ -328,7 +342,7 @@ impl PartialConfig {
     }
 
     /// The file `load` reads back as this; the defaults are left out.
-    fn to_toml(&self) -> String {
+    pub fn to_toml(&self) -> String {
         let mut text = String::new();
         // Only an Account setting nothing of its own goes at the top level,
         // where its tables would be every Account's.
@@ -345,10 +359,8 @@ impl PartialConfig {
             writeln!(text, "name = {}", toml::Value::from(name.as_str())).ok();
         }
 
-        match self.icons {
-            IconChoice::Auto => {}
-            IconChoice::Nerd => text += "icons = \"nerd\"\n",
-            IconChoice::None => text += "icons = \"none\"\n",
+        if self.icons != IconChoice::Auto {
+            writeln!(text, "icons = \"{}\"", self.icons.key()).ok();
         }
 
         self.imap.write(&mut text, "imap");

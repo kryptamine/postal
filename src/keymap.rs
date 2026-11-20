@@ -50,6 +50,7 @@ pub enum Action {
     },
     /// The login flow again, while signed out.
     SignIn,
+    Settings,
     Folders,
     Suspend,
     Quit,
@@ -152,17 +153,19 @@ const READING: &[Mode] = &[Mode::Reading];
 const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 const DRAFT: &[Mode] = &[Mode::Draft];
 const LOCAL: &[Mode] = &[Mode::LocalDrafts];
+const SETTINGS: &[Mode] = &[Mode::Settings];
 const ANY: &[Mode] = &[
     Mode::List,
     Mode::Reading,
     Mode::Draft,
     Mode::LocalDrafts,
     Mode::Queued,
+    Mode::Settings,
 ];
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 41] = [
+const BINDINGS: [Binding; 46] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -387,6 +390,15 @@ const BINDINGS: [Binding; 41] = [
     },
     Binding {
         group: "App",
+        modes: BOTH,
+        signed_out: false,
+        keys: ",",
+        aliases: "",
+        description: "settings and Accounts",
+        hint: None,
+    },
+    Binding {
+        group: "App",
         modes: ANY,
         signed_out: false,
         keys: "?",
@@ -408,7 +420,13 @@ const BINDINGS: [Binding; 41] = [
     },
     Binding {
         group: "App",
-        modes: &[Mode::Reading, Mode::Draft, Mode::LocalDrafts, Mode::Queued],
+        modes: &[
+            Mode::Reading,
+            Mode::Draft,
+            Mode::LocalDrafts,
+            Mode::Queued,
+            Mode::Settings,
+        ],
         signed_out: false,
         keys: "^c",
         aliases: "",
@@ -598,6 +616,54 @@ const BINDINGS: [Binding; 41] = [
             description: "back",
         }),
     },
+    Binding {
+        group: "Settings",
+        modes: SETTINGS,
+        signed_out: false,
+        keys: "j / k",
+        aliases: "↓ / ↑",
+        description: "next / previous",
+        hint: Some(Hint {
+            keys: "j/k",
+            description: "move",
+        }),
+    },
+    Binding {
+        group: "Settings",
+        modes: SETTINGS,
+        signed_out: false,
+        keys: "Enter",
+        aliases: "",
+        description: "change the setting, or add an Account",
+        hint: Some(Hint {
+            keys: "Enter",
+            description: "change",
+        }),
+    },
+    Binding {
+        group: "Settings",
+        modes: SETTINGS,
+        signed_out: false,
+        keys: "d",
+        aliases: "Backspace",
+        description: "unlink the Account",
+        hint: Some(Hint {
+            keys: "d",
+            description: "unlink",
+        }),
+    },
+    Binding {
+        group: "Settings",
+        modes: SETTINGS,
+        signed_out: false,
+        keys: "q",
+        aliases: "Esc / ,",
+        description: "back to the Message List",
+        hint: Some(Hint {
+            keys: "q",
+            description: "back",
+        }),
+    },
 ];
 
 /// The bindings listed in `mode` now, in `BINDINGS` order.
@@ -648,6 +714,7 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (_, KeyCode::Char('|')) => Some(Action::Page),
         (_, KeyCode::Char('?')) => Some(Action::Help),
         (_, KeyCode::Char('L')) => Some(Action::SignIn),
+        (_, KeyCode::Char(',')) => Some(Action::Settings),
         (_, KeyCode::Char('f')) => Some(Action::Folders),
         (Mode::List | Mode::Query, KeyCode::Char('j') | KeyCode::Down) => {
             Some(Action::Move(Move::Down))

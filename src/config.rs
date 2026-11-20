@@ -74,13 +74,33 @@ impl Smtp {
 }
 
 /// Whether to draw Nerd Font icons: `auto` guesses from the terminal.
-#[derive(Deserialize, Default, Clone, Copy)]
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum IconChoice {
     #[default]
     Auto,
     Nerd,
     None,
+}
+
+impl IconChoice {
+    /// The value of `icons` in `config.toml`.
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Nerd => "nerd",
+            Self::None => "none",
+        }
+    }
+
+    /// The one after this, back to `auto` after `none`.
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Auto => Self::Nerd,
+            Self::Nerd => Self::None,
+            Self::None => Self::Auto,
+        }
+    }
 }
 
 #[derive(Debug)]

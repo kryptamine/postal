@@ -2,7 +2,7 @@
 //! browser or by an app-specific password, checked on the IMAP server before
 //! anything is written.
 
-mod field;
+pub mod field;
 mod page;
 mod step;
 
