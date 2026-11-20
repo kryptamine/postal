@@ -1,8 +1,13 @@
 #include "alignment.h"
 
 #include "dom.h"
+#include "text.h"
+
+#include <cctype>
 
 #include <set>
+#include <string>
+#include <vector>
 
 using namespace litehtml;
 
@@ -35,10 +40,25 @@ void lines(const element::ptr& el, std::set<float>& rows, size_t& breaks)
     }
 }
 
+// A table row of two cells whose first shows one glyph that is no letter
+// or digit, a bullet, is a list item built of cells.
+bool bulleted(const element::ptr& row)
+{
+    if(!tag_is(row, "tr")) return false;
+    std::vector<element::ptr> cells_in;
+    for(auto& cell : row->children())
+        if(cell->css().get_display() == display_table_cell) cells_in.push_back(cell);
+    if(cells_in.size() != 2) return false;
+    std::string text;
+    shown_text(cells_in[0], text);
+    text = squeezed(text);
+    return cells(text.c_str()) == 1 && !std::isalnum(static_cast<unsigned char>(text[0]));
+}
+
 void spread(const element::ptr& el, bool listed)
 {
     css_properties& css = el->css();
-    listed = listed || css.get_display() == display_list_item;
+    listed = listed || css.get_display() == display_list_item || bulleted(el);
     if(css.get_text_align() == text_align_justify || (listed && css.get_text_align() == text_align_center))
         css.set_text_align(text_align_left);
     for(auto& child : el->children()) spread(child, listed);

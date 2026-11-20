@@ -152,3 +152,19 @@ fn shades_of_one_colour_are_one_colour() {
     assert_eq!(colour("A lighter blue"), colour("A title"));
     assert_ne!(colour("An overdue"), colour("A title"));
 }
+
+// A list built of table rows, a bullet in one cell and the item in the
+// next, took the centring of the cell round it: each item stood half a
+// pane from its bullet.
+#[test]
+fn a_centred_item_beside_a_bullet_cell_is_set_left() {
+    let body = html(
+        "<table width=\"100%\"><tr><td align=\"center\"><table width=\"100%\"><tr>\
+         <td width=\"24\">&bull;</td><td>Antalya</td></tr></table></td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "Antalya");
+    let (row, bullet) = at(&screen, "•");
+    let (item_row, item) = at(&screen, "Antalya");
+    assert_eq!(row, item_row, "{}", screen.text());
+    assert!(item - bullet <= 4, "{}", screen.text());
+}

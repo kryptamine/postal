@@ -145,7 +145,9 @@ element helpers.
 
 - Text alignment gives way where one-cell glyphs make it hard to read.
   Justified text is set left: its lines were padded with whole cells. So is
-  centred text in a list item, which stood apart from its marker. After
+  centred text in a list item, which stood apart from its marker, and in
+  a table row of two cells whose first shows one glyph that is no letter
+  or digit: a list built of cells, each item half a pane from its bullet. After
   layout, a centred block whose own words wrap onto three lines or more,
   not counting the breaks the mail put in, is a paragraph and is set left,
   and the layout runs again (`alignment.cpp`): a title, a button and an
