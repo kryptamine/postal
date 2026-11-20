@@ -18,6 +18,7 @@
 #include "picture_boxes.h"
 #include "snap.h"
 #include "stacking.h"
+#include "superscripts.h"
 #include "text.h"
 #include "titles.h"
 #include "word_breaks.h"
@@ -485,7 +486,9 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
     }
     left_align_spread(doc->root());
     unfloat_cells(doc->root());
+    // Before the digits are raised: a cell of raised digits keeps no gap.
     gap_cells(doc->root());
+    raise_digits(doc->root());
     snap_tree(doc->root());
     container.body = body_size(doc->root());
     if(loose) loosen(doc->root());

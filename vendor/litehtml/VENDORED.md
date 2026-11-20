@@ -5,7 +5,7 @@ Vendored from https://github.com/litehtml/litehtml at commit
 (with the bundled gumbo in `src/gumbo/`) and `LICENSE`. Built by `build.rs`.
 See `docs/adr/0006-rendered-view-engine.md`.
 
-Six changes, marked `Postal:` in the source:
+Seven changes, marked `Postal:` in the source:
 
 - `document::rebuild_render_tree` is public in
   `include/litehtml/document.h`, so `cpp/cell_grid.cpp` can rebuild the boxes
@@ -32,6 +32,9 @@ Six changes, marked `Postal:` in the source:
   (`css_properties::get_text_align`), and a table does not inherit them
   (`css_properties::compute`): text in a table under `<td align=center>`
   stood centred where a browser sets it left.
+- `el_text::set_text` in `include/litehtml/el_text.h` replaces a word's
+  text after parsing and measures it again, so `cpp/superscripts.cpp` can
+  show the digits of a `<sup>` raised.
 
 To update, replace these directories from a newer commit, apply the changes
 again and update the hash.

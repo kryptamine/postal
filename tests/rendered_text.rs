@@ -242,3 +242,16 @@ fn the_words_of_two_cells_are_set_apart() {
     let screen = preview(body, &DEFAULT, "Unsubscribe");
     assert!(screen.contains("Support Unsubscribe"), "{}", screen.text());
 }
+
+// Cents set in `<sup>` read as part of the price: `5846 €` for 58.46.
+#[test]
+fn the_digits_of_a_sup_are_raised() {
+    let body = html(
+        "<p>Price 58<sup>46</sup> €</p>\
+         <table cellspacing=\"0\" cellpadding=\"0\"><tr><td>14</td><td><sup>17</sup></td>\
+         <td>€</td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "Price");
+    assert!(screen.contains("Price 58⁴⁶ €"), "{}", screen.text());
+    assert!(screen.contains("14¹⁷ €"), "{}", screen.text());
+}

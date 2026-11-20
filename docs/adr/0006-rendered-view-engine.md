@@ -22,7 +22,8 @@ drops the boxes round pictures, `buttons.cpp` and `titles.cpp` collapse
 buttons and cover bands with `collapse.cpp`, `contents.cpp` gathers what
 each element shows for those passes in one walk, `loosen.cpp`,
 `stacking.cpp` and `word_breaks.cpp` make a mail too wide fit,
-`cell_gaps.cpp` sets the words of two cells apart,
+`cell_gaps.cpp` sets the words of two cells apart, `superscripts.cpp`
+raises the digits of a `<sup>`,
 `font_sizes.cpp` tells the small print, and
 `colour.cpp`, `text.cpp` and `dom.cpp` hold the colour, cell-width and
 element helpers.
@@ -176,9 +177,12 @@ element helpers.
   receipt's rows stood centred. This changed 67 of 473 cached mails.
 - Two table cells with words side by side get a column between them where
   their padding, borders and spacing give less: in 600 px the table spread
-  them, and in the pane `Support` met `Unsubscribe`.
+  them, and in the pane `Support` met `Unsubscribe`. The digits of a
+  `<sup>` are drawn raised, and their cell takes no column: cents read
+  `58⁴⁶ €`, not `5846 €`, a price a hundred times too high. These changed
+  61 of 473 cached mails.
 
-Six changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
+Seven changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
 `document::rebuild_render_tree` is public: the boxes are built from the
 computed styles inside `createFromString`, before the snap, and must be built
 again after it. A block inside an inline-block no longer splits the inline
@@ -187,7 +191,8 @@ around it, a litehtml bug that cut link-wrapped buttons in two. And a cell's
 memory outside the table's columns. And `text-decoration: none` no longer
 shifts by -1, and `string_id` has a fixed underlying type, so the ids of
 names interned while parsing are in its range. And `text-align` has Blink's
-`-webkit-` values, which a table does not inherit.
+`-webkit-` values, which a table does not inherit, and `el_text::set_text`
+lets a word be replaced after parsing.
 
 ### A mail too wide for the pane
 

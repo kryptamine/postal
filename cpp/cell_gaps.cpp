@@ -2,6 +2,7 @@
 
 #include "dom.h"
 #include "geometry.h"
+#include "superscripts.h"
 #include "text.h"
 
 #include <string>
@@ -44,7 +45,8 @@ void gap_cells(const element::ptr& root)
         if(child->is_comment() || child->css().get_display() == display_none) continue;
         if(cell(child))
         {
-            if(before && worded(before) && worded(child) && between(before, child) < CW)
+            // Raised digits stay on the words before them: cents on a price.
+            if(before && worded(before) && worded(child) && !raised(child) && between(before, child) < CW)
             {
                 // A whole column: less would snap away with the padding.
                 css_margins p = before->css().get_padding();
