@@ -51,6 +51,17 @@ pub fn create(drafts: &Path, text: Option<&str>) -> io::Result<PathBuf> {
     Ok(path)
 }
 
+/// Whether the Draft at `path` is still the template, however its blank
+/// lines and spaces were left. A file that does not read is not.
+pub fn untouched(path: &Path) -> bool {
+    std::fs::read_to_string(path).is_ok_and(|text| {
+        text.lines().all(|line| {
+            let line = line.trim();
+            line.is_empty() || TEMPLATE.lines().any(|header| header.trim() == line)
+        })
+    })
+}
+
 /// Writes a discarded Draft's `text` back to its file, with its notes.
 pub fn restore(path: &Path, text: &str, notes: DraftNotes<'_>) -> io::Result<()> {
     note(path, notes)?;

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use ratatui::Terminal;
 
@@ -27,7 +27,7 @@ use crate::{
 };
 
 /// Compose from the Account `from`: a new Draft's file in the editor,
-/// then its preview.
+/// then its preview, unless it was left as the template.
 pub fn compose(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
@@ -45,7 +45,25 @@ pub fn compose(
         tracing::error!("noting the Account of a Draft failed: {error}");
     }
 
-    edit(terminal, events, screen, (path, (account, None)))
+    run::outside(terminal, events, || editor::edit(&path))?;
+    if draft_file::untouched(&path) {
+        drop_untouched(screen, &path);
+        return Ok(());
+    }
+
+    preview(screen, (path, (account, None)));
+    Ok(())
+}
+
+/// Deletes a Compose left as the template: nothing is lost, so no Undo.
+fn drop_untouched(screen: &mut Screen, path: &Path) {
+    if let Err(error) = notes::remove_message(path) {
+        tracing::error!("dropping an empty Draft failed: {error}");
+        screen.toast = Some(Toast::error("could not drop the empty Draft"));
+        return;
+    }
+
+    screen.toast = Some(Toast::new("Empty Draft dropped"));
 }
 
 /// Reply, or Reply All, at once on a body in the Cache; else once the
@@ -173,6 +191,16 @@ pub fn edit(
     (path, (account, answering)): (PathBuf, (Option<String>, Option<Answering>)),
 ) -> Result<(), Error> {
     run::outside(terminal, events, || editor::edit(&path))?;
+    preview(screen, (path, (account, answering)));
+    Ok(())
+}
+
+/// The preview of the Draft at `path` as the file reads now; `notes` win
+/// over those beside it.
+fn preview(
+    screen: &mut Screen,
+    (path, (account, answering)): (PathBuf, (Option<String>, Option<Answering>)),
+) {
     screen.draft = match DraftPreview::read(path, answering) {
         Ok(mut preview) => {
             preview.account = account.or(preview.account);
@@ -184,8 +212,6 @@ pub fn edit(
             None
         }
     };
-
-    Ok(())
 }
 
 /// Send: the Draft shown moves to the Outbox, unless it does not parse,

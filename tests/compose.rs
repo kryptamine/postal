@@ -287,26 +287,30 @@ fn a_bad_address_refuses_send() {
     );
 }
 
-// An editor quit without a change is no cancel: the template stays a Draft.
+// An editor quit on the bare template was a `c` pressed by mistake: no
+// preview, and no Draft left behind in Local Drafts.
 #[test]
-fn an_unchanged_draft_is_previewed_too() {
+fn an_untouched_compose_leaves_no_draft() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp);
-    let mut t = postal(&home, "true");
-    t.wait_until(listed).unwrap();
-    t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| previewed(s) && s.contains("`To` is empty"))
-        .unwrap();
-    quit(t);
+    let blanked = Editor::writing("To:\nCc:  \nSubject:\n\n\n");
+    for editor in ["true".to_owned(), blanked.command()] {
+        let mut t = postal(&home, &editor);
+        t.wait_until(listed).unwrap();
+        t.send(Key::Char('c')).unwrap();
+        t.wait_until(|s| s.contains("Empty Draft dropped") && !previewed(s))
+            .unwrap();
+        quit(t);
 
-    assert_eq!(drafts(&home)[0].1, "To: \nCc: \nSubject: \n\n");
+        assert!(drafts(&home).is_empty(), "{editor}");
+    }
 }
 
 #[test]
 fn e_opens_the_editor_again_on_the_same_draft() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp);
-    let editor = Editor::writing("To: \n\n");
+    let editor = Editor::writing("To: \nSubject: Hello\n\n");
     let mut t = composed(&home, &editor);
     assert!(t.screen().contains("`To` is empty"));
 
