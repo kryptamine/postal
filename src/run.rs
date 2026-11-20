@@ -16,7 +16,7 @@ use crate::{
     composing,
     draft_pane::DraftPane,
     draft_preview::DraftPreview,
-    folder::{self, Folder, Role},
+    folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
@@ -506,12 +506,8 @@ fn paged(
         *known = nothing_below.map(|uid| (folder, uid));
     }
 
-    // An Account with nothing older sets no edge there (ADR 0014).
-    if view.folder.is_all_inboxes() {
-        show(view, caches, None)?;
-    }
-
-    Ok(())
+    // In All Inboxes, an Account with nothing older sets no edge (ADR 0014).
+    show(view, caches, None)
 }
 
 /// The sync connection of `account` is in `status` now.
@@ -887,11 +883,10 @@ fn undo(
 
     relist(screen, view, caches)?;
     asks.send(account, Ask::Changes);
-    let shown = if view.folder.is_all_inboxes() {
-        folders.iter().any(|f| **f == *folder::INBOX)
-    } else {
-        account == view.folder.account && folders.contains(&view.folder.name)
-    };
+    let shown = view
+        .folder
+        .of(account)
+        .is_some_and(|shown| folders.iter().any(|f| **f == *shown));
 
     let here = view.search.is_some() || shown;
     screen.toast = Some(if here {
@@ -1089,14 +1084,10 @@ fn steer(
         }
         Step::Show(folder) => {
             if switch(view, screen, caches, folder)? {
-                if view.folder.is_all_inboxes() {
-                    let inbox: Arc<str> = folder::INBOX.into();
-                    for account in 0..caches.len() {
-                        asks.send(account, Ask::Show(Arc::clone(&inbox)));
+                for account in 0..caches.len() {
+                    if let Some(shown) = view.folder.of(account) {
+                        asks.send(account, Ask::Show(shown.into()));
                     }
-                } else {
-                    let shown = Arc::clone(&view.folder.name);
-                    asks.send(view.folder.account, Ask::Show(shown));
                 }
             }
         }
@@ -1140,13 +1131,7 @@ fn relist(screen: &mut Screen, view: &InboxView, caches: &[Cache]) -> Result<(),
 fn everywhere(caches: &[Cache], shown: &Folder) -> Result<Inbox, cache::Error> {
     let (mut messages, mut elsewhere) = (Vec::new(), Vec::new());
     for (account, cache) in caches.iter().enumerate() {
-        let here = if shown.is_all_inboxes() {
-            Some(folder::INBOX)
-        } else {
-            (account == shown.account).then_some(&*shown.name)
-        };
-
-        let found = cache.everywhere(here)?;
+        let found = cache.everywhere(shown.of(account))?;
         messages.extend(found.messages);
         elsewhere.extend(found.elsewhere);
     }
@@ -1297,6 +1282,7 @@ fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<
             inbox
         })
     } else {
+        view.edge = Some(view.folder.account);
         let read = caches[view.folder.account].inbox(&view.folder.name, limit);
         read.map_err(Error::Cache)?
     };

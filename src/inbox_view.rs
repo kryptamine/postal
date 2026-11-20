@@ -25,8 +25,8 @@ pub struct InboxView {
     /// Each Account's Folder and its oldest cached UID, when the server had
     /// nothing older there.
     pub nothing_below: Vec<Option<(Arc<str>, u32)>>,
-    /// In All Inboxes, the Account whose cache edge ends the rows: a
-    /// Backfill there shows more.
+    /// The Account whose cache edge ends the rows, a Backfill of which
+    /// shows more: the shown Folder's; in All Inboxes, as ADR 0014 picks.
     pub edge: Option<usize>,
     /// The shown Folder's rows; `None` until the Cache or the server has some.
     pub list: Option<Listing>,

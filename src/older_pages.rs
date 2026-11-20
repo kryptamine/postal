@@ -1,6 +1,5 @@
 use crate::{
-    backfill::Backfill, body_fetch::Request, folder::INBOX, inbox_view::InboxView, routes::Routes,
-    update::Update,
+    backfill::Backfill, body_fetch::Request, inbox_view::InboxView, routes::Routes, update::Update,
 };
 
 /// Rows from the end of the Message List at which the next page is asked
@@ -40,14 +39,8 @@ impl OlderPages {
         }
 
         // With no edge, every Account has shown all it holds (ADR 0014).
-        let (account, folder) = if view.folder.is_all_inboxes() {
-            let Some(account) = view.edge else {
-                return;
-            };
-
-            (account, INBOX)
-        } else {
-            (view.folder.account, &*view.folder.name)
+        let Some((account, folder)) = view.edge.and_then(|a| Some((a, view.folder.of(a)?))) else {
+            return;
         };
 
         let live = self.live.get(account).copied().unwrap_or(false);

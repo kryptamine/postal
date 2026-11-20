@@ -84,6 +84,16 @@ impl Folder {
         self.role == Some(Role::AllInboxes)
     }
 
+    /// The server Folder of `account` this one shows: each Account's Inbox
+    /// in All Inboxes, else itself for its own Account.
+    pub fn of(&self, account: usize) -> Option<&str> {
+        if self.is_all_inboxes() {
+            return Some(INBOX);
+        }
+
+        (account == self.account).then_some(&*self.name)
+    }
+
     /// Folders are known by Account and name; those never on the server by
     /// their role.
     pub fn same(&self, other: &Self) -> bool {
