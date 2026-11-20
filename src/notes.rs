@@ -14,6 +14,10 @@ pub struct Notes {
     /// give back.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub draft: Option<String>,
+    /// The address of the Account it goes out from; the first Account's
+    /// when it names none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
     #[serde(default)]
     pub answering: Option<Answering>,
     /// The server's answer to the last Send.

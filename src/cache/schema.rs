@@ -5,24 +5,28 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 12;
+pub const VERSION: i64 = 13;
 
 const FILE: &str = "cache.sqlite3";
 
 const TABLES: &str = "
+-- Every row names its Account by address, lowercased.
 -- One row per Folder, from `LIST` or a resync; the sync columns are NULL
 -- until the Folder is first resynced.
 CREATE TABLE mailbox (
-    name TEXT PRIMARY KEY,
+    account TEXT NOT NULL,
+    name TEXT NOT NULL,
     -- Its special use (RFC 6154), as `Role::label` names it; NULL for none.
     role TEXT,
     uid_validity INTEGER,
     uid_next INTEGER,
     highest_modseq INTEGER,
     -- NULL until a resync or a `STATUS` counts it.
-    unread INTEGER
+    unread INTEGER,
+    PRIMARY KEY (account, name)
 );
 CREATE TABLE message (
+    account TEXT NOT NULL,
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
     -- The `body` row of this Message, once fetched: see docs/adr/0005-body-cache-key.md.
@@ -43,14 +47,15 @@ CREATE TABLE message (
     text_encoding TEXT,
     text_charset TEXT,
     text_html INTEGER,
-    PRIMARY KEY (mailbox, uid)
+    PRIMARY KEY (account, mailbox, uid)
 );
-CREATE INDEX message_by_arrival ON message (mailbox, received DESC, uid DESC);
+CREATE INDEX message_by_arrival ON message (account, mailbox, received DESC, uid DESC);
 -- A Thread's Messages as `[Gmail]/All Mail` held them when it was last read;
 -- see docs/adr/0009-threads-from-gmail-thread-id.md.
 CREATE TABLE thread_message (
+    account TEXT NOT NULL,
     -- Its `X-GM-MSGID`, the key its body is cached under.
-    key INTEGER PRIMARY KEY,
+    key INTEGER NOT NULL,
     thread INTEGER NOT NULL,
     received INTEGER NOT NULL,
     received_offset INTEGER NOT NULL,
@@ -59,28 +64,32 @@ CREATE TABLE thread_message (
     sender TEXT NOT NULL,
     subject TEXT NOT NULL,
     from_me INTEGER NOT NULL,
-    snippet TEXT NOT NULL
+    snippet TEXT NOT NULL,
+    PRIMARY KEY (account, key)
 );
-CREATE INDEX thread_message_by_thread ON thread_message (thread);
+CREATE INDEX thread_message_by_thread ON thread_message (account, thread);
 -- Shared by every Folder, and not dropped with the rows on a UIDVALIDITY
 -- change; a byte-bounded LRU.
 CREATE TABLE body (
-    key INTEGER PRIMARY KEY,
+    account TEXT NOT NULL,
+    key INTEGER NOT NULL,
     raw BLOB NOT NULL,
     size INTEGER NOT NULL,
     -- Bumped on every write and read; the lowest goes first.
-    used INTEGER NOT NULL
+    used INTEGER NOT NULL,
+    PRIMARY KEY (account, key)
 );
 CREATE INDEX body_by_use ON body (used);
 -- A flag change the server has not acknowledged yet; a resync leaves that
 -- flag of the row alone. See docs/adr/0011-select-the-shown-folder.md.
 CREATE TABLE flag_change (
+    account TEXT NOT NULL,
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
     -- As IMAP names it: `\\Seen` or `\\Answered`.
     flag TEXT NOT NULL,
     added INTEGER NOT NULL,
-    PRIMARY KEY (mailbox, uid, flag)
+    PRIMARY KEY (account, mailbox, uid, flag)
 );
 -- A Message a Delete took out of `message`, with its row, while the
 -- server or an Undo may still move it: docs/adr/0012-delete-and-undo.md.
@@ -94,6 +103,7 @@ CREATE TABLE moved (
     at_trash INTEGER NOT NULL,
     at_uid INTEGER,
     trash TEXT,
+    account TEXT NOT NULL,
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
     body_key INTEGER NOT NULL,
@@ -113,10 +123,10 @@ CREATE TABLE moved (
 );
 -- What the server holds in `mailbox` that the Message List leaves out.
 CREATE VIEW deleted AS
-    SELECT mailbox, at_uid AS uid FROM moved WHERE want_trash AND NOT at_trash;
+    SELECT account, mailbox, at_uid AS uid FROM moved WHERE want_trash AND NOT at_trash;
 -- Rows an Undo put back under `uid`, with where the server has the Message.
 CREATE VIEW undone AS
-    SELECT mailbox, uid, at_trash, at_uid FROM moved WHERE NOT want_trash;
+    SELECT account, mailbox, uid, at_trash, at_uid FROM moved WHERE NOT want_trash;
 ";
 
 /// Why an existing Cache file cannot be used as it is.

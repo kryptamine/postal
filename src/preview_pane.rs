@@ -12,12 +12,10 @@ use crate::{
     preview::Preview, shown::Shown, stack_str::StackStr, theme::Theme, truncate,
 };
 
-/// The header labels, padded so the values line up.
-pub const LABELS: [&str; 3] = ["From    ", "Subject ", "Date    "];
+/// The header labels, padded so the values line up; `Account` only with
+/// several Accounts.
+pub const LABELS: [&str; 4] = ["From    ", "Subject ", "Date    ", "Account "];
 const LABEL_WIDTH: u16 = 8;
-/// The header rows and the row under them: a rule in the Preview, blank
-/// in a stack.
-pub const HEADER_ROWS: usize = LABELS.len() + 1;
 
 /// Where a Preview's text goes in `pane`: inside the border, padded each
 /// side and not on top.
@@ -30,12 +28,10 @@ pub const fn text_area(pane: Rect) -> Rect {
     }
 }
 
-/// Where the body goes in a Preview's `text`: under the header, which
-/// stays put while the body scrolls.
-pub fn body_area(text: Rect) -> Rect {
-    let header = u16::try_from(HEADER_ROWS)
-        .unwrap_or(u16::MAX)
-        .min(text.height);
+/// Where the body goes in a Preview's `text`: under the `header` rows,
+/// which stay put while the body scrolls.
+pub fn body_area(text: Rect, header: usize) -> Rect {
+    let header = u16::try_from(header).unwrap_or(u16::MAX).min(text.height);
     Rect {
         y: text.y + header,
         height: text.height - header,
@@ -43,9 +39,10 @@ pub fn body_area(text: Rect) -> Rect {
     }
 }
 
-/// The body lines that `text` shows from scroll position `scroll`.
-pub fn body_lines(scroll: usize, text: Rect) -> Range<usize> {
-    scroll..scroll.saturating_add(usize::from(body_area(text).height))
+/// The body lines that `text` shows from scroll position `scroll`, under
+/// `header` rows.
+pub fn body_lines(scroll: usize, text: Rect, header: usize) -> Range<usize> {
+    scroll..scroll.saturating_add(usize::from(body_area(text, header).height))
 }
 
 /// The selected Message's Preview inside a border titled with the Folder
@@ -89,20 +86,26 @@ impl StatefulWidget for PreviewPane<'_> {
             Shown::Unavailable { header, why } => (header, Some(why)),
         };
 
+        let header_rows = view.header_rows();
+        let account = view
+            .selected_message()
+            .and_then(|m| view.account_label(m.account));
         let values = [
-            (&preview.from, self.theme.sender),
-            (&preview.subject, self.theme.subject),
-            (&preview.date, self.theme.date),
+            (&*preview.from, self.theme.sender),
+            (&*preview.subject, self.theme.subject),
+            (&*preview.date, self.theme.date),
+            (account.unwrap_or_default(), self.theme.sender),
         ];
 
         let rows = text.y..text.bottom();
-        for (y, (label, &(value, style))) in rows.zip(LABELS.iter().zip(&values)) {
+        let fields = LABELS.iter().zip(&values).take(header_rows - 1);
+        for (y, (label, &(value, style))) in rows.zip(fields) {
             let row = Rect::new(text.x, y, text.width, 1);
             header(self.theme, buf, row, label, (value, style));
         }
 
-        let body = body_area(text);
-        if usize::from(text.height) >= HEADER_ROWS {
+        let body = body_area(text, header_rows);
+        if usize::from(text.height) >= header_rows {
             border::rule(buf, area, body.y - 1, self.theme.border);
         }
 

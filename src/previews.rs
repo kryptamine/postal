@@ -17,6 +17,7 @@ use crate::{
     preview::Preview,
     preview_render::{self, Job},
     rendered_previews::{PreviewKey, RenderedPreviews},
+    routes::Routes,
     shown::Shown,
     update::Update,
     view::View,
@@ -37,8 +38,10 @@ enum Link {
 }
 
 /// Gets Previews ready: fetches bodies the Cache lacks, renders on a thread
-/// of its own, and keeps what it rendered. Its UIDs are those of `folder`.
+/// of its own, and keeps what it rendered. Its UIDs are those of `folder`
+/// of `account`.
 pub struct Previews {
+    account: usize,
     folder: Arc<str>,
     rendered: RenderedPreviews,
     rendering: HashSet<PreviewKey>,
@@ -53,17 +56,18 @@ pub struct Previews {
     refused: HashMap<u32, String>,
     /// The header of the selected Message, while its body is unavailable.
     header: Option<(u32, Preview)>,
-    link: Link,
+    /// Each Account's, by its place in this run.
+    links: Vec<Link>,
     colours: MailColours,
-    requests: UnboundedSender<Request>,
+    requests: Routes<Request>,
     jobs: mpsc::Sender<Job>,
 }
 
 impl Previews {
     /// Starts the render thread, which sends each Preview back to `updates`.
     pub fn start(
-        requests: UnboundedSender<Request>,
-        updates: UnboundedSender<Update>,
+        requests: Routes<Request>,
+        (accounts, updates): (usize, UnboundedSender<(usize, Update)>),
         colours: MailColours,
     ) -> Self {
         let (jobs, queue) = mpsc::channel::<Job>();
@@ -72,7 +76,7 @@ impl Previews {
                 let key = job.key;
                 let preview = preview_render::render(job);
                 if updates
-                    .unbounded_send(Update::Rendered(key, preview))
+                    .unbounded_send((key.account, Update::Rendered(key, preview)))
                     .is_err()
                 {
                     return;
@@ -81,6 +85,7 @@ impl Previews {
         });
 
         Self {
+            account: 0,
             folder: folder::INBOX.into(),
             rendered: RenderedPreviews::default(),
             rendering: HashSet::new(),
@@ -89,7 +94,7 @@ impl Previews {
             offline: HashSet::new(),
             refused: HashMap::new(),
             header: None,
-            link: Link::Starting,
+            links: vec![Link::Starting; accounts],
             colours,
             requests,
             jobs,
@@ -104,6 +109,7 @@ impl Previews {
     /// The Preview of `message` in `html` at `width`, once rendered.
     pub fn of(&self, message: &Message, html: View, width: u16) -> Option<&Preview> {
         self.rendered.get(PreviewKey {
+            account: message.account,
             body: message.body_key,
             width,
             view: html,
@@ -148,7 +154,7 @@ impl Previews {
     /// When all are rendered already this does not allocate.
     pub fn want(
         &mut self,
-        cache: &Cache,
+        caches: &[Cache],
         view: &InboxView,
         width: u16,
     ) -> Result<(), cache::Error> {
@@ -156,8 +162,10 @@ impl Previews {
         let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
         let rows = std::iter::once(selected).chain(around.filter(|&i| i != selected));
         let wanted = rows.filter_map(|index| Some((view.row(index)?, index == selected)));
-        let folder = view.selected_message().and_then(|m| m.folder.as_ref());
-        self.ready(cache, (view, folder), wanted, width)?;
+        let folder = view
+            .selected_message()
+            .and_then(|m| Some((m.account, m.folder.as_ref()?)));
+        self.ready(caches, (view, folder), wanted, width)?;
         if let Some(message) = view.selected_message() {
             self.ready_header(message);
         }
@@ -169,7 +177,7 @@ impl Previews {
     /// `width`, the one at `cursor` asked for first.
     pub fn want_stack(
         &mut self,
-        cache: &Cache,
+        caches: &[Cache],
         view: &InboxView,
         (unfolded, cursor): (impl Fn(i64) -> bool, i64),
         width: u16,
@@ -178,8 +186,8 @@ impl Previews {
         let wanted = stack.clone().map(|m| (m, m.body_key == cursor));
         let at_cursor = stack
             .filter(|m| m.body_key == cursor)
-            .find_map(|m| m.folder.as_ref());
-        self.ready(cache, (view, at_cursor), wanted, width)
+            .find_map(|m| Some((m.account, m.folder.as_ref()?)));
+        self.ready(caches, (view, at_cursor), wanted, width)
     }
 
     /// Renders each `(message, selected)` whose body is cached and asks the
@@ -187,15 +195,17 @@ impl Previews {
     /// `None`. When all are rendered already this does not allocate.
     fn ready<'m>(
         &mut self,
-        cache: &Cache,
-        (view, folder): (&InboxView, Option<&Arc<str>>),
+        caches: &[Cache],
+        (view, folder): (&InboxView, Option<(usize, &Arc<str>)>),
         wanted: impl Iterator<Item = (&'m Message, bool)>,
         width: u16,
     ) -> Result<(), cache::Error> {
-        let folder = folder.unwrap_or(&view.folder.name);
-        if self.folder != *folder {
-            self.switch(folder);
+        let (account, folder) = folder.unwrap_or((view.folder.account, &view.folder.name));
+        if self.account != account || self.folder != *folder {
+            self.switch(account, folder);
         }
+
+        let live = self.links.get(account).copied();
 
         let mut request = BodyRequest {
             folder: Arc::clone(&self.folder),
@@ -205,6 +215,7 @@ impl Previews {
 
         for (message, selected) in wanted {
             let key = PreviewKey {
+                account: message.account,
                 body: message.body_key,
                 width,
                 view: view.html,
@@ -222,21 +233,21 @@ impl Previews {
             let body = if here && self.fetching.contains(&message.uid) {
                 None
             } else {
-                cache.body(message.body_key)?
+                caches[message.account].body(message.body_key)?
             };
 
             match body {
                 Some(body) => self.render(key, body, message),
                 // It came with the Thread, or comes once its Folder is asked.
                 None if !here => {}
-                None if self.link == Link::Live => {
+                None if live == Some(Link::Live) => {
                     if selected {
                         request.selected = Some(message.uid);
                     } else {
                         request.neighbours.push(message.uid);
                     }
                 }
-                None if self.link == Link::Down => {
+                None if live == Some(Link::Down) => {
                     self.offline.insert(message.uid);
                 }
                 None => {}
@@ -249,7 +260,8 @@ impl Previews {
 
     /// Forgets what it knew by UID: those were another Folder's. Rendered
     /// Previews are kept by body, shared across Folders.
-    fn switch(&mut self, folder: &Arc<str>) {
+    fn switch(&mut self, account: usize, folder: &Arc<str>) {
+        self.account = account;
         self.folder = Arc::clone(folder);
         self.fetching.clear();
         self.asked = None;
@@ -260,7 +272,7 @@ impl Previews {
 
     /// Whether `message`'s UID is one of `folder`'s.
     fn holds(&self, message: &Message) -> bool {
-        message.folder.as_deref() == Some(&*self.folder)
+        message.account == self.account && message.folder.as_deref() == Some(&*self.folder)
     }
 
     /// Whether the body of `uid` cannot come for now.
@@ -284,8 +296,7 @@ impl Previews {
         self.fetching.clear();
         self.fetching
             .extend(request.selected.iter().chain(&request.neighbours));
-        // The send fails only once the body fetch has stopped.
-        self.requests.unbounded_send(Request::Bodies(request)).ok();
+        self.requests.send(self.account, Request::Bodies(request));
     }
 
     fn render(&mut self, key: PreviewKey, body: Vec<u8>, message: &Message) {
@@ -323,8 +334,8 @@ impl Previews {
 
     /// Bodies fetched in `folder`; those of a Folder no longer shown are
     /// in the Cache, and no UID here waits on them.
-    pub fn fetched(&mut self, folder: &str, fetched: Fetched) {
-        if *self.folder != *folder {
+    pub fn fetched(&mut self, (account, folder): (usize, &str), fetched: Fetched) {
+        if self.account != account || *self.folder != *folder {
             return;
         }
 
@@ -346,13 +357,19 @@ impl Previews {
 
     /// Down, what was asked for will not come; back up, every body that
     /// could not come is asked for again as it is wanted.
-    pub fn link(&mut self, live: bool) {
+    pub fn link(&mut self, account: usize, live: bool) {
+        if let Some(link) = self.links.get_mut(account) {
+            *link = if live { Link::Live } else { Link::Down };
+        }
+
+        if account != self.account {
+            return;
+        }
+
         if live {
-            self.link = Link::Live;
             self.offline.clear();
             self.refused.clear();
         } else {
-            self.link = Link::Down;
             self.fetching.clear();
             self.asked = None;
         }

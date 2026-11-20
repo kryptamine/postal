@@ -5,8 +5,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use super::{Cache, Error};
 
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
-const ROW: &str = "body_key, received, received_offset, unread, answered, sender, subject, thread,
-    from_me, snippet, text_section, text_encoding, text_charset, text_html";
+const ROW: &str = "account, body_key, received, received_offset, unread, answered, sender,
+    subject, thread, from_me, snippet, text_section, text_encoding, text_charset, text_html";
 
 /// One Message the server is to move, from the Folder to select.
 pub struct PendingMove {
@@ -29,6 +29,7 @@ impl Cache {
     /// copies of it under other labels, and wants it in Trash. Returns the
     /// Delete for an Undo; `None` when no row was cached.
     pub fn delete(&self, messages: &[(Arc<str>, u32)]) -> Result<Option<i64>, Error> {
+        let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let batch: i64 = transaction.query_row(
@@ -38,7 +39,7 @@ impl Cache {
             )?;
             let mut any = false;
             for (folder, uid) in messages {
-                any |= delete(&transaction, batch, (folder, *uid))?;
+                any |= delete(&transaction, batch, (account, folder, *uid))?;
             }
 
             transaction.commit()?;
@@ -50,6 +51,7 @@ impl Cache {
     /// the Folders they went back to; none when the server named no UID in
     /// Trash to move them back by.
     pub fn undo(&self, batch: i64) -> Result<Vec<Arc<str>>, Error> {
+        let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             // Unreachable: in Trash under a UID the server never named.
@@ -64,7 +66,7 @@ impl Cache {
                 .query_map([batch], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .collect::<Result<_, _>>()?;
             for (trash, uid) in trashed {
-                drop_row(&transaction, (&trash, uid))?;
+                drop_row(&transaction, (account, &trash, uid))?;
             }
 
             let rows: Vec<(i64, String)> = transaction
@@ -87,14 +89,14 @@ impl Cache {
 
     /// Every move the server has yet to make, those back out of Trash first.
     pub fn pending_moves(&self) -> Result<Vec<PendingMove>, Error> {
-        let connection = self.connection.borrow();
+        let connection = self.connection();
         let mut statement = connection.prepare_cached(
             "SELECT id, want_trash, mailbox, trash, at_uid FROM moved
-             WHERE want_trash != at_trash AND at_uid IS NOT NULL
+             WHERE account = ?1 AND want_trash != at_trash AND at_uid IS NOT NULL
              ORDER BY want_trash, mailbox, trash, at_uid",
         )?;
         let pending = statement
-            .query_map([], |row| {
+            .query_map([self.email()], |row| {
                 let (id, want_trash, mailbox): (i64, bool, String) =
                     (row.get(0)?, row.get(1)?, row.get(2)?);
                 let uid = row.get(4)?;
@@ -168,19 +170,26 @@ impl Cache {
 }
 
 /// Once its new UID is in `folder`, an Undo's row gives way to it.
-pub(super) fn settle(connection: &Connection, folder: &str) -> rusqlite::Result<()> {
+pub(super) fn settle(
+    connection: &Connection,
+    (account, folder): (&str, &str),
+) -> rusqlite::Result<()> {
     let arrived = "NOT at_trash AND at_uid != uid
-        AND EXISTS (SELECT 1 FROM message n WHERE n.mailbox = ?1 AND n.uid = at_uid)";
+        AND EXISTS (SELECT 1 FROM message n WHERE n.account = ?2 AND n.mailbox = ?1
+                      AND n.uid = at_uid)";
     connection.execute(
         &format!(
-            "DELETE FROM message WHERE mailbox = ?1 AND uid IN
-                 (SELECT uid FROM undone WHERE mailbox = ?1 AND {arrived})"
+            "DELETE FROM message WHERE account = ?2 AND mailbox = ?1 AND uid IN
+                 (SELECT uid FROM undone WHERE account = ?2 AND mailbox = ?1 AND {arrived})"
         ),
-        [folder],
+        params![folder, account],
     )?;
     connection.execute(
-        &format!("DELETE FROM moved WHERE mailbox = ?1 AND NOT want_trash AND {arrived}"),
-        [folder],
+        &format!(
+            "DELETE FROM moved WHERE account = ?2 AND mailbox = ?1 AND NOT want_trash
+               AND {arrived}"
+        ),
+        params![folder, account],
     )?;
     Ok(())
 }
@@ -200,11 +209,16 @@ pub(super) fn forget_settled(connection: &Connection) -> rusqlite::Result<()> {
 fn delete(
     connection: &Connection,
     batch: i64,
-    (folder, uid): (&str, u32),
+    (account, folder, uid): (&str, &str, u32),
 ) -> rusqlite::Result<bool> {
     let key: Option<(i64, Option<i64>)> = connection
-        .prepare_cached("SELECT body_key, thread FROM message WHERE mailbox = ?1 AND uid = ?2")?
-        .query_row(params![folder, uid], |row| Ok((row.get(0)?, row.get(1)?)))
+        .prepare_cached(
+            "SELECT body_key, thread FROM message WHERE account = ?3 AND mailbox = ?1
+               AND uid = ?2",
+        )?
+        .query_row(params![folder, uid, account], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
         .optional()?;
     let Some((key, thread)) = key else {
         return Ok(false);
@@ -214,34 +228,35 @@ fn delete(
     let again = connection
         .prepare_cached(
             "UPDATE moved SET want_trash = 1, batch = ?3
-             WHERE mailbox = ?1 AND uid = ?2 AND NOT want_trash",
+             WHERE account = ?4 AND mailbox = ?1 AND uid = ?2 AND NOT want_trash",
         )?
-        .execute(params![folder, uid, batch])?;
+        .execute(params![folder, uid, batch, account])?;
     if again == 0 {
         connection
             .prepare_cached(&format!(
                 "INSERT INTO moved (batch, want_trash, at_trash, at_uid, mailbox, uid, {ROW})
                  SELECT ?1, 1, 0, uid, mailbox, uid, {ROW} FROM message
-                 WHERE mailbox = ?2 AND uid = ?3"
+                 WHERE account = ?4 AND mailbox = ?2 AND uid = ?3"
             ))?
-            .execute(params![batch, folder, uid])?;
+            .execute(params![batch, folder, uid, account])?;
     }
 
     // Gmail drops every label of a Message moved to Trash.
-    let copies = "(mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL)";
+    let copies =
+        "account = ?4 AND ((mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL))";
     connection
         .prepare_cached(&format!(
-            "UPDATE mailbox SET unread = max(unread - 1, 0)
-             WHERE name IN (SELECT mailbox FROM message WHERE ({copies}) AND unread)"
+            "UPDATE mailbox SET unread = max(unread - 1, 0) WHERE account = ?4
+               AND name IN (SELECT mailbox FROM message WHERE ({copies}) AND unread)"
         ))?
-        .execute(params![folder, uid, key])?;
+        .execute(params![folder, uid, key, account])?;
     connection
         .prepare_cached(&format!("DELETE FROM message WHERE {copies}"))?
-        .execute(params![folder, uid, key])?;
+        .execute(params![folder, uid, key, account])?;
     if thread.is_some() {
         connection
-            .prepare_cached("DELETE FROM thread_message WHERE key = ?1")?
-            .execute([key])?;
+            .prepare_cached("DELETE FROM thread_message WHERE account = ?2 AND key = ?1")?
+            .execute(params![key, account])?;
     }
 
     Ok(true)
@@ -257,12 +272,12 @@ fn wanted_back(connection: &Connection, id: i64) -> rusqlite::Result<bool> {
 
 /// Forgets `id` for good, with the row an Undo showed for it.
 fn lose(connection: &Connection, id: i64) -> rusqlite::Result<()> {
-    let shown: Option<(String, u32)> = connection
-        .prepare_cached("SELECT mailbox, uid FROM moved WHERE id = ?1 AND NOT want_trash")?
-        .query_row([id], |row| Ok((row.get(0)?, row.get(1)?)))
+    let shown: Option<(String, String, u32)> = connection
+        .prepare_cached("SELECT account, mailbox, uid FROM moved WHERE id = ?1 AND NOT want_trash")?
+        .query_row([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .optional()?;
-    if let Some((folder, uid)) = shown {
-        drop_row(connection, (&folder, uid))?;
+    if let Some((account, folder, uid)) = shown {
+        drop_row(connection, (&account, &folder, uid))?;
     }
 
     connection.execute("DELETE FROM moved WHERE id = ?1", [id])?;
@@ -280,22 +295,27 @@ fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
     connection
         .prepare_cached(
             "UPDATE mailbox SET unread = unread + 1
-             WHERE name = (SELECT mailbox FROM moved WHERE id = ?1 AND unread)",
+             WHERE (account, name) =
+                 (SELECT account, mailbox FROM moved WHERE id = ?1 AND unread)",
         )?
         .execute([id])?;
     Ok(())
 }
 
 /// Drops one row from the Message List, with its share of the Unread count.
-fn drop_row(connection: &Connection, (folder, uid): (&str, u32)) -> rusqlite::Result<()> {
+fn drop_row(
+    connection: &Connection,
+    (account, folder, uid): (&str, &str, u32),
+) -> rusqlite::Result<()> {
     connection
         .prepare_cached(
-            "UPDATE mailbox SET unread = max(unread - 1, 0) WHERE name = ?1
-               AND EXISTS (SELECT 1 FROM message WHERE mailbox = ?1 AND uid = ?2 AND unread)",
+            "UPDATE mailbox SET unread = max(unread - 1, 0) WHERE account = ?3 AND name = ?1
+               AND EXISTS (SELECT 1 FROM message WHERE account = ?3 AND mailbox = ?1
+                             AND uid = ?2 AND unread)",
         )?
-        .execute(params![folder, uid])?;
+        .execute(params![folder, uid, account])?;
     connection
-        .prepare_cached("DELETE FROM message WHERE mailbox = ?1 AND uid = ?2")?
-        .execute(params![folder, uid])?;
+        .prepare_cached("DELETE FROM message WHERE account = ?3 AND mailbox = ?1 AND uid = ?2")?
+        .execute(params![folder, uid, account])?;
     Ok(())
 }

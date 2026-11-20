@@ -12,6 +12,9 @@ pub struct DraftPreview {
     pub draft: Result<Draft, String>,
     /// The last Send's error, such as the server's answer.
     pub failure: Option<String>,
+    /// The address of the Account it goes out from; the first Account's
+    /// when `None`.
+    pub account: Option<String>,
     /// For a Reply.
     pub answering: Option<Answering>,
     /// An Outbox Message, shown read-only.
@@ -24,7 +27,7 @@ impl DraftPreview {
     pub fn read(path: PathBuf, answering: Option<Answering>) -> io::Result<Self> {
         let text = std::fs::read_to_string(&path)?;
         let notes = Notes::read(&path)?.unwrap_or_default();
-        let mut preview = Self::new(path, text, answering.or(notes.answering));
+        let mut preview = Self::new(path, text, (notes.account, answering.or(notes.answering)));
         preview.failure = notes.error;
         Ok(preview)
     }
@@ -34,13 +37,18 @@ impl DraftPreview {
     pub fn queued(path: PathBuf) -> io::Result<Self> {
         let notes = Notes::read(&path)?.unwrap_or_default();
         let text = notes.draft.unwrap_or_default();
-        let mut preview = Self::new(path, text, notes.answering);
+        let mut preview = Self::new(path, text, (notes.account, notes.answering));
         (preview.failure, preview.queued) = (notes.error, true);
         Ok(preview)
     }
 
-    pub fn new(path: PathBuf, text: String, answering: Option<Answering>) -> Self {
+    pub fn new(
+        path: PathBuf,
+        text: String,
+        (account, answering): (Option<String>, Option<Answering>),
+    ) -> Self {
         Self {
+            account,
             draft: Draft::parse(&text),
             path,
             text,

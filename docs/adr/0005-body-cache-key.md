@@ -15,6 +15,8 @@ change only orphans the old bodies until the LRU evicts them.
 
 Both keys are 64-bit unsigned and stored as their bit pattern in a signed
 `INTEGER`; nothing sorts or compares them, so the sign does not matter.
+Neither is unique across Accounts, so a body is cached under its Account and
+its key together.
 
 The raw bodies live in a byte-bounded LRU of about 200 MB, ordered by last
 use; rendered Previews live apart in memory (ADR 0001).

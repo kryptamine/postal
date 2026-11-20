@@ -11,7 +11,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 
-use super::fake_imap::{APP_PASSWORD, EMAIL, xoauth2};
+use super::fake_imap::{APP_PASSWORD, xoauth2};
 
 /// One Message as the server took it.
 #[derive(Clone, Debug)]
@@ -192,7 +192,7 @@ fn auth(command: &str, state: &Mutex<State>) -> String {
         .unwrap_or_default();
     let ok = match mechanism.as_str() {
         "XOAUTH2" => response == xoauth2(),
-        "PLAIN" => response == format!("\0{EMAIL}\0{APP_PASSWORD}"),
+        "PLAIN" => response.ends_with(&format!("\0{APP_PASSWORD}")),
         _ => false,
     };
 

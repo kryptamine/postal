@@ -345,7 +345,7 @@ impl MailServer for ImapSession {
         let mut folders: Vec<_> = names
             .iter()
             .filter(|name| !name.attributes().contains(&NameAttribute::NoSelect))
-            .map(|name| Folder::new(name.name(), role(name.attributes())))
+            .map(|name| Folder::new(0, name.name(), role(name.attributes())))
             .collect();
         named_roles::fill(&mut folders);
         tracing::info!("listed {} Folders", folders.len());

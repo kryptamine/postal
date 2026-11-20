@@ -9,11 +9,14 @@ pub struct LocalDraft {
     pub queued: bool,
     pub to: String,
     pub subject: String,
+    /// The address of the Account it goes out from, as its notes name it.
+    pub account: Option<String>,
 }
 
 impl LocalDraft {
-    fn new(path: PathBuf, queued: bool, text: &str) -> Self {
+    fn new(path: PathBuf, queued: bool, (text, account): (&str, Option<String>)) -> Self {
         Self {
+            account,
             path,
             queued,
             to: draft::header(text, "To").unwrap_or_default(),
@@ -28,7 +31,13 @@ pub fn list(outbox: &Outbox) -> io::Result<Vec<LocalDraft>> {
     let mut rows = Vec::new();
     for path in draft_file::listed(&draft_file::dir()?)? {
         match std::fs::read_to_string(&path) {
-            Ok(text) => rows.push(LocalDraft::new(path, false, &text)),
+            Ok(text) => {
+                let account = Notes::read(&path)
+                    .ok()
+                    .flatten()
+                    .and_then(|notes| notes.account);
+                rows.push(LocalDraft::new(path, false, (&text, account)));
+            }
             Err(error) => tracing::warn!("reading {} failed: {error}", path.display()),
         }
     }
@@ -36,8 +45,9 @@ pub fn list(outbox: &Outbox) -> io::Result<Vec<LocalDraft>> {
     for queued in outbox.queued()?.into_iter().filter(|q| !q.sent) {
         match Notes::read(&queued.path) {
             Ok(notes) => {
-                let text = notes.and_then(|notes| notes.draft).unwrap_or_default();
-                rows.push(LocalDraft::new(queued.path, true, &text));
+                let notes = notes.unwrap_or_default();
+                let text = notes.draft.unwrap_or_default();
+                rows.push(LocalDraft::new(queued.path, true, (&text, notes.account)));
             }
             Err(error) => tracing::warn!("reading {} failed: {error}", queued.path.display()),
         }

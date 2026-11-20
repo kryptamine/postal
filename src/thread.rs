@@ -4,18 +4,20 @@ use crate::message::Message;
 
 /// What tells one Thread from another across reloads of the Message List.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+/// Each names its Account first: a Thread never spans Accounts, and their
+/// IDs and body keys may repeat.
 pub enum Key {
-    Gmail(u64),
+    Gmail(usize, u64),
     /// A Message with no thread ID, a Thread of its own, by body key: UIDs
     /// repeat across Folders.
-    Lone(i64),
+    Lone(usize, i64),
 }
 
 impl Key {
     pub const fn of(message: &Message) -> Self {
         match message.thread {
-            Some(id) => Self::Gmail(id),
-            None => Self::Lone(message.body_key),
+            Some(id) => Self::Gmail(message.account, id),
+            None => Self::Lone(message.account, message.body_key),
         }
     }
 }

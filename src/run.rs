@@ -1,15 +1,12 @@
 use std::{io, sync::Arc};
 
 use crossterm::event::Event;
-use futures::{
-    FutureExt, Stream, StreamExt,
-    channel::mpsc::UnboundedSender,
-    future::{Fuse, FusedFuture},
-};
+use futures::{FutureExt, Stream, StreamExt, future::FusedFuture};
 use ratatui::{Frame, Terminal, layout::Rect};
 use tokio::time::Instant;
 
 use crate::{
+    accounts::Accounts,
     alloc_count,
     awaited_reply::AwaitedReply,
     backfill::Backfill,
@@ -23,6 +20,7 @@ use crate::{
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
+    inbox::Inbox,
     inbox_view::InboxView,
     input::Input,
     keymap::{self, Action, DraftKey, LocalKey, Pick, QueuedKey},
@@ -35,7 +33,6 @@ use crate::{
     mode::Mode,
     older_pages::OlderPages,
     outbox::Outbox,
-    outgoing::Outgoing,
     pager, pager_text,
     picker_popup::PickerPopup,
     preview_pane::{self, PreviewPane},
@@ -44,6 +41,7 @@ use crate::{
     reading::Reading,
     rendered_previews::PreviewKey,
     reply_fetch::ReplyFetch,
+    routes::Routes,
     screen::Screen,
     search::Search,
     stack,
@@ -81,39 +79,27 @@ impl std::error::Error for Error {}
 /// How the TUI ended.
 pub enum Exit {
     Quit,
-    /// `L` asked for the login flow, run with the terminal handed back.
-    SignIn,
+    /// `L` asked for the login flow of this Account, run with the terminal
+    /// handed back.
+    SignIn(usize),
 }
 
 /// The network work behind the screen, what it reports as it goes, the
 /// pages of older Messages and the bodies Replies wait on asked of it, what
 /// the sync connection is asked, and where a Send leaves from.
 pub struct Background<'a, W, U> {
-    pub work: Work<W>,
+    pub work: W,
+    /// Each tells the Account it is of, by its place in this run.
     pub updates: U,
     pub older: OlderPages,
     pub replies: ReplyFetch,
-    pub asks: UnboundedSender<Ask>,
-    pub outgoing: Outgoing<'a>,
+    pub asks: Routes<Ask>,
+    pub accounts: Accounts<'a>,
     pub outbox: &'a Outbox,
-}
-
-pub enum Work<W> {
-    Running(W),
-    /// Nothing runs until `L` signs in again; `failed` when the last try did.
-    SignedOut {
-        failed: bool,
-    },
-}
-
-impl<W: Future> Work<W> {
-    /// Finished already while signed out.
-    fn fused(self) -> Fuse<W> {
-        match self {
-            Self::Running(work) => work.fuse(),
-            Self::SignedOut { .. } => Fuse::terminated(),
-        }
-    }
+    /// Each Account's at the start: signed out until `L` signs it in again.
+    pub statuses: Vec<Status>,
+    /// The last sign-in failed.
+    pub failed: bool,
 }
 
 /// The one event loop: input, and each `Update` from the background work,
@@ -130,30 +116,31 @@ impl<W: Future> Work<W> {
 pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
     theme: &Theme,
-    cache: &Cache,
+    caches: &[Cache],
     previews: &mut Previews,
     background: Background<
         '_,
         impl Future<Output = Result<(), sync::Error>>,
-        impl Stream<Item = Update> + Unpin,
+        impl Stream<Item = (usize, Update)> + Unpin,
     >,
 ) -> Result<Exit, Error> {
     let mut events = Input::new();
-    let mut view = InboxView::loading();
+    let accounts = background.accounts;
+    let emails = accounts.0.iter().map(|config| config.email.as_str().into());
+    let mut view = InboxView::loading(emails.collect());
     let rows = first_rows(terminal)?;
-    show(&mut view, cache, Some(rows))?;
+    show(&mut view, caches, Some(rows))?;
     let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
-    let (outgoing, outbox) = (background.outgoing, background.outbox);
+    let outbox = background.outbox;
     let mut replies = background.replies;
-    let account = outgoing.config.email.as_str();
-    let from = outgoing.from().map_or_else(
-        |_bad| outgoing.config.email.clone(),
-        |from| from.to_string(),
-    );
-    let mut screen = Screen::opening(cache, &background.work);
+    let rebuilt = caches.iter().any(Cache::rebuilt);
+    let mut screen = Screen::opening(rebuilt, background.statuses, background.failed);
     screen.outbox = outbox.count();
-    (screen.status == Status::SignedOut).then(|| previews.link(false));
-    let mut work = std::pin::pin!(background.work.fused());
+    for (account, &status) in screen.statuses.iter().enumerate() {
+        (status == Status::SignedOut).then(|| previews.link(account, false));
+    }
+
+    let mut work = std::pin::pin!(background.work.fuse());
     let mut whole = false;
     let mut listening = true;
     // A frame's allocations count from what triggered it, the input or the
@@ -163,15 +150,21 @@ pub async fn run(
         let text = panes(terminal, screen.mode)?
             .preview
             .map(preview_pane::text_area);
-        want(previews, cache, (&view, &screen), text.filter(|_| whole))?;
+        want(previews, caches, (&view, &screen), text.filter(|_| whole))?;
         whole.then(|| older.want(&view));
-        screen.notice_write_failure(cache);
-        draw(terminal, (theme, &from), &mut view, previews, &mut screen)?;
+        screen.notice_write_failure(caches);
+        draw(
+            terminal,
+            (theme, accounts),
+            &mut view,
+            previews,
+            &mut screen,
+        )?;
         alloc_count::report(frame_start);
         if !whole {
             whole = true;
             frame_start = alloc_count::count();
-            show(&mut view, cache, None)?;
+            show(&mut view, caches, None)?;
             continue;
         }
 
@@ -179,7 +172,7 @@ pub async fn run(
         tokio::select! {
             () = tokio::time::sleep_until(change.unwrap_or_else(Instant::now)), if change.is_some() => {
                 frame_start = alloc_count::count();
-                expire(&mut view, &mut screen, cache, &asks)?;
+                expire(&mut view, &mut screen, caches, &asks)?;
             }
             result = &mut work, if !work.is_terminated() => {
                 frame_start = alloc_count::count();
@@ -187,15 +180,15 @@ pub async fn run(
             }
             update = updates.next(), if listening => {
                 frame_start = alloc_count::count();
-                let Some(update) = update else {
+                let Some((account, update)) = update else {
                     listening = false;
                     continue;
                 };
 
-                let arrived = replies.notice(&update, screen.replying.as_ref());
-                apply(older.notice(update), &mut view, &mut screen, (cache, outbox), previews)?;
+                let arrived = replies.notice((account, &update), screen.replying.as_ref());
+                apply(older.notice((account, update)), &mut view, &mut screen, (caches, outbox), previews)?;
                 if let Some(result) = arrived {
-                    composing::fetched(result, terminal, &mut events, &mut screen, (cache, account))?;
+                    composing::fetched(result, terminal, &mut events, &mut screen, (caches, accounts))?;
                 }
             }
             event = events.next() => {
@@ -205,19 +198,22 @@ pub async fn run(
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
-                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, cache, &asks)?,
+                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, caches, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
-                    Step::Page => screen.toast = open(terminal, &mut events, theme, cache, (&view, screen.reading.as_ref()))?,
-                    step @ (Step::Compose | Step::Edit | Step::Send) => draft(&step, terminal, &mut events, &mut screen, (outgoing, outbox, &asks))?,
+                    Step::Page => screen.toast = open(terminal, &mut events, theme, caches, (&view, screen.reading.as_ref()))?,
+                    step @ (Step::Compose | Step::Edit | Step::Send) => {
+                        let from = accounts.noted(view.folder.account);
+                        draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
+                    }
                     Step::Reply(all) => {
                         if let Some(message) = answered(&view, &screen) {
                             let awaited = AwaitedReply { message, all };
-                            composing::reply(terminal, &mut events, &mut screen, (cache, &replies), (awaited, account))?;
+                            composing::reply(terminal, &mut events, &mut screen, (caches, &replies), (awaited, accounts))?;
                         }
                     }
                     Step::LocalDrafts => open_local(&mut screen, outbox),
                     Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
-                    Step::SignIn => return Ok(Exit::SignIn),
+                    Step::SignIn(account) => return Ok(Exit::SignIn(account)),
                     Step::Quit => return Ok(Exit::Quit),
                 }
 
@@ -247,13 +243,13 @@ fn next_change(
 fn expire(
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
+    caches: &[Cache],
+    asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let now = Instant::now();
     screen.expire(now);
     if screen.dwell.ended(now) {
-        mark_read(view, screen, cache, asks)?;
+        mark_read(view, screen, caches, asks)?;
     }
 
     Ok(())
@@ -279,7 +275,7 @@ fn finished(result: Result<(), sync::Error>) -> Result<(), Error> {
 /// reading, once `text` is laid out.
 fn want(
     previews: &mut Previews,
-    cache: &Cache,
+    caches: &[Cache],
     (view, screen): (&InboxView, &Screen),
     text: Option<Rect>,
 ) -> Result<(), Error> {
@@ -290,9 +286,9 @@ fn want(
     match &screen.reading {
         Some(reading) => {
             let stack = (|key| reading.unfolded(key), reading.cursor);
-            previews.want_stack(cache, view, stack, text.width)
+            previews.want_stack(caches, view, stack, text.width)
         }
-        None => previews.want(cache, view, text.width),
+        None => previews.want(caches, view, text.width),
     }
     .map_err(Error::Cache)
 }
@@ -311,10 +307,9 @@ fn panes(terminal: &Terminal<TerminalBackend>, mode: Mode) -> Result<layout::Pan
     ))
 }
 
-/// `from` is the `From` a Send adds, for a Draft's preview.
 fn draw(
     terminal: &mut Terminal<TerminalBackend>,
-    (theme, from): (&Theme, &str),
+    (theme, accounts): (&Theme, Accounts),
     view: &mut InboxView,
     previews: &Previews,
     screen: &mut Screen,
@@ -349,11 +344,13 @@ fn draw(
             }
 
             let keys = screen.keys();
+            let (status, account) = screen.status();
             let hint_line =
                 HintLine {
                     theme,
                     toast: screen.toast.as_ref(),
-                    status: screen.status(),
+                    status,
+                    account: account.map(|account| accounts.email(account)),
                     outbox: screen.outbox,
                     mode: keys,
                     query: view.search.as_ref().map(Search::query).filter(|_| {
@@ -367,7 +364,7 @@ fn draw(
             }
 
             frame.render_widget(hint_line, panes.hint);
-            popups(frame, (theme, from), panes.body, screen);
+            popups(frame, (theme, accounts), panes.body, screen);
         })
         .map_err(Error::Terminal)?;
     Ok(())
@@ -375,7 +372,7 @@ fn draw(
 
 /// What shows over the panes in `body`: the Folder Picker, Local Drafts, a
 /// Draft's preview, then the `?` popup over any.
-fn popups(frame: &mut Frame, (theme, from): (&Theme, &str), body: Rect, screen: &Screen) {
+fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, screen: &Screen) {
     if let Some(picker) = &screen.picker {
         let popup = PickerPopup { theme, picker };
         frame.set_cursor_position(popup.cursor(body));
@@ -383,14 +380,29 @@ fn popups(frame: &mut Frame, (theme, from): (&Theme, &str), body: Rect, screen: 
     }
 
     if let Some(local) = &screen.local {
-        frame.render_widget(LocalDraftsPane { theme, local }, body);
+        let pane = LocalDraftsPane {
+            theme,
+            local,
+            accounts,
+        };
+
+        frame.render_widget(pane, body);
     }
 
     if let Some(preview) = &screen.draft {
+        // The `From` a Send adds.
+        let outgoing = accounts.outgoing(accounts.place(preview.account.as_deref()));
+        let from = outgoing.map(|outgoing| {
+            let email = || outgoing.config.email.clone();
+            outgoing
+                .from()
+                .map_or_else(|_bad| email(), |from| from.to_string())
+        });
+
         let pane = DraftPane {
             theme,
             preview,
-            from,
+            from: from.as_deref().unwrap_or_default(),
         };
 
         frame.render_widget(pane, body);
@@ -400,7 +412,7 @@ fn popups(frame: &mut Frame, (theme, from): (&Theme, &str), body: Rect, screen: 
         let popup = HelpPopup {
             theme,
             mode: screen.keys(),
-            signed_out: screen.status == Status::SignedOut,
+            signed_out: screen.signed_out().is_some(),
         };
 
         frame.render_widget(popup, body);
@@ -408,10 +420,10 @@ fn popups(frame: &mut Frame, (theme, from): (&Theme, &str), body: Rect, screen: 
 }
 
 fn apply(
-    update: Update,
+    (account, update): (usize, Update),
     view: &mut InboxView,
     screen: &mut Screen,
-    (cache, outbox): (&Cache, &Outbox),
+    (caches, outbox): (&[Cache], &Outbox),
     previews: &mut Previews,
 ) -> Result<(), Error> {
     match update {
@@ -422,7 +434,7 @@ fn apply(
                 None => Vec::new(),
             };
 
-            show(view, cache, None)?;
+            show(view, caches, None)?;
             // The labels belong to the Messages they were laid out on, and
             // Reading to the Thread it was opened on; a Query being typed stays.
             if screen.reading.is_none() {
@@ -436,32 +448,26 @@ fn apply(
                 }
             }
 
-            relist(screen, view, cache)?;
+            relist(screen, view, caches)?;
         }
-        Update::Folders => relist(screen, view, cache)?,
+        Update::Folders => relist(screen, view, caches)?,
         Update::FolderGone(folder) => {
-            if folder == view.folder.name {
+            if account == view.folder.account && folder == view.folder.name {
                 let gone = format!("Folder {} no longer exists", view.folder.label());
                 // The sync connection is back on the Inbox already.
-                switch(view, screen, cache, Folder::inbox())?;
+                switch(view, screen, caches, Folder::inbox(account))?;
                 screen.toast = Some(Toast::new(gone));
             }
 
-            relist(screen, view, cache)?;
+            relist(screen, view, caches)?;
         }
-        Update::Bodies(folder, fetched) => previews.fetched(&folder, fetched),
+        Update::Bodies(folder, fetched) => previews.fetched((account, &folder), fetched),
         Update::BodyLink(live) => {
-            previews.link(live);
+            previews.link(account, live);
             screen.backfill = None;
         }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
-        Update::Status(status) => {
-            if status == Status::SignedOut {
-                previews.link(false);
-            }
-
-            screen.status = status;
-        }
+        Update::Status(status) => report(screen, previews, (account, status)),
         Update::Backfill(Backfill::Fetching { done, total }) => {
             screen.backfill = Some(Status::Syncing { done, total });
         }
@@ -483,6 +489,17 @@ fn apply(
     Ok(())
 }
 
+/// The sync connection of `account` is in `status` now.
+fn report(screen: &mut Screen, previews: &mut Previews, (account, status): (usize, Status)) {
+    if status == Status::SignedOut {
+        previews.link(account, false);
+    }
+
+    if let Some(was) = screen.statuses.get_mut(account) {
+        *was = status;
+    }
+}
+
 /// What the event loop does after one input event.
 enum Step {
     Stay,
@@ -490,9 +507,9 @@ enum Step {
     Folders,
     Show(Folder),
     Search,
-    /// Reading opened, on the Gmail Thread with this ID if it has one: its
-    /// Messages in other Folders are asked for.
-    Read(Option<u64>),
+    /// Reading opened, on the Gmail Thread with this ID if it has one, of
+    /// this Account: its Messages in other Folders are asked for.
+    Read(Option<(usize, u64)>),
     MarkUnread,
     Delete,
     Undo,
@@ -506,7 +523,8 @@ enum Step {
     Edit,
     Send,
     Suspend,
-    SignIn,
+    /// The sign-in of this Account, signed out.
+    SignIn(usize),
     Quit,
 }
 
@@ -576,7 +594,7 @@ fn act(
         }
         Some(Action::Page) => Step::Page,
         Some(Action::Suspend) => Step::Suspend,
-        Some(Action::SignIn) if screen.status == Status::SignedOut => Step::SignIn,
+        Some(Action::SignIn) => screen.signed_out().map_or(Step::Stay, Step::SignIn),
         Some(Action::Links) => Step::Links,
         Some(Action::Folders) => Step::Folders,
         Some(Action::SwitchView) => {
@@ -620,7 +638,7 @@ fn act(
 
             Step::Stay
         }
-        Some(Action::SignIn) | None => Step::Stay,
+        None => Step::Stay,
     }
 }
 
@@ -639,7 +657,7 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
             let apart =
                 view.search.is_none() && matches!(view.folder.role, Some(Role::Trash | Role::Spam));
             let gmail = match view.selected_key() {
-                Some(Key::Gmail(id)) if !apart => Some(id),
+                Some(Key::Gmail(account, id)) if !apart => Some((account, id)),
                 _ => None,
             };
 
@@ -689,15 +707,19 @@ fn dwelling(
 fn mark_read(
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
+    caches: &[Cache],
+    asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let unread: Vec<_> = view
         .stack()
         .filter(|m| m.unread)
         .filter_map(|m| Some((Arc::clone(m.folder.as_ref()?), m.uid)))
         .collect();
-    mark((view, screen), cache, asks, (&unread, false)).map(drop)
+    let Some(account) = view.stack().next().map(|m| m.account) else {
+        return Ok(());
+    };
+
+    mark((view, screen), caches, asks, (account, &unread, false)).map(drop)
 }
 
 /// Mark Unread on the selected Thread's newest Message, or in Reading on
@@ -705,8 +727,8 @@ fn mark_read(
 fn mark_unread(
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
+    caches: &[Cache],
+    asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let message = screen.reading.as_ref().map_or_else(
         || view.selected_message(),
@@ -722,34 +744,37 @@ fn mark_unread(
         return Ok(());
     };
 
-    let marked = [(Arc::clone(folder), message.uid)];
+    let (account, marked) = (message.account, [(Arc::clone(folder), message.uid)]);
     if let Some(key) = view.selected_key() {
         screen.dwell.spare(key);
     }
 
-    if mark((view, screen), cache, asks, (&marked, true))? {
+    if mark((view, screen), caches, asks, (account, &marked, true))? {
         screen.toast = Some(Toast::new("marked Unread"));
     }
 
     Ok(())
 }
 
-/// Sets Unread on `messages` in the Cache and the screen, and asks the
-/// sync connection to tell the server; false when none changed.
+/// Sets Unread on `messages` of `account` in the Cache and the screen, and
+/// asks its sync connection to tell the server; false when none changed.
 fn mark(
     (view, screen): (&mut InboxView, &mut Screen),
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
-    (messages, unread): (&[(Arc<str>, u32)], bool),
+    caches: &[Cache],
+    asks: &Routes<Ask>,
+    (account, messages, unread): (usize, &[(Arc<str>, u32)], bool),
 ) -> Result<bool, Error> {
-    if !cache.mark(messages, unread).map_err(Error::Cache)? {
+    if !caches[account]
+        .mark(messages, unread)
+        .map_err(Error::Cache)?
+    {
         return Ok(false);
     }
 
-    show(view, cache, None)?;
-    relist(screen, view, cache)?;
-    // The send fails only while signed out; the change waits in the Cache.
-    asks.unbounded_send(Ask::Changes).ok();
+    show(view, caches, None)?;
+    relist(screen, view, caches)?;
+    // Signed out, the change waits in the Cache.
+    asks.send(account, Ask::Changes);
     Ok(true)
 }
 
@@ -758,8 +783,8 @@ fn mark(
 fn delete(
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
+    caches: &[Cache],
+    asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     // A Search never shows Trash.
     if view.search.is_none() && view.folder.role == Some(Role::Trash) {
@@ -781,19 +806,24 @@ fn delete(
         return Ok(());
     }
 
-    let thread = view.selected_key();
-    let Some(batch) = cache.delete(&messages).map_err(Error::Cache)? else {
+    // A Thread never spans Accounts.
+    let Some(account) = view.stack().next().map(|m| m.account) else {
         return Ok(());
     };
 
-    screen.undo.push(Undo::Delete(batch, thread));
-    show(view, cache, None)?;
+    let thread = view.selected_key();
+    let Some(batch) = caches[account].delete(&messages).map_err(Error::Cache)? else {
+        return Ok(());
+    };
+
+    screen.undo.push(Undo::Delete(account, batch, thread));
+    show(view, caches, None)?;
     screen.hints = None;
     screen.follow(view, thread);
 
-    relist(screen, view, cache)?;
-    // The send fails only while signed out; the move waits in the Cache.
-    asks.unbounded_send(Ask::Changes).ok();
+    relist(screen, view, caches)?;
+    // Signed out, the move waits in the Cache.
+    asks.send(account, Ask::Changes);
     screen.toast = Some(Toast::new("deleted · u to undo"));
     Ok(())
 }
@@ -803,40 +833,41 @@ fn delete(
 fn undo(
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
+    caches: &[Cache],
+    asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let folders = match screen.undo.pop() {
-        Some(Undo::Discard(path, text, answering)) => {
-            composing::restore(screen, (path, text, answering));
+        Some(Undo::Discard(path, text, notes)) => {
+            composing::restore(screen, (path, text, notes));
             return Ok(());
         }
-        Some(Undo::Delete(batch, thread)) => {
-            let folders = cache.undo(batch).map_err(Error::Cache)?;
-            (!folders.is_empty()).then_some((folders, thread))
+        Some(Undo::Delete(account, batch, thread)) => {
+            let folders = caches[account].undo(batch).map_err(Error::Cache)?;
+            (!folders.is_empty()).then_some((account, folders, thread))
         }
         None => None,
     };
 
-    let Some((folders, thread)) = folders else {
+    let Some((account, folders, thread)) = folders else {
         screen.toast = Some(Toast::new("nothing to undo"));
         return Ok(());
     };
 
-    show(view, cache, None)?;
+    show(view, caches, None)?;
     screen.hints = None;
     if let Some(key) = thread {
         screen.follow(view, thread);
         view.select(key);
     }
 
-    relist(screen, view, cache)?;
-    asks.unbounded_send(Ask::Changes).ok();
-    let here = view.search.is_some() || folders.contains(&view.folder.name);
+    relist(screen, view, caches)?;
+    asks.send(account, Ask::Changes);
+    let shown = account == view.folder.account && folders.contains(&view.folder.name);
+    let here = view.search.is_some() || shown;
     screen.toast = Some(if here {
         Toast::new("restored")
     } else {
-        let folder = cache.folder(&folders[0]).map_err(Error::Cache)?;
+        let folder = caches[account].folder(&folders[0]).map_err(Error::Cache)?;
         Toast::new(format!("restored to {}", folder.label()))
     });
     Ok(())
@@ -941,16 +972,17 @@ fn draft(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    (outgoing, outbox, asks): (Outgoing, &Outbox, &UnboundedSender<Ask>),
+    (accounts, from, outbox, asks): (Accounts, Option<&str>, &Outbox, &Routes<Ask>),
 ) -> Result<(), Error> {
     match step {
-        Step::Compose => composing::compose(terminal, events, screen)?,
+        Step::Compose => composing::compose(terminal, events, screen, from)?,
         Step::Edit => {
             if let Some(preview) = screen.draft.take() {
-                composing::edit(terminal, events, screen, (preview.path, preview.answering))?;
+                let notes = (preview.account, preview.answering);
+                composing::edit(terminal, events, screen, (preview.path, notes))?;
             }
         }
-        Step::Send => composing::send(screen, (outgoing, outbox), asks),
+        Step::Send => composing::send(screen, (accounts, outbox), asks),
         _ => {}
     }
 
@@ -992,17 +1024,17 @@ fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 fn switch(
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
+    caches: &[Cache],
     folder: Folder,
 ) -> Result<bool, Error> {
-    if folder.name == view.folder.name {
+    if folder.account == view.folder.account && folder.name == view.folder.name {
         return Ok(false);
     }
 
     screen.list();
     screen.hints = None;
     view.switch(folder);
-    show(view, cache, None)?;
+    show(view, caches, None)?;
     Ok(true)
 }
 
@@ -1013,56 +1045,83 @@ fn steer(
     step: Step,
     view: &mut InboxView,
     screen: &mut Screen,
-    cache: &Cache,
-    asks: &UnboundedSender<Ask>,
+    caches: &[Cache],
+    asks: &Routes<Ask>,
 ) -> Result<(), Error> {
-    let ask = match step {
+    // Signed out, nothing syncs and the ask is dropped.
+    match step {
         Step::Folders => {
-            let folders = cache.folders().map_err(Error::Cache)?;
-            screen.picker = Some(FolderPicker::new(folders, &view.folder));
-            Ask::ListFolders
+            let folders = folders(caches)?;
+            screen.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
+            for account in 0..caches.len() {
+                asks.send(account, Ask::ListFolders);
+            }
         }
         Step::Show(folder) => {
-            if !switch(view, screen, cache, folder)? {
-                return Ok(());
+            if switch(view, screen, caches, folder)? {
+                let shown = Arc::clone(&view.folder.name);
+                asks.send(view.folder.account, Ask::Show(shown));
             }
-
-            Ask::Show(Arc::clone(&view.folder.name))
         }
         Step::Read(thread) => {
-            mark_read(view, screen, cache, asks)?;
-            let Some(id) = thread else {
-                return Ok(());
-            };
-
-            Ask::Thread(id)
+            mark_read(view, screen, caches, asks)?;
+            if let Some((account, id)) = thread {
+                asks.send(account, Ask::Thread(id));
+            }
         }
-        Step::MarkUnread => return mark_unread(view, screen, cache, asks),
-        Step::Delete => return delete(view, screen, cache, asks),
-        Step::Undo => return undo(view, screen, cache, asks),
-        Step::Search => return start_search(view, screen, cache),
-        _ => return Ok(()),
-    };
-
-    // The send fails only while signed out, when nothing syncs.
-    asks.unbounded_send(ask).ok();
-    Ok(())
-}
-
-/// Lists the Folders anew in an open Folder Picker.
-fn relist(screen: &mut Screen, view: &InboxView, cache: &Cache) -> Result<(), Error> {
-    if let Some(picker) = &mut screen.picker {
-        picker.reload(cache.folders().map_err(Error::Cache)?, &view.folder);
+        Step::MarkUnread => mark_unread(view, screen, caches, asks)?,
+        Step::Delete => delete(view, screen, caches, asks)?,
+        Step::Undo => undo(view, screen, caches, asks)?,
+        Step::Search => start_search(view, screen, caches)?,
+        _ => {}
     }
 
     Ok(())
 }
 
+/// Every Account's Folders, each Account's in the Folder Picker's order.
+fn folders(caches: &[Cache]) -> Result<Vec<Folder>, Error> {
+    let mut folders = Vec::new();
+    for cache in caches {
+        folders.extend(cache.folders().map_err(Error::Cache)?);
+    }
+
+    Ok(folders)
+}
+
+/// Lists the Folders anew in an open Folder Picker.
+fn relist(screen: &mut Screen, view: &InboxView, caches: &[Cache]) -> Result<(), Error> {
+    if let Some(picker) = &mut screen.picker {
+        picker.reload(folders(caches)?, &view.folder);
+    }
+
+    Ok(())
+}
+
+/// Every Account's Messages a Search matches, newest first, the shown
+/// Folder's copy winning in its Account (ADR 0010).
+fn everywhere(caches: &[Cache], shown: &Folder) -> Result<Inbox, cache::Error> {
+    let (mut messages, mut elsewhere) = (Vec::new(), Vec::new());
+    for (account, cache) in caches.iter().enumerate() {
+        let here = (account == shown.account).then_some(&*shown.name);
+        let found = cache.everywhere(here)?;
+        messages.extend(found.messages);
+        elsewhere.extend(found.elsewhere);
+    }
+
+    messages.sort_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
+    elsewhere.sort_by_key(|m| m.received);
+    Ok(Inbox {
+        messages,
+        elsewhere,
+    })
+}
+
 /// Types the Query of a new Search over the whole Cache, or of the one under way.
-fn start_search(view: &mut InboxView, screen: &mut Screen, cache: &Cache) -> Result<(), Error> {
-    let shown = Arc::clone(&view.folder.name);
+fn start_search(view: &mut InboxView, screen: &mut Screen, caches: &[Cache]) -> Result<(), Error> {
+    let shown = view.folder.clone();
     if view
-        .start_search(|| cache.everywhere(&shown))
+        .start_search(|| everywhere(caches, &shown))
         .map_err(Error::Cache)?
     {
         screen.mode = Mode::Query;
@@ -1080,7 +1139,7 @@ fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text:
         }
 
         let preview = previews.get(view, text.width)?;
-        let lines = preview_pane::body_lines(view.preview_scroll, text);
+        let lines = preview_pane::body_lines(view.preview_scroll, text, view.header_rows());
         LinkHints::find([(0, &preview.body[..], lines)])
     });
 
@@ -1141,7 +1200,7 @@ fn open(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     theme: &Theme,
-    cache: &Cache,
+    caches: &[Cache],
     (view, reading): (&InboxView, Option<&Reading>),
 ) -> Result<Option<Toast>, Error> {
     let message = reading.map_or_else(
@@ -1153,13 +1212,15 @@ fn open(
         return Ok(None);
     };
 
-    let Some(body) = cache.body(message.body_key).map_err(Error::Cache)? else {
+    let found = caches[message.account].body(message.body_key);
+    let Some(body) = found.map_err(Error::Cache)? else {
         return Ok(Some(Toast::new("not downloaded")));
     };
 
     let width = terminal.size().map_err(Error::Terminal)?.width;
     let preview = preview_render::paged(Job {
         key: PreviewKey {
+            account: message.account,
             body: message.body_key,
             width,
             view: view.html,
@@ -1176,8 +1237,8 @@ fn open(
     Ok(None)
 }
 
-fn show(view: &mut InboxView, cache: &Cache, limit: Option<usize>) -> Result<(), Error> {
-    if let Some(inbox) = cache
+fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<(), Error> {
+    if let Some(inbox) = caches[view.folder.account]
         .inbox(&view.folder.name, limit)
         .map_err(Error::Cache)?
     {
@@ -1185,7 +1246,7 @@ fn show(view: &mut InboxView, cache: &Cache, limit: Option<usize>) -> Result<(),
     }
 
     if view.search.is_some() {
-        view.research(cache.everywhere(&view.folder.name).map_err(Error::Cache)?);
+        view.research(everywhere(caches, &view.folder).map_err(Error::Cache)?);
     }
 
     Ok(())

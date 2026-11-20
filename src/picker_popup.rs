@@ -10,7 +10,12 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    centred::centred, folder_picker::FolderPicker, stack_str::StackStr, theme::Theme, truncate,
+    centred::centred,
+    folder::Folder,
+    folder_picker::{FolderPicker, Row},
+    stack_str::StackStr,
+    theme::Theme,
+    truncate,
 };
 
 const TITLE: &str = " Folders ";
@@ -23,7 +28,7 @@ const PADDING: u16 = 1;
 
 /// The Folder Picker centred over `area`: the Query, a rule, then a row per
 /// Folder with its Unread count right-aligned, none for `0` or one not yet
-/// counted.
+/// counted, under each Account's address when there are several.
 pub struct PickerPopup<'a> {
     pub theme: &'a Theme,
     pub picker: &'a FolderPicker,
@@ -57,14 +62,27 @@ impl Widget for PickerPopup<'_> {
             ..inner
         };
 
-        if self.picker.rows().len() == 0 {
+        if self.picker.is_empty() {
             return centred("no matches", list, buf);
         }
 
         let fitting = usize::from(list.height);
         let offset = (self.picker.selected() + 1).saturating_sub(fitting);
         let rows = self.picker.rows().enumerate().skip(offset).take(fitting);
-        for ((index, folder), y) in rows.zip(list.y..) {
+        for ((index, row), y) in rows.zip(list.y..) {
+            let folder = match row {
+                Row::Folder(folder) => folder,
+                Row::Heading(address) => {
+                    let heading = Rect {
+                        y,
+                        height: 1,
+                        ..list
+                    };
+                    truncate::draw(buf, heading, address, self.theme.title);
+                    continue;
+                }
+            };
+
             let row = Rect::new(popup.x + 1, y, popup.width.saturating_sub(2), 1);
             let style = if index == self.picker.selected() {
                 self.theme.selected
@@ -73,31 +91,40 @@ impl Widget for PickerPopup<'_> {
             };
 
             buf.set_style(row, style);
-
-            let mut count = StackStr::<24>::new();
-            if let Some(unread) = folder.unread.filter(|&n| n > 0) {
-                write!(count, "{unread}").ok();
-            }
-
-            let count_width = u16::try_from(count.as_str().width()).unwrap_or(0);
-            let label_room = list.width.saturating_sub(count_width + 1);
-            let label = Rect {
-                y,
-                width: label_room,
-                height: 1,
-                ..list
-            };
-
-            let icon = self.theme.icons.folder(folder.role);
-            let label = icon.map_or(label, |icon| after_icon(buf, label, icon, style));
-            truncate::draw(buf, label, folder.label(), style);
-            let count_x = list.right().saturating_sub(count_width);
-            buf.set_stringn(count_x, y, count.as_str(), count_width.into(), style);
+            self.folder(
+                buf,
+                Rect {
+                    y,
+                    height: 1,
+                    ..list
+                },
+                (folder, style),
+            );
         }
     }
 }
 
 impl PickerPopup<'_> {
+    /// One Folder in `row`: its icon and label, then its Unread count.
+    fn folder(&self, buf: &mut Buffer, row: Rect, (folder, style): (&Folder, Style)) {
+        let mut count = StackStr::<24>::new();
+        if let Some(unread) = folder.unread.filter(|&n| n > 0) {
+            write!(count, "{unread}").ok();
+        }
+
+        let count_width = u16::try_from(count.as_str().width()).unwrap_or(0);
+        let label = Rect {
+            width: row.width.saturating_sub(count_width + 1),
+            ..row
+        };
+
+        let icon = self.theme.icons.folder(folder.role);
+        let label = icon.map_or(label, |icon| after_icon(buf, label, icon, style));
+        truncate::draw(buf, label, folder.label(), style);
+        let count_x = row.right().saturating_sub(count_width);
+        buf.set_stringn(count_x, row.y, count.as_str(), count_width.into(), style);
+    }
+
     /// Where the terminal's cursor goes: after the Query.
     pub fn cursor(&self, area: Rect) -> Position {
         let inner = inner(popup(area, self.picker));
@@ -123,7 +150,7 @@ fn after_icon(buf: &mut Buffer, label: Rect, icon: &str, style: Style) -> Rect {
 
 /// Tall enough for every Folder, as `area` allows.
 fn popup(area: Rect, picker: &FolderPicker) -> Rect {
-    let rows = u16::try_from(picker.rows().len().max(1)).unwrap_or(u16::MAX);
+    let rows = u16::try_from(picker.rows().count().max(1)).unwrap_or(u16::MAX);
     let width = WIDTH.min(area.width);
     let height = rows.saturating_add(CHROME).min(area.height);
     Rect {

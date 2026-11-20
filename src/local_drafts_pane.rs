@@ -6,19 +6,23 @@ use ratatui::{
 };
 
 use crate::{
-    border, centred::centred, layout::PADDING, local_drafts::LocalDrafts, theme::Theme, truncate,
+    accounts::Accounts, border, centred::centred, layout::PADDING, local_drafts::LocalDrafts,
+    theme::Theme, truncate,
 };
 
 /// The kind of a row, a word or an icon, and a gap after it.
 const KIND: u16 = 8;
 /// The recipients' share of what the kind leaves, in percent.
 const TO_SHARE: u16 = 40;
+/// The sender's share, with several Accounts, in percent.
+const FROM_SHARE: u16 = 30;
 
 /// Local Drafts over the whole body: a row per Draft or Outbox Message,
-/// its kind, its recipients and its subject.
+/// its kind, its sender with several Accounts, its recipients and its subject.
 pub struct LocalDraftsPane<'a> {
     pub theme: &'a Theme,
     pub local: &'a LocalDrafts,
+    pub accounts: Accounts<'a>,
 }
 
 impl Widget for LocalDraftsPane<'_> {
@@ -48,7 +52,10 @@ impl Widget for LocalDraftsPane<'_> {
         let fitting = usize::from(list.height);
         let offset = (self.local.selected() + 1).saturating_sub(fitting);
         let rows = self.local.rows().iter().enumerate().skip(offset);
-        let to_width = list.width.saturating_sub(KIND) * TO_SHARE / 100;
+        let rest = list.width.saturating_sub(KIND);
+        let several = self.accounts.0.len() > 1;
+        let from_width = if several { rest * FROM_SHARE / 100 } else { 0 };
+        let to_width = rest * TO_SHARE / 100;
         for ((index, row), y) in rows.take(fitting).zip(list.y..) {
             let style = if index == self.local.selected() {
                 self.theme.selected
@@ -63,7 +70,14 @@ impl Widget for LocalDraftsPane<'_> {
             let kind = self.theme.icons.local(row.queued);
             let cell = |x: u16, width: u16| Rect::new(x, y, width.min(list.right() - x), 1);
             truncate::draw(buf, cell(list.x, KIND), kind, self.theme.muted.patch(style));
-            let to_x = list.x.saturating_add(KIND).min(list.right());
+            let from_x = list.x.saturating_add(KIND).min(list.right());
+            if several {
+                let account = self.accounts.place(row.account.as_deref());
+                let from = self.accounts.email(account);
+                truncate::draw(buf, cell(from_x, from_width.saturating_sub(1)), from, style);
+            }
+
+            let to_x = from_x.saturating_add(from_width).min(list.right());
             truncate::draw(buf, cell(to_x, to_width.saturating_sub(1)), &row.to, style);
             let subject_x = to_x.saturating_add(to_width).min(list.right());
             truncate::draw(buf, cell(subject_x, list.right()), &row.subject, style);

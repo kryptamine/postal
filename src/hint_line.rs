@@ -27,6 +27,8 @@ pub struct HintLine<'a> {
     pub theme: &'a Theme,
     pub toast: Option<&'a Toast>,
     pub status: Status,
+    /// The address of the Account `status` is of, with several.
+    pub account: Option<&'a str>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
     pub mode: Mode,
@@ -78,12 +80,16 @@ impl Widget for HintLine<'_> {
 
 impl HintLine<'_> {
     /// The Status, then the Outbox count while it is not empty.
-    fn status_text(&self) -> StackStr<72> {
+    fn status_text(&self) -> StackStr<200> {
         let status = self.status.text(self.now);
         let mut text = StackStr::new();
-        // Every text fits, so the writes cannot fail.
+        // Every text fits, so the writes cannot fail; an address too long is left out.
         if let Some(icon) = self.theme.icons.status(self.status) {
             write!(text, "{icon} ").ok();
+        }
+
+        if let Some(account) = self.account.filter(|a| a.len() <= 120) {
+            write!(text, "{account} · ").ok();
         }
 
         text.write_str(status.as_str()).ok();

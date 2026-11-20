@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use futures::channel::mpsc::UnboundedSender;
-
 use crate::{
     awaited_reply::AwaitedReply,
     body_fetch::{Fetched, Request},
+    routes::Routes,
     status::Status,
     update::Update,
 };
@@ -12,16 +11,16 @@ use crate::{
 /// Asks the fetch connection for the body an `AwaitedReply` waits on, and
 /// tells when it is in the Cache.
 pub struct ReplyFetch {
-    requests: UnboundedSender<Request>,
-    /// Whether the fetch connection is up.
-    live: bool,
+    requests: Routes<Request>,
+    /// Whether each Account's fetch connection is up.
+    live: Vec<bool>,
 }
 
 impl ReplyFetch {
-    pub const fn new(requests: UnboundedSender<Request>) -> Self {
+    pub fn new(requests: Routes<Request>, accounts: usize) -> Self {
         Self {
             requests,
-            live: false,
+            live: vec![false; accounts],
         }
     }
 
@@ -31,11 +30,10 @@ impl ReplyFetch {
             return;
         };
 
-        if self.live {
-            // The send fails only once the fetch connection has stopped.
-            self.requests
-                .unbounded_send(Request::Reply(Arc::clone(folder), awaited.message.uid))
-                .ok();
+        let account = awaited.message.account;
+        if self.live.get(account).copied().unwrap_or(false) {
+            let request = Request::Reply(Arc::clone(folder), awaited.message.uid);
+            self.requests.send(account, request);
         }
     }
 
@@ -44,12 +42,15 @@ impl ReplyFetch {
     /// `awaited` waits on, or why it will not come.
     pub fn notice(
         &mut self,
-        update: &Update,
+        (account, update): (usize, &Update),
         awaited: Option<&AwaitedReply>,
     ) -> Option<Result<(), String>> {
         let awaited = match update {
             Update::BodyLink(live) => {
-                self.live = *live;
+                if let Some(was) = self.live.get_mut(account) {
+                    *was = *live;
+                }
+
                 if let Some(awaited) = awaited {
                     self.ask(awaited);
                 }
@@ -60,6 +61,10 @@ impl ReplyFetch {
         };
 
         let message = &awaited.message;
+        if message.account != account {
+            return None;
+        }
+
         match update {
             Update::Status(Status::SignedOut) => Some(Err("signed out".to_owned())),
             Update::Bodies(folder, fetched) if message.folder.as_ref() == Some(folder) => {

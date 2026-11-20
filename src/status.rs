@@ -51,6 +51,18 @@ impl Status {
         text
     }
 
+    /// How bad it is, for the worst of several Accounts to show.
+    pub const fn rank(self) -> u8 {
+        match self {
+            Self::Live => 0,
+            Self::Fetching => 1,
+            Self::Syncing { .. } => 2,
+            Self::Connecting => 3,
+            Self::Retrying { .. } => 4,
+            Self::SignedOut => 5,
+        }
+    }
+
     /// Whether the text warns, rather than tells of work under way.
     pub const fn warns(self) -> bool {
         matches!(self, Self::Retrying { .. })

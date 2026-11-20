@@ -11,7 +11,13 @@ Threads group across Folders by `X-GM-THRID`, as in Reading. On a server
 without Gmail's extensions copies in two Folders have different keys and both
 match.
 
-A match from another Folder has its body fetched from that Folder. Ending the
+With several Accounts it matches the Folders of every Account. Body keys and
+thread IDs are unique only within an Account, so the deduplication and the
+Threads stay inside each one: the same Message delivered to two Accounts
+matches twice, once in each.
+
+A match from another Folder has its body fetched from that Folder, on its
+own Account's connection. Ending the
 Search always stays in the shown Folder: on the match when that Folder holds
 its Thread, else back where `/` was pressed.
 

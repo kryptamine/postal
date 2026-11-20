@@ -13,7 +13,7 @@ use crate::{
     date_label::DateLabel,
     inbox_view::InboxView,
     link_hints::LinkHints,
-    preview_pane::{self, HEADER_ROWS, LABELS},
+    preview_pane::{self, LABELS},
     preview_render,
     previews::Previews,
     reading::Reading,
@@ -97,17 +97,20 @@ impl ThreadPane<'_> {
             write!(date, "{}", message.received.format(preview_render::DATE)).ok();
         }
 
+        let account = self.view.account_label(message.account);
         let values = [
             (message.sender.as_str(), self.theme.sender),
             (message.subject.as_str(), self.theme.subject),
             (date.as_str(), self.theme.date),
+            (account.unwrap_or_default(), self.theme.sender),
         ];
 
-        if let Some(&value) = values.get(offset) {
+        let fields = placed.header - 1;
+        if let Some(&value) = values.get(offset).filter(|_| offset < fields) {
             return preview_pane::header(self.theme, buf, row, LABELS[offset], value);
         }
 
-        let Some(index) = offset.checked_sub(HEADER_ROWS) else {
+        let Some(index) = offset.checked_sub(placed.header) else {
             return;
         };
 

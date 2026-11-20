@@ -25,4 +25,7 @@ pub struct Message {
     /// The Folder `uid` is of. `None` for a Message found only with its
     /// Thread, whose body comes with the Thread, and for one not yet cached.
     pub folder: Option<Arc<str>>,
+    /// The Account's place in this run, as the Cache read the row; 0 for
+    /// one not read from it yet.
+    pub account: usize,
 }

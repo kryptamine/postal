@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 use crate::{
@@ -7,6 +9,7 @@ use crate::{
     listing::Listing,
     matched::Matched,
     message::Message,
+    preview_pane::LABELS,
     search::Search,
     thread::{Key, Thread},
     view::View,
@@ -14,8 +17,10 @@ use crate::{
 
 /// The Message List's contents, selection and scroll position.
 pub struct InboxView {
-    /// The Folder shown; the Inbox on every run.
+    /// The Folder shown; the first Account's Inbox on every run.
     pub folder: Folder,
+    /// Each Account's address, by its place in this run.
+    pub accounts: Vec<Arc<str>>,
     /// The shown Folder's rows; `None` until the Cache or the server has some.
     pub list: Option<Listing>,
     /// Shows its own rows, from every Folder; `selected` and `offset` index those.
@@ -34,9 +39,10 @@ pub struct InboxView {
 }
 
 impl InboxView {
-    pub fn loading() -> Self {
+    pub fn loading(accounts: Vec<Arc<str>>) -> Self {
         Self {
-            folder: Folder::inbox(),
+            folder: Folder::inbox(0),
+            accounts,
             list: None,
             search: None,
             selected: 0,
@@ -160,6 +166,19 @@ impl InboxView {
         if self.selected_body() != body {
             self.preview_scroll = 0;
         }
+    }
+
+    /// The address of `account`, which a header shows only with several.
+    pub fn account_label(&self, account: usize) -> Option<&str> {
+        let several = self.accounts.len() > 1;
+        self.accounts.get(account).filter(|_| several).map(|a| &**a)
+    }
+
+    /// The header rows of a Preview, with the row under them: a rule in
+    /// the Preview, blank in a stack.
+    pub fn header_rows(&self) -> usize {
+        let account = usize::from(self.accounts.len() > 1);
+        LABELS.len() - 1 + account + 1
     }
 
     pub fn now(&self) -> DateTime<FixedOffset> {

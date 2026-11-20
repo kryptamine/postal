@@ -108,6 +108,7 @@ fn message(
         thread,
         from_me: envelope.is_some_and(|e| from(e, email)),
         folder: None,
+        account: 0,
     };
 
     let structure = attributes.iter().find_map(|a| match a {

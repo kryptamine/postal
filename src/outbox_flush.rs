@@ -21,6 +21,20 @@ pub struct Sender<'a> {
     pub outbox: &'a Outbox,
     pub outgoing: Outgoing<'a>,
     pub sign_in: &'a SignIn,
+    /// The first Account, which sends the Messages naming none.
+    pub first: bool,
+}
+
+impl Sender<'_> {
+    /// Whether `queued` goes out from this Account; one whose notes do not
+    /// read is left to the first.
+    fn sends(self, queued: &Queued) -> bool {
+        let notes = Notes::read(&queued.path).ok().flatten();
+        let email = &self.outgoing.config.email;
+        notes
+            .and_then(|notes| notes.account)
+            .map_or(self.first, |account| account.eq_ignore_ascii_case(email))
+    }
 }
 
 /// Sends each Message in the Outbox over SMTP, then saves its copy to Sent,
@@ -46,7 +60,7 @@ pub async fn flush(
 
     let (mut accepted, mut unreachable) = (false, false);
     let mut sent_folder = None;
-    for mut queued in queued {
+    for mut queued in queued.into_iter().filter(|queued| sender.sends(queued)) {
         if !queued.sent {
             // A failure that is not a refusal would fail the rest the same way.
             if unreachable {
@@ -131,6 +145,7 @@ async fn submit(
     tracing::warn!("{} was refused: {refusal}", queued.path.display());
     let notes = Notes {
         draft: None,
+        account: notes.account,
         answering: notes.answering,
         error: Some(refusal),
     };

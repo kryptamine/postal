@@ -1,3 +1,4 @@
+mod accounts;
 mod alloc_count;
 mod ansi;
 mod answering;
@@ -97,6 +98,7 @@ mod reply_draft;
 mod reply_fetch;
 mod rgb;
 mod role_folder;
+mod routes;
 mod run;
 mod screen;
 mod search;
@@ -142,13 +144,14 @@ use std::{
 };
 
 use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
-use steering::Steering;
+use steering::{Ask, Steering};
 
 use crate::{
+    accounts::Accounts,
     body_fetch::Request,
     cache::Cache,
     cli::Command,
-    config::{Config, SecretStore},
+    config::{Config, IconChoice, SecretStore},
     icons::Icons,
     imap::ImapSession,
     oauth::Tokens,
@@ -162,7 +165,8 @@ use crate::{
     provider::Provider,
     reply_fetch::ReplyFetch,
     rgb::Rgb,
-    run::{Background, Exit, Work},
+    routes::Routes,
+    run::{Background, Exit},
     sign_in::SignIn,
     status::Status,
     terminal_slot::TerminalSlot,
@@ -248,27 +252,32 @@ fn login() -> Result<(), Box<dyn Error>> {
 fn try_main() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
     on_screen(async |slot| {
-        let (mut config, sign_in) = signed_in(slot, &dir).await?.swap_remove(0);
-        let mut sign_in = Some(sign_in);
+        let (configs, sign_ins): (Vec<_>, Vec<_>) =
+            signed_in(slot, &dir).await?.into_iter().unzip();
+        let mut sign_ins: Vec<_> = sign_ins.into_iter().map(Some).collect();
         let mut failed = false;
         loop {
-            let exit = Box::pin(session(slot, &config, sign_in.as_ref(), failed)).await?;
-            match exit {
+            let exit = Box::pin(session(slot, (&configs, &sign_ins), failed)).await?;
+            let account = match exit {
                 Exit::Quit => return Ok(()),
-                Exit::SignIn => {
-                    let (terminal, background) = slot.take()?;
-                    let theme = onboarding_theme(&dir, background)?;
-                    let again = Start::again(&config);
-                    match onboarding::run(terminal, &theme, &dir, again).await? {
-                        Outcome::SignedIn(_) => {
-                            let (signed_in_as, fresh) = signed_in(slot, &dir).await?.swap_remove(0);
-                            (config, sign_in, failed) = (signed_in_as, Some(fresh), false);
-                        }
-                        Outcome::Quit(error) => {
-                            sign_in = None;
-                            failed = error.is_some();
-                        }
-                    }
+                Exit::SignIn(account) => account,
+            };
+
+            let (Some(config), Some(sign_in)) = (configs.get(account), sign_ins.get_mut(account))
+            else {
+                continue;
+            };
+
+            let (terminal, background) = slot.take()?;
+            let theme = onboarding_theme(&dir, background)?;
+            match onboarding::run(terminal, &theme, &dir, Start::again(config)).await? {
+                Outcome::SignedIn(_) => {
+                    *sign_in = read_sign_in(config, &dir)?;
+                    failed = sign_in.is_none();
+                }
+                Outcome::Quit(error) => {
+                    *sign_in = None;
+                    failed = error.is_some();
                 }
             }
         }
@@ -382,68 +391,117 @@ fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn E
     }))
 }
 
-/// The TUI until it exits, signed out without `sign_in`; `failed` when the
-/// last sign-in did.
+/// The TUI until it exits, each Account of `configs` signed out without
+/// its sign-in; `failed` when the last sign-in did.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
 )]
 async fn session(
     slot: &mut TerminalSlot,
-    config: &Config,
-    sign_in: Option<&SignIn>,
+    (configs, sign_ins): (&[Config], &[Option<SignIn>]),
     failed: bool,
 ) -> Result<Exit, Box<dyn Error>> {
-    let cache = Cache::open(&xdg::cache_dir()?)?;
+    let emails: Vec<&str> = configs.iter().map(|config| config.email.as_str()).collect();
+    let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
     // Without one, Compose says so when it is used.
     let outbox = Outbox::new(xdg::data_dir().ok());
-    let outgoing = Outgoing { config };
     let (sender, updates) = futures::channel::mpsc::unbounded();
-    let (requests, requested) = futures::channel::mpsc::unbounded();
-    let (asks, asked) = futures::channel::mpsc::unbounded();
-    let older = OlderPages::new(requests.clone());
-    let replies = ReplyFetch::new(requests.clone());
-    let updates_to_previews = sender.clone();
-    let send = move |update| {
-        // The send fails only once the event loop has stopped listening.
-        sender.unbounded_send(update).ok();
-    };
+    let (mut asks, mut requests, mut works) = (Vec::new(), Vec::new(), Vec::new());
+    for (account, (config, sign_in)) in configs.iter().zip(sign_ins).enumerate() {
+        let (ask, asked) = futures::channel::mpsc::unbounded();
+        let (request, requested) = futures::channel::mpsc::unbounded();
+        asks.push(ask);
+        requests.push(request);
+        // Its channels close with their receivers: what is asked of it is dropped.
+        let Some(sign_in) = sign_in else {
+            continue;
+        };
 
+        let sender = sender.clone();
+        let send = move |update| {
+            // The send fails only once the event loop has stopped listening.
+            sender.unbounded_send((account, update)).ok();
+        };
+
+        let sender = Sender {
+            outbox: &outbox,
+            outgoing: Outgoing { config },
+            sign_in,
+            first: account == 0,
+        };
+
+        let cache = &caches[account];
+        works.push(Box::pin(served(
+            config,
+            cache,
+            (asked, requested),
+            sender,
+            send,
+        )));
+    }
+
+    let requests = Routes::new(requests);
+    let older = OlderPages::new(requests.clone(), configs.len());
+    let replies = ReplyFetch::new(requests.clone(), configs.len());
     let (terminal, background) = slot.take()?;
-    let theme = Theme::from_env(background, Icons::choose(config.icons));
-    let mut previews = Previews::start(requests, updates_to_previews, theme.mail);
-    let work = sign_in.map_or(Work::SignedOut { failed }, |sign_in| {
-        Work::Running(
-            futures::future::try_join(
-                sync(
-                    config,
-                    &cache,
-                    (
-                        Steering::new(asked),
-                        Sender {
-                            outbox: &outbox,
-                            outgoing,
-                            sign_in,
-                        },
-                    ),
-                    (&send, |status| send(Update::Status(status))),
-                ),
-                bodies(config, sign_in, &cache, requested, &send),
-            )
-            .map_ok(|((), ())| ()),
-        )
-    });
+    let icons = configs
+        .first()
+        .map_or(IconChoice::Auto, |config| config.icons);
+    let theme = Theme::from_env(background, Icons::choose(icons));
+    let to_previews = (configs.len(), sender);
+    let mut previews = Previews::start(requests, to_previews, theme.mail);
     let background = Background {
-        work,
+        work: futures::future::try_join_all(works).map_ok(drop),
         updates,
         older,
         replies,
-        asks,
-        outgoing,
+        asks: Routes::new(asks),
+        accounts: Accounts(configs),
         outbox: &outbox,
+        statuses: sign_ins.iter().map(Option::as_ref).map(starting).collect(),
+        failed,
     };
 
-    Ok(run::run(terminal, &theme, &cache, &mut previews, background).await?)
+    Ok(run::run(terminal, &theme, &caches, &mut previews, background).await?)
+}
+
+/// The Status an Account starts in.
+const fn starting(sign_in: Option<&SignIn>) -> Status {
+    match sign_in {
+        Some(_) => Status::Live,
+        None => Status::SignedOut,
+    }
+}
+
+/// One Account's connections until the screen stops asking; signed out,
+/// it ends and leaves the others running.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn served(
+    config: &Config,
+    cache: &Cache,
+    (asked, requested): (UnboundedReceiver<Ask>, UnboundedReceiver<Request>),
+    sender: Sender<'_>,
+    send: impl Fn(Update),
+) -> Result<(), sync::Error> {
+    let report = |status| send(Update::Status(status));
+    let synced = sync(
+        config,
+        cache,
+        (Steering::new(asked), sender),
+        (&send, report),
+    );
+    let fetched = bodies(config, sender.sign_in, cache, requested, &send);
+    match futures::future::try_join(synced, fetched).await {
+        Err(error) if error.signed_out() => {
+            tracing::warn!("{}: {error}", config.email);
+            Ok(())
+        }
+        result => result.map(drop),
+    }
 }
 
 /// The second connection, kept open for the bodies the Preview asks for:

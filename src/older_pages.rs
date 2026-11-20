@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use futures::channel::mpsc::UnboundedSender;
-
-use crate::{backfill::Backfill, body_fetch::Request, inbox_view::InboxView, update::Update};
+use crate::{
+    backfill::Backfill, body_fetch::Request, inbox_view::InboxView, routes::Routes, update::Update,
+};
 
 /// Rows from the end of the Message List at which the next page is asked
 /// for, so it is mostly in before the selection gets there.
@@ -11,20 +11,20 @@ const NEAR_END: usize = 50;
 /// Asks the fetch connection for the next page of older Messages as the
 /// selection nears the end of the Message List, one page at a time.
 pub struct OlderPages {
-    requests: UnboundedSender<Request>,
-    /// Whether the fetch connection is up.
-    live: bool,
+    requests: Routes<Request>,
+    /// Whether each Account's fetch connection is up.
+    live: Vec<bool>,
     asked: bool,
-    /// A Folder and its oldest cached UID, when the server had nothing
-    /// older for it.
-    nothing_below: Option<(Arc<str>, u32)>,
+    /// A Folder, of an Account, and its oldest cached UID, when the server
+    /// had nothing older for it.
+    nothing_below: Option<(usize, Arc<str>, u32)>,
 }
 
 impl OlderPages {
-    pub const fn new(requests: UnboundedSender<Request>) -> Self {
+    pub fn new(requests: Routes<Request>, accounts: usize) -> Self {
         Self {
             requests,
-            live: false,
+            live: vec![false; accounts],
             asked: false,
             nothing_below: None,
         }
@@ -39,7 +39,9 @@ impl OlderPages {
         };
 
         let searching = view.search.is_some();
-        if !self.live || self.asked || searching || view.selected + NEAR_END < view.rows() {
+        let account = view.folder.account;
+        let live = self.live.get(account).copied().unwrap_or(false);
+        if !live || self.asked || searching || view.selected + NEAR_END < view.rows() {
             return;
         }
 
@@ -51,24 +53,27 @@ impl OlderPages {
         if self
             .nothing_below
             .as_ref()
-            .is_some_and(|(nothing, below)| nothing == folder && *below == oldest)
+            .is_some_and(|(at, nothing, below)| {
+                *at == account && nothing == folder && *below == oldest
+            })
         {
             return;
         }
 
         self.asked = true;
-        // The send fails only once the fetch connection has stopped.
         self.requests
-            .unbounded_send(Request::Backfill(Arc::clone(folder)))
-            .ok();
+            .send(account, Request::Backfill(Arc::clone(folder)));
     }
 
     /// Follows the fetch connection, and passes `update` on. A request in
     /// flight when the connection went down was dropped with it.
-    pub fn notice(&mut self, update: Update) -> Update {
+    pub fn notice(&mut self, (account, update): (usize, Update)) -> (usize, Update) {
         match &update {
             Update::BodyLink(live) => {
-                self.live = *live;
+                if let Some(was) = self.live.get_mut(account) {
+                    *was = *live;
+                }
+
                 self.asked = false;
             }
             Update::Backfill(Backfill::Paged {
@@ -76,11 +81,11 @@ impl OlderPages {
                 nothing_below,
             }) => {
                 self.asked = false;
-                self.nothing_below = nothing_below.map(|uid| (Arc::clone(folder), uid));
+                self.nothing_below = nothing_below.map(|uid| (account, Arc::clone(folder), uid));
             }
             _ => {}
         }
 
-        update
+        (account, update)
     }
 }
