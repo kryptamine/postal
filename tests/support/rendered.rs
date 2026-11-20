@@ -21,12 +21,15 @@ pub struct Run {
     pub size: (u16, u16),
     pub background: (u8, u8, u8),
     pub no_color: bool,
+    /// The terminal draws Nerd Font glyphs.
+    pub nerd: bool,
 }
 
 pub const DEFAULT: Run = Run {
     size: WIDE,
     background: DARK,
     no_color: false,
+    nerd: false,
 };
 
 pub fn fixture(name: &str) -> FakeBody {
@@ -55,6 +58,11 @@ pub fn started(body: FakeBody, run: &Run) -> (Terminal, FakeImap) {
         .timeout(Duration::from_secs(10));
     let builder = if run.no_color {
         builder.env("NO_COLOR", "1")
+    } else {
+        builder
+    };
+    let builder = if run.nerd {
+        builder.env("TERM_PROGRAM", "WezTerm")
     } else {
         builder
     };

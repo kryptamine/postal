@@ -1,5 +1,6 @@
 use crate::{
-    cell_grid::CellGrid,
+    cell_grid::{self, CellGrid},
+    icons::Icons,
     region::{self, Region},
     rgb::Rgb,
 };
@@ -14,12 +15,15 @@ pub enum Outline {
     /// It goes, and this piece of the frame round its region is drawn, in
     /// the fill's colour: a frame moved off text lies on cells with no fill.
     Line(&'static str, Rgb),
+    /// It stays, and this half circle in its colour rounds a button's end.
+    Cap(&'static str),
 }
 
 /// For each cell of `grid`: a section's fill gives way to a frame in its
 /// colour round every region of one fill, so text sits on the terminal's
-/// own background. See docs/adr/0006-rendered-view-engine.md.
-pub fn of(grid: &CellGrid) -> Vec<Outline> {
+/// own background. With Nerd Font `icons`, a rounded button's fill ends in
+/// half circles. See docs/adr/0006-rendered-view-engine.md.
+pub fn of(grid: &CellGrid, icons: Icons) -> Vec<Outline> {
     let cells = grid.cells();
     let mut out = vec![Outline::Fill; cells.len()];
     let mut seen = vec![false; cells.len()];
@@ -47,6 +51,20 @@ pub fn of(grid: &CellGrid) -> Vec<Outline> {
 
         for (i, glyph) in region.frame(|i| out[i] == Outline::Fill) {
             out[i] = Outline::Line(glyph, colour);
+        }
+    }
+
+    if matches!(icons, Icons::Nerd) {
+        for (outline, cell) in out.iter_mut().zip(cells) {
+            match (
+                *outline,
+                cell.has(cell_grid::CAP_LEFT),
+                cell.has(cell_grid::CAP_RIGHT),
+            ) {
+                (Outline::Fill, true, _) => *outline = Outline::Cap("\u{e0b6}"),
+                (Outline::Fill, _, true) => *outline = Outline::Cap("\u{e0b4}"),
+                _ => {}
+            }
         }
     }
 

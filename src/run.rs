@@ -230,7 +230,10 @@ pub async fn run(
                         Ok(settings) => screen.settings = Some(settings),
                         Err(error) => screen.toast = Some(Toast::error(error.to_string())),
                     },
-                    Step::Icons(choice) => theme.icons = Icons::choose(choice),
+                    Step::Icons(choice) => {
+                        theme.icons = Icons::choose(choice);
+                        previews.set_look(theme.mail_look());
+                    }
                     Step::AddAccount => return Ok(Exit::AddAccount),
                     Step::Unlink(email) => return Ok(Exit::Unlink(email)),
                     Step::Reload => return Ok(Exit::Reload),
@@ -1335,7 +1338,7 @@ fn open(
         sender: message.sender.clone(),
         subject: message.subject.clone(),
         received: message.received,
-        colours: theme.mail,
+        look: theme.mail_look(),
     });
 
     let text = pager_text::ansi(&preview, theme);

@@ -10,7 +10,7 @@
 
 mod support;
 
-use support::rendered::{DEFAULT, at, bg, frames, html, pane, preview};
+use support::rendered::{DEFAULT, Run, at, bg, frames, html, pane, preview};
 use termlens::Color;
 
 // litehtml split an inline around a block inside it even through an
@@ -97,4 +97,31 @@ fn a_bordered_cell_with_a_link_is_no_button() {
     let (row, col) = at(&screen, "Download");
     assert_eq!(bg(&screen, row, col), Color::Default, "{}", screen.text());
     assert!(screen.row_text(row - 1).contains('┌'), "{}", screen.text());
+}
+
+// A rounded button ends in half circles where the font has them: a pill,
+// as the mail drew it, not a slab.
+#[test]
+fn a_rounded_button_has_round_ends_in_a_nerd_font() {
+    let body = || {
+        html(
+            "<p>Text</p><a href=\"https://app.example\" style=\"background:#1a73e8;color:#fff;\
+             padding:12px 24px;border-radius:20px;display:inline-block\">Launch App</a><p>End</p>",
+        )
+    };
+    let nerd = Run {
+        nerd: true,
+        ..DEFAULT
+    };
+
+    let screen = preview(body(), &nerd, "Launch App");
+    let rows = pane(&screen);
+    let row = rows.iter().find(|r| r.contains("Launch App")).unwrap();
+    assert!(
+        row.contains("\u{e0b6}  Launch App  \u{e0b4}")
+            || row.contains("\u{e0b6} Launch App \u{e0b4}"),
+        "{row}"
+    );
+    let plain = preview(body(), &DEFAULT, "Launch App");
+    assert!(!plain.contains("\u{e0b6}"), "{}", plain.text());
 }

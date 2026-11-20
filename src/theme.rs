@@ -1,6 +1,8 @@
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::{icons::Icons, mail_colours::MailColours, marks::Marks, paint::Paint, rgb::Rgb};
+use crate::{
+    icons::Icons, mail_colours::MailColours, mail_look::MailLook, marks::Marks, paint::Paint, rgb::Rgb,
+};
 
 /// The terminal's own palette: named ANSI colours and modifiers, no explicit
 /// background. Muted text is `DIM`, since bright black vanishes in Solarized.
@@ -80,6 +82,13 @@ impl Theme {
             coloured,
             mail: MailColours::new(background),
             icons,
+        }
+    }
+
+    pub const fn mail_look(&self) -> MailLook {
+        MailLook {
+            colours: self.mail,
+            icons: self.icons,
         }
     }
 

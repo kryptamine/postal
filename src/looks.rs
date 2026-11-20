@@ -33,9 +33,16 @@ impl Looks {
     /// A blank cell takes the look of the cell `before` it on the same
     /// background, so the words either side of it stay one run.
     pub fn of(&self, cell: &Cell, outline: Outline, before: (Marks, Paint)) -> (Marks, Paint) {
-        if let Outline::Line(_, colour) = outline {
-            let (fg, marks) = self.colours.line(Some(colour), None);
-            return (marks, Paint { fg, bg: None });
+        match outline {
+            Outline::Line(_, colour) => {
+                let (fg, marks) = self.colours.line(Some(colour), None);
+                return (marks, Paint { fg, bg: None });
+            }
+            Outline::Cap(_) => {
+                let fg = fill(cell, Outline::Fill, self.colours);
+                return (Marks::default(), Paint { fg, bg: None });
+            }
+            Outline::Fill | Outline::Bare => {}
         }
 
         let bg = fill(cell, outline, self.colours);

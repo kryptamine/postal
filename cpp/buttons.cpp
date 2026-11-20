@@ -144,6 +144,9 @@ void shape(Grid& grid, const Box& box)
             // The fill says it can be pressed; a link's underline is noise.
             if(cell.flags & CG_TEXT) cell.flags = (cell.flags | CG_BOLD) & ~uint32_t(CG_UNDERLINE);
         }
+        bool pill = box.r0 == box.r1 && (fill & CG_BG_ROUND);
+        if(pill && from >= 0 && grid.at(r, from)->flags == 0) grid.at(r, from)->flags = CG_CAP_LEFT;
+        if(pill && to <= end && grid.at(r, to)->flags == 0) grid.at(r, to)->flags = CG_CAP_RIGHT;
     }
 }
 } // namespace

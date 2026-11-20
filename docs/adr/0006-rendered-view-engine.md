@@ -148,7 +148,9 @@ element helpers.
   page-light button gives way to the terminal, and the frame round its
   rows (below) is its shape. On 539 cached mails 52 framed buttons became
   fills, and 440 of 570 short fills have exactly that shape; the rest are
-  badges and cells that are no links.
+  badges and cells that are no links. A button of one row whose box was
+  rounded ends in the half circles `` `` of its fill where the font has
+  Nerd Font glyphs (`Outline::Cap`): 194 of 473 cached mails have one.
 - A filled box holding an `h1`, at most two lines of a 600 px mail (150
   cells), no link and no shown picture, in a colour no other box outside it
   fills, is a cover band its logo and pictures left: it loses its fill,

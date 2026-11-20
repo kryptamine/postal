@@ -4,7 +4,7 @@ use crate::{
     cell_grid::{self, CellGrid},
     footer, frame_padding,
     looks::Looks,
-    mail_colours::MailColours,
+    mail_look::MailLook,
     marks::Marks,
     outlines::{self, Outline},
     paint::Paint,
@@ -13,14 +13,14 @@ use crate::{
 };
 
 /// An HTML part laid out as a mail client shows it, `width` cells wide, in
-/// `colours`; `None` when the engine fails on it or it is too wide to show
+/// `look`; `None` when the engine fails on it or it is too wide to show
 /// whole. Blank rows at the ends are dropped, and a run of them inside is one.
-pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<StyledLine>> {
+pub fn render(html: &str, width: u16, look: MailLook) -> Option<Vec<StyledLine>> {
     let grid = render_process::lay_out(html, width).filter(CellGrid::fits)?;
     let mut hrefs: HashMap<u32, Arc<str>> = HashMap::new();
     let mut lines: Vec<StyledLine> = Vec::new();
-    let outlines = outlines::of(&grid);
-    let looks = Looks::new(&grid, &outlines, colours);
+    let outlines = outlines::of(&grid, look.icons);
+    let looks = Looks::new(&grid, &outlines, look.colours);
     let mut outline = outlines.iter().copied();
     for row in grid.rows() {
         let mut line = StyledLine::new();
@@ -41,8 +41,8 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
             };
 
             let glyph = match outline {
-                Outline::Line(glyph, _) => glyph,
-                _ => cell.glyph(),
+                Outline::Line(glyph, _) | Outline::Cap(glyph) => glyph,
+                Outline::Fill | Outline::Bare => cell.glyph(),
             };
 
             line.push(glyph, marks, paint, target);

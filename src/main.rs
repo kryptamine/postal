@@ -62,6 +62,7 @@ mod logging;
 mod login;
 mod looks;
 mod mail_colours;
+mod mail_look;
 mod marks;
 mod matched;
 mod message;
@@ -502,7 +503,7 @@ async fn session(
         .map_or(IconChoice::Auto, |config| config.icons);
     let mut theme = Theme::from_env(background, Icons::choose(icons));
     let to_previews = (configs.len(), sender);
-    let mut previews = Previews::start(requests, to_previews, theme.mail);
+    let mut previews = Previews::start(requests, to_previews, theme.mail_look());
     let background = Background {
         work: futures::future::try_join_all(works).map_ok(drop),
         updates,

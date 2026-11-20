@@ -24,6 +24,9 @@ enum
     CG_PAGE_BOX = 128,
     // The small print: text set smaller than the body, under its last words.
     CG_SMALL = 256,
+    // The outer cell at the left or the right of a rounded button's fill.
+    CG_CAP_LEFT = 512,
+    CG_CAP_RIGHT = 1024,
 };
 
 // A colour is 0x01RRGGBB when set and 0 when not. A `bg` also carries

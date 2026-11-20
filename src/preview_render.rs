@@ -3,7 +3,7 @@ use mail_parser::{HeaderValue, MessageParser, PartType};
 
 use crate::{
     html_preview::{self, Links},
-    mail_colours::MailColours,
+    mail_look::MailLook,
     marks::Marks,
     preview::Preview,
     quoted_html, quoted_text,
@@ -29,7 +29,7 @@ pub struct Job {
     pub sender: String,
     pub subject: String,
     pub received: DateTime<FixedOffset>,
-    pub colours: MailColours,
+    pub look: MailLook,
 }
 
 /// The Preview of `job` at the width in its key.
@@ -107,7 +107,7 @@ fn body(job: &Job, links: Links) -> (Vec<StyledLine>, bool) {
 /// fits, which is `true`; else as text.
 fn html_rows(html: &str, job: &Job, links: Links) -> (Vec<StyledLine>, bool) {
     let laid_out = (job.key.view == View::Rendered)
-        .then(|| rendered_view::render(html, job.key.width, job.colours))
+        .then(|| rendered_view::render(html, job.key.width, job.look))
         .flatten();
     if let Some(rendered) = laid_out {
         return (rendered, true);

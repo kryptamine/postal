@@ -12,7 +12,7 @@ use crate::{
     cache::{self, Cache},
     folder,
     inbox_view::InboxView,
-    mail_colours::MailColours,
+    mail_look::MailLook,
     message::Message,
     preview::Preview,
     preview_render::{self, Job},
@@ -57,7 +57,7 @@ pub struct Previews {
     header: Option<(u32, Preview)>,
     /// Each Account's, by its place in this run.
     links: Vec<Link>,
-    colours: MailColours,
+    look: MailLook,
     requests: Routes<Request>,
     jobs: mpsc::Sender<Job>,
 }
@@ -67,7 +67,7 @@ impl Previews {
     pub fn start(
         requests: Routes<Request>,
         (accounts, updates): (usize, UnboundedSender<(usize, Update)>),
-        colours: MailColours,
+        look: MailLook,
     ) -> Self {
         let (jobs, queue) = mpsc::channel::<Job>();
         thread::spawn(move || {
@@ -94,10 +94,17 @@ impl Previews {
             refused: HashMap::new(),
             header: None,
             links: vec![Link::Starting; accounts],
-            colours,
+            look,
             requests,
             jobs,
         }
+    }
+
+    /// Renders every Preview again in `look`: the ends of buttons change
+    /// with the font.
+    pub fn set_look(&mut self, look: MailLook) {
+        self.look = look;
+        self.rendered = RenderedPreviews::default();
     }
 
     /// The selected Message's Preview at `width`, once rendered.
@@ -291,7 +298,7 @@ impl Previews {
             sender: message.sender.clone(),
             subject: message.subject.clone(),
             received: message.received,
-            colours: self.colours,
+            look: self.look,
         };
 
         // The send fails only once the render thread is gone.
