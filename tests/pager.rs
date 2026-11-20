@@ -1,5 +1,4 @@
-//! `|` hands the Message to `$PAGER`, and `Ctrl-z` to the shell; the
-//! screen comes back whole either way.
+//! `|` hands the Message to `$PAGER`, and the screen comes back whole.
 
 #![allow(
     clippy::unwrap_used,
@@ -47,10 +46,6 @@ fn postal(home: &Home, envs: &[(&str, &Path)], no_color: bool) -> Terminal {
     }
 
     builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
-}
-
-fn server() -> FakeImap {
-    server_with(HTML)
 }
 
 fn server_with(html: &str) -> FakeImap {
@@ -149,29 +144,4 @@ fn a_link_with_a_control_character_is_no_hyperlink() {
     let copy = paged(html, &[Key::Char('|')], true);
     assert!(copy.contains("␛]8;;https://good.example/"), "{copy}");
     assert!(!copy.contains("␛]8;;https://evil.example"), "{copy}");
-}
-
-// Run straight under the terminal, Postal would lead an orphaned process
-// group, where the kernel discards SIGTSTP. An interactive shell has job
-// control; it goes on past a stopped Postal, and `fg` continues it.
-const JOB_SHELL: &str = "\"$POSTAL\"; printf 'postal stopped'; read answer; fg";
-
-#[test]
-fn ctrl_z_stops_with_the_terminal_restored_and_redraws_after_fg() {
-    let server = server();
-    let home = Home::for_server(&server);
-    let mut t = terminal(&home)
-        .env("POSTAL", env!("CARGO_BIN_EXE_postal"))
-        .args(["-i", "-c", JOB_SHELL])
-        .spawn("sh")
-        .unwrap();
-    t.wait_until(main_screen).unwrap();
-
-    t.send(Key::Ctrl('z')).unwrap();
-    t.wait_until(|s| !s.alternate_screen() && s.contains("postal stopped"))
-        .unwrap();
-    t.send(Key::Enter).unwrap();
-    t.wait_until(main_screen).unwrap();
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }

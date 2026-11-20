@@ -125,7 +125,6 @@ mod stack_str;
 mod status;
 mod steering;
 mod styled_line;
-mod suspend;
 mod sync;
 mod sync_state;
 mod terminal_backend;

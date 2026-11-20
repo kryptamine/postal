@@ -31,12 +31,12 @@ size: 80x37  cursor: hidden
 │          │ ,                       settings and Accounts          │          │
 │          │ ?                       this help                      │          │
 │          │ q          ^c           quit                           │          │
-│          │ ^z                      suspend to the shell           │          │
 │          │                                                        │          │
 │          │ Search                                                 │          │
 │          │ /                       search, or edit the Query      │          │
 │          │ ^j / ^k    ↓ / ↑        move, while typing the Query   │          │
 │          │ Enter                   keep the Query                 │          │
+│          │ Esc                     end the Search                 │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

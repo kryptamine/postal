@@ -55,7 +55,6 @@ pub enum Action {
     SignIn,
     Settings,
     Folders,
-    Suspend,
     Quit,
 }
 
@@ -168,7 +167,7 @@ const ANY: &[Mode] = &[
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 47] = [
+const BINDINGS: [Binding; 46] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -447,15 +446,6 @@ const BINDINGS: [Binding; 47] = [
     },
     Binding {
         group: "App",
-        modes: BOTH,
-        signed_out: false,
-        keys: "^z",
-        aliases: "",
-        description: "suspend to the shell",
-        hint: None,
-    },
-    Binding {
-        group: "App",
         modes: READING,
         signed_out: false,
         keys: "f",
@@ -706,7 +696,6 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
             (_, KeyCode::Char('c')) => Some(Action::Quit),
             (_, KeyCode::Char('d')) => Some(scroll(Direction::Down, By::HalfPage)),
             (_, KeyCode::Char('u')) => Some(scroll(Direction::Up, By::HalfPage)),
-            (_, KeyCode::Char('z')) => Some(Action::Suspend),
             (Mode::Query, KeyCode::Char('j')) => Some(Action::Move(Move::Down)),
             (Mode::Query, KeyCode::Char('k')) => Some(Action::Move(Move::Up)),
             _ => None,

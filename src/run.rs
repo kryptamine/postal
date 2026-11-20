@@ -51,7 +51,7 @@ use crate::{
     stack,
     status::Status,
     steering::Ask,
-    suspend, sync,
+    sync,
     terminal_backend::{self, TerminalBackend},
     theme::Theme,
     thread::Key,
@@ -224,7 +224,6 @@ pub async fn run(
                         }
                     }
                     Step::LocalDrafts => open_local(&mut screen, outbox),
-                    Step::Suspend => outside(terminal, &mut events, suspend::suspend)?,
                     Step::SignIn(account) => return Ok(Exit::SignIn(account)),
                     Step::Settings => match Settings::open(config_dir) {
                         Ok(settings) => screen.settings = Some(settings),
@@ -575,7 +574,6 @@ enum Step {
     /// The shown Draft in the editor again.
     Edit,
     Send,
-    Suspend,
     /// The sign-in of this Account, signed out.
     SignIn(usize),
     Settings,
@@ -652,7 +650,6 @@ fn act(
             Step::Stay
         }
         Some(Action::Page) => Step::Page,
-        Some(Action::Suspend) => Step::Suspend,
         Some(Action::SignIn) => screen.signed_out().map_or(Step::Stay, Step::SignIn),
         Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
