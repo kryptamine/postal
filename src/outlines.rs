@@ -41,7 +41,7 @@ pub fn of(grid: &CellGrid) -> Vec<Outline> {
             out[i] = Outline::Bare;
         }
 
-        if is_page || region.bordered() {
+        if is_page || region.bordered() || region.empty() {
             continue;
         }
 

@@ -17,6 +17,10 @@ const SIDES: [fn(usize, usize) -> usize; 4] = [
     |at, _| at + 1,
 ];
 
+/// A card this high never shows whole on a screen, so its frame would be
+/// two lines down the sides of the text.
+const PAGE_ROWS: usize = 24;
+
 /// A light fill this far from the page is a card laid on it; any nearer
 /// only tints it.
 const TINT: u8 = 10;
@@ -111,17 +115,27 @@ impl<'a> Region<'a> {
     }
 
     /// The mail's own page, which a frame would only box whole: as wide as
-    /// the pane and four fifths of the mail high, or in the `page` colour
-    /// round a narrower card. A rectangle that wide is a section.
+    /// the pane and four fifths of the mail high, the card a long mail is
+    /// written on, or the `page` colour round a narrower card.
     pub fn page(&self, page: Rgb) -> bool {
         let rows = self.cells.len() / self.cols;
         let in_page = self.colour == page;
         let right = self.left + self.width - 2 * RING == self.cols;
-        match (self.left == 0, right) {
-            (true, true) => (self.height - 2 * RING) * 5 >= rows * 4 || (in_page && !self.boxed),
+        let height = self.height - 2 * RING;
+        let card = height >= PAGE_ROWS && height * 5 >= rows * 3;
+        card || match (self.left == 0, right) {
+            (true, true) => height * 5 >= rows * 4 || (in_page && !self.boxed),
             (true, false) | (false, true) => in_page,
             (false, false) => false,
         }
+    }
+
+    /// Nothing of the mail's shows inside its bounding box: the box a gone
+    /// picture left, or a gutter of the page.
+    pub fn empty(&self) -> bool {
+        (RING..self.height - RING)
+            .flat_map(|row| (RING..self.width - RING).map(move |col| row * self.width + col))
+            .all(|at| self.cell(at).is_none_or(|(_, cell)| !taken(cell)))
     }
 
     /// Most of its edge lies against a border the mail drew itself.

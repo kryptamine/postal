@@ -239,12 +239,17 @@ change.
   has no fill. Where it cannot, a level edge is not drawn, and an upright
   one leaves a gap at the text.
 - A region as wide as the pane and four fifths of the mail high is the page
-  of a dark mail: its fill goes and it gets no frame. So does one in the
-  page's colour against one side of the pane, or against both when it is
+  of a dark mail: its fill goes and it gets no frame. So does one 24 rows
+  high and three fifths of the mail, the card the mail is written on: no
+  screen shows such a frame whole, so it was two bars down the sides of
+  every line, round the frames of the cards inside. So does one
+  in the page's colour against one side of the pane, or against both when it is
   no rectangle: the page's margins round a narrower card, which a wide pane
   framed on each side, or filled where they wrap it top and bottom too.
 - A region with the mail's own border along most of its edge gets no
   second one.
+- A region with no glyph inside its bounding box loses its fill and gets
+  no frame: the box of a gone picture, a gutter of the page beside a card.
 - The fill stays on a control, on a region under three cells high or wide,
   which has no room for a frame, and on a region that is not a rectangle:
   that is a drawing made of fills, as the bars of a chart are.

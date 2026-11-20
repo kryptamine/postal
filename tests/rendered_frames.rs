@@ -188,3 +188,32 @@ fn a_cover_band_left_with_its_title_is_a_title() {
     );
     assert_eq!(frames(&screen), 2, "{}", rows.join("\n"));
 }
+
+// The box of a gone picture and the gutters of a page stood as frames
+// round nothing, beside the text or between its blocks.
+#[test]
+fn a_section_that_shows_nothing_gets_no_frame() {
+    let body = html(
+        "<p>Above</p><div style=\"background:#1e50f5;height:64px\"></div><p>Below</p>\
+         <div style=\"background:#1e50f5;color:#fff;padding:32px\">Card</div><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    let (above, _) = at(&screen, "Above");
+    let (below, _) = at(&screen, "Below");
+    assert_eq!(below - above, 2, "{}", screen.text());
+    assert_eq!(frames(&screen), 1, "{}", screen.text());
+}
+
+// The card a mail is written on is taller than the screen: its frame was
+// two bars down the sides of every line, round the frames of what it holds.
+#[test]
+fn the_card_a_long_mail_is_written_on_gets_no_frame() {
+    let lines = "Line<br>".repeat(26);
+    let body = html(&format!(
+        "<div style=\"background:#f0f0ff;padding:16px\">{lines}</div><p>Footer end</p>"
+    ));
+    let screen = preview(body, &DEFAULT, "Line");
+    assert_eq!(frames(&screen), 0, "{}", screen.text());
+    let (row, col) = at(&screen, "Line");
+    assert_eq!(bg(&screen, row, col), Color::Default);
+}
