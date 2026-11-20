@@ -105,7 +105,10 @@ element helpers.
     or the next words in the mail are a link's: a product's picture beside
     its title, a banner over its button;
   - its `alt` is 16 columns or more and the mail shows it as text anywhere:
-    a card's title under its picture, however far the markup puts it.
+    a card's title under its picture, however far the markup puts it;
+  - its `alt` is six words or more: written for a screen reader, it
+    describes a photo (`An audience sits in a dark auditorium…`) rather
+    than names it. One that is all its link shows is named by the link.
 
   A box with pictures and no text, a space even, was sized for them: its
   height and min-height go, or a product photo's cell stood twelve rows

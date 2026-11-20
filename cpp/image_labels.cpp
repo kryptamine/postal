@@ -134,11 +134,10 @@ void ImageLabels::walk(const element::ptr& el)
     if(el->css().get_display() != display_none) label_one(el);
 }
 
-// The name of `img` as its row of icons shows it: each names its sender,
-// and `Kraken on X` is `X`.
-std::string ImageLabels::named(const element::ptr& img, bool icon) const
+// `name`, the name of `img`, as its row of icons shows it: each names its
+// sender, and `Kraken on X` is `X`.
+std::string ImageLabels::named(const element::ptr& img, const std::string& name, bool icon) const
 {
-    std::string name = name_of(img);
     auto shared = prefixes.find(table_of(img).get());
     if(!icon || shared == prefixes.end() || name.compare(0, shared->second.size(), shared->second) != 0) return name;
     return name.substr(shared->second.size());
@@ -151,7 +150,8 @@ std::string ImageLabels::text_for(const element::ptr& el, bool icon, const eleme
     // An icon, or a file's name for an alt, decorates the text beside it.
     bool decorates = !sole && (icon || file_word(alt));
     if(invisible(el) || decorates || said_already(el, alt, mail_text)) return "";
-    if(!alt.empty() || !sole || icon) return named(el, icon);
+    if(description(alt)) alt.clear();
+    if(!alt.empty() || !sole || icon) return named(el, alt, icon);
     if(labelled_links.count(link.get()) || redundant.count(link.get())) return "";
     labelled_links.insert(link.get());
     return "[" + link_name(link->get_attr("href")) + "]";

@@ -31,7 +31,7 @@ class ImageLabels
     void walk(const litehtml::element::ptr& el);
     void label_one(const litehtml::element::ptr& el);
     std::string text_for(const litehtml::element::ptr& el, bool icon, const litehtml::element::ptr& link, bool sole);
-    [[nodiscard]] std::string named(const litehtml::element::ptr& img, bool icon) const;
+    [[nodiscard]] std::string named(const litehtml::element::ptr& img, const std::string& name, bool icon) const;
 
     std::map<std::string, std::string> labels;
     LabelWidths label_widths;

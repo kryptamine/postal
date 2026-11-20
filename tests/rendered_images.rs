@@ -339,3 +339,15 @@ fn an_alt_that_is_a_file_name_is_dropped() {
     // All its link shows, the word still names the link.
     assert!(screen.contains("facebook"), "{}", screen.text());
 }
+
+// An alt that describes the picture, written for a screen reader, is a
+// sentence about a photo the reader cannot see.
+#[test]
+fn an_alt_that_describes_its_picture_is_dropped() {
+    let body = html(
+        "<p>Above</p><img src=\"https://cdn.example/hero.png\" width=\"400\" \
+         alt=\"An audience sits in a dark auditorium watching the stage\"><p>Below</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Below");
+    assert!(!screen.contains("audience"), "{}", screen.text());
+}

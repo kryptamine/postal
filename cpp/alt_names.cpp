@@ -27,6 +27,8 @@ std::string alt_name(const std::string& alt)
     return rest.find(' ') == std::string::npos && among(rest, ARTICLES) ? "" : rest;
 }
 
+bool description(const std::string& alt) { return std::count(alt.begin(), alt.end(), ' ') >= 5; }
+
 bool file_word(const std::string& alt)
 {
     return !alt.empty() && std::all_of(alt.begin(), alt.end(), [](unsigned char c) { return std::islower(c) != 0; });
