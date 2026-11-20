@@ -8,12 +8,13 @@ use nucleo_matcher::{
 use crate::folder::{Folder, Role};
 
 /// The Folder Picker: every Folder, narrowed by a typed Query with the
-/// Search matcher, and the row selected. With several Accounts, each has a
-/// section headed by its address, and Local Drafts comes after them all.
+/// Search matcher, and the row selected. With several Accounts, All Inboxes
+/// comes first, each Account has a section headed by its address, and Local
+/// Drafts comes after them all.
 pub struct FolderPicker {
     folders: Vec<Folder>,
-    /// The section each Folder is listed in: its Account's, then Local
-    /// Drafts' after them all; one section with one Account.
+    /// The section each Folder is listed in: All Inboxes', each Account's,
+    /// then Local Drafts'; one section with one Account.
     sections: Vec<usize>,
     /// Each Account's address, when there are several.
     headings: Vec<Arc<str>>,
@@ -60,19 +61,25 @@ impl FolderPicker {
         picker
     }
 
-    /// Lists `folders` anew, with Local Drafts, the Query and the selected
-    /// Folder kept; `shown` is listed even before the Cache knows it.
+    /// Lists `folders` anew, with All Inboxes, Local Drafts, the Query and
+    /// the selected Folder kept; `shown` is listed even before the Cache
+    /// knows it.
     pub fn reload(&mut self, mut folders: Vec<Folder>, shown: &Folder) {
         let selected = self.chosen().unwrap_or(shown).clone();
-        if !folders.iter().any(|f| same(f, shown)) {
+        if !shown.is_all_inboxes() && !folders.iter().any(|f| f.same(shown)) {
             folders.push(shown.clone());
+        }
+
+        if !self.headings.is_empty() {
+            folders.push(counted_all_inboxes(&folders));
         }
 
         folders.push(Folder::local_drafts());
         let section = |folder: &Folder| match folder.role {
             _ if self.headings.is_empty() => 0,
-            Some(Role::LocalDrafts) => self.headings.len(),
-            _ => folder.account,
+            Some(Role::AllInboxes) => 0,
+            Some(Role::LocalDrafts) => self.headings.len() + 1,
+            _ => folder.account + 1,
         };
 
         folders.sort_by(|a, b| section(a).cmp(&section(b)).then_with(|| a.order(b)));
@@ -83,7 +90,7 @@ impl FolderPicker {
         self.selected = self
             .hits
             .iter()
-            .position(|&i| same(&self.folders[i], &selected))
+            .position(|&i| self.folders[i].same(&selected))
             .unwrap_or(0);
     }
 
@@ -137,9 +144,7 @@ impl FolderPicker {
             .iter()
             .zip(self.heading_at())
             .flat_map(|(&i, heading)| {
-                let heading = heading
-                    .then(|| self.headings.get(self.sections[i]))
-                    .flatten();
+                let heading = heading.then(|| self.heading(self.sections[i])).flatten();
                 heading
                     .map(|address| Row::Heading(address))
                     .into_iter()
@@ -147,13 +152,17 @@ impl FolderPicker {
             })
     }
 
+    /// The address heading `section`, when it is an Account's.
+    fn heading(&self, section: usize) -> Option<&Arc<str>> {
+        self.headings.get(section.checked_sub(1)?)
+    }
+
     /// For each hit, whether it opens an Account's section.
     fn heading_at(&self) -> impl Iterator<Item = bool> + '_ {
-        let headed = !self.headings.is_empty();
         self.hits.iter().enumerate().map(move |(at, &i)| {
             let section = self.sections[i];
             let opens = at == 0 || self.sections[self.hits[at - 1]] != section;
-            headed && opens && section < self.headings.len()
+            opens && self.heading(section).is_some()
         })
     }
 
@@ -185,10 +194,13 @@ impl FolderPicker {
     }
 }
 
-/// Folders are known by Account and name; Local Drafts by its role.
-fn same(a: &Folder, b: &Folder) -> bool {
-    let local = |f: &Folder| f.role == Some(Role::LocalDrafts);
-    local(a) == local(b) && (local(a) || (a.account == b.account && a.name == b.name))
+/// All Inboxes, its Unread count the sum of the Inboxes' counted.
+fn counted_all_inboxes(folders: &[Folder]) -> Folder {
+    let counts = folders.iter().filter(|f| f.role == Some(Role::Inbox));
+    Folder {
+        unread: counts.filter_map(|f| f.unread).reduce(|a, b| a + b),
+        ..Folder::all_inboxes()
+    }
 }
 
 /// A special-use Folder answers to its label as well as to its path.

@@ -51,6 +51,7 @@ impl Icons {
         }
 
         Some(match role {
+            Some(Role::AllInboxes) => "\u{f08b0}",
             Some(Role::Inbox) => "\u{f0687}",
             Some(Role::Starred) => "\u{f04ce}",
             Some(Role::Sent) => "\u{f048a}",

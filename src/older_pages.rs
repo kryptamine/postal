@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use crate::{
-    backfill::Backfill, body_fetch::Request, inbox_view::InboxView, routes::Routes, update::Update,
+    backfill::Backfill, body_fetch::Request, folder::INBOX, inbox_view::InboxView, routes::Routes,
+    update::Update,
 };
 
 /// Rows from the end of the Message List at which the next page is asked
@@ -9,15 +8,13 @@ use crate::{
 const NEAR_END: usize = 50;
 
 /// Asks the fetch connection for the next page of older Messages as the
-/// selection nears the end of the Message List, one page at a time.
+/// selection nears the end of the Message List, one page at a time; in All
+/// Inboxes, for the Account whose cache edge ends it.
 pub struct OlderPages {
     requests: Routes<Request>,
     /// Whether each Account's fetch connection is up.
     live: Vec<bool>,
     asked: bool,
-    /// A Folder, of an Account, and its oldest cached UID, when the server
-    /// had nothing older for it.
-    nothing_below: Option<(usize, Arc<str>, u32)>,
 }
 
 impl OlderPages {
@@ -26,7 +23,6 @@ impl OlderPages {
             requests,
             live: vec![false; accounts],
             asked: false,
-            nothing_below: None,
         }
     }
 
@@ -39,30 +35,34 @@ impl OlderPages {
         };
 
         let searching = view.search.is_some();
-        let account = view.folder.account;
-        let live = self.live.get(account).copied().unwrap_or(false);
-        if !live || self.asked || searching || view.selected + NEAR_END < view.rows() {
+        if self.asked || searching || view.selected + NEAR_END < view.rows() {
             return;
         }
 
-        let Some(oldest) = list.messages.iter().map(|m| m.uid).min() else {
+        // With no edge, every Account has shown all it holds (ADR 0014).
+        let (account, folder) = if view.folder.is_all_inboxes() {
+            let Some(account) = view.edge else {
+                return;
+            };
+
+            (account, INBOX)
+        } else {
+            (view.folder.account, &*view.folder.name)
+        };
+
+        let live = self.live.get(account).copied().unwrap_or(false);
+        let mine = list.messages.iter().filter(|m| m.account == account);
+        let Some(oldest) = mine.map(|m| m.uid).min() else {
             return;
         };
 
-        let folder = &view.folder.name;
-        if self
-            .nothing_below
-            .as_ref()
-            .is_some_and(|(at, nothing, below)| {
-                *at == account && nothing == folder && *below == oldest
-            })
-        {
+        if !live || view.bottomed(account, folder, oldest) {
             return;
         }
 
         self.asked = true;
         self.requests
-            .send(account, Request::Backfill(Arc::clone(folder)));
+            .send(account, Request::Backfill(folder.into()));
     }
 
     /// Follows the fetch connection, and passes `update` on. A request in
@@ -76,13 +76,7 @@ impl OlderPages {
 
                 self.asked = false;
             }
-            Update::Backfill(Backfill::Paged {
-                folder,
-                nothing_below,
-            }) => {
-                self.asked = false;
-                self.nothing_below = nothing_below.map(|uid| (account, Arc::clone(folder), uid));
-            }
+            Update::Backfill(Backfill::Paged { .. }) => self.asked = false,
             _ => {}
         }
 

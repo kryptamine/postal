@@ -17,10 +17,17 @@ use crate::{
 
 /// The Message List's contents, selection and scroll position.
 pub struct InboxView {
-    /// The Folder shown; the first Account's Inbox on every run.
+    /// The Folder shown; on every run All Inboxes, or the Inbox with one
+    /// Account.
     pub folder: Folder,
     /// Each Account's address, by its place in this run.
     pub accounts: Vec<Arc<str>>,
+    /// Each Account's Folder and its oldest cached UID, when the server had
+    /// nothing older there.
+    pub nothing_below: Vec<Option<(Arc<str>, u32)>>,
+    /// In All Inboxes, the Account whose cache edge ends the rows: a
+    /// Backfill there shows more.
+    pub edge: Option<usize>,
     /// The shown Folder's rows; `None` until the Cache or the server has some.
     pub list: Option<Listing>,
     /// Shows its own rows, from every Folder; `selected` and `offset` index those.
@@ -41,7 +48,13 @@ pub struct InboxView {
 impl InboxView {
     pub fn loading(accounts: Vec<Arc<str>>) -> Self {
         Self {
-            folder: Folder::inbox(0),
+            folder: if accounts.len() > 1 {
+                Folder::all_inboxes()
+            } else {
+                Folder::inbox(0)
+            },
+            nothing_below: vec![None; accounts.len()],
+            edge: None,
             accounts,
             list: None,
             search: None,
@@ -166,6 +179,15 @@ impl InboxView {
         if self.selected_body() != body {
             self.preview_scroll = 0;
         }
+    }
+
+    /// Whether the server had nothing older than what `account` caches of
+    /// `folder`, whose oldest cached UID is `oldest`.
+    pub fn bottomed(&self, account: usize, folder: &str, oldest: u32) -> bool {
+        self.nothing_below
+            .get(account)
+            .and_then(Option::as_ref)
+            .is_some_and(|(at, uid)| **at == *folder && *uid == oldest)
     }
 
     /// The address of `account`, which a header shows only with several.

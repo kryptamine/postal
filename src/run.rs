@@ -7,7 +7,7 @@ use tokio::time::Instant;
 
 use crate::{
     accounts::Accounts,
-    alloc_count,
+    all_inboxes, alloc_count,
     awaited_reply::AwaitedReply,
     backfill::Backfill,
     body::Body,
@@ -16,7 +16,7 @@ use crate::{
     composing,
     draft_pane::DraftPane,
     draft_preview::DraftPreview,
-    folder::{Folder, Role},
+    folder::{self, Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
     hint_line::HintLine,
@@ -202,7 +202,7 @@ pub async fn run(
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, caches, (&view, screen.reading.as_ref()))?,
                     step @ (Step::Compose | Step::Edit | Step::Send) => {
-                        let from = accounts.noted(view.folder.account);
+                        let from = accounts.noted(composing_from(&view));
                         draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
                     }
                     Step::Reply(all) => {
@@ -471,7 +471,13 @@ fn apply(
         Update::Backfill(Backfill::Fetching { done, total }) => {
             screen.backfill = Some(Status::Syncing { done, total });
         }
-        Update::Backfill(Backfill::Paged { .. }) => screen.backfill = None,
+        Update::Backfill(Backfill::Paged {
+            folder,
+            nothing_below,
+        }) => {
+            screen.backfill = None;
+            paged(view, caches, (account, folder, nothing_below))?;
+        }
         Update::NoTrash => screen.toast = Some(Toast::error("no Trash Folder")),
         Update::Unrestored => screen.toast = Some(Toast::error("nothing to undo")),
         Update::Sent => {
@@ -484,6 +490,25 @@ fn apply(
             screen.outbox = outbox.count();
             screen.toast = Some(Toast::error("refused · back in Drafts"));
         }
+    }
+
+    Ok(())
+}
+
+/// A page of older Messages of `folder` of `account` is in; the server had
+/// nothing below `nothing_below` when it says so.
+fn paged(
+    view: &mut InboxView,
+    caches: &[Cache],
+    (account, folder, nothing_below): (usize, Arc<str>, Option<u32>),
+) -> Result<(), Error> {
+    if let Some(known) = view.nothing_below.get_mut(account) {
+        *known = nothing_below.map(|uid| (folder, uid));
+    }
+
+    // An Account with nothing older sets no edge there (ADR 0014).
+    if view.folder.is_all_inboxes() {
+        show(view, caches, None)?;
     }
 
     Ok(())
@@ -862,7 +887,12 @@ fn undo(
 
     relist(screen, view, caches)?;
     asks.send(account, Ask::Changes);
-    let shown = account == view.folder.account && folders.contains(&view.folder.name);
+    let shown = if view.folder.is_all_inboxes() {
+        folders.iter().any(|f| **f == *folder::INBOX)
+    } else {
+        account == view.folder.account && folders.contains(&view.folder.name)
+    };
+
     let here = view.search.is_some() || shown;
     screen.toast = Some(if here {
         Toast::new("restored")
@@ -1027,7 +1057,7 @@ fn switch(
     caches: &[Cache],
     folder: Folder,
 ) -> Result<bool, Error> {
-    if folder.account == view.folder.account && folder.name == view.folder.name {
+    if folder.same(&view.folder) {
         return Ok(false);
     }
 
@@ -1059,8 +1089,15 @@ fn steer(
         }
         Step::Show(folder) => {
             if switch(view, screen, caches, folder)? {
-                let shown = Arc::clone(&view.folder.name);
-                asks.send(view.folder.account, Ask::Show(shown));
+                if view.folder.is_all_inboxes() {
+                    let inbox: Arc<str> = folder::INBOX.into();
+                    for account in 0..caches.len() {
+                        asks.send(account, Ask::Show(Arc::clone(&inbox)));
+                    }
+                } else {
+                    let shown = Arc::clone(&view.folder.name);
+                    asks.send(view.folder.account, Ask::Show(shown));
+                }
             }
         }
         Step::Read(thread) => {
@@ -1099,11 +1136,16 @@ fn relist(screen: &mut Screen, view: &InboxView, caches: &[Cache]) -> Result<(),
 }
 
 /// Every Account's Messages a Search matches, newest first, the shown
-/// Folder's copy winning in its Account (ADR 0010).
+/// Folder's copy winning in its Account, the Inbox's in All Inboxes (ADR 0010).
 fn everywhere(caches: &[Cache], shown: &Folder) -> Result<Inbox, cache::Error> {
     let (mut messages, mut elsewhere) = (Vec::new(), Vec::new());
     for (account, cache) in caches.iter().enumerate() {
-        let here = (account == shown.account).then_some(&*shown.name);
+        let here = if shown.is_all_inboxes() {
+            Some(folder::INBOX)
+        } else {
+            (account == shown.account).then_some(&*shown.name)
+        };
+
         let found = cache.everywhere(here)?;
         messages.extend(found.messages);
         elsewhere.extend(found.elsewhere);
@@ -1237,11 +1279,29 @@ fn open(
     Ok(None)
 }
 
+/// The Account a Compose goes out from: the shown Folder's; in All
+/// Inboxes, the selected Thread's, else the first.
+fn composing_from(view: &InboxView) -> usize {
+    if view.folder.is_all_inboxes() {
+        return view.selected_message().map_or(0, |m| m.account);
+    }
+
+    view.folder.account
+}
+
 fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<(), Error> {
-    if let Some(inbox) = caches[view.folder.account]
-        .inbox(&view.folder.name, limit)
-        .map_err(Error::Cache)?
-    {
+    let inbox = if view.folder.is_all_inboxes() {
+        let read = all_inboxes::read(caches, view, limit).map_err(Error::Cache)?;
+        read.map(|(inbox, edge)| {
+            view.edge = edge;
+            inbox
+        })
+    } else {
+        let read = caches[view.folder.account].inbox(&view.folder.name, limit);
+        read.map_err(Error::Cache)?
+    };
+
+    if let Some(inbox) = inbox {
         view.show(inbox);
     }
 

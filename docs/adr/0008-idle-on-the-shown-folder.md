@@ -6,6 +6,10 @@ with it: the new Folder's arrivals and flag changes show live, and the Inbox
 is not watched until the user goes back to it. Its Unread count in the Folder
 Picker is as fresh as the last `STATUS` sent when the Picker opened.
 
+With several Accounts each holds its own connection, and in All Inboxes each
+idles on its own Inbox. Showing another Folder moves that Account's IDLE
+alone; the others stay on the Folder they last showed.
+
 The Folder Picker's `LIST` and `STATUS (UNSEEN)` go over the same connection:
 Postal ends IDLE with `DONE`, sends them, and idles again. `STATUS` is never
 sent for the selected Folder (RFC 3501 advises against it); its count comes

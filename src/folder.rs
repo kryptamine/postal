@@ -7,6 +7,8 @@ pub const INBOX: &str = "INBOX";
 /// Picker lists them.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Role {
+    /// Every Account's Inbox in one Message List, never on the server.
+    AllInboxes,
     Inbox,
     Starred,
     Sent,
@@ -33,6 +35,7 @@ impl Role {
     /// The name the Folder is shown under, whatever the server calls it.
     pub const fn label(self) -> &'static str {
         match self {
+            Self::AllInboxes => "All Inboxes",
             Self::Inbox => "Inbox",
             Self::Starred => "Starred",
             Self::Sent => "Sent",
@@ -71,6 +74,25 @@ impl Folder {
     /// Local Drafts, as the Folder Picker lists it among the server's.
     pub fn local_drafts() -> Self {
         Self::new(0, Role::LocalDrafts.label(), Some(Role::LocalDrafts))
+    }
+
+    pub fn all_inboxes() -> Self {
+        Self::new(0, Role::AllInboxes.label(), Some(Role::AllInboxes))
+    }
+
+    pub fn is_all_inboxes(&self) -> bool {
+        self.role == Some(Role::AllInboxes)
+    }
+
+    /// Folders are known by Account and name; those never on the server by
+    /// their role.
+    pub fn same(&self, other: &Self) -> bool {
+        let local = |f: &Self| matches!(f.role, Some(Role::LocalDrafts | Role::AllInboxes));
+        match (local(self), local(other)) {
+            (true, true) => self.role == other.role,
+            (false, false) => self.account == other.account && self.name == other.name,
+            _ => false,
+        }
     }
 
     /// The Inbox is known by its name alone (RFC 3501).

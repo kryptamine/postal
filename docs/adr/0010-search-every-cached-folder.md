@@ -6,7 +6,8 @@ Cache, except Trash and Spam, which Gmail's own search leaves out by default.
 
 A Message Gmail files under several labels is cached once per Folder under one
 `X-GM-MSGID`, its body key (ADR 0005), so the matches are deduplicated by body
-key: the copy in the shown Folder wins, else the first in Folder Picker order.
+key: the copy in the shown Folder wins, else the first in Folder Picker order;
+in All Inboxes, the copy in each Account's Inbox.
 Threads group across Folders by `X-GM-THRID`, as in Reading. On a server
 without Gmail's extensions copies in two Folders have different keys and both
 match.

@@ -478,6 +478,17 @@ impl Cache {
         Ok(oldest)
     }
 
+    /// When the oldest cached Message of `folder` arrived.
+    pub fn oldest_arrival(&self, folder: &str) -> Result<Option<DateTime<Utc>>, Error> {
+        let oldest: Option<i64> = self
+            .connection()
+            .prepare_cached(
+                "SELECT min(received) FROM message WHERE account = ?2 AND mailbox = ?1",
+            )?
+            .query_row(params![folder, self.email()], |row| row.get(0))?;
+        Ok(oldest.and_then(|at| DateTime::from_timestamp(at, 0)))
+    }
+
     /// Up to `limit` Messages of `folder` still without a Snippet, newest
     /// first, and the part each one's Snippet is cut from; only UIDs below
     /// `below` when given.

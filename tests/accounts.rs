@@ -19,7 +19,7 @@ use std::{
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{APP_PASSWORD, EMAIL, FakeImap, FakeMessage, Outage},
+    fake_imap::{APP_PASSWORD, EMAIL, FIRST_UID, FakeImap, FakeMessage, Outage},
     fake_oauth,
     fake_smtp::FakeSmtp,
     home::Home,
@@ -46,16 +46,24 @@ struct Two {
 }
 
 fn two() -> Two {
-    let first = FakeImap::start(vec![
+    let first = vec![
         FakeMessage::new("Alice", "Alpha news", "2024-03-02T09:00:00Z")
             .body(FakeBody::plain("Body of Alpha news")),
-    ]);
-    let second = FakeImap::start(Vec::new());
-    let bravo = second.deliver(
+    ];
+    let second = vec![
         FakeMessage::new("Bob", "Bravo notes", "2024-03-01T09:00:00Z")
             .body(FakeBody::plain("Body of Bravo notes"))
             .unread(),
-    );
+    ];
+    two_with(first, second)
+}
+
+/// As `two`, with `first` and `second` in each Account's Inbox; `bravo` is
+/// the UID of the second's last.
+fn two_with(first: Vec<FakeMessage>, second: Vec<FakeMessage>) -> Two {
+    let first = FakeImap::start(first);
+    let bravo = FIRST_UID + u32::try_from(second.len()).unwrap() - 1;
+    let second = FakeImap::start(second);
     second.as_icloud();
     let smtp = (FakeSmtp::start(), FakeSmtp::start());
     let server = |port: u16| format!("host = \"127.0.0.1\"\nport = {port}\ntls = false\n");
@@ -124,38 +132,148 @@ fn both_listed(screen: &Screen) -> bool {
     rows.iter().any(|r| r == OTHER) && rows.iter().any(|r| r.starts_with("Trash"))
 }
 
-/// Shows the second Account's Inbox, the row under the first's.
+/// Shows the second Account's Inbox: the Query leaves All Inboxes and
+/// each Account's Inbox, the second's last.
 fn second_inbox(t: &mut Terminal) {
     t.wait_until(|s| s.contains("Alpha news")).unwrap();
     t.send(Key::Char('f')).unwrap();
     t.wait_until(both_listed).unwrap();
+    t.send_str("inbox").unwrap();
+    t.wait_until(|s| picked(s).len() == 5).unwrap();
+    t.send(Key::Down).unwrap();
     t.send(Key::Down).unwrap();
     t.send(Key::Enter).unwrap();
-    t.wait_until(|s| picker(s).is_empty() && s.contains("Bravo notes"))
-        .unwrap();
+    t.wait_until(|s| {
+        picker(s).is_empty() && s.contains("Bravo notes") && !s.contains("Alpha news")
+    })
+    .unwrap();
 }
 
 #[test]
-fn the_picker_heads_a_section_per_account_and_lists_local_drafts_last() {
+fn the_picker_lists_all_inboxes_first_then_a_section_per_account_and_local_drafts_last() {
     let two = two();
+    two.first
+        .deliver(FakeMessage::new("Carol", "Charlie plans", "2024-03-03T09:00:00Z").unread());
     let mut t = postal(&two);
-    t.wait_until(|s| s.contains("Alpha news")).unwrap();
+    t.wait_until(|s| s.contains("Charlie plans")).unwrap();
     t.send(Key::Char('f')).unwrap();
-    let screen = t.snapshot_after(both_listed).unwrap();
+    // Its Unread count sums the Inboxes'.
+    let screen = t
+        .snapshot_after(|s| both_listed(s) && picked(s).iter().any(|r| r == "All Inboxes 2"))
+        .unwrap();
     let rows = picked(&screen);
     let at = |row: &str| rows.iter().position(|r| r == row).unwrap();
-    assert_eq!(rows[0], EMAIL, "{rows:?}");
-    assert!(rows[1].starts_with("Inbox"), "{rows:?}");
-    assert!(at(OTHER) > 1, "{rows:?}");
+    assert_eq!(rows[0], "All Inboxes 2", "{rows:?}");
+    assert_eq!(rows[1], EMAIL, "{rows:?}");
+    assert!(rows[2].starts_with("Inbox"), "{rows:?}");
+    assert!(at(OTHER) > 2, "{rows:?}");
     assert!(rows[at(OTHER) + 1].starts_with("Inbox"), "{rows:?}");
     assert_eq!(rows.last().map(String::as_str), Some("Local Drafts"));
 
     // Typing narrows every section, and each keeps its heading.
     t.send_str("inb").unwrap();
-    let screen = t.snapshot_after(|s| picked(s).len() == 4).unwrap();
+    let screen = t.snapshot_after(|s| picked(s).len() == 5).unwrap();
     let rows = picked(&screen);
-    assert_eq!([&*rows[0], &*rows[2]], [EMAIL, OTHER], "{rows:?}");
-    assert!(rows[1].starts_with("Inbox") && rows[3].starts_with("Inbox"));
+    assert_eq!([&*rows[1], &*rows[3]], [EMAIL, OTHER], "{rows:?}");
+    assert!(rows[2].starts_with("Inbox") && rows[4].starts_with("Inbox"));
+    quit(t);
+}
+
+#[test]
+fn every_run_starts_in_all_inboxes_with_each_accounts_rows_by_arrival() {
+    let two = two();
+    let mut t = postal(&two);
+    let screen = t
+        .snapshot_after(|s| s.contains("Alpha news") && s.contains("Bravo notes"))
+        .unwrap();
+    assert!(screen.row_text(0).contains(" All Inboxes "), "{screen:?}");
+    let row = |subject: &str| {
+        (0..screen.rows())
+            .find(|&r| screen.row_text(r).contains(subject))
+            .unwrap()
+    };
+    assert!(row("Alpha news") < row("Bravo notes"), "{screen:?}");
+    quit(t);
+}
+
+// Each Account idles on its own Inbox, so mail to either shows at once.
+#[test]
+fn all_inboxes_shows_new_mail_to_each_account_live() {
+    let two = two();
+    let mut t = postal(&two);
+    t.wait_until(|s| s.contains("Alpha news") && s.contains("Bravo notes"))
+        .unwrap();
+    wait_for(|| two.first.commands().iter().any(|c| c == "IDLE"));
+    wait_for(|| two.second.commands().iter().any(|c| c == "IDLE"));
+    two.second.deliver(FakeMessage::new(
+        "Dave",
+        "Delta report",
+        "2024-03-04T09:00:00Z",
+    ));
+    t.wait_until(|s| s.contains("Delta report")).unwrap();
+    two.first.deliver(FakeMessage::new(
+        "Erin",
+        "Echo minutes",
+        "2024-03-05T09:00:00Z",
+    ));
+    t.wait_until(|s| s.contains("Echo minutes") && s.contains("Delta report"))
+        .unwrap();
+    quit(t);
+}
+
+#[test]
+fn compose_in_all_inboxes_goes_out_from_the_account_of_the_selected_thread() {
+    let two = two();
+    let mut t = postal(&two);
+    t.wait_until(|s| s.contains("Alpha news") && s.contains("Bravo notes"))
+        .unwrap();
+    // Bravo notes, the second Account's, is the second row.
+    t.send(Key::Char('j')).unwrap();
+    t.wait_until(|s| s.contains("Body of Bravo notes")).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    t.wait_until(|s| s.contains(" Draft ") && s.contains(OTHER))
+        .unwrap();
+    t.send(Key::Char('y')).unwrap();
+    wait_for(|| two.smtp.1.received().len() == 1);
+    assert!(two.smtp.0.received().is_empty());
+    quit(t);
+}
+
+/// Message `n` of one Account, `n` hours and `minutes` after the epoch.
+fn hourly(account: &str, n: i64, minutes: i64) -> FakeMessage {
+    let date = chrono::DateTime::UNIX_EPOCH
+        + chrono::Duration::hours(n)
+        + chrono::Duration::minutes(minutes);
+    let subject = format!("{account} {n}");
+    FakeMessage::new("Sender", &subject, &date.to_rfc3339()).body(FakeBody::plain(&subject))
+}
+
+/// The Preview's title: the selection's place in the Message List.
+fn place(t: &mut Terminal, place: &str) {
+    t.wait_until(|s| s.row_text(0).contains(&format!(" {place} ")))
+        .unwrap();
+}
+
+// A row below an Account's cache edge would hide that Account's own
+// older mail, not yet fetched; each Backfill goes to the Account whose
+// edge stops the list, until no Account has older mail.
+#[test]
+fn all_inboxes_ends_at_the_latest_cache_edge_until_a_backfill_lowers_it() {
+    let first = (1..=600).map(|n| hourly("First", n, 0)).collect();
+    // One below the first Account's first window of 500, one above it.
+    let second = vec![hourly("Second", 50, 30), hourly("Second", 700, 0)];
+    let two = two_with(first, second);
+    let mut t = postal(&two);
+    // The first's 500 newest, from hour 101, and the second's from hour 700.
+    place(&mut t, "1/501");
+    wait_for(|| two.first.commands().iter().any(|c| c == "IDLE"));
+    wait_for(|| two.second.commands().iter().any(|c| c == "IDLE"));
+    t.send(Key::Char('G')).unwrap();
+    // The first's backfill reaches its oldest, the second's finds none older.
+    t.wait_until(|s| s.row_text(0).contains("/602 ")).unwrap();
+    t.send(Key::Char('G')).unwrap();
+    place(&mut t, "602/602");
+    t.wait_until(|s| s.contains("First 1\u{20}")).unwrap();
     quit(t);
 }
 
