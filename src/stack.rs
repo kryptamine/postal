@@ -51,7 +51,7 @@ pub fn placed<'a>(
     view.stack().enumerate().map(move |(index, message)| {
         let body = reading
             .unfolded(message.body_key)
-            .then(|| previews.body(message, view.html, width));
+            .then(|| previews.body(view, message, width));
         let height = match &body {
             None => 1,
             Some(Body::Rendered(preview)) => header + preview.body.len(),

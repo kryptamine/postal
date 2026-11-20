@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
@@ -10,6 +10,7 @@ use crate::{
     matched::Matched,
     message::Message,
     preview_pane::LABELS,
+    rendered_previews::PreviewKey,
     search::Search,
     thread::{Key, Thread},
     view::View,
@@ -40,6 +41,8 @@ pub struct InboxView {
     pub preview_scroll: usize,
     /// How the Preview shows HTML mail, for every Message.
     pub html: View,
+    /// The Messages shown with their Quote, by Account and body key.
+    quoted: HashSet<(usize, i64)>,
     /// The local offset as of the last `show`: chrono's `Local` rereads the
     /// time zone every second, and that allocates inside a frame.
     zone: FixedOffset,
@@ -62,6 +65,7 @@ impl InboxView {
             offset: 0,
             preview_scroll: 0,
             html: View::default(),
+            quoted: HashSet::new(),
             zone: Utc.fix(),
         }
     }
@@ -188,6 +192,24 @@ impl InboxView {
             .get(account)
             .and_then(Option::as_ref)
             .is_some_and(|(at, uid)| **at == *folder && *uid == oldest)
+    }
+
+    /// What tells the Preview of `message` at `width` from its others.
+    pub fn preview_key(&self, message: &Message, width: u16) -> PreviewKey {
+        PreviewKey {
+            account: message.account,
+            body: message.body_key,
+            width,
+            view: self.html,
+            quoted: self.quoted.contains(&(message.account, message.body_key)),
+        }
+    }
+
+    /// Shows the Quote of the Message `body` of `account`, or hides it.
+    pub fn switch_quoted(&mut self, account: usize, body: i64) {
+        if !self.quoted.remove(&(account, body)) {
+            self.quoted.insert((account, body));
+        }
     }
 
     /// The address of `account`, which a header shows only with several.

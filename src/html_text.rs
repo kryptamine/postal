@@ -25,6 +25,11 @@ const BREAKING: [&str; 20] = [
     "ul",
 ];
 
+/// Whether the element `name` breaks a line, whatever its case.
+pub fn breaks(name: &str) -> bool {
+    BREAKING.iter().any(|tag| tag.eq_ignore_ascii_case(name))
+}
+
 /// The text of an HTML fragment: tags, comments and hidden elements dropped,
 /// entities decoded. A tag cut off at the end is dropped with what follows.
 pub fn strip(html: &str) -> String {
@@ -61,7 +66,7 @@ pub fn strip(html: &str) -> String {
             .to_ascii_lowercase();
         if !closing && HIDDEN.contains(&name.as_str()) {
             rest = after_closing(rest, &name);
-        } else if BREAKING.contains(&name.as_str()) {
+        } else if breaks(&name) {
             text.push(' ');
         }
     }

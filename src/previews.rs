@@ -20,7 +20,6 @@ use crate::{
     routes::Routes,
     shown::Shown,
     update::Update,
-    view::View,
 };
 
 /// Rows on each side of the selection whose Preview is made ready too.
@@ -103,21 +102,12 @@ impl Previews {
 
     /// The selected Message's Preview at `width`, once rendered.
     pub fn get(&self, view: &InboxView, width: u16) -> Option<&Preview> {
-        self.of(view.selected_message()?, view.html, width)
+        self.rendered
+            .get(view.preview_key(view.selected_message()?, width))
     }
 
-    /// The Preview of `message` in `html` at `width`, once rendered.
-    pub fn of(&self, message: &Message, html: View, width: u16) -> Option<&Preview> {
-        self.rendered.get(PreviewKey {
-            account: message.account,
-            body: message.body_key,
-            width,
-            view: html,
-        })
-    }
-
-    pub fn body(&self, message: &Message, html: View, width: u16) -> Body<'_> {
-        if let Some(preview) = self.of(message, html, width) {
+    pub fn body(&self, view: &InboxView, message: &Message, width: u16) -> Body<'_> {
+        if let Some(preview) = self.rendered.get(view.preview_key(message, width)) {
             return Body::Rendered(preview);
         }
 
@@ -138,7 +128,7 @@ impl Previews {
             return Shown::Loading;
         };
 
-        let why = match self.body(message, view.html, width) {
+        let why = match self.body(view, message, width) {
             Body::Rendered(preview) => return Shown::Rendered(preview),
             Body::Loading => return Shown::Loading,
             Body::Unavailable(why) => why,
@@ -214,13 +204,7 @@ impl Previews {
         };
 
         for (message, selected) in wanted {
-            let key = PreviewKey {
-                account: message.account,
-                body: message.body_key,
-                width,
-                view: view.html,
-            };
-
+            let key = view.preview_key(message, width);
             let here = self.holds(message);
             if self.rendered.touch(key)
                 || self.rendering.contains(&key)

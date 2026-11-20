@@ -65,8 +65,12 @@ Taking back the latest Delete or Draft discard not yet taken back, with `u`, as 
 _Avoid_: restore, revert
 
 **Preview**:
-The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View. With more than one Account, its header names the Account the Message reached, as does each unfolded Message in Reading.
+The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View, without its Quote. With more than one Account, its header names the Account the Message reached, as does each unfolded Message in Reading.
 _Avoid_: reader, viewer, body pane
+
+**Quote**:
+The earlier mail a Message that answers another repeats at its end, with the line naming whom it is of: `>` lines, a `<blockquote>`, or all under Outlook's header (ADR 0015). The Preview and Reading leave it out and say so in one line; `z` shows it for that Message, or hides it again, and `$PAGER` always shows it. Quoted mail with words after it is no Quote.
+_Avoid_: quoted text, citation, trimmed content
 
 **Rendered View**:
 How the Preview shows HTML mail by default: laid out as a mail client does, on the terminal cell grid, in the mail's colours moved onto the terminal's background. Images are never fetched.

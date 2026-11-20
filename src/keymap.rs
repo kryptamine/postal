@@ -35,6 +35,9 @@ pub enum Action {
     Links,
     /// The other View of HTML mail: rendered or text.
     SwitchView,
+    /// Shows the Quote of the selected Message, or in Reading of the one
+    /// at the cursor, or hides it.
+    SwitchQuoted,
     Help,
     /// Types the Query in the hint line: a new Search, or the one under way.
     Search,
@@ -165,7 +168,7 @@ const ANY: &[Mode] = &[
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 46] = [
+const BINDINGS: [Binding; 47] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -374,6 +377,15 @@ const BINDINGS: [Binding; 46] = [
         keys: "v",
         aliases: "",
         description: "rendered / text view of HTML",
+        hint: None,
+    },
+    Binding {
+        group: "View",
+        modes: BOTH,
+        signed_out: false,
+        keys: "z",
+        aliases: "",
+        description: "show / hide the Quote",
         hint: None,
     },
     Binding {
@@ -711,6 +723,7 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (_, KeyCode::PageUp) => Some(scroll(Direction::Up, By::HalfPage)),
         (_, KeyCode::Char('o')) => Some(Action::Links),
         (_, KeyCode::Char('v')) => Some(Action::SwitchView),
+        (_, KeyCode::Char('z')) => Some(Action::SwitchQuoted),
         (_, KeyCode::Char('|')) => Some(Action::Page),
         (_, KeyCode::Char('?')) => Some(Action::Help),
         (_, KeyCode::Char('L')) => Some(Action::SignIn),

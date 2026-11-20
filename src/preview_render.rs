@@ -1,10 +1,12 @@
 use chrono::{DateTime, FixedOffset};
-use mail_parser::{MessageParser, PartType};
+use mail_parser::{HeaderValue, MessageParser, PartType};
 
 use crate::{
     html_preview::{self, Links},
     mail_colours::MailColours,
+    marks::Marks,
     preview::Preview,
+    quoted_html, quoted_text,
     rendered_previews::PreviewKey,
     rendered_view,
     styled_line::StyledLine,
@@ -14,6 +16,10 @@ use crate::{
 
 /// How a Preview header shows the date.
 pub const DATE: &str = "%a, %-d %b %Y %H:%M";
+
+/// The line that stands for a Quote left out; it names the key of
+/// `Action::SwitchQuoted`.
+const QUOTE_CUT: &str = "… quoted text hidden (z)";
 
 /// What rendering one Preview needs, sent to the thread that renders it.
 pub struct Job {
@@ -58,40 +64,70 @@ pub fn header(sender: String, subject: String, received: DateTime<FixedOffset>) 
 }
 
 /// The HTML part when there is one, laid out in the rendered View; else
-/// the `text/plain` part wrapped, else a note. `true` when laid out.
+/// the `text/plain` part wrapped, else a note. `true` when laid out. Its
+/// Quote is left out unless the key keeps it (ADR 0015).
 fn body(job: &Job, links: Links) -> (Vec<StyledLine>, bool) {
-    let width = usize::from(job.key.width);
     let message = MessageParser::default().parse(&job.body);
+    // Outlook names what it answers in `References` alone.
+    let reply = message.as_ref().is_some_and(|m| {
+        [m.in_reply_to(), m.references()]
+            .iter()
+            .any(|header| !matches!(header, HeaderValue::Empty))
+    });
+
+    let cutting = reply && !job.key.quoted;
     let html = message
         .as_ref()
         .and_then(|m| m.html_part(0))
         .map(|p| &p.body);
     if let Some(PartType::Html(html)) = html {
-        let laid_out = (job.key.view == View::Rendered)
-            .then(|| rendered_view::render(html, job.key.width, job.colours))
-            .flatten();
-        if let Some(rendered) = laid_out {
-            return (rendered, true);
-        }
-
-        let converted = html_preview::render(html, width, links)
-            .unwrap_or_else(|_| note("(this Message could not be shown)", width));
-        return (converted, false);
+        let own = cutting.then(|| quoted_html::cut(html)).flatten();
+        let (rows, laid_out) = html_rows(own.unwrap_or(html), job, links);
+        return (cut(rows, own.is_some()), laid_out);
     }
 
+    let width = usize::from(job.key.width);
     let text = message
         .as_ref()
         .and_then(|m| m.text_part(0))
         .map(|p| &p.body);
-    let wrapped = match text {
-        Some(PartType::Text(text)) => wrap(text, width)
-            .into_iter()
-            .map(StyledLine::plain)
-            .collect(),
-        _ => note("(this Message has no text)", width),
+    let Some(PartType::Text(text)) = text else {
+        return (note("(this Message has no text)", width), false);
     };
 
-    (wrapped, false)
+    let own = cutting.then(|| quoted_text::cut(text)).flatten();
+    let rows = wrap(own.unwrap_or(text), width)
+        .into_iter()
+        .map(StyledLine::plain)
+        .collect();
+    (cut(rows, own.is_some()), false)
+}
+
+/// `html` laid out in the rendered View when the key asks for it and it
+/// fits, which is `true`; else as text.
+fn html_rows(html: &str, job: &Job, links: Links) -> (Vec<StyledLine>, bool) {
+    let laid_out = (job.key.view == View::Rendered)
+        .then(|| rendered_view::render(html, job.key.width, job.colours))
+        .flatten();
+    if let Some(rendered) = laid_out {
+        return (rendered, true);
+    }
+
+    let width = usize::from(job.key.width);
+    let converted = html_preview::render(html, width, links)
+        .unwrap_or_else(|_| note("(this Message could not be shown)", width));
+    (converted, false)
+}
+
+/// `rows` with the line that stands for a Quote, when one was left out.
+fn cut(mut rows: Vec<StyledLine>, quote: bool) -> Vec<StyledLine> {
+    if quote {
+        let mut line = StyledLine::plain(QUOTE_CUT.to_owned());
+        line.restyle(Marks::MUTED);
+        rows.extend([StyledLine::new(), line]);
+    }
+
+    rows
 }
 
 fn note(text: &str, width: usize) -> Vec<StyledLine> {

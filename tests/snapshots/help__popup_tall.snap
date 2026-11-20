@@ -25,6 +25,7 @@ size: 80x37  cursor: hidden
 │ Date    M│                                                        │          │
 ├──────────│ View                                                   │──────────┤
 │ Newer bod│ v                       rendered / text view of HTML   │          │
+│          │ z                       show / hide the Quote          │          │
 │          │                                                        │          │
 │          │ App                                                    │          │
 │          │ ,                       settings and Accounts          │          │
@@ -36,7 +37,6 @@ size: 80x37  cursor: hidden
 │          │ /                       search, or edit the Query      │          │
 │          │ ^j / ^k    ↓ / ↑        move, while typing the Query   │          │
 │          │ Enter                   keep the Query                 │          │
-│          │ Esc                     end the Search                 │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

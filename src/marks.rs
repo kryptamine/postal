@@ -14,7 +14,8 @@ impl Marks {
     pub const UNDERLINE: Self = Self(1 << 5);
     /// A grey border of the rendered View, drawn like Postal's own.
     pub const BORDER: Self = Self(1 << 6);
-    /// The footer of a mail in the rendered View.
+    /// The footer of a mail in the rendered View, and the line that stands
+    /// for a Quote left out.
     pub const MUTED: Self = Self(1 << 7);
 
     #[must_use]

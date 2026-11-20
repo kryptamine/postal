@@ -6,8 +6,8 @@ use crate::{preview::Preview, view::View};
 /// recently used go first.
 const BYTES: usize = 8 * 1024 * 1024;
 
-/// A Preview is rendered for one width and View: a resize, or a switch of
-/// View, renders it again.
+/// A Preview is rendered for one width and View, with its Quote or
+/// without: a resize, or a switch of either, renders it again.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PreviewKey {
     /// The Account the body key is of: keys repeat across Accounts.
@@ -15,6 +15,8 @@ pub struct PreviewKey {
     pub body: i64,
     pub width: u16,
     pub view: View,
+    /// The Quote is shown.
+    pub quoted: bool,
 }
 
 /// Rendered Previews in a byte-bounded LRU. Looking one up does not

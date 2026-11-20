@@ -654,15 +654,8 @@ fn act(
         Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
         Some(Action::Folders) => Step::Folders,
-        Some(Action::SwitchView) => {
-            view.html = view.html.other();
-            view.preview_scroll = 0;
-            if let Some(reading) = &mut screen.reading {
-                reading.reveal = true;
-            }
-
-            // The labels sit where the other View laid the links out.
-            screen.hints = None;
+        Some(action @ (Action::SwitchView | Action::SwitchQuoted)) => {
+            reshow(action, view, screen);
             Step::Stay
         }
         Some(Action::Help) => {
@@ -697,6 +690,31 @@ fn act(
         }
         None => Step::Stay,
     }
+}
+
+/// Shows HTML mail in the other View; on any other `action`, the Quote of
+/// the selected Message, or in Reading of the one at the cursor.
+fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
+    if matches!(action, Action::SwitchView) {
+        view.html = view.html.other();
+        view.preview_scroll = 0;
+        if let Some(reading) = &mut screen.reading {
+            reading.reveal = true;
+        }
+    } else {
+        let cursor = screen.reading.as_ref().map(|reading| reading.cursor);
+        let message = cursor.map_or_else(
+            || view.selected_message(),
+            |cursor| view.stack().find(|m| m.body_key == cursor),
+        );
+
+        if let Some((account, body)) = message.map(|m| (m.account, m.body_key)) {
+            view.switch_quoted(account, body);
+        }
+    }
+
+    // The labels sit where the links were before the switch.
+    screen.hints = None;
 }
 
 /// Opens the selected Thread in Reading, or moves through it there.
@@ -1310,6 +1328,8 @@ fn open(
             body: message.body_key,
             width,
             view: view.html,
+            // The pager shows the Message whole.
+            quoted: true,
         },
         body,
         sender: message.sender.clone(),
