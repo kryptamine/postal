@@ -5,6 +5,7 @@
 
 #include "alignment.h"
 #include "buttons.h"
+#include "cell_gaps.h"
 #include "colour.h"
 #include "contents.h"
 #include "dom.h"
@@ -484,6 +485,7 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
     }
     left_align_spread(doc->root());
     unfloat_cells(doc->root());
+    gap_cells(doc->root());
     snap_tree(doc->root());
     container.body = body_size(doc->root());
     if(loose) loosen(doc->root());

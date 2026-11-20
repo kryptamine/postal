@@ -233,3 +233,12 @@ fn the_small_print_under_the_body_is_muted() {
     assert!(!dim(&screen, "A caption"), "{}", screen.text());
     assert!(!dim(&screen, "The third"), "{}", screen.text());
 }
+
+// Two cells of words side by side are set apart: in 600 px the table
+// spread them, in the pane `Support` met `Unsubscribe`.
+#[test]
+fn the_words_of_two_cells_are_set_apart() {
+    let body = html("<table><tr><td>Support</td><td>Unsubscribe</td></tr></table>");
+    let screen = preview(body, &DEFAULT, "Unsubscribe");
+    assert!(screen.contains("Support Unsubscribe"), "{}", screen.text());
+}

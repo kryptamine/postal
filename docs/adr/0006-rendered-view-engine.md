@@ -22,6 +22,7 @@ drops the boxes round pictures, `buttons.cpp` and `titles.cpp` collapse
 buttons and cover bands with `collapse.cpp`, `contents.cpp` gathers what
 each element shows for those passes in one walk, `loosen.cpp`,
 `stacking.cpp` and `word_breaks.cpp` make a mail too wide fit,
+`cell_gaps.cpp` sets the words of two cells apart,
 `font_sizes.cpp` tells the small print, and
 `colour.cpp`, `text.cpp` and `dom.cpp` hold the colour, cell-width and
 element helpers.
@@ -173,6 +174,9 @@ element helpers.
   set round it, as in Blink, which maps them to `-webkit-` values a table
   resets; one a style sets, it does. Under `<td align="center">`, a
   receipt's rows stood centred. This changed 67 of 473 cached mails.
+- Two table cells with words side by side get a column between them where
+  their padding, borders and spacing give less: in 600 px the table spread
+  them, and in the pane `Support` met `Unsubscribe`.
 
 Six changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
 `document::rebuild_render_tree` is public: the boxes are built from the
