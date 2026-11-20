@@ -209,7 +209,9 @@ pub fn send(screen: &mut Screen, (accounts, outbox): (Accounts, &Outbox), asks: 
 
     let notes = Notes {
         draft: Some(preview.text.clone()),
-        account: preview.account.clone(),
+        // The Account it is built for, which alone sends it: one named and
+        // gone from the config would leave it in the Outbox.
+        account: accounts.noted(account).map(str::to_owned),
         answering: preview.answering.clone(),
         error: None,
     };

@@ -266,6 +266,38 @@ fn compose_and_reply_go_out_from_the_account_of_the_shown_folder() {
 }
 
 #[test]
+fn a_draft_of_an_account_gone_from_the_config_sends_from_the_first() {
+    let two = two();
+    let mut t = postal(&two);
+    second_inbox(&mut t);
+    t.send(Key::Char('c')).unwrap();
+    t.wait_until(|s| s.contains(" Draft ")).unwrap();
+    t.send(Key::Char('d')).unwrap();
+    t.wait_until(|s| s.contains("Saved to Drafts")).unwrap();
+    quit(t);
+
+    let config = fs::read_to_string(two.home.config_path()).unwrap();
+    let (first, _) = config.split_once("[[account]]").unwrap();
+    fs::write(two.home.config_path(), first).unwrap();
+    let mut t = postal(&two);
+    t.wait_until(|s| s.contains("Alpha news")).unwrap();
+    t.send(Key::Char('f')).unwrap();
+    t.send_str("local").unwrap();
+    t.wait_until(|s| picked(s).first().is_some_and(|f| f == "Local Drafts"))
+        .unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains(" Local Drafts ") && s.contains("Plans"))
+        .unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains(" Draft ") && s.contains(EMAIL))
+        .unwrap();
+    t.send(Key::Char('y')).unwrap();
+    // Queued for an Account no longer run, it would wait in the Outbox.
+    wait_for(|| two.smtp.0.received().len() == 1);
+    quit(t);
+}
+
+#[test]
 fn local_drafts_names_the_sender_of_each_draft() {
     let two = two();
     let mut t = postal(&two);
