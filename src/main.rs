@@ -36,6 +36,7 @@ mod folder;
 mod folder_list;
 mod folder_picker;
 mod footer;
+mod frame_glyphs;
 mod frame_padding;
 mod header;
 mod help_popup;

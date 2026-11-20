@@ -54,7 +54,8 @@ element helpers.
   same rule. A box's own background stops inside its border
   (`background-clip: padding-box`), as a 1px border looks; a cell thick, it
   would ring the line in the fill. Borders are drawn as `─ │ ┌ ┐ └ ┘` after
-  the text, on cells without text.
+  the text, on cells without text; a corner rounded 4 px or more is drawn
+  as `╭ ╮ ╰ ╯`, and so is the frame of a section whose box was rounded.
 - A box with all four borders round every glyph of the mail only frames the
   page, a frame round every line of it, and prints as blank cells. It stays
   in the grid (`CG_PAGE_BOX`), so a section against it still takes it as its

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{marks::Marks, paint::Paint};
+use crate::{frame_glyphs, marks::Marks, paint::Paint};
 
 /// One line of a Preview body: its text, and the runs that cover it end to
 /// end, each with its marks, its colours and the URL of the link it is in.
@@ -109,10 +109,14 @@ impl StyledLine {
         self.text.chars().all(blank) && self.runs.iter().all(|run| run.paint.bg.is_none())
     }
 
-    /// Shows nothing but pieces of frames, a `corner` among them: the top
-    /// or the bottom edge of a card.
-    pub fn frame_edge(&self, corner: char) -> bool {
-        self.text.contains(corner) && self.text.chars().all(|c| " ─│┌┐└┘".contains(c))
+    /// Shows nothing but pieces of frames, one of `corners` among them: the
+    /// top or the bottom edge of a card.
+    pub fn frame_edge(&self, corners: &[char]) -> bool {
+        self.text.contains(corners)
+            && self
+                .text
+                .chars()
+                .all(|c| c == ' ' || frame_glyphs::piece(c))
     }
 
     /// The text in runs, in order.

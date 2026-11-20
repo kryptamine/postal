@@ -45,6 +45,11 @@ struct Font
     float size = 0;
 };
 
+// A corner rounded this much or more is drawn round, as `╭`.
+const float ROUND_PX = 4;
+
+bool round(pixel_t x, pixel_t y) { return float(x) >= ROUND_PX && float(y) >= ROUND_PX; }
+
 void set_glyph(cg_cell& c, const char* g, size_t n)
 {
     n = std::min(n, sizeof c.glyph - 1);
@@ -238,6 +243,9 @@ class grid_container : public document_container, public Grid
 
         // A button or a badge is short and narrow; a section is neither.
         uint32_t panel = layer.is_root || r1 - r0 >= 3 || (c1 - c0 + 1) * 2 >= cols ? CG_BG_PANEL : 0;
+        const border_radiuses& radius = layer.border_radius;
+        if(round(radius.top_left_x, radius.top_left_y) && round(radius.bottom_right_x, radius.bottom_right_y))
+            panel |= CG_BG_ROUND;
         for(int r = r0; r <= r1; r++)
             for(int c = c0; c <= c1; c++)
                 if(cg_cell* cell = at(r, c); cell && (layer.is_root || visible(r, c, &layer.clip_box)))
@@ -350,10 +358,13 @@ class grid_container : public document_container, public Grid
                 for(int r = tr; r <= br; r++) line(r, c0, "│", f.b.left, flags);
             if(right)
                 for(int r = tr; r <= br; r++) line(r, c1, "│", f.b.right, flags);
-            if(top && left) line(tr, c0, "┌", f.b.top, flags, true);
-            if(top && right) line(tr, c1, "┐", f.b.top, flags, true);
-            if(bottom && left) line(br, c0, "└", f.b.bottom, flags, true);
-            if(bottom && right) line(br, c1, "┘", f.b.bottom, flags, true);
+            const border_radiuses& rad = f.b.radius;
+            if(top && left) line(tr, c0, round(rad.top_left_x, rad.top_left_y) ? "╭" : "┌", f.b.top, flags, true);
+            if(top && right) line(tr, c1, round(rad.top_right_x, rad.top_right_y) ? "╮" : "┐", f.b.top, flags, true);
+            if(bottom && left)
+                line(br, c0, round(rad.bottom_left_x, rad.bottom_left_y) ? "╰" : "└", f.b.bottom, flags, true);
+            if(bottom && right)
+                line(br, c1, round(rad.bottom_right_x, rad.bottom_right_y) ? "╯" : "┘", f.b.bottom, flags, true);
         }
         clips.clear();
     }

@@ -1,5 +1,6 @@
 use crate::{
     cell_grid::{self, Cell, CellGrid},
+    frame_glyphs,
     rgb::{Rgb, WHITE},
 };
 
@@ -67,6 +68,8 @@ pub struct Region<'a> {
     inside: Vec<bool>,
     colour: Rgb,
     boxed: bool,
+    /// The box filled had rounded corners.
+    round: bool,
 }
 
 impl<'a> Region<'a> {
@@ -96,6 +99,7 @@ impl<'a> Region<'a> {
             inside,
             colour,
             boxed: false,
+            round: grid.cells()[top * cols + left].round(),
         };
         region.boxed = region.rectangle();
         region
@@ -192,6 +196,11 @@ impl<'a> Region<'a> {
             .filter_map(|at| {
                 let (i, _) = self.cell(at).filter(|(_, cell)| !taken(cell))?;
                 let glyph = glyph(&outside, at, self.width)?;
+                let glyph = if self.round {
+                    frame_glyphs::rounded(glyph)
+                } else {
+                    glyph
+                };
                 let upright = outside[at - 1] || outside[at + 1];
                 match (flat[at], upright) {
                     (false, _) => Some((i, glyph)),

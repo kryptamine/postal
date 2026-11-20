@@ -234,3 +234,18 @@ fn the_card_a_long_mail_is_written_on_gets_no_frame() {
     let (row, col) = at(&screen, "Line");
     assert_eq!(bg(&screen, row, col), Color::Default);
 }
+
+// A box the mail rounds has round corners: a card read as a table cell.
+#[test]
+fn a_rounded_box_has_round_corners() {
+    let body = html(
+        "<p>Above</p><div style=\"border:1px solid #888888;border-radius:8px;padding:8px\">\
+         A bordered card</div><p>Middle</p><div style=\"background:#6d28d2;color:#ffffff;\
+         border-radius:12px;padding:16px\">A filled card<br>with two lines</div><p>Below</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Below");
+    let rows = pane(&screen).join("\n");
+    assert_eq!(rows.matches('╭').count(), 2, "{rows}");
+    assert_eq!(rows.matches('╯').count(), 2, "{rows}");
+    assert!(!rows.contains('┌'), "{rows}");
+}

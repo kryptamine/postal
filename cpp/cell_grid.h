@@ -30,6 +30,8 @@ enum
 // CG_BG_PANEL when it comes from a box too large to be a control: a section
 // or the page, which may give way to the terminal's own. `link` is 0 or an id.
 #define CG_BG_PANEL 0x02000000u
+// In a `bg`: the box filled has rounded corners.
+#define CG_BG_ROUND 0x04000000u
 
 // How src/mail_colours.rs moves mail colours, which the layout must know:
 // a background over this WCAG luminance is the page and gives way to the

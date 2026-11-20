@@ -18,6 +18,8 @@ pub const PAGE_BOX: u32 = 128;
 pub const SMALL: u32 = 256;
 /// In `bg`: it comes from a section or the page, not from a control.
 const BG_PANEL: u32 = 0x0200_0000;
+/// In `bg`: the box filled has rounded corners.
+const BG_ROUND: u32 = 0x0400_0000;
 /// A background this light is the mail's page, which becomes the terminal's:
 /// about `#cccccc` and up, in WCAG's linear luminance. The layout reads it too.
 pub const PAGE_LUMINANCE: f32 = 0.6;
@@ -56,6 +58,11 @@ impl Cell {
     /// The background comes from a section or the page, not from a control.
     pub const fn panel(&self) -> bool {
         self.bg & BG_PANEL != 0
+    }
+
+    /// The background comes from a box with rounded corners.
+    pub const fn round(&self) -> bool {
+        self.bg & BG_ROUND != 0
     }
 
     pub const fn has(&self, flag: u32) -> bool {
