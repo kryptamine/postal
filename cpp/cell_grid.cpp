@@ -9,6 +9,7 @@
 #include "contents.h"
 #include "dom.h"
 #include "floated_cells.h"
+#include "font_sizes.h"
 #include "geometry.h"
 #include "grid.h"
 #include "image_labels.h"
@@ -39,6 +40,7 @@ namespace
 struct Font
 {
     bool zero = false, bold = false, italic = false, underline = false;
+    float size = 0;
 };
 
 void set_glyph(cg_cell& c, const char* g, size_t n)
@@ -75,6 +77,8 @@ class grid_container : public document_container, public Grid
     bool lost_text = false;
     // Long words are parsed in pieces a line may break between.
     bool break_words;
+    // The size the mail's body is set in (`body_size`).
+    float body = 0;
 
     grid_container(int cols, bool break_words) : Grid(cols), break_words(break_words) {}
 
@@ -118,6 +122,7 @@ class grid_container : public document_container, public Grid
         f->bold = d.weight >= 600 || float(d.size) >= 20.f;
         f->italic = d.style == font_style_italic;
         f->underline = (d.decoration_line & text_decoration_line_underline) != 0;
+        f->size = float(d.size);
         if(fm)
         {
             float h = f->zero ? 0 : CH;
@@ -179,7 +184,8 @@ class grid_container : public document_container, public Grid
     {
         auto f = reinterpret_cast<Font*>(font);
         if(f->zero || color.alpha == 0) return;
-        uint32_t flags = (f->bold ? CG_BOLD : 0) | (f->italic ? CG_ITALIC : 0) | (f->underline ? CG_UNDERLINE : 0);
+        uint32_t flags = (f->bold ? CG_BOLD : 0) | (f->italic ? CG_ITALIC : 0) | (f->underline ? CG_UNDERLINE : 0) |
+                         size_flags(f->size, body);
         put(first_cell(pos.y, CH), first_cell(pos.x, CW), text, rgb(color), flags);
     }
 
@@ -479,11 +485,13 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
     left_align_spread(doc->root());
     unfloat_cells(doc->root());
     snap_tree(doc->root());
+    container.body = body_size(doc->root());
     if(loose) loosen(doc->root());
     draw(doc, container);
     if(loose && container.lost_text && stack_spilt_tables(doc->root(), float(cols) * CW)) draw(doc, container);
     shape_buttons(buttons, container);
     grid->mark_links(doc->root());
+    keep_small_print(container);
     return grid.release();
 }
 } // namespace

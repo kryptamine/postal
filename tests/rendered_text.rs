@@ -218,3 +218,18 @@ fn a_table_under_an_align_attribute_is_set_left() {
         screen.text()
     );
 }
+
+// Legal lines set small under the body read as its footer; small text
+// above the body's last words is a caption and reads as the body.
+#[test]
+fn the_small_print_under_the_body_is_muted() {
+    let body = html(
+        "<p>The first paragraph of the body.</p><p style=\"font-size:12px\">A caption</p>\
+         <p>The second paragraph of the body.</p><p>The third paragraph.</p>\
+         <p style=\"font-size:12px\">Registered office of the sender</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Registered");
+    assert!(dim(&screen, "Registered office"), "{}", screen.text());
+    assert!(!dim(&screen, "A caption"), "{}", screen.text());
+    assert!(!dim(&screen, "The third"), "{}", screen.text());
+}

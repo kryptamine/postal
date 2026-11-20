@@ -21,7 +21,8 @@ share, `label_widths.cpp` sizes each label, `picture_boxes.cpp` fits or
 drops the boxes round pictures, `buttons.cpp` and `titles.cpp` collapse
 buttons and cover bands with `collapse.cpp`, `contents.cpp` gathers what
 each element shows for those passes in one walk, `loosen.cpp`,
-`stacking.cpp` and `word_breaks.cpp` make a mail too wide fit, and
+`stacking.cpp` and `word_breaks.cpp` make a mail too wide fit,
+`font_sizes.cpp` tells the small print, and
 `colour.cpp`, `text.cpp` and `dom.cpp` hold the colour, cell-width and
 element helpers.
 
@@ -334,6 +335,20 @@ of its block above it, back to a blank row, go with it, unless the block
 starts above that last third: then it is the body, with the line in it.
 
 387 of 539 cached mails have one, a median 15% of their rows.
+
+### Font size
+
+Every glyph is one cell, so a font's size shows only as a mark, told
+against the body's size: the one most of the mail's letters of 13 px or
+more are set in, as legal lines can outnumber the body's
+(`cpp/font_sizes.cpp`).
+
+- Text at 0.85 of the body's size or less is small. Under the last row of
+  the body's words that are no link, from the next block a blank row sets
+  off, it is the small print and is drawn muted, as the footer is: legal
+  lines, a registered office. Above that row it is a caption or a card's
+  copy and reads as the body, and a mail with under three rows of the
+  body's words has none. This changed 163 of 473 cached mails.
 
 ## Measurements
 

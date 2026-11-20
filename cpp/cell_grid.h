@@ -22,6 +22,8 @@ enum
     CG_ALT = 64,
     // A border of the box round the whole mail, which only frames the page.
     CG_PAGE_BOX = 128,
+    // The small print: text set smaller than the body, under its last words.
+    CG_SMALL = 256,
 };
 
 // A colour is 0x01RRGGBB when set and 0 when not. A `bg` also carries

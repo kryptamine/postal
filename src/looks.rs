@@ -65,6 +65,10 @@ impl Looks {
         .into_iter()
         .filter(|&(on, _)| on)
         .fold(Marks::default(), |marks, (_, mark)| marks.with(mark));
+        if cell.has(cell_grid::SMALL) && bg.is_none() {
+            return (marks.with(Marks::MUTED), Paint { fg: None, bg });
+        }
+
         let (fg, role) = self.text(cell, bg);
         (marks.with(role), Paint { fg, bg })
     }
