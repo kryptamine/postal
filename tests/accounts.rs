@@ -364,13 +364,14 @@ fn compose_and_reply_go_out_from_the_account_of_the_shown_folder() {
     let two = two();
     let mut t = postal(&two);
     second_inbox(&mut t);
-    for key in ['c', 'r'] {
+    for (sent, key) in [(1, 'c'), (2, 'r')] {
         t.send(Key::Char(key)).unwrap();
         t.wait_until(|s| s.contains(" Draft ") && s.contains(OTHER))
             .unwrap();
         t.send(Key::Char('y')).unwrap();
-        t.wait_until(|s| s.contains("Sent") && !s.contains(" Draft "))
-            .unwrap();
+        // The first Send's Toast may still show while the second goes out.
+        wait_for(|| two.smtp.1.received().len() == sent);
+        t.wait_until(|s| !s.contains(" Draft ")).unwrap();
     }
 
     let received = two.smtp.1.received();
