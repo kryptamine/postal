@@ -37,11 +37,12 @@ impl Listing {
         self.threads.iter().position(|t| t.key == key)
     }
 
-    /// The Messages of `thread`, those found in other Folders too, oldest first.
+    /// The Messages of `thread`, those found in other Folders too: the
+    /// oldest, then the rest newest first.
     pub fn stack<'a>(
         &'a self,
         thread: Option<&'a Thread>,
-    ) -> impl DoubleEndedIterator<Item = &'a Message> + Clone {
+    ) -> impl Iterator<Item = &'a Message> + Clone {
         let places = thread.map_or(&[][..], |t| t.stack.as_slice());
         places.iter().filter_map(|&place| match place {
             Place::Here(i) => self.messages.get(i),

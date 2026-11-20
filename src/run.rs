@@ -734,7 +734,8 @@ fn answered(view: &InboxView, screen: &Screen) -> Option<Message> {
     let message = screen.reading.as_ref().map_or_else(
         || {
             view.stack()
-                .rfind(|m| !m.from_me)
+                .filter(|m| !m.from_me)
+                .max_by_key(|m| m.received)
                 .or_else(|| view.selected_message())
         },
         |reading| view.stack().find(|m| m.body_key == reading.cursor),

@@ -9,7 +9,7 @@ const GAP: usize = 1;
 
 /// One Message of the Thread in Reading, and the rows it takes in the stack.
 pub struct Placed<'a> {
-    /// Its place in the stack, oldest first.
+    /// Its place in the stack, from the top.
     pub index: usize,
     pub message: &'a Message,
     /// `None` while folded to one line.
@@ -99,7 +99,10 @@ pub fn settle(
             held = Some(placed.top + into);
         }
 
-        newest = Some((key, rows));
+        // The second from the top, else the only one.
+        if placed.index <= 1 {
+            newest = Some((key, rows));
+        }
     }
 
     let cursor = match (cursor, newest) {

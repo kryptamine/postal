@@ -194,10 +194,17 @@ fn read_thread(t: &mut Terminal) {
     t.wait_until(reading).unwrap();
 }
 
+/// The first row that shows `text`.
+fn row_of(screen: &Screen, text: &str) -> u16 {
+    (0..screen.rows())
+        .find(|&row| screen.row_text(row).contains(text))
+        .unwrap_or_else(|| panic!("no {text}: {screen}"))
+}
+
 // On entry the newest and every Unread Message are open, the rest one line
-// each, and the cursor marks the first Unread.
+// each, and the cursor marks the oldest Unread.
 #[test]
-fn reading_unfolds_the_newest_and_the_unread_and_starts_on_the_first_unread() {
+fn reading_unfolds_the_newest_and_the_unread_and_starts_on_the_oldest_unread() {
     let server = FakeImap::start(conversation(true));
     let home = Home::for_server(&server);
     let browser = Browser::new();
@@ -212,11 +219,15 @@ fn reading_unfolds_the_newest_and_the_unread_and_starts_on_the_first_unread() {
                 && folded(s, "Cid", "Cid agrees", "2024-03-03")
         })
         .unwrap();
-    assert!(screen.contains(" 2/4 "), "{screen}");
+    assert!(screen.contains(" 4/4 "), "{screen}");
     assert!(screen.contains("│▎From    Bob"), "{screen}");
     assert!(screen.contains("│ From    Dee"), "{screen}");
     assert!(!screen.contains("From    Ada"), "{screen}");
     assert!(!screen.contains("From    Cid"), "{screen}");
+    // The Message that started the Thread stays on top, and the latest
+    // reply is right under it, not a screen of older ones away.
+    let rows = ["Ada asks", "From    Dee", "Cid agrees", "From    Bob"].map(|t| row_of(&screen, t));
+    assert!(rows.is_sorted(), "{rows:?}: {screen}");
     quit(t);
 }
 
@@ -233,7 +244,7 @@ fn with_nothing_unread_only_the_newest_is_unfolded_and_has_the_cursor() {
             s.contains("│▎From    Dee") && folded(s, "Bob", "Bob answers", "2024-03-02")
         })
         .unwrap();
-    assert!(screen.contains(" 4/4 "), "{screen}");
+    assert!(screen.contains(" 2/4 "), "{screen}");
     assert!(!screen.contains("From    Bob"), "{screen}");
     quit(t);
 }
@@ -246,11 +257,9 @@ fn n_and_p_move_the_cursor_through_the_thread() {
     let browser = Browser::new();
     let mut t = tall(&home, &browser);
     read_thread(&mut t);
-    t.wait_until(|s| s.contains(" 2/4 ")).unwrap();
+    t.wait_until(|s| s.contains(" 4/4 ")).unwrap();
 
     for (key, title) in [
-        ('n', " 3/4 "),
-        ('n', " 4/4 "),
         ('n', " 4/4 "),
         ('p', " 3/4 "),
         ('p', " 2/4 "),
@@ -284,8 +293,8 @@ fn enter_and_space_fold_and_unfold_the_message_at_the_cursor() {
 
     t.send(Key::Char('p')).unwrap();
     t.send(Key::Char(' ')).unwrap();
-    let screen = t.snapshot_after(|s| s.contains("│▎Ada asks")).unwrap();
-    assert!(screen.contains("│▎From    Ada"), "{screen}");
+    let screen = t.snapshot_after(|s| s.contains("│▎Cid agrees")).unwrap();
+    assert!(screen.contains("│▎From    Cid"), "{screen}");
     assert!(screen.contains("From    Bob"), "{screen}");
     quit(t);
 }

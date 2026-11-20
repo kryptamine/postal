@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cmp::Reverse, collections::HashMap};
 
 use crate::message::Message;
 
@@ -36,7 +36,7 @@ pub struct Thread {
     /// Indices into the Folder's Messages, newest first; never empty.
     pub messages: Vec<usize>,
     /// The whole Thread as Reading shows it, these Messages and those found
-    /// in other Folders, oldest first.
+    /// in other Folders: the oldest, then the rest newest first.
     pub stack: Vec<Place>,
     /// One Message per distinct sender name, in order of first appearance.
     pub senders: Vec<usize>,
@@ -106,6 +106,10 @@ pub fn threads(messages: &[Message], elsewhere: &[Message]) -> Vec<Thread> {
         thread.stack.splice(0..0, here);
         // Stable: of one date, the shown Folder's go first.
         thread.stack.sort_by_key(received);
+        if let Some((_, replies)) = thread.stack.split_first_mut() {
+            replies.sort_by_key(|place| Reverse(received(place)));
+        }
+
         for &index in thread.messages.iter().rev() {
             let name = sender(&messages[index]);
             if !thread.senders.iter().any(|&s| sender(&messages[s]) == name) {

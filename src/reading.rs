@@ -5,8 +5,8 @@ use crate::{
     message::Message,
 };
 
-/// Reading: the selected Thread as a stack of Messages, oldest first, each
-/// folded to a line or unfolded to its header and body.
+/// Reading: the selected Thread as a stack of Messages, the oldest then the
+/// rest newest first, each folded to a line or unfolded to its header and body.
 pub struct Reading {
     unfolded: HashSet<i64>,
     /// The body key of the Message at the cursor, which tells apart Messages
@@ -26,12 +26,13 @@ pub struct Reading {
 
 impl Reading {
     /// The newest and every Unread Message unfolded, the cursor on the
-    /// first Unread, else the newest; `None` for an empty `stack`.
+    /// oldest Unread, else the newest; `None` for an empty `stack`.
     pub fn open<'a>(stack: impl Iterator<Item = &'a Message> + Clone) -> Option<Self> {
-        let newest = stack.clone().last()?;
-        let mut unread = stack.filter(|m| m.unread).peekable();
+        let newest = stack.clone().max_by_key(|m| m.received)?;
+        let unread = stack.filter(|m| m.unread);
+        let oldest = unread.clone().min_by_key(|m| m.received);
         Some(Self {
-            cursor: unread.peek().copied().unwrap_or(newest).body_key,
+            cursor: oldest.unwrap_or(newest).body_key,
             unfolded: unread.chain([newest]).map(|m| m.body_key).collect(),
             scroll: 0,
             reveal: true,

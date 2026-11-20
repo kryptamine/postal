@@ -263,9 +263,9 @@ impl InboxView {
             .map_or(self.list.as_ref(), |search| Some(search.listing()))
     }
 
-    /// The selected Thread's Messages, those found in other Folders too,
-    /// oldest first.
-    pub fn stack(&self) -> impl DoubleEndedIterator<Item = &Message> + Clone {
+    /// The selected Thread's Messages, those found in other Folders too:
+    /// the oldest, then the rest newest first.
+    pub fn stack(&self) -> impl Iterator<Item = &Message> + Clone {
         let thread = self.thread_at(self.selected);
         self.listing()
             .into_iter()
