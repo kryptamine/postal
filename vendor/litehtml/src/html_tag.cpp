@@ -1731,6 +1731,17 @@ namespace litehtml
         m_style.add_property(prop_name, {tok});
     }
 
+    void html_tag::map_align_attribute()
+    {
+        const char* str = get_attr("align");
+        if(!str) return;
+        std::string value = str;
+        lcase(value);
+        if(value == "center" || value == "middle") m_style.add_property(_text_align_, "-webkit-center");
+        else if(value == "left" || value == "right") m_style.add_property(_text_align_, "-webkit-" + value);
+        else m_style.add_property(_text_align_, value);
+    }
+
     // https://html.spec.whatwg.org/multipage/rendering.html#maps-to-the-dimension-property
     void html_tag::map_to_dimension_property(string_id prop_name, const std::string& attr_value)
     {

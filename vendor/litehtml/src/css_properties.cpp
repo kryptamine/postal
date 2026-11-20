@@ -28,6 +28,9 @@ void litehtml::css_properties::compute(const html_tag* el, const document::ptr& 
     m_overflow = static_cast<overflow>(el->get_property<int>(_overflow_, false, overflow_visible, offset(m_overflow)));
     m_text_align =
         static_cast<text_align>(el->get_property<int>(_text_align_, true, text_align_left, offset(m_text_align)));
+    // Postal: a table does not inherit what an `align` attribute or `<center>`
+    // set round it, as in Blink; what a style set, it does.
+    if(el->tag() == _table_ && m_text_align >= text_align_webkit_left) m_text_align = text_align_left;
     m_vertical_align = static_cast<vertical_align>(
         el->get_property<int>(_vertical_align_, false, va_baseline, offset(m_vertical_align)));
     m_text_transform = static_cast<text_transform>(

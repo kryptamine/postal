@@ -5,7 +5,7 @@ Vendored from https://github.com/litehtml/litehtml at commit
 (with the bundled gumbo in `src/gumbo/`) and `LICENSE`. Built by `build.rs`.
 See `docs/adr/0006-rendered-view-engine.md`.
 
-Five changes, marked `Postal:` in the source:
+Six changes, marked `Postal:` in the source:
 
 - `document::rebuild_render_tree` is public in
   `include/litehtml/document.h`, so `cpp/cell_grid.cpp` can rebuild the boxes
@@ -25,6 +25,13 @@ Five changes, marked `Postal:` in the source:
   underlying type. Names interned while parsing get ids past the last
   enumerator, out of the range of an enum without one: undefined behaviour
   that UBSan reports on most mail.
+- `text_align` in `include/litehtml/css_values.h` has the `-webkit-left`,
+  `-webkit-right` and `-webkit-center` values Blink maps an `align`
+  attribute and `<center>` to (`html_tag::map_align_attribute`,
+  `master_css.h`). They lay out as left, right and centre
+  (`css_properties::get_text_align`), and a table does not inherit them
+  (`css_properties::compute`): text in a table under `<td align=center>`
+  stood centred where a browser sets it left.
 
 To update, replace these directories from a newer commit, apply the changes
 again and update the hash.

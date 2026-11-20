@@ -15,11 +15,7 @@ void litehtml::el_tr::parse_attributes()
         map_to_dimension_property(_height_, str);
     }
 
-    str = get_attr("align");
-    if(str)
-    {
-        m_style.add_property(_text_align_, str);
-    }
+    map_align_attribute();
     str = get_attr("valign");
     if(str)
     {

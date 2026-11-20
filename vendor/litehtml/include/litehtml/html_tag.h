@@ -130,6 +130,8 @@ namespace litehtml
         void map_to_pixel_length_property_with_default_value(string_id prop_name, const std::string& attr_value,
                                                              int default_value);
         void map_to_dimension_property(string_id prop_name, const std::string& attr_value);
+        // Postal: `align` as Blink maps it, to a `-webkit-` text-align.
+        void map_align_attribute();
         void map_to_dimension_property_ignoring_zero(string_id prop_name, const std::string& attr_value);
 
       private:

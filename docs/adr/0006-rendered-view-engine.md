@@ -162,8 +162,12 @@ element helpers.
   not counting the breaks the mail put in, is a paragraph and is set left,
   and the layout runs again (`alignment.cpp`): a title, a button and an
   address stay centred. This changed 117 of 539 cached mails.
+- A table does not inherit the alignment an `align` attribute or `<center>`
+  set round it, as in Blink, which maps them to `-webkit-` values a table
+  resets; one a style sets, it does. Under `<td align="center">`, a
+  receipt's rows stood centred. This changed 67 of 473 cached mails.
 
-Five changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
+Six changes to litehtml, all recorded in `vendor/litehtml/VENDORED.md`.
 `document::rebuild_render_tree` is public: the boxes are built from the
 computed styles inside `createFromString`, before the snap, and must be built
 again after it. A block inside an inline-block no longer splits the inline
@@ -171,7 +175,8 @@ around it, a litehtml bug that cut link-wrapped buttons in two. And a cell's
 `colspan` and `rowspan` are clamped as HTML parses them: `colspan="0"` read
 memory outside the table's columns. And `text-decoration: none` no longer
 shifts by -1, and `string_id` has a fixed underlying type, so the ids of
-names interned while parsing are in its range.
+names interned while parsing are in its range. And `text-align` has Blink's
+`-webkit-` values, which a table does not inherit.
 
 ### A mail too wide for the pane
 

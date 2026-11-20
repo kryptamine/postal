@@ -194,3 +194,27 @@ fn an_important_line_height_keeps_lines_together() {
     let (first, last) = (at(&screen, "One").0, at(&screen, "twelve").0);
     assert_eq!(last - first, 2, "{}", screen.text());
 }
+
+// Blink sets a table's text left under `<td align=center>`, as a receipt's
+// rows read; what a style centres stays centred, as does a block's text.
+#[test]
+fn a_table_under_an_align_attribute_is_set_left() {
+    let body = html(
+        "<table width=\"100%\"><tr><td align=\"center\">\
+         <table width=\"500\"><tr><td>Total due</td></tr></table>\
+         <table width=\"500\"><tr><td style=\"text-align:center\">Centred by its style</td></tr></table>\
+         <div>Centred block</div></td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "Centred block");
+    let total = at(&screen, "Total due").1;
+    assert!(
+        at(&screen, "Centred by its style").1 > total + 10,
+        "{}",
+        screen.text()
+    );
+    assert!(
+        at(&screen, "Centred block").1 > total + 10,
+        "{}",
+        screen.text()
+    );
+}

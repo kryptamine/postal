@@ -350,7 +350,14 @@ namespace litehtml
 
     inline text_align css_properties::get_text_align() const
     {
-        return m_text_align;
+        // Postal: a `-webkit-` value lays out as the one it is named after.
+        switch(m_text_align)
+        {
+        case text_align_webkit_left: return text_align_left;
+        case text_align_webkit_right: return text_align_right;
+        case text_align_webkit_center: return text_align_center;
+        default: return m_text_align;
+        }
     }
 
     inline void css_properties::set_text_align(text_align mTextAlign)

@@ -388,14 +388,19 @@ namespace litehtml
     // ==========================================================
     // CSS Property: align
     // ==========================================================
-    inline constexpr auto text_align_strings = split_css_values<4>("left;right;center;justify");
+    // Postal: the `-webkit-` values an `align` attribute maps to, as in Blink.
+    inline constexpr auto text_align_strings =
+        split_css_values<7>("left;right;center;justify;-webkit-left;-webkit-right;-webkit-center");
 
     enum text_align
     {
         text_align_left,
         text_align_right,
         text_align_center,
-        text_align_justify
+        text_align_justify,
+        text_align_webkit_left,
+        text_align_webkit_right,
+        text_align_webkit_center
     };
 
     // ==========================================================
