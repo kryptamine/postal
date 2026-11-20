@@ -104,6 +104,7 @@ mod run;
 mod screen;
 mod search;
 mod secret;
+mod secret_store;
 mod senders;
 mod sequence_numbers;
 mod shown;
@@ -152,7 +153,7 @@ use crate::{
     body_fetch::Request,
     cache::Cache,
     cli::Command,
-    config::{Config, IconChoice, SecretStore},
+    config::{Config, IconChoice},
     icons::Icons,
     imap::ImapSession,
     oauth::Tokens,
@@ -370,12 +371,7 @@ async fn signed_in(
 
 /// How `config` signs in, from its secret; `None` once that is lost.
 fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn Error>> {
-    let secret = match config.secrets {
-        SecretStore::Keychain => keychain::read(&config.email, &dir.join("config.toml"))?,
-        SecretStore::File => secret::read(&secret::path(dir, &config.email))?,
-    };
-
-    let Some(secret) = secret else {
+    let Some(secret) = config.secrets.read(dir, &config.email)? else {
         return Ok(None);
     };
 

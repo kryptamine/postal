@@ -5,6 +5,7 @@ use std::{
 
 use serde::Deserialize;
 
+pub use crate::secret_store::SecretStore;
 use crate::{oauth::Endpoints, partial_config::PartialConfig, provider::Provider};
 
 /// One Account's settings from `config.toml`, with those every Account shares.
@@ -70,14 +71,6 @@ impl Smtp {
             },
         }
     }
-}
-
-#[derive(Deserialize, Default, Clone, Copy)]
-#[serde(rename_all = "kebab-case")]
-pub enum SecretStore {
-    #[default]
-    Keychain,
-    File,
 }
 
 /// Whether to draw Nerd Font icons: `auto` guesses from the terminal.

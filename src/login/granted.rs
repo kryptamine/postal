@@ -2,14 +2,8 @@ use std::path::Path;
 
 use super::Writes;
 use crate::{
-    atomic_file, cache,
-    config::{Config, SecretStore},
-    keychain,
-    partial_config::PartialConfig,
-    provider::Provider,
-    secret,
-    sign_in::SignIn,
-    xdg,
+    atomic_file, cache, config::Config, partial_config::PartialConfig, provider::Provider,
+    sign_in::SignIn, xdg,
 };
 
 /// A sign-in the IMAP server accepted, not yet written.
@@ -43,14 +37,9 @@ impl Granted {
         let config_path = dir.join("config.toml");
         let config = &self.config;
         // The secret goes first, so a config never names an Account without one.
-        match config.secrets {
-            SecretStore::Keychain => {
-                keychain::write(&config.email, self.sign_in.secret(), &config_path)?;
-            }
-            SecretStore::File => {
-                secret::write(&secret::path(dir, &config.email), self.sign_in.secret())?;
-            }
-        }
+        config
+            .secrets
+            .write(dir, &config.email, self.sign_in.secret())?;
 
         // Before the config, so the Account never opens the old Provider's Cache.
         if matches!(self.writes, Writes::Moved(_)) {
