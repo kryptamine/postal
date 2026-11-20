@@ -108,7 +108,10 @@ element helpers.
     a card's title under its picture, however far the markup puts it;
   - its `alt` is six words or more: written for a screen reader, it
     describes a photo (`An audience sits in a dark auditorium…`) rather
-    than names it. One that is all its link shows is named by the link.
+    than names it. One that is all its link shows is named by the link;
+  - it lies before the mail's first words or after its last, with an `alt`
+    of three words or fewer: the sender's logo, which says only who sent
+    the mail. A mail of pictures alone keeps them.
 
   A box with pictures and no text, a space even, was sized for them: its
   height and min-height go, or a product photo's cell stood twelve rows

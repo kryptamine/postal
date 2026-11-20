@@ -8,8 +8,6 @@ size: 120x40  cursor: hidden
 │   Subject                              ││ Subject Subject                                                            │
 │   PLAIN TWIN of the weekly digest.     ││ Date    Mon, 18 Nov 2024 09:00                                             │
 │                                        │├────────────────────────────────────────────────────────────────────────────┤
-│                                        ││     Acme                                                                   │
-│                                        ││                                                                            │
 │                                        ││     Hello Sam, here is what changed this week in Acme Cloud. Run acme      │
 │                                        ││     update to get it.                                                      │
 │                                        ││                                                                            │
@@ -18,6 +16,8 @@ size: 120x40  cursor: hidden
 │                                        ││     Read the release notes before you upgrade.                             │
 │                                        ││                                                                            │
 │                                        ││                               [acme.example]                               │
+│                                        ││                                                                            │
+│                                        ││                                                                            │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
 │                                        ││                                                                            │
@@ -50,16 +50,16 @@ styles:
 2: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-58 bold; 119 dim
 3: 0 dim; 1-40 fg=4 reverse; 41-42 dim; 44-51 fg=4; 52-73 fg=6; 119 dim
 4: 0 dim; 41-119 dim
-5: 0 dim; 41-42 dim; 48-51 dim italic; 119 dim
+5: 0 dim; 41-42 dim; 48-58 bold; 93-102 italic; 119 dim
 6: 0 dim; 41-42 dim; 119 dim
-7: 0 dim; 41-42 dim; 48-58 bold; 93-102 italic; 119 dim
-8: 0 dim; 41-42 dim; 119 dim
+7: 0 dim; 41-42 dim; 119 dim
+8: 0 dim; 41-42 dim; 74-86 dim italic; 119 dim
 9: 0 dim; 41-42 dim; 119 dim
-10: 0 dim; 41-42 dim; 74-86 dim italic; 119 dim
+10: 0 dim; 41-42 dim; 48-52 dim; 53-69 fg=#ff6600 underline; 71-89 dim; 119 dim
 11: 0 dim; 41-42 dim; 119 dim
-12: 0 dim; 41-42 dim; 48-52 dim; 53-69 fg=#ff6600 underline; 71-89 dim; 119 dim
+12: 0 dim; 41-42 dim; 74-87 dim italic; 119 dim
 13: 0 dim; 41-42 dim; 119 dim
-14: 0 dim; 41-42 dim; 74-87 dim italic; 119 dim
+14: 0 dim; 41-42 dim; 119 dim
 15: 0 dim; 41-42 dim; 119 dim
 16: 0 dim; 41-42 dim; 119 dim
 17: 0 dim; 41-42 dim; 119 dim

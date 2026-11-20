@@ -8,6 +8,7 @@
 #include "shared_prefix.h"
 #include "text.h"
 
+#include <algorithm>
 #include <set>
 #include <utility>
 
@@ -111,6 +112,30 @@ void icon_names(const element::ptr& el, std::map<const element*, std::vector<std
     for(auto& child : el->children()) icon_names(child, out);
 }
 
+// An alt this many words long or fewer names a logo.
+const size_t NAME_WORDS = 3;
+
+// The words of `s`, which is squeezed: one space between each two.
+size_t words(const std::string& s) { return s.empty() ? 0 : size_t(std::count(s.begin(), s.end(), ' ')) + 1; }
+
+// The images in document order before the mail's first words, and after its
+// last: the sender's logo at the top or the bottom.
+void ends(const element::ptr& el, std::vector<const element*>& before, std::vector<const element*>& after, bool& worded)
+{
+    if(el->is_comment() || el->css().get_display() == display_none) return;
+    if(el->is_text())
+    {
+        std::string text;
+        el->get_text(text);
+        if(squeezed(text).empty()) return;
+        worded = true;
+        after.clear();
+        return;
+    }
+    if(tag_is(el, "img")) (worded ? after : before).push_back(el.get());
+    for(auto& child : el->children()) ends(child, before, after, worded);
+}
+
 } // namespace
 
 void ImageLabels::label(const element::ptr& root, int cols)
@@ -123,6 +148,15 @@ void ImageLabels::label(const element::ptr& root, int cols)
     icon_names(root, names);
     for(auto& [table, in_table] : names)
         if(std::string prefix = shared_prefix(in_table); !prefix.empty()) prefixes.emplace(table, prefix);
+    std::vector<const element*> before, after;
+    bool worded = false;
+    ends(root, before, after, worded);
+    // A mail of pictures alone has no ends to tell a logo by.
+    if(worded)
+    {
+        logos.insert(before.begin(), before.end());
+        logos.insert(after.begin(), after.end());
+    }
     walk(root);
 }
 
@@ -149,7 +183,8 @@ std::string ImageLabels::text_for(const element::ptr& el, bool icon, const eleme
     std::string alt = name_of(el);
     // An icon, or a file's name for an alt, decorates the text beside it.
     bool decorates = !sole && (icon || file_word(alt));
-    if(invisible(el) || decorates || said_already(el, alt, mail_text)) return "";
+    bool logo = logos.count(el.get()) && words(alt) <= NAME_WORDS;
+    if(invisible(el) || decorates || logo || said_already(el, alt, mail_text)) return "";
     if(description(alt)) alt.clear();
     if(!alt.empty() || !sole || icon) return named(el, alt, icon);
     if(labelled_links.count(link.get()) || redundant.count(link.get())) return "";

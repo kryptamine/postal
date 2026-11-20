@@ -31,7 +31,7 @@ fn a_gmail_reply_draws_a_bar_for_each_quote() {
 // button's label sits in the middle row of its block.
 #[test]
 fn a_statement_keeps_its_table_rules_and_centres_its_button() {
-    let screen = preview(fixture("statement"), &DEFAULT, "Bank");
+    let screen = preview(fixture("statement"), &DEFAULT, "Never share");
     let rows = pane(&screen);
     let rules = rows.iter().filter(|row| row.contains("────────")).count();
     assert!(rules >= 5, "{}", rows.join("\n"));
@@ -47,7 +47,7 @@ fn a_statement_on_a_light_terminal() {
         ..DEFAULT
     };
 
-    let screen = preview(fixture("statement"), &run, "Bank");
+    let screen = preview(fixture("statement"), &run, "Never share");
     insta::assert_snapshot!(screen.with_styles());
 }
 
@@ -59,7 +59,7 @@ fn no_color_keeps_the_layout_and_drops_the_colours() {
         ..DEFAULT
     };
 
-    let screen = preview(fixture("statement"), &run, "Bank");
+    let screen = preview(fixture("statement"), &run, "Never share");
     insta::assert_snapshot!(screen.with_styles());
 }
 

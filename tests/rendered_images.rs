@@ -23,7 +23,8 @@ fn images_are_never_fetched_and_one_without_alt_takes_no_room() {
     let port = listener.local_addr().unwrap().port();
     let body = html(&format!(
         "<p>Above</p><img src=\"http://127.0.0.1:{port}/banner.png\" width=\"600\" \
-         height=\"300\"><p>Below</p><img src=\"http://127.0.0.1:{port}/logo.png\" alt=\"Acme\">"
+         height=\"300\"><p>Below</p><img src=\"http://127.0.0.1:{port}/logo.png\" alt=\"Acme\">\
+         <p>End</p>"
     ));
     let screen = preview(body, &DEFAULT, "Acme");
     let rows = pane(&screen);
@@ -93,8 +94,8 @@ fn a_linked_icon_shows_its_whole_alt_where_it_fits() {
     let icon = "<a href=\"https://social.example\"><img src=\"https://cdn.example/i.png\" \
                 width=\"24\" height=\"24\" alt=\"Instagram\"></a>";
     let body = html(&format!(
-        "<table style=\"width:40px\"><tr><td style=\"width:40px;max-width:40px;\
-         overflow:hidden\">{icon}</td></tr></table><p>Free</p>{icon}"
+        "<p>Above</p><table style=\"width:40px\"><tr><td style=\"width:40px;max-width:40px;\
+         overflow:hidden\">{icon}</td></tr></table><p>Free</p>{icon}<p>End</p>"
     ));
     let screen = preview(body, &DEFAULT, "Free");
     let rows = pane(&screen);
@@ -211,7 +212,7 @@ fn a_bare_picture_link_is_named_by_its_address() {
         )
     };
     let body = html(&format!(
-        "{}{}<p>End</p>",
+        "<p>Above</p>{}{}<p>End</p>",
         picture("https://www.events.example/e/ignite-watch-party-tickets-2004779926728?ref=mail"),
         picture("https://click.bank.example/f/a/Yv9Qtu~~/AAD4-xA~/pEerNWDa"),
     ));
@@ -229,7 +230,7 @@ fn a_bare_picture_link_is_named_by_its_address() {
 #[test]
 fn an_alt_loses_the_noun_that_calls_it_a_picture() {
     let body = html(
-        "<a href=\"https://social.example/inbox\"><img src=\"https://cdn.example/m.png\" \
+        "<p>Above</p><a href=\"https://social.example/inbox\"><img src=\"https://cdn.example/m.png\" \
          width=\"24\" height=\"24\" alt=\"Messaging icon\"></a>\
          <p><img src=\"https://cdn.example/hero.png\" width=\"400\" alt=\"Some Image\"></p>\
          <p><img src=\"https://cdn.example/brand.png\" width=\"400\" alt=\"Acme Hotels Logo\"></p>\
@@ -290,7 +291,8 @@ fn a_row_of_icons_drops_the_words_their_names_share() {
         .map(icon)
         .collect();
     let body = html(&format!(
-        "<p>Follow us</p><table width=\"140\" style=\"display:inline-block\"><tr>{icons}</tr></table>"
+        "<p>Follow us</p><table width=\"140\" style=\"display:inline-block\"><tr>{icons}</tr></table>\
+         <p>Thanks</p>"
     ));
     let screen = preview(body, &DEFAULT, "YouTube");
     let rows = pane(&screen);
@@ -350,4 +352,19 @@ fn an_alt_that_describes_its_picture_is_dropped() {
     );
     let screen = preview(body, &DEFAULT, "Below");
     assert!(!screen.contains("audience"), "{}", screen.text());
+}
+
+// The sender's logo over the first words or under the last says only who
+// sent the mail, which the header says already.
+#[test]
+fn the_logo_at_either_end_of_the_mail_is_dropped() {
+    let body = html(
+        "<a href=\"https://acme.example\"><img src=\"https://cdn.example/logo.png\" \
+         width=\"120\" height=\"40\" alt=\"Acme\"></a><p>Hello</p>\
+         <img src=\"https://cdn.example/x.png\" width=\"120\" height=\"40\" alt=\"Spring sale\">\
+         <p>Bye</p><img src=\"https://cdn.example/logo.png\" width=\"120\" alt=\"Acme Corp\">",
+    );
+    let screen = preview(body, &DEFAULT, "Bye");
+    assert!(!screen.contains("Acme"), "{}", screen.text());
+    assert!(screen.contains("Spring sale"), "{}", screen.text());
 }

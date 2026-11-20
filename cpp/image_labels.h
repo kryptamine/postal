@@ -41,6 +41,8 @@ class ImageLabels
     std::vector<litehtml::element::ptr> pictured;
     // The words the icons of a table all start their names with.
     std::map<const litehtml::element*, std::string> prefixes;
+    // Images before the mail's first words or after its last.
+    std::set<const litehtml::element*> logos;
     // Links that already show their name once.
     std::set<const litehtml::element*> labelled_links;
 };
