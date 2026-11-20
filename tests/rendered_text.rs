@@ -168,3 +168,15 @@ fn a_centred_item_beside_a_bullet_cell_is_set_left() {
     assert_eq!(row, item_row, "{}", screen.text());
     assert!(item - bullet <= 4, "{}", screen.text());
 }
+
+// A floated cell is a block to a browser, which litehtml laid over the
+// first glyph of its row: it stays a cell, a column off the one before.
+#[test]
+fn a_floated_cell_stays_a_cell() {
+    let body = html(
+        "<table><tr><td style=\"float:left\">Distance</td>\
+         <td style=\"float:right\">7 km</td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "7 km");
+    assert!(screen.contains("Distance 7 km"), "{}", screen.text());
+}

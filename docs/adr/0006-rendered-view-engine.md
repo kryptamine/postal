@@ -12,9 +12,12 @@ one key away.
 Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
 buffer of cells: `cell_grid.cpp` draws into the cells of `grid.cpp`,
-`snap.cpp` snaps the styles before layout and `alignment.cpp` sets text
-left, `image_labels.cpp` decides each image, `alt_names.cpp` names it and
-`link_names.cpp` names a bare picture link, `picture_boxes.cpp` fits or
+`snap.cpp` snaps the styles before layout, `floated_cells.cpp` keeps a
+floated cell in its row and `alignment.cpp` sets text left,
+`image_labels.cpp` decides each image, `said_already.cpp` finds an alt the
+mail says in words, `alt_names.cpp` names it, `link_names.cpp` names a
+bare picture link, `shared_prefix.cpp` finds the words a row of icons
+share, `label_widths.cpp` sizes each label, `picture_boxes.cpp` fits or
 drops the boxes round pictures, `buttons.cpp` and `titles.cpp` collapse
 buttons and cover bands with `collapse.cpp`, `contents.cpp` gathers what
 each element shows for those passes in one walk, `loosen.cpp`,
@@ -139,6 +142,10 @@ element helpers.
   borders, vertical padding, height and the vertical margins inside it, and
   its title stands as bold lines. A colour other boxes share is a section
   built of many boxes, or one of the mail's cards.
+- A floated `td` or `th` stays a cell, its words unwrapped, and one
+  floated right is set right, a column off the cell before. A browser makes
+  it a block out of its row; litehtml laid that block over the row's first
+  glyph, and `Distance` read `istance`.
 - An inline-block holding blocks is a column of a fluid layout and aligns
   to the top: on the baseline the columns' bottoms line up, which only
   images of one height kept level.

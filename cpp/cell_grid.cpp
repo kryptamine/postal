@@ -8,6 +8,7 @@
 #include "colour.h"
 #include "contents.h"
 #include "dom.h"
+#include "floated_cells.h"
 #include "geometry.h"
 #include "grid.h"
 #include "image_labels.h"
@@ -476,6 +477,7 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
         unframe_titles(doc->root(), contents);
     }
     left_align_spread(doc->root());
+    unfloat_cells(doc->root());
     snap_tree(doc->root());
     if(loose) loosen(doc->root());
     draw(doc, container);
