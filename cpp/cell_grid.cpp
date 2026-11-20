@@ -393,10 +393,10 @@ class grid_container : public document_container, public Grid
     void import_css(std::string&, const std::string&, std::string&) override {}
 };
 
-// One line of text is one row, so line-height can only be one row. A border
-// is a whole cell, and a box's own background under it would show round the
-// line. litehtml leaves a table under `align=center` or `<center>` on the left.
-const char* const user_css = "* { line-height: normal !important; background-clip: padding-box !important; } "
+// A border is a whole cell, and a box's own background under it would show
+// round the line. litehtml leaves a table under `align=center` or `<center>`
+// on the left.
+const char* const user_css = "* { background-clip: padding-box !important; } "
                              "[align=center] > table, center > table { margin-left: auto; margin-right: auto; }";
 } // namespace
 

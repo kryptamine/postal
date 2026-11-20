@@ -180,3 +180,17 @@ fn a_floated_cell_stays_a_cell() {
     let screen = preview(body, &DEFAULT, "7 km");
     assert!(screen.contains("Distance 7 km"), "{}", screen.text());
 }
+
+// A line is one row: `line-height: 1.5 !important` beat the layout's own
+// rule and put a blank row between the lines of a title.
+#[test]
+fn an_important_line_height_keeps_lines_together() {
+    let body = html(
+        "<p style=\"width:240px;line-height:1.5 !important\">One two three four five six \
+         seven eight nine ten eleven twelve</p><p>Next</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Next");
+    // Three lines, and no blank row between them.
+    let (first, last) = (at(&screen, "One").0, at(&screen, "twelve").0);
+    assert_eq!(last - first, 2, "{}", screen.text());
+}

@@ -75,6 +75,10 @@ void snap_box(const element::ptr& el, uint32_t fill)
     css_properties& css = el->css();
     if(const web_color& own = css.get_bg().m_color; own.alpha) fill = rgb(own);
     top_aligned(el, css);
+    // One line of text is one row. Set here, not in a user style: litehtml
+    // lets an author's `line-height: 1.5 !important` win over the user's.
+    css.line_height().css_value = css_length::predef_value(0);
+    css.line_height().computed_value = css.get_font_metrics().height;
 
     css_margins m = css.get_margins();
     snap(m.top, rows_above);

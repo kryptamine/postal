@@ -28,7 +28,10 @@ element helpers.
 - Every glyph is one cell of 8×16 CSS px, two for a wide one, and every font
   is one row high. A 600 px mail is 75 columns. `font-size` never changes the
   cell: large text is bold, and under 4 px it takes no room, which keeps the
-  `font-size:0` whitespace trick of MJML and Outlook layouts working.
+  `font-size:0` whitespace trick of MJML and Outlook layouts working. Every
+  box's line height is one row, set in the snap rather than a user style:
+  litehtml let an author's `line-height: 1.25 !important` win, and a title
+  had a blank row between its lines. This changed 9 of 473 cached mails.
 - Before layout, vertical margins, paddings and heights snap to whole rows,
   horizontal ones to whole columns, and a shown border is one cell thick;
   an `<hr>` keeps only its top border, or four would box nothing in. Under a
