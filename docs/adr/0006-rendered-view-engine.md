@@ -23,8 +23,8 @@ buttons and cover bands with `collapse.cpp`, `contents.cpp` gathers what
 each element shows for those passes in one walk, `loosen.cpp`,
 `stacking.cpp` and `word_breaks.cpp` make a mail too wide fit,
 `cell_gaps.cpp` sets the words of two cells apart, `superscripts.cpp`
-raises the digits of a `<sup>`,
-`font_sizes.cpp` tells the small print, and
+raises the digits of a `<sup>`, `font_sizes.cpp` tells the small print and
+the headings, and
 `colour.cpp`, `text.cpp` and `dom.cpp` hold the colour, cell-width and
 element helpers.
 
@@ -356,7 +356,7 @@ starts above that last third: then it is the body, with the line in it.
 
 ### Font size
 
-Every glyph is one cell, so a font's size shows only as a mark, told
+Every glyph is one cell, so a font's size shows only as two marks, told
 against the body's size: the one most of the mail's letters of 13 px or
 more are set in, as legal lines can outnumber the body's
 (`cpp/font_sizes.cpp`).
@@ -367,6 +367,9 @@ more are set in, as legal lines can outnumber the body's
   lines, a registered office. Above that row it is a caption or a card's
   copy and reads as the body, and a mail with under three rows of the
   body's words has none. This changed 163 of 473 cached mails.
+- Text at 1.4 times the body's size and 18 px or more, in no colour of the
+  mail's own, is a heading and takes the style of Postal's own titles. This
+  changed 241 of 473 cached mails.
 
 ## Measurements
 

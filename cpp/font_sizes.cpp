@@ -16,6 +16,10 @@ namespace
 const float BODY_PX = 13;
 // This share of the body's size or smaller is the small print.
 const float SMALL_PRINT = 0.85f;
+// This share of the body's size and this many px or larger is a heading:
+// an h3 at 18 px over a 16 px body is not.
+const float TITLE = 1.4f;
+const float TITLE_PX = 18;
 // A mail with fewer rows of the body's words has no body to set the small
 // print off from.
 const int BODY_ROWS = 3;
@@ -49,7 +53,9 @@ float body_size(const element::ptr& root)
 
 uint32_t size_flags(float size, float body)
 {
-    return body > 0 && size <= body * SMALL_PRINT ? CG_SMALL : 0;
+    if(body <= 0) return 0;
+    if(size <= body * SMALL_PRINT) return CG_SMALL;
+    return size >= std::max(body * TITLE, TITLE_PX) ? CG_TITLE : 0;
 }
 
 void keep_small_print(Grid& grid)

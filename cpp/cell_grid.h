@@ -27,6 +27,8 @@ enum
     // The outer cell at the left or the right of a rounded button's fill.
     CG_CAP_LEFT = 512,
     CG_CAP_RIGHT = 1024,
+    // Text set well larger than the body: a heading.
+    CG_TITLE = 2048,
 };
 
 // A colour is 0x01RRGGBB when set and 0 when not. A `bg` also carries

@@ -19,6 +19,8 @@ pub const SMALL: u32 = 256;
 /// The outer cell at the left or the right of a rounded button's fill.
 pub const CAP_LEFT: u32 = 512;
 pub const CAP_RIGHT: u32 = 1024;
+/// Text set well larger than the body: a heading.
+pub const TITLE: u32 = 2048;
 /// In `bg`: it comes from a section or the page, not from a control.
 const BG_PANEL: u32 = 0x0200_0000;
 /// In `bg`: the box filled has rounded corners.

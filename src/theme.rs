@@ -1,7 +1,8 @@
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::{
-    icons::Icons, mail_colours::MailColours, mail_look::MailLook, marks::Marks, paint::Paint, rgb::Rgb,
+    icons::Icons, mail_colours::MailColours, mail_look::MailLook, marks::Marks, paint::Paint,
+    rgb::Rgb,
 };
 
 /// The terminal's own palette: named ANSI colours and modifiers, no explicit
@@ -103,6 +104,7 @@ impl Theme {
             (Marks::UNDERLINE, self.underline),
             (Marks::BORDER, self.border),
             (Marks::MUTED, self.muted),
+            (Marks::HEADING, self.title),
         ]
         .into_iter()
         .filter(|&(mark, _)| marks.has(mark))

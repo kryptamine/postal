@@ -89,6 +89,8 @@ impl Looks {
             (None, _) => (None, plain),
             (Some(fg), Some(_)) => (Some(self.colours.text(fg, bg)), plain),
             (Some(fg), None) => match self.palette.role(fg, under(cell)) {
+                // Ink set larger than the body is a heading.
+                Role::Ink if cell.has(cell_grid::TITLE) => (None, Marks::HEADING),
                 Role::Ink => (None, plain),
                 Role::Muted => (None, Marks::MUTED),
                 Role::Accent(accent) => (Some(self.colours.text(accent, None)), plain),

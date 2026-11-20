@@ -255,3 +255,21 @@ fn the_digits_of_a_sup_are_raised() {
     assert!(screen.contains("Price 58⁴⁶ €"), "{}", screen.text());
     assert!(screen.contains("14¹⁷ €"), "{}", screen.text());
 }
+
+// Every glyph is one cell, so a title differs from the body only by its
+// style: a heading the mail set in no colour of its own takes Postal's.
+#[test]
+fn a_heading_takes_the_title_style() {
+    let body =
+        html("<h1 style=\"font-size:32px\">Your market recap</h1><p>Body text of the mail.</p>");
+    let screen = preview(body, &DEFAULT, "Body text");
+    let (row, col) = at(&screen, "Your market");
+    assert_eq!(
+        fg(&screen, row, col),
+        Color::Indexed(4),
+        "{}",
+        screen.text()
+    );
+    let (row, col) = at(&screen, "Body text");
+    assert_eq!(fg(&screen, row, col), Color::Default, "{}", screen.text());
+}
