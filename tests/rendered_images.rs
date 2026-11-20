@@ -258,3 +258,84 @@ fn a_badge_shows_its_whole_alt_where_it_fits() {
     let rows = pane(&screen).join("\n");
     assert!(rows.contains("Download on the App Store"), "{rows}");
 }
+
+// A card's picture over its caption said the caption twice, in the next
+// row of the table, where the text of its own row could not show it.
+#[test]
+fn an_alt_that_is_the_caption_beside_it_is_dropped() {
+    let body = html(
+        "<table><tr><td><a href=\"https://shop.example/dev\">\
+         <img src=\"https://cdn.example/dev.png\" width=\"200\" alt=\"Development\"></a></td></tr>\
+         <tr><td>Development</td></tr></table><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    let rows = pane(&screen).join("\n");
+    assert_eq!(rows.matches("Development").count(), 1, "{rows}");
+}
+
+// Six icons named `Acme on …` had no room for six names, and cut to their
+// own width each read `Acm…`: the words they share go, and the table sized
+// for the icons widens to the names.
+#[test]
+fn a_row_of_icons_drops_the_words_their_names_share() {
+    let icon = |name: &str| {
+        format!(
+            "<td><a href=\"https://{name}.example\"><img src=\"https://cdn.example/{name}.png\" \
+             width=\"32\" height=\"32\" alt=\"Acme on {name}\"></a></td>"
+        )
+    };
+
+    let icons: String = ["Facebook", "Instagram", "LinkedIn", "YouTube"]
+        .into_iter()
+        .map(icon)
+        .collect();
+    let body = html(&format!(
+        "<p>Follow us</p><table width=\"140\" style=\"display:inline-block\"><tr>{icons}</tr></table>"
+    ));
+    let screen = preview(body, &DEFAULT, "YouTube");
+    let rows = pane(&screen);
+    let row = rows.iter().find(|r| r.contains("YouTube")).unwrap();
+    assert!(
+        row.contains("Facebook") && row.contains("LinkedIn"),
+        "{}",
+        rows.join("\n")
+    );
+    assert!(
+        !screen.contains("Acme on") && !row.contains('…'),
+        "{}",
+        rows.join("\n")
+    );
+}
+
+// A link or a cell sized for its picture cut the picture's name to that
+// size: `Тел…` in 32 px, `[revolut.co…` in 100 px.
+#[test]
+fn a_box_sized_for_a_picture_widens_to_its_name() {
+    let body = html(
+        "<p>Follow us</p>\
+         <a href=\"https://t.example\" style=\"display:inline-block;width:32px;height:32px\">\
+         <img src=\"https://cdn.example/t.png\" width=\"32\" height=\"32\" alt=\"Telegram\"></a>\
+         <table><tr><td style=\"width:80px\"><a href=\"https://www.bank.example/home\">\
+         <img src=\"https://cdn.example/logo.png\" style=\"width:100%\"></a></td></tr></table>\
+         <p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    assert!(screen.contains("Telegram"), "{}", screen.text());
+    assert!(screen.contains("[bank.example]"), "{}", screen.text());
+}
+
+// `dots`, `car`, `flag`: an alt of one lowercase word is the picture's
+// file name, and beside the text it decorates it read as a stray word.
+#[test]
+fn an_alt_that_is_a_file_name_is_dropped() {
+    let body = html(
+        "<table><tr><td><img src=\"https://cdn.example/dots.png\" alt=\"dots\"></td>\
+         <td>From the station</td></tr></table>\
+         <a href=\"https://social.example\"><img src=\"https://cdn.example/f.png\" \
+         width=\"32\" height=\"32\" alt=\"facebook\"></a><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    assert!(!screen.contains("dots"), "{}", screen.text());
+    // All its link shows, the word still names the link.
+    assert!(screen.contains("facebook"), "{}", screen.text());
+}

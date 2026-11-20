@@ -433,19 +433,22 @@ struct cg_grid
 
 namespace
 {
+// The boxes were built from the styles before a pass changed them.
+void lay_out(const document::ptr& doc, float width)
+{
+    doc->rebuild_render_tree();
+    doc->render(width);
+}
+
 // Lays `doc` out as its styles now stand and draws it on an empty grid.
 void draw(const document::ptr& doc, grid_container& container)
 {
     float width = float(container.cols) * CW;
-    // The boxes were built from the styles before they changed.
-    doc->rebuild_render_tree();
-    doc->render(width);
-    bool spilt = container.images.shrink_spilt();
-    if(left_align_paragraphs(doc->root()) || spilt)
-    {
-        doc->rebuild_render_tree();
-        doc->render(width);
-    }
+    LabelWidths& labels = container.images.widths();
+    lay_out(doc, width);
+    if(labels.let_out_spilt()) lay_out(doc, width);
+    bool spilt = labels.shrink_spilt();
+    if(left_align_paragraphs(doc->root()) || spilt) lay_out(doc, width);
     container.wipe();
     // Wider than the pane: litehtml skips a box wholly outside the clip, and
     // text there must be drawn to count as lost.

@@ -8,6 +8,11 @@ namespace cg
 {
 bool tag_is(const element::ptr& el, const char* tag) { return std::strcmp(el->get_tagName(), tag) == 0; }
 
+float px_or(const css_length& l, float none)
+{
+    return !l.is_predefined() && l.units() == css_units_px ? float(l.val()) : none;
+}
+
 void shown_text(const element::ptr& el, std::string& out)
 {
     if(el->is_comment() || el->css().get_display() == display_none) return;

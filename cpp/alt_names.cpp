@@ -26,4 +26,9 @@ std::string alt_name(const std::string& alt)
     std::string rest = cut == std::string::npos ? "" : alt.substr(0, cut);
     return rest.find(' ') == std::string::npos && among(rest, ARTICLES) ? "" : rest;
 }
+
+bool file_word(const std::string& alt)
+{
+    return !alt.empty() && std::all_of(alt.begin(), alt.end(), [](unsigned char c) { return std::islower(c) != 0; });
+}
 } // namespace cg

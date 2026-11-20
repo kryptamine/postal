@@ -53,11 +53,21 @@ element helpers.
   a band at its top were framed apart, one frame cutting through the other.
 - An icon label that is all its link shows takes its whole `alt`, up to 16
   columns, and a column after it: cut, `Insta…` named nothing. A larger
-  picture that is all its link shows, a store badge, takes up to 32. After
-  layout, a grown label that spills past a block around it goes back to the
-  picture's width, with every grown one in its table, and one past the pane
-  takes every grown label back: the tables before it pushed it there. The
-  document is then laid out again.
+  picture that is all its link shows, a store badge, takes up to 32. The
+  boxes round it that show no word and are narrower than its name were
+  sized for the picture, a link of 32 px or a cell of 100 px, and widen to
+  the name; a picture a share of such a box wide takes the name's width
+  too. After layout, a box of fixed width that a grown label still spills
+  past, a table sized for its row of icons, loses that width, and the
+  document is laid out again. A grown label that spills after that goes
+  back to the picture's width, with every grown one in its table, and one
+  past the pane takes every grown label back: the tables before it pushed
+  it there. The document is then laid out once more.
+- The icons of one table often start their names with the same words,
+  `Kraken on Facebook`, `Kraken on X`: six of them had no room, and each
+  cut to its own width read `Kra…`. The leading words all the names but
+  one share go, where the table has three icons or more and every name
+  has more after them (`shared_prefix.cpp`).
 - An `alt` loses the noun at its end that only calls it a picture (`icon`,
   `image`, `img`, `logo`, `picture`, `photo`, `banner`): `Messaging icon`
   names `Messaging`. With nothing left but an article, as in `Some Image`
@@ -77,7 +87,11 @@ element helpers.
     text, and its `alt` rarely fits its box (`GitHub` in 32 px read `GitH`);
   - its `alt` is already in the nearest text around it, within its table row
     and under 200 bytes, as an avatar's caption or a status icon's job name
-    is (`Appfire` beside `Appfire · Sofia` read `Appfir Appfire`).
+    is (`Appfire` beside `Appfire · Sofia` read `Appfir Appfire`);
+  - its `alt` is all the words before it or after it say, at any level up
+    to its table: a card's caption in the row under its picture;
+  - its `alt` is one lowercase word and a link shows more than it: `dots`,
+    `car`, `flag` are the names of files, stray words beside the text;
 
   - it is all a link shows and a link with words opens the same page (the
     href before its query, where mail tags where in the mail a link sits),

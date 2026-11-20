@@ -10,6 +10,8 @@
 namespace cg
 {
 bool tag_is(const litehtml::element::ptr& el, const char* tag);
+// `l` in px, or `none` when it is set in another unit or not at all.
+float px_or(const litehtml::css_length& l, float none);
 // The text a reader sees: litehtml's `get_text` takes in comments too, and
 // mail hides whole Outlook tables in conditional ones.
 void shown_text(const litehtml::element::ptr& el, std::string& out);
