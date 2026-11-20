@@ -352,6 +352,8 @@ fn offline_the_picker_and_a_cached_folder_come_from_the_cache() {
     t.wait_until(|s| picked(s).iter().any(|row| row == "Work/Clients 1"))
         .unwrap();
     t.send(Key::Esc).unwrap();
+    // A key read with `Esc` in one go is taken for Alt and the Esc is lost.
+    t.wait_until(|s| picked(s).is_empty()).unwrap();
     quit(t);
 
     server.fail(support::fake_imap::Outage::Offline);

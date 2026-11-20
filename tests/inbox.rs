@@ -160,6 +160,8 @@ fn heads_each_date_group_and_keeps_the_top_one_in_view() {
     assert!(!screen.contains("─ 2023 ─"), "{screen}");
     assert!(!screen.contains("─ 2024 ─"), "{screen}");
     t.send(Key::Esc).unwrap();
+    // A key read with `Esc` in one go is taken for Alt and the Esc is lost.
+    t.wait_until(|s| s.contains("Dave")).unwrap();
     quit(t);
 }
 

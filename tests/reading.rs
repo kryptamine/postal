@@ -128,6 +128,8 @@ fn the_help_popup_lists_the_reading_keys() {
     let screen = t.snapshot_after(|s| s.contains(" Help ")).unwrap();
     insta::assert_snapshot!(screen);
     t.send(Key::Esc).unwrap();
+    // A key read with `Esc` in one go is taken for Alt and the Esc is lost.
+    t.wait_until(|s| !s.contains(" Help ")).unwrap();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 }
