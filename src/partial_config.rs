@@ -330,11 +330,13 @@ impl PartialConfig {
     /// The file `load` reads back as this; the defaults are left out.
     fn to_toml(&self) -> String {
         let mut text = String::new();
-        let (first, more) = match self.accounts.split_first() {
-            Some((first, more)) => (Some(first), more),
-            None => (None, &[][..]),
-        };
-
+        // Only an Account setting nothing of its own goes at the top level,
+        // where its tables would be every Account's.
+        let first = self
+            .accounts
+            .first()
+            .filter(|first| first.name.is_none() && first.imap.is_empty() && first.smtp.is_empty());
+        let more = &self.accounts[usize::from(first.is_some())..];
         if let Some(first) = first {
             write_account(&mut text, first);
         }

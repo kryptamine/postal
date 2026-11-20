@@ -473,6 +473,31 @@ fn a_login_as_another_address_adds_an_account() {
     assert!(home.cache_path().exists());
 }
 
+#[test]
+fn a_login_keeps_what_a_first_account_table_sets_of_its_own() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let old = "\n[[account]]\nemail = \"old@example.com\"\nname = \"Old Name\"\n\n\
+               [account.smtp]\nport = 2525\n";
+    let seed = fs::read_to_string(home.config_path()).unwrap() + old;
+    fs::write(home.config_path(), seed).unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
+    grant(&query::of_url(&consent_url(&browser)));
+
+    t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
+        .unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    assert!(config.contains(old), "{config}");
+    assert!(
+        config.contains(&format!("\n[[account]]\nemail = \"{EMAIL}\"\n")),
+        "{config}"
+    );
+}
+
 /// This Account written at iCloud, with a Cache of its own.
 fn at_icloud(server: &FakeImap, oauth: &FakeOAuth) -> (Home, String) {
     let home = signed_in(server, oauth);
