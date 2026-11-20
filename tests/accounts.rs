@@ -232,6 +232,8 @@ fn a_search_matches_the_messages_of_every_account() {
     t.send(Key::Char('f')).unwrap();
     t.wait_until(both_listed).unwrap();
     t.send(Key::Esc).unwrap();
+    // A key read with `Esc` in one go is taken for Alt and the Esc is lost.
+    t.wait_until(|s| picker(s).is_empty()).unwrap();
     t.send(Key::Char('/')).unwrap();
     t.send_str("bravo").unwrap();
     t.wait_until(|s| s.contains("Bravo notes") && !s.contains("Alpha news"))
