@@ -25,10 +25,10 @@ fn a_section_fill_becomes_a_frame_in_its_colour() {
     let screen = preview(body, &DEFAULT, "Go");
     let (row, col) = at(&screen, "Banner");
     assert_eq!(bg(&screen, row, col), Color::Default);
-    let corner = screen.row_text(row - 2).chars().position(|c| c == '┌');
+    let corner = screen.row_text(row - 1).chars().position(|c| c == '┌');
     let corner = u16::try_from(corner.expect("a frame")).unwrap();
-    assert!(matches!(fg(&screen, row - 2, corner), Color::Rgb(..)));
-    assert!(screen.row_text(row + 2).contains('└'), "{}", screen.text());
+    assert!(matches!(fg(&screen, row - 1, corner), Color::Rgb(..)));
+    assert!(screen.row_text(row + 1).contains('└'), "{}", screen.text());
     let (row, col) = at(&screen, "Go");
     assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
 }
@@ -187,6 +187,23 @@ fn a_cover_band_left_with_its_title_is_a_title() {
         rows.join("\n")
     );
     assert_eq!(frames(&screen), 2, "{}", rows.join("\n"));
+}
+
+// A card pads its text with blank rows, and inside a frame each was a row
+// of two bars: the frame sets the card apart without them.
+#[test]
+fn a_frame_keeps_no_blank_row_inside_its_edges() {
+    let body = html(
+        "<p>Page</p><div style=\"background:#1e50f5;color:#fff;padding:32px\">One<br><br>Two\
+         </div><p>More page</p>",
+    );
+    let screen = preview(body, &DEFAULT, "More page");
+    let (one, _) = at(&screen, "One");
+    let (two, _) = at(&screen, "Two");
+    assert!(screen.row_text(one - 1).contains('┌'), "{}", screen.text());
+    assert!(screen.row_text(two + 1).contains('└'), "{}", screen.text());
+    // The blank row the card put between its lines is its own.
+    assert_eq!(two - one, 2, "{}", screen.text());
 }
 
 // The box of a gone picture and the gutters of a page stood as frames

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     cell_grid::{self, CellGrid},
-    footer,
+    footer, frame_padding,
     looks::Looks,
     mail_colours::MailColours,
     marks::Marks,
@@ -61,8 +61,10 @@ pub fn render(html: &str, width: u16, colours: MailColours) -> Option<Vec<Styled
     let start = lines.iter().position(|line| !blank(line)).unwrap_or(0);
     lines.drain(..start);
     // Mail spaces its blocks with rows of padding, and one row sets them
-    // apart as well as five.
-    lines.dedup_by(|line, kept| kept.spacer() && line == kept);
+    // apart as well as five. Blank rows are alike by their text: what marks
+    // their cells carry shows nowhere.
+    lines.dedup_by(|line, kept| kept.spacer() && line.spacer() && line.text == kept.text);
+    frame_padding::trim(&mut lines);
     footer::mute(&mut lines);
     Some(lines)
 }

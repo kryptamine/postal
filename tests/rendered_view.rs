@@ -205,11 +205,11 @@ fn a_percentage_height_is_the_height_of_what_it_holds() {
     let screen = preview(body, &DEFAULT, "After");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
-    assert_eq!(row("After") - row("Inside"), 4, "{}", rows.join("\n"));
+    assert_eq!(row("After") - row("Inside"), 3, "{}", rows.join("\n"));
 }
 
 // Mail spaces its blocks with rows of padding: one blank row sets two
-// blocks apart as well as eight, in a frame too, whose sides run on.
+// blocks apart as well as eight, and a frame's edge needs none inside it.
 #[test]
 fn a_run_of_blank_rows_is_one() {
     let body = html(
@@ -219,7 +219,7 @@ fn a_run_of_blank_rows_is_one() {
     let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
-    // A blank row, the frame's top, and a row of its two sides.
-    assert_eq!(row("Inside") - row("Above"), 4, "{}", rows.join("\n"));
-    assert_eq!(row("Below") - row("Inside"), 4, "{}", rows.join("\n"));
+    // A blank row and the frame's edge.
+    assert_eq!(row("Inside") - row("Above"), 3, "{}", rows.join("\n"));
+    assert_eq!(row("Below") - row("Inside"), 3, "{}", rows.join("\n"));
 }

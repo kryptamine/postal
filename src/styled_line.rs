@@ -109,6 +109,12 @@ impl StyledLine {
         self.text.chars().all(blank) && self.runs.iter().all(|run| run.paint.bg.is_none())
     }
 
+    /// Shows nothing but pieces of frames, a `corner` among them: the top
+    /// or the bottom edge of a card.
+    pub fn frame_edge(&self, corner: char) -> bool {
+        self.text.contains(corner) && self.text.chars().all(|c| " ─│┌┐└┘".contains(c))
+    }
+
     /// The text in runs, in order.
     pub fn segments(&self) -> impl Iterator<Item = Segment<'_>> {
         let mut rest = self.text.as_str();

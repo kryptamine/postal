@@ -300,6 +300,19 @@ one blank row sets two blocks apart as well as five. A row with a fill left
 on it stays, since those rows are a drawing. On 539 cached mails at 74
 columns this cut the rows from 41594 to 34668.
 
+A card pads its text with a blank row under the top of its frame and over
+the bottom. A row that shows only the sides of frames goes when the row
+above it shows only frames with a top corner among them, or the row below
+only frames with a bottom corner (`src/frame_padding.rs`): the frame sets
+the card apart already.
+
+On 388 cached mails at 74 columns, the rules for empty regions, the mail's
+card, frame padding, captions, icon names, boxes sized for pictures, file
+names, bullet cells and floated cells changed 213, cut the rows from
+22747 to 21921, the frames round nothing from 35 to 11, all borders the
+mail drew itself, and the names cut to five letters or fewer from 195 to
+77. One mail still does not fit, as before.
+
 ### The footer
 
 Every mail ends the same way, an unsubscribe link, an address, a copyright
