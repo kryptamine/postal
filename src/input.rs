@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, time::Duration};
 
 use crossterm::event::{Event, EventStream};
 use futures::StreamExt;
@@ -12,7 +12,7 @@ pub struct Input {
 impl Input {
     pub fn new() -> Self {
         Self {
-            stream: Some(EventStream::new()),
+            stream: Some(fresh()),
         }
     }
 
@@ -29,6 +29,14 @@ impl Input {
     /// terminal, it holds the lock a new one takes.
     pub fn restart(&mut self) {
         self.stream = None;
-        self.stream = Some(EventStream::new());
+        self.stream = Some(fresh());
     }
+}
+
+/// A stream dropped idle leaves a wake behind; met with a key later, it
+/// hides that key from every read. Taken now, before any key, it is harmless.
+fn fresh() -> EventStream {
+    let stream = EventStream::new();
+    crossterm::event::poll(Duration::ZERO).ok();
+    stream
 }
