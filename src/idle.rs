@@ -309,6 +309,7 @@ async fn changes(
     Ok(Some(Changes {
         // Left as the resync saw it, so the next one asks for all since.
         state,
+        exists: sequence.exists(),
         unread: server.unread_count().await?,
         replace: false,
         new,

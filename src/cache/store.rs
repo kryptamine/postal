@@ -481,6 +481,22 @@ impl Cache {
         Ok(uids)
     }
 
+    /// Whether the Cache held every Message of `folder` when the server last
+    /// counted them: then the server has nothing older than the Cache.
+    pub fn whole(&self, folder: &str) -> Result<bool, Error> {
+        let exists: Option<usize> = self
+            .connection()
+            .prepare_cached("SELECT exists_count FROM mailbox WHERE account = ?2 AND name = ?1")?
+            .query_row(params![folder, self.email()], |row| row.get(0))
+            .optional()?
+            .flatten();
+        let Some(exists) = exists else {
+            return Ok(false);
+        };
+
+        Ok(self.uids(folder)?.len() >= exists)
+    }
+
     pub fn oldest_uid(&self, folder: &str) -> Result<Option<u32>, Error> {
         let oldest = self
             .connection()
@@ -707,13 +723,24 @@ fn apply(
         ])?;
     }
 
+    write_state(&transaction, (account, folder), changes)?;
+    drop((delete, seen, answered));
+    transaction.commit()
+}
+
+fn write_state(
+    connection: &Connection,
+    (account, folder): (&str, &str),
+    changes: &Changes,
+) -> rusqlite::Result<()> {
     let state = &changes.state;
-    transaction.execute(
-        "INSERT INTO mailbox (account, name, uid_validity, uid_next, highest_modseq, unread)
-         VALUES (?6, ?1, ?2, ?3, ?4, ?5)
+    connection.execute(
+        "INSERT INTO mailbox
+             (account, name, uid_validity, uid_next, highest_modseq, unread, exists_count)
+         VALUES (?6, ?1, ?2, ?3, ?4, ?5, ?7)
          ON CONFLICT (account, name) DO UPDATE SET uid_validity = excluded.uid_validity,
              uid_next = excluded.uid_next, highest_modseq = excluded.highest_modseq,
-             unread = excluded.unread",
+             unread = excluded.unread, exists_count = excluded.exists_count",
         params![
             folder,
             state.uid_validity,
@@ -721,10 +748,10 @@ fn apply(
             state.highest_modseq,
             changes.unread,
             account,
+            changes.exists,
         ],
     )?;
-    drop((delete, seen, answered));
-    transaction.commit()
+    Ok(())
 }
 
 /// Drops `folder` with its rows and its queued changes.

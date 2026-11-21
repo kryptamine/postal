@@ -5,7 +5,7 @@ use rusqlite::{Connection, OpenFlags};
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 16;
+pub const VERSION: i64 = 17;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -21,6 +21,8 @@ CREATE TABLE mailbox (
     uid_validity INTEGER,
     uid_next INTEGER,
     highest_modseq INTEGER,
+    -- The server's `EXISTS` as the last resync or IDLE update saw it.
+    exists_count INTEGER,
     -- NULL until a resync or a `STATUS` counts it.
     unread INTEGER,
     PRIMARY KEY (account, name)

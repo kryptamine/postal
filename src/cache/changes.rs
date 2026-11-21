@@ -3,6 +3,8 @@ use crate::{message_flags::MessageFlags, new_message::NewMessage, sync_state::Sy
 /// What one resync learnt, written to the Cache in one transaction.
 pub struct Changes {
     pub state: SyncState,
+    /// The server's Message count of the Folder.
+    pub exists: u32,
     /// The server's count over the whole Inbox.
     pub unread: usize,
     /// Drops every cached row first, as after a UIDVALIDITY change.

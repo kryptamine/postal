@@ -140,6 +140,7 @@ async fn refetch(
 
     Ok(Changes {
         state: examined.state,
+        exists: examined.exists,
         unread,
         replace: true,
         new,
@@ -174,6 +175,7 @@ async fn update(
 
     Ok(Changes {
         state: examined.state,
+        exists: examined.exists,
         unread,
         replace: false,
         new,

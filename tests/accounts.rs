@@ -277,6 +277,23 @@ fn all_inboxes_ends_at_the_latest_cache_edge_until_a_backfill_lowers_it() {
     quit(t);
 }
 
+// An Inbox cached whole at the last resync stopped the list on every
+// start until its Backfill answered, hiding the other Account's mail.
+#[test]
+fn a_wholly_cached_inbox_sets_no_edge_on_the_next_start() {
+    let first = (1..=3).map(|n| hourly("First", n, 0)).collect();
+    let two = two_with(first, vec![hourly("Second", 5, 0)]);
+    let t = postal(&two);
+    wait_for(|| two.first.commands().iter().any(|c| c == "IDLE"));
+    wait_for(|| two.second.commands().iter().any(|c| c == "IDLE"));
+    quit(t);
+
+    two.second.fail(Outage::Offline);
+    let mut t = postal(&two);
+    place(&mut t, "1/4");
+    quit(t);
+}
+
 #[test]
 fn a_folder_of_the_second_account_marks_read_there() {
     let two = two();

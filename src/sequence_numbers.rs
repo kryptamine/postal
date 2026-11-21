@@ -45,6 +45,11 @@ impl SequenceNumbers {
         (index < self.uids.len()).then(|| self.uids.remove(index))
     }
 
+    /// The server's Message count as announced so far.
+    pub fn exists(&self) -> u32 {
+        self.older + u32::try_from(self.uids.len()).unwrap_or(u32::MAX)
+    }
+
     pub fn oldest(&self) -> Option<u32> {
         self.uids.first().copied()
     }
