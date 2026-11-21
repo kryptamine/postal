@@ -4,7 +4,6 @@
 
 use std::{
     collections::HashMap,
-    fmt::Write,
     net::Ipv4Addr,
     num::{NonZeroU32, NonZeroU64},
     sync::{Arc, Mutex},
@@ -14,32 +13,37 @@ use std::{
 
 use imap_next::{
     imap_types::{
-        auth::{AuthMechanism, AuthenticateData},
-        command::{Command, CommandBody, FetchModifier},
-        core::{AString, Atom, IString, NString, QuotedChar, Tag, Vec1},
-        datetime::DateTime,
-        envelope::{Address, Envelope},
-        fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
+        command::{Command, CommandBody},
+        core::{Atom, QuotedChar, Tag, Vec1},
+        fetch::MessageDataItem,
         flag::{Flag, FlagFetch, FlagNameAttribute},
-        flag::{StoreResponse, StoreType},
         mailbox::Mailbox,
-        response::{
-            Capability, Code, CodeOther, CommandContinuationRequest, Data, Greeting, Status,
-        },
+        response::{Code, CodeOther, CommandContinuationRequest, Data, Greeting, Status},
         search::SearchKey,
-        sequence::{SeqOrUid, Sequence, SequenceSet},
         status::StatusDataItem,
     },
     server::{Event, Options, Server},
     stream::Stream,
-    types::CommandAuthenticate,
 };
 use tokio::net::{TcpListener, TcpStream};
 
-use super::{fake_body::FakeBody, relay::relay};
+use super::relay::relay;
 
 mod appends;
+mod auth;
+mod fetch;
+mod message;
 mod moves;
+mod stall;
+mod store;
+
+pub use auth::xoauth2;
+use auth::{capabilities, finish_authenticate, login, start_authenticate};
+use fetch::{answer_fetch, contains};
+pub use message::FakeMessage;
+pub use stall::Stall;
+use stall::{wait_unless_command_stalled, wait_unless_stalled};
+use store::store;
 
 pub const EMAIL: &str = "me@example.com";
 /// The OAuth access token `AUTHENTICATE XOAUTH2` accepts.
@@ -58,129 +62,6 @@ pub const FIRST_MSGID: u64 = 1_800_000_000_000_000_001;
 
 /// The `X-GM-THRID` of `FakeMessage::in_thread(0)`; the rest follow.
 pub const FIRST_THRID: u64 = 1_700_000_000_000_000_001;
-
-#[derive(Clone)]
-pub struct FakeMessage {
-    pub from_name: Option<&'static str>,
-    pub from_address: &'static str,
-    /// A raw `From` header the server could not parse: the envelope then has no `From`.
-    pub unparsable_from: Option<&'static str>,
-    /// Raw header text, so a test can send RFC 2047 encoded words.
-    pub subject: String,
-    /// RFC 3339.
-    pub internal_date: String,
-    pub seen: bool,
-    pub body: FakeBody,
-    /// Messages sharing it share an `X-GM-THRID`; `None` starts a Thread of its own.
-    pub thread: Option<u64>,
-    /// More header lines of the whole Message, each ending in CRLF.
-    pub headers: String,
-    pub answered: bool,
-    /// Each `(name, address)` of its envelope's `To`, then of its `Cc`.
-    pub to: Vec<(&'static str, &'static str)>,
-    pub cc: Vec<(&'static str, &'static str)>,
-    pub message_id: Option<&'static str>,
-}
-
-impl FakeMessage {
-    pub fn new(from_name: &'static str, subject: &str, internal_date: &str) -> Self {
-        Self {
-            from_name: Some(from_name),
-            from_address: "someone@example.com",
-            unparsable_from: None,
-            subject: subject.to_owned(),
-            internal_date: internal_date.to_owned(),
-            seen: true,
-            body: FakeBody::plain(""),
-            thread: None,
-            headers: String::new(),
-            answered: false,
-            to: Vec::new(),
-            cc: Vec::new(),
-            message_id: None,
-        }
-    }
-
-    /// Sent to `name` at `address`.
-    pub fn to(mut self, name: &'static str, address: &'static str) -> Self {
-        self.to.push((name, address));
-        self
-    }
-
-    pub fn cc(mut self, name: &'static str, address: &'static str) -> Self {
-        self.cc.push((name, address));
-        self
-    }
-
-    pub const fn message_id(mut self, id: &'static str) -> Self {
-        self.message_id = Some(id);
-        self
-    }
-
-    /// Adds `name: value` to the whole Message's header.
-    pub fn header(mut self, name: &str, value: &str) -> Self {
-        write!(self.headers, "{name}: {value}\r\n").unwrap();
-        self
-    }
-
-    pub fn body(mut self, body: FakeBody) -> Self {
-        self.body = body;
-        self
-    }
-
-    pub const fn unread(mut self) -> Self {
-        self.seen = false;
-        self
-    }
-
-    pub const fn answered(mut self) -> Self {
-        self.answered = true;
-        self
-    }
-
-    pub const fn in_thread(mut self, thread: u64) -> Self {
-        self.thread = Some(thread);
-        self
-    }
-
-    /// Sent from the Account's own address.
-    pub const fn sent_by_me(mut self) -> Self {
-        self.from_address = EMAIL;
-        self
-    }
-
-    pub const fn unparsable_from(mut self, raw: &'static str) -> Self {
-        self.unparsable_from = Some(raw);
-        self
-    }
-
-    /// The `From` header's value as the Message carries it.
-    fn sender_header(&self) -> String {
-        match (self.unparsable_from, self.from_name) {
-            (Some(raw), _) => raw.to_owned(),
-            (None, Some(name)) => format!("{name} <{}>", self.from_address),
-            (None, None) => self.from_address.to_owned(),
-        }
-    }
-}
-
-/// Where the server stops answering until `FakeImap::release`.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Stall {
-    /// Before the greeting: the client sees no byte at all.
-    Greeting,
-    /// After a `FETCH` or `UID FETCH` is recorded, before its answer.
-    Fetch,
-    /// As `Fetch`, but only for a fetch of a body part.
-    Part,
-    /// As `Fetch`, but only for a fetch of a whole Message, `BODY[]`.
-    Whole,
-    /// As `Fetch`, but only for a `FETCH` by sequence number, as the first
-    /// fetch and a page of older Messages send.
-    Sequence,
-    /// After a `UID MOVE` is recorded, before it is made.
-    Move,
-}
 
 /// How the server turns clients away until `FakeImap::recover`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -669,44 +550,6 @@ async fn accept(
     }
 }
 
-async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
-    while inbox.lock().unwrap().stall == Some(stall) {
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-}
-
-/// Holds a `FETCH` or a `UID MOVE` while a stall covers it.
-async fn wait_unless_command_stalled(inbox: &Mutex<Inbox>, body: &CommandBody<'static>) {
-    match body {
-        CommandBody::Fetch {
-            macro_or_item_names,
-            uid,
-            ..
-        } => wait_unless_fetch_stalled(inbox, macro_or_item_names, *uid).await,
-        CommandBody::Move { .. } => wait_unless_stalled(inbox, Stall::Move).await,
-        _ => {}
-    }
-}
-
-async fn wait_unless_fetch_stalled(
-    inbox: &Mutex<Inbox>,
-    items: &MacroOrMessageDataItemNames<'static>,
-    uid: bool,
-) {
-    wait_unless_stalled(inbox, Stall::Fetch).await;
-    if !uid {
-        wait_unless_stalled(inbox, Stall::Sequence).await;
-    }
-
-    if body_part(items).is_some() {
-        wait_unless_stalled(inbox, Stall::Part).await;
-    }
-
-    if whole_body(items) {
-        wait_unless_stalled(inbox, Stall::Whole).await;
-    }
-}
-
 /// Counts a connection in `Inbox::open` while it is served.
 struct Open {
     inbox: Arc<Mutex<Inbox>>,
@@ -966,97 +809,6 @@ fn code(atom: &'static str) -> Code<'static> {
     Code::Other(CodeOther::unvalidated(atom.as_bytes()))
 }
 
-/// Asks for the XOAUTH2 response and returns the tag to answer it under;
-/// any other mechanism is refused at once.
-fn start_authenticate(server: &mut Server, command: CommandAuthenticate) -> Option<Tag<'static>> {
-    let tag = Some(command.tag);
-    if command.mechanism != AuthMechanism::XOAuth2 {
-        let refused = Status::no(tag, None, "mechanism not faked").unwrap();
-        server.authenticate_finish(refused).unwrap();
-        return None;
-    }
-
-    let ready = CommandContinuationRequest::base64(Vec::new());
-    server.authenticate_continue(ready).unwrap();
-    tag
-}
-
-fn finish_authenticate(
-    server: &mut Server,
-    tag: Option<Tag<'static>>,
-    data: &AuthenticateData,
-    outage: Option<Outage>,
-) {
-    let ok = matches!(data, AuthenticateData::Continue(data)
-        if data.declassify().as_ref() == xoauth2().as_bytes());
-    let status = match outage {
-        Some(Outage::Throttled) => Status::no(tag, Some(code("THROTTLED")), "Too many logins"),
-        Some(Outage::Revoked) => Status::no(
-            tag,
-            Some(code("AUTHENTICATIONFAILED")),
-            "Invalid credentials",
-        ),
-        _ if ok => Status::ok(tag, None, "AUTHENTICATE completed"),
-        _ => Status::no(
-            tag,
-            Some(code("AUTHENTICATIONFAILED")),
-            "Invalid credentials",
-        ),
-    };
-
-    server.authenticate_finish(status.unwrap()).unwrap();
-}
-
-/// Answers `LOGIN` as `AUTHENTICATE` is, taking `APP_PASSWORD` as the
-/// user the test set.
-fn login(
-    inbox: &Inbox,
-    tag: Tag<'static>,
-    (user, password): (&AString, &AString),
-) -> Status<'static> {
-    let text = |value: &AString| String::from_utf8(value.as_ref().to_vec()).unwrap();
-    let ok = text(user) == inbox.login_user && text(password) == APP_PASSWORD;
-    let tag = Some(tag);
-    let status = match inbox.outage {
-        Some(Outage::Throttled) => Status::no(tag, Some(code("THROTTLED")), "Too many logins"),
-        Some(Outage::Revoked) => Status::no(
-            tag,
-            Some(code("AUTHENTICATIONFAILED")),
-            "Invalid credentials",
-        ),
-        _ if ok => Status::ok(tag, None, "LOGIN completed"),
-        _ => Status::no(
-            tag,
-            Some(code("AUTHENTICATIONFAILED")),
-            "Invalid credentials",
-        ),
-    };
-
-    status.unwrap()
-}
-
-/// The SASL XOAUTH2 response of the Account with `ACCESS_TOKEN`.
-pub fn xoauth2() -> String {
-    format!("user={EMAIL}\x01auth=Bearer {ACCESS_TOKEN}\x01\x01")
-}
-
-fn capabilities(inbox: &Inbox) -> Data<'static> {
-    let mut capabilities = vec![Capability::Imap4Rev1, Capability::UidPlus];
-    if inbox.listed.moves {
-        capabilities.push(Capability::Move);
-    }
-
-    if inbox.listed.idle {
-        capabilities.push(Capability::Idle);
-    }
-
-    if inbox.gmail {
-        capabilities.push(Capability::from(Atom::try_from("X-GM-EXT-1").unwrap()));
-    }
-
-    Data::Capability(Vec1::try_from(capabilities).unwrap())
-}
-
 /// The name a command gives a mailbox, as `LIST` sends it.
 fn mailbox_name(mailbox: &Mailbox<'_>) -> String {
     match mailbox {
@@ -1135,79 +887,6 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
     }
 }
 
-/// Applies a `UID STORE` of `\Seen` or `\Answered` to the Folder `opened`, and
-/// `\Seen` to each copy of its Messages in other Folders, as Gmail shares it;
-/// refused unless it was `SELECT`ed.
-fn store(inbox: &mut Inbox, command: Command<'static>, opened: &Opened) -> Status<'static> {
-    let tag = Some(command.tag);
-    let CommandBody::Store {
-        sequence_set,
-        kind,
-        response: StoreResponse::Silent,
-        flags,
-        uid: true,
-        ..
-    } = command.body
-    else {
-        return Status::bad(tag, None, "not faked").unwrap();
-    };
-
-    let Some(folder) = inbox.folder(&opened.0).filter(|_| opened.1) else {
-        return Status::no(tag, None, "STORE needs a Folder selected read-write").unwrap();
-    };
-
-    let added = |flag| kind == StoreType::Add && flags.contains(&flag);
-    let only_here: Option<fn(&mut Stored)> = if added(Flag::Deleted) {
-        Some(|stored| stored.deleted = true)
-    } else if added(Flag::Answered) {
-        Some(|stored| stored.message.answered = true)
-    } else {
-        None
-    };
-
-    if let Some(mark) = only_here {
-        let uids: Vec<u32> = fetched(folder, &sequence_set, true, None)
-            .map(|(_, stored)| stored.uid)
-            .collect();
-        let folder = inbox.folder_mut(&opened.0);
-        for uid in uids {
-            mark(folder.stored(uid));
-        }
-
-        return Status::ok(tag, None, "STORE completed").unwrap();
-    }
-
-    let has_seen = flags.contains(&Flag::Seen);
-    let seen = match kind {
-        StoreType::Add if has_seen => true,
-        StoreType::Remove if has_seen => false,
-        StoreType::Replace => has_seen,
-        StoreType::Add | StoreType::Remove => {
-            return Status::ok(tag, None, "STORE completed").unwrap();
-        }
-    };
-
-    let msgids: Vec<u64> = fetched(folder, &sequence_set, true, None)
-        .map(|(_, stored)| stored.msgid)
-        .collect();
-    for folder in &mut inbox.folders {
-        let copies: Vec<u32> = folder
-            .messages
-            .iter()
-            .filter(|m| msgids.contains(&m.msgid) && m.message.seen != seen)
-            .map(|m| m.uid)
-            .collect();
-        for uid in copies {
-            let modseq = folder.bump();
-            let stored = folder.stored(uid);
-            stored.modseq = modseq;
-            stored.message.seen = seen;
-        }
-    }
-
-    Status::ok(tag, None, "STORE completed").unwrap()
-}
-
 /// Enqueues what a `LIST` or a `STATUS` asks for and returns its tagged status.
 fn answer_folders(
     server: &mut Server,
@@ -1233,47 +912,6 @@ fn answer_folders(
         items: vec![StatusDataItem::Unseen(u32::try_from(unseen).unwrap())].into(),
     });
     Status::ok(tag, None, "STATUS completed").unwrap()
-}
-
-/// Enqueues what a `FETCH` asks for and returns its tagged status.
-fn answer_fetch(
-    server: &mut Server,
-    tag: Option<Tag<'static>>,
-    body: CommandBody<'static>,
-    (inbox, folder): (&Inbox, &Folder),
-) -> Status<'static> {
-    let CommandBody::Fetch {
-        sequence_set,
-        macro_or_item_names,
-        uid,
-        modifiers,
-    } = body
-    else {
-        panic!("only a FETCH is answered here");
-    };
-
-    let asked = Asked {
-        from_header: header_fields(&macro_or_item_names),
-        part: body_part(&macro_or_item_names),
-        whole: whole_body(&macro_or_item_names),
-    };
-
-    let refused = fetched(folder, &sequence_set, uid, None)
-        .any(|(_, stored)| inbox.refused.contains(&stored.uid));
-    if asked.whole && refused {
-        let text = "Some messages could not be FETCHed (Failure)";
-        return Status::no(tag, None, text).unwrap();
-    }
-
-    let changed_since = modifiers.iter().find_map(|m| match m {
-        FetchModifier::ChangedSince(modseq) => Some(modseq.get()),
-        FetchModifier::Vanished => None,
-    });
-    for (seq, stored) in fetched(folder, &sequence_set, uid, changed_since) {
-        server.enqueue_data(fetch(seq, stored, &asked));
-    }
-
-    Status::ok(tag, None, "FETCH completed").unwrap()
 }
 
 /// The `LIST` line of `folder`, `/` its hierarchy delimiter as on Gmail.
@@ -1336,217 +974,4 @@ fn search(criteria: &[SearchKey<'_>], inbox: &Folder) -> Option<Vec<u32>> {
     }
 
     Some(uids)
-}
-
-/// The Messages a `FETCH` names, with their sequence numbers.
-fn fetched<'a>(
-    inbox: &'a Folder,
-    set: &'a SequenceSet,
-    uid: bool,
-    changed_since: Option<u64>,
-) -> impl Iterator<Item = (u32, &'a Stored)> {
-    let max = if uid {
-        inbox.messages.last().map_or(0, |m| m.uid)
-    } else {
-        u32::try_from(inbox.messages.len()).unwrap()
-    };
-
-    (1..).zip(&inbox.messages).filter(move |&(seq, stored)| {
-        contains(set, if uid { stored.uid } else { seq }, max)
-            && changed_since.is_none_or(|since| stored.modseq > since)
-    })
-}
-
-/// Whether `set` holds `value`, with `*` standing for `max`.
-fn contains(set: &SequenceSet, value: u32, max: u32) -> bool {
-    let resolve = |bound: &SeqOrUid| match bound {
-        SeqOrUid::Value(n) => n.get(),
-        SeqOrUid::Asterisk => max,
-    };
-
-    set.0.as_ref().iter().any(|sequence| match sequence {
-        Sequence::Single(one) => resolve(one) == value,
-        Sequence::Range(a, b) => {
-            let (a, b) = (resolve(a), resolve(b));
-            (a.min(b)..=a.max(b)).contains(&value)
-        }
-    })
-}
-
-/// The `HEADER.FIELDS` section the client asked for, if any; the fake serves
-/// only the `From` field whatever the list names.
-fn header_fields(items: &MacroOrMessageDataItemNames<'static>) -> Option<Section<'static>> {
-    let MacroOrMessageDataItemNames::MessageDataItemNames(names) = items else {
-        return None;
-    };
-
-    names.iter().find_map(|name| match name {
-        MessageDataItemName::BodyExt {
-            section: Some(section @ Section::HeaderFields(..)),
-            ..
-        } => Some(section.clone()),
-        _ => None,
-    })
-}
-
-/// A body part number the client asked for, and the octets it asked for.
-struct PartAsked {
-    path: Vec1<NonZeroU32>,
-    partial: Option<(u32, NonZeroU32)>,
-}
-
-/// The items of a `FETCH` the fake answers only when asked.
-struct Asked {
-    from_header: Option<Section<'static>>,
-    part: Option<PartAsked>,
-    /// `BODY[]`, the whole Message.
-    whole: bool,
-}
-
-fn whole_body(items: &MacroOrMessageDataItemNames<'static>) -> bool {
-    let MacroOrMessageDataItemNames::MessageDataItemNames(names) = items else {
-        return false;
-    };
-
-    names.iter().any(|name| {
-        matches!(
-            name,
-            MessageDataItemName::BodyExt {
-                section: None,
-                partial: None,
-                ..
-            }
-        )
-    })
-}
-
-fn body_part(items: &MacroOrMessageDataItemNames<'static>) -> Option<PartAsked> {
-    let MacroOrMessageDataItemNames::MessageDataItemNames(names) = items else {
-        return None;
-    };
-
-    names.iter().find_map(|name| match name {
-        MessageDataItemName::BodyExt {
-            section: Some(Section::Part(Part(path))),
-            partial,
-            ..
-        } => Some(PartAsked {
-            path: path.clone(),
-            partial: *partial,
-        }),
-        _ => None,
-    })
-}
-
-/// The octets asked for, empty for a part the body does not have.
-fn body_part_item(body: &FakeBody, asked: &PartAsked) -> MessageDataItem<'static> {
-    let content = body.part(asked.path.as_ref()).unwrap_or_default();
-    let (start, len) = asked.partial.map_or((0, content.len()), |(start, len)| {
-        (
-            usize::try_from(start).unwrap(),
-            usize::try_from(len.get()).unwrap(),
-        )
-    });
-    let served = content.get(start..).unwrap_or_default();
-    let served = &served[..len.min(served.len())];
-    MessageDataItem::BodyExt {
-        section: Some(Section::Part(Part(asked.path.clone()))),
-        origin: asked.partial.map(|(start, _)| start),
-        // A short part goes quoted, as a server may send it.
-        data: NString(Some(IString::try_from(served.to_vec()).unwrap())),
-    }
-}
-
-fn whole_body_item(message: &FakeMessage) -> MessageDataItem<'static> {
-    let headers = format!(
-        "From: {}\r\nSubject: {}\r\n{}",
-        message.sender_header(),
-        message.subject,
-        message.headers
-    );
-    let whole = IString::try_from(message.body.message(&headers)).unwrap();
-    MessageDataItem::BodyExt {
-        section: None,
-        origin: None,
-        data: NString(Some(whole)),
-    }
-}
-
-/// An envelope's address list of each `(name, address)`.
-fn addresses(listed: &[(&str, &str)]) -> Vec<Address<'static>> {
-    let nstring = |s: &str| NString(Some(IString::try_from(s.to_owned()).unwrap()));
-    listed
-        .iter()
-        .map(|(name, address)| {
-            let (mailbox, host) = address.split_once('@').unwrap();
-            Address {
-                name: nstring(name),
-                adl: NString(None),
-                mailbox: nstring(mailbox),
-                host: nstring(host),
-            }
-        })
-        .collect()
-}
-
-/// Every item whatever the client asked for, as a client must cope with extras.
-fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
-    let message = &stored.message;
-    let nstring = |s: &str| NString(Some(IString::try_from(s.to_owned()).unwrap()));
-    let (mailbox, host) = message.from_address.split_once('@').unwrap();
-    let from = Address {
-        name: message.from_name.map_or(NString(None), nstring),
-        adl: NString(None),
-        mailbox: nstring(mailbox),
-        host: nstring(host),
-    };
-
-    let from = if message.unparsable_from.is_some() {
-        vec![]
-    } else {
-        vec![from]
-    };
-
-    let envelope = Envelope {
-        date: NString(None),
-        subject: nstring(&message.subject),
-        from: from.clone(),
-        sender: from.clone(),
-        reply_to: from,
-        to: addresses(&message.to),
-        cc: addresses(&message.cc),
-        bcc: vec![],
-        in_reply_to: NString(None),
-        message_id: message.message_id.map_or(NString(None), nstring),
-    };
-
-    let received = chrono::DateTime::parse_from_rfc3339(&message.internal_date).unwrap();
-    let mut items = vec![
-        MessageDataItem::Uid(NonZeroU32::new(stored.uid).unwrap()),
-        MessageDataItem::Flags(flags(message.seen, message.answered)),
-        MessageDataItem::InternalDate(DateTime::try_from(received).unwrap()),
-        MessageDataItem::Envelope(envelope),
-        MessageDataItem::ModSeq(NonZeroU64::new(stored.modseq).unwrap()),
-        MessageDataItem::BodyStructure(message.body.structure()),
-    ];
-    if let Some(asked) = &asked.part {
-        items.push(body_part_item(&message.body, asked));
-    }
-
-    if asked.whole {
-        items.push(whole_body_item(message));
-    }
-
-    if let Some(section) = &asked.from_header {
-        items.push(MessageDataItem::BodyExt {
-            section: Some(section.clone()),
-            origin: None,
-            data: nstring(&format!("From: {}\r\n\r\n", message.sender_header())),
-        });
-    }
-
-    Data::Fetch {
-        seq: NonZeroU32::new(seq).unwrap(),
-        items: Vec1::try_from(items).unwrap(),
-    }
 }

@@ -12,7 +12,7 @@ use imap_next::{
     server::Server,
 };
 
-use super::{FakeMessage, Inbox, Opened, announce, code, fetched, mailbox_name};
+use super::{FakeMessage, Inbox, Opened, announce, code, fetch::fetched, mailbox_name};
 
 /// Answers a `UID MOVE`, a `UID COPY` or a `UID EXPUNGE` in the Folder
 /// `opened`, with `COPYUID` as UIDPLUS sends it, and announces the
