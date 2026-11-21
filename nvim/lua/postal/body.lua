@@ -24,16 +24,16 @@ function M.get(buf)
 	return table.concat(lines, "\n") .. "\n"
 end
 
---- Replaces the body with `text` in one undoable change, the headers as
---- they are.
-function M.set(buf, text)
+--- Adds the blank line that ends the headers when there is none, and
+--- returns the 0-based row the body starts at and whether it added one.
+function M.row(buf)
 	local first, ended = start(buf)
-	local lines = vim.split((text:gsub("\n$", "")), "\n", { plain = true })
 	if not ended then
-		table.insert(lines, 1, "")
+		vim.api.nvim_buf_set_lines(buf, first, first, false, { "" })
+		first = first + 1
 	end
 
-	vim.api.nvim_buf_set_lines(buf, first, -1, false, lines)
+	return first, not ended
 end
 
 return M

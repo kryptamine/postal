@@ -28,8 +28,9 @@ while a turn runs waits for it to end.
 
 The agent sees the Draft's file as its body alone: the client offers
 `fs/read_text_file` and `fs/write_text_file` for that one path, reading the
-buffer's body and replacing it in one undoable change, so an agent that
-edits through the client cannot touch the headers, whatever the rules say.
+buffer's body and offering a write for review hunk by hunk (ADR 0019), so
+an agent that edits through the client cannot touch the headers, whatever
+the rules say.
 Any other path is refused, there is no terminal, and every permission
 request is denied but an edit whose locations are all the Draft, allowed
 once each time, never always. A write lands in the buffer, never on disk;

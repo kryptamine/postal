@@ -39,6 +39,16 @@ function Pane:show()
 	local win = vim.api.nvim_open_win(buf, false, { split = "right", win = beside ~= -1 and beside or 0 })
 	vim.wo[win].wrap = true
 	vim.wo[win].linebreak = true
+	vim.wo[win].winbar = self.winbar or ""
+end
+
+--- A line atop the pane, kept until the next one; empty hides it.
+function Pane:status(text)
+	self.winbar = text
+	local win = self.buf and vim.fn.bufwinid(self.buf) or -1
+	if win ~= -1 then
+		vim.wo[win].winbar = text
+	end
 end
 
 local function blank(buf)

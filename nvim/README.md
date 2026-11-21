@@ -33,10 +33,18 @@ The list is what Postal has synced: run `postal` once before.
 speaks [ACP](https://agentclientprotocol.com), and asks what to change;
 `<CR>` in the pane asks again. The agent reads the Thread the Draft
 answers, from `postal thread show`, and the body as it stands each turn,
-your own edits included. Its edit replaces the body in the buffer, never
-on disk, and `u` takes it back; it cannot see or change the headers, run
+your own edits included. It cannot see or change the headers, run
 commands, or send. The Draft's text goes to whichever provider the agent
 talks to, and only once you ask.
+
+The agent's edit lands in the buffer, never on disk, for review hunk by
+hunk: its lines highlighted, the ones they replace shown over them.
+`<LocalLeader>a` accepts the hunk under the cursor and `<LocalLeader>r`
+rejects it; `<LocalLeader>A` and `<LocalLeader>R` take or reject every
+hunk left, and the pane's top line counts them. A hunk over lines you
+changed while the agent worked is a conflict: your lines stay until you
+accept the agent's, for the whole hunk. The next instruction waits for
+the review to end.
 
 ```lua
 require("postal").setup({

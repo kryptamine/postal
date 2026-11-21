@@ -1,6 +1,7 @@
 -- An ACP agent for `make smoke`, run by `nvim -l`: each turn streams a
 -- message, asks to run a command and to edit the Draft, writes elsewhere
--- and then upper-cases the body. `locked` wants a sign-in instead.
+-- and then upper-cases the body it was sent, a line `drop me` dropped.
+-- `locked` wants a sign-in.
 local log = arg[1]
 local locked = log == "locked"
 
@@ -55,10 +56,11 @@ local OPTIONS = {
 }
 
 local function turn(session, prompt)
-	local path
+	local path, sent
 	for _, block in ipairs(prompt) do
 		if block.type == "resource" and block.resource.uri:match("^file://") then
 			path = vim.uri_to_fname(block.resource.uri)
+			sent = block.resource.text
 		end
 	end
 
@@ -79,8 +81,19 @@ local function turn(session, prompt)
 	call("session/request_permission", { sessionId = session, toolCall = { toolCallId = "edit" }, options = OPTIONS })
 
 	call("fs/write_text_file", { sessionId = session, path = "/tmp/elsewhere.txt", content = "x" })
-	local read = call("fs/read_text_file", { sessionId = session, path = path })
-	call("fs/write_text_file", { sessionId = session, path = path, content = read.result.content:upper() })
+	call("fs/read_text_file", { sessionId = session, path = path })
+	-- Told `slowly`, it writes once the smoke check has edited the Draft.
+	if prompt[#prompt].text == "slowly" then
+		while not vim.uv.fs_stat(log .. ".go") do
+			vim.uv.sleep(10)
+		end
+	end
+
+	local lines = vim.tbl_filter(function(line)
+		return line ~= "drop me"
+	end, vim.split(sent, "\n", { plain = true }))
+
+	call("fs/write_text_file", { sessionId = session, path = path, content = table.concat(lines, "\n"):upper() })
 end
 
 record({ pid = vim.uv.os_getpid() })

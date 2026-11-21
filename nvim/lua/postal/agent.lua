@@ -1,9 +1,11 @@
 -- A chat with an ACP agent about one Draft buffer: its pane, its session,
--- and the one write the agent is allowed, to the Draft's body (ADR 0018).
+-- and the one write the agent is allowed, to the Draft's body, reviewed
+-- hunk by hunk (ADR 0018, 0019).
 local acp = require("postal.acp")
 local body = require("postal.body")
 local pane = require("postal.pane")
 local recipients = require("postal.recipients")
+local review = require("postal.review")
 
 local M = {}
 
@@ -83,7 +85,9 @@ function Chat:prompt(instruction)
 		end
 	end
 
-	table.insert(blocks, self:resource(vim.uri_from_fname(self.path), body.get(self.draft)))
+	self.sent = body.get(self.draft)
+	self.proposed = nil
+	table.insert(blocks, self:resource(vim.uri_from_fname(self.path), self.sent))
 	table.insert(blocks, { type = "text", text = instruction })
 	self.busy = true
 	self.conn:request("session/prompt", { sessionId = self.session, prompt = blocks }, function(failed, result)
@@ -106,10 +110,10 @@ function Chat:prompt(instruction)
 	end)
 end
 
---- Prompts with the first instruction waiting, once the session is up and
---- no turn runs.
+--- Prompts with the first instruction waiting, once the session is up, no
+--- turn runs and no edit of the agent's waits for review.
 function Chat:next()
-	if self.session and self.thread ~= nil and not self.busy and #self.queue > 0 then
+	if self.session and self.thread ~= nil and not self.busy and not self.review and #self.queue > 0 then
 		self:prompt(table.remove(self.queue, 1))
 	end
 end
@@ -117,6 +121,10 @@ end
 --- Sends `instruction` when the agent is free, the body as it is then.
 function Chat:send(instruction)
 	table.insert(self.queue, instruction)
+	if self.review then
+		self.pane:say("Sent once the agent's edit is reviewed: " .. instruction)
+	end
+
 	self:next()
 end
 
@@ -173,16 +181,51 @@ function Chat:request(method, params, respond)
 	elseif method == "session/request_permission" then
 		self:permit(params, respond)
 	elseif method == "fs/read_text_file" then
-		local lines = vim.split(body.get(self.draft), "\n", { plain = true })
+		-- The agent's last write this turn, whatever the review made of it.
+		local lines = vim.split(self.proposed or body.get(self.draft), "\n", { plain = true })
 		local first = params.line or 1
 		local last = params.limit and first + params.limit - 1 or #lines
 		respond({ content = table.concat(vim.list_slice(lines, first, last), "\n") })
 	elseif method == "fs/write_text_file" then
-		body.set(self.draft, params.content)
-		self.pane:say("Changed the body; `u` in the Draft takes it back.")
+		self:propose(params.content)
 		respond(vim.empty_dict())
 	else
 		respond(nil, { code = acp.NOT_FOUND, message = method .. " is not offered" })
+	end
+end
+
+--- Opens a review of the agent's body `text` against the one its turn was
+--- sent with; a later write in the same turn replaces the review.
+function Chat:propose(text)
+	if text ~= "" and not vim.endswith(text, "\n") then
+		text = text .. "\n"
+	end
+
+	self.proposed = text
+	if self.review then
+		self.review:settle(false, true)
+	end
+
+	self.review = review.new(self.draft, self.sent, text, function(summary)
+		self:reviewed(summary)
+	end)
+
+	if not self.review then
+		self.pane:status("")
+		self.pane:say("The agent's edit changes nothing.")
+		return
+	end
+
+	self.pane:say("The agent's edit is in the Draft for review, hunk by hunk.")
+	self:reviewed(self.review:summary())
+end
+
+--- Shows what is left to review; with nothing, sends what waits for it.
+function Chat:reviewed(summary)
+	self.pane:status(summary or "")
+	if not summary then
+		self.review = nil
+		self:next()
 	end
 end
 

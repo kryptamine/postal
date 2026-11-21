@@ -170,23 +170,95 @@ if not vim.deep_equal(outcomes, { "no", "yes", true, false, false }) then
 	fail("the agent was answered " .. vim.inspect(outcomes))
 end
 
-vim.api.nvim_buf_call(draft_buf, function()
-	vim.cmd("silent undo")
-end)
+local review = vim.api.nvim_create_namespace("postal-review")
+-- What the review shows over the Draft as virtual lines, top to bottom.
+local function virtual()
+	local lines = {}
+	for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(draft_buf, review, 0, -1, { details = true })) do
+		for _, line in ipairs(mark[4].virt_lines or {}) do
+			table.insert(lines, line[1][1])
+		end
+	end
 
-if not vim.deep_equal(body(), { "", "hi bob", "", "> Shall we meet?" }) then
-	fail("undo left " .. vim.inspect(body()))
+	return lines
 end
+
+local function shows(want)
+	if not vim.deep_equal(virtual(), want) then
+		fail("the review shows " .. vim.inspect(virtual()) .. ", not " .. vim.inspect(want))
+	end
+end
+
+local function left(want)
+	local winbar = vim.wo[vim.fn.bufwinid(pane_buf)].winbar
+	if want == "" and winbar ~= "" or not winbar:find(want, 1, true) then
+		fail("the pane says " .. vim.inspect(winbar) .. ", not " .. vim.inspect(want))
+	end
+end
+
+local function press(row, lhs)
+	vim.api.nvim_win_set_cursor(0, { row, 0 })
+	vim.cmd.normal(vim.keycode(lhs))
+end
+
+local function is(want)
+	if not vim.deep_equal(body(), want) then
+		fail("the body is " .. vim.inspect(body()) .. ", not " .. vim.inspect(want))
+	end
+end
+
+-- The agent's lines are in the buffer, the ones they replace shown over it
+shows({ "hi bob", "> Shall we meet?" })
+left("2 hunks left")
+press(4, "<LocalLeader>a")
+left("1 hunk left")
+press(6, "<LocalLeader>r")
+is({ "", "HI BOB", "", "> Shall we meet?" })
+shows({})
+left("")
 
 -- A hand edit goes with the next turn, which carries no rules again
 vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "hello bob" })
+vim.api.nvim_buf_set_lines(draft_buf, -1, -1, false, { "", "drop me" })
 instruction = "shorter"
 vim.cmd("PostalAgent")
-turn({ "", "HELLO BOB", "", "> SHALL WE MEET?" })
+turn({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
+shows({ "hello bob", "> Shall we meet?", "drop me" })
 local second = prompts()[2].params.prompt
-if #second ~= 2 or second[1].resource.text ~= "hello bob\n\n> Shall we meet?\n" or second[2].text ~= "shorter" then
+local asked = "hello bob\n\n> Shall we meet?\n\ndrop me\n"
+if #second ~= 2 or second[1].resource.text ~= asked or second[2].text ~= "shorter" then
 	fail("the second prompt is " .. vim.inspect(second))
 end
+
+-- An instruction waits for the review of the agent's last edit
+instruction = "slowly"
+vim.cmd("PostalAgent")
+vim.wait(200)
+if #prompts() ~= 2 then
+	fail("prompted while a review was open")
+end
+
+press(4, "<LocalLeader>R")
+is({ "", "hello bob", "", "> Shall we meet?", "", "drop me" })
+shows({})
+if not vim.wait(5000, function()
+	return #prompts() == 3
+end) then
+	fail("the waiting instruction was never sent")
+end
+
+-- The user's edit while the agent works is never overwritten unasked
+vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "hey bob" })
+vim.fn.writefile({}, agent_log .. ".go")
+turn({ "", "hey bob", "", "> SHALL WE MEET?", "" })
+shows({ "HELLO BOB", "> Shall we meet?", "drop me" })
+left("3 hunks left (1 conflict)")
+press(4, "<LocalLeader>a")
+left("2 hunks left")
+press(4, "<LocalLeader>A")
+is({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
+shows({})
+left("")
 
 -- An agent wanting a sign-in shows its command
 local locked = drafts .. "/3.eml"
