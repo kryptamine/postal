@@ -23,26 +23,29 @@ function M.new(mail, kind, actions)
 		self:submit()
 	end
 
-	-- `short` puts a key on the winbar; the last lists them all.
+	-- The key that lists every key, at the winbar's right.
+	self.more = {
+		modes = "n",
+		lhs = "?",
+		short = "keys",
+		desc = "list the keys",
+		run = function()
+			local groups = { { "Chat", self.keys } }
+			if kind.review then
+				table.insert(groups, { "Review, in the Draft", kind.review })
+			end
+
+			help.open(vim.api.nvim_get_current_win(), groups)
+		end,
+	}
+
+	-- `short` puts a key on the winbar.
 	self.keys = {
 		{ modes = "n", lhs = "<CR>", short = "send", desc = "send what is typed under the last Me", run = submit },
 		{ modes = { "n", "i" }, lhs = "<C-s>", desc = "send, from insert mode too", run = submit },
 		{ modes = "n", lhs = "q", short = "stop", desc = "stop the agent's turn", run = actions.stop },
 		{ modes = "n", lhs = "<C-c>", short = "end", desc = "end the chat and close the pane", run = actions.close },
-		{
-			modes = "n",
-			lhs = "?",
-			short = "keys",
-			desc = "list the keys",
-			run = function()
-				local groups = { { "Chat", self.keys } }
-				if kind.review then
-					table.insert(groups, { "Review, in the Draft", kind.review })
-				end
-
-				help.open(vim.api.nvim_get_current_win(), groups)
-			end,
-		},
+		self.more,
 	}
 
 	self:status()
@@ -150,17 +153,14 @@ function Pane:show(focus)
 end
 
 --- Shows the chat's keys on the winbar or, with `summary` of a review,
---- it, the review's keys and the one listing them all.
+--- it and the review's keys.
 function Pane:status(summary)
 	self.summary = summary
-	local win = self.buf and vim.fn.bufwinid(self.buf) or -1
-	if win ~= -1 then
-		vim.api.nvim__redraw({ win = win, winbar = true })
-	end
+	vim.cmd.redrawstatus({ bang = true })
 end
 
 --- The winbar of the pane on buffer `buf`: as many whole keys, in order,
---- as fit.
+--- as fit, and the one listing them all at the right.
 function M.winbar(buf)
 	local self = panes[buf]
 	if not self then
@@ -173,32 +173,31 @@ function M.winbar(buf)
 		return text, vim.fn.strdisplaywidth(label .. " " .. key.short)
 	end
 
-	local room = vim.api.nvim_win_get_width(0) - 2
-	local bar, keys, gap, tail = { "  " }, self.keys, "", ""
+	local more, wide = hint(self.more)
+	local bar, keys = { "  " }, self.keys
+	local room = vim.api.nvim_win_get_width(0) - wide - 5
 	if self.summary then
 		local glyph, group = icons.get("review")
 		local lead = glyph .. " " .. self.summary
-		table.insert(bar, "%#" .. group .. "#" .. lead:gsub("%%", "%%%%"))
-		keys, gap = self.kind.review, "  "
-		-- The key listing every key stays at the right, room kept for it.
-		local text, wide = hint(self.keys[#self.keys])
-		tail = "%=" .. text .. " "
-		room = room - vim.fn.strdisplaywidth(lead) - wide - 3
+		table.insert(bar, "%#" .. group .. "#" .. lead:gsub("%%", "%%%%") .. "  ")
+		room = room - vim.fn.strdisplaywidth(lead) - 2
+		keys = self.kind.review
 	end
 
+	local gap = ""
 	for _, key in ipairs(keys) do
-		if key.short then
-			local text, wide = hint(key)
-			if #gap + wide > room then
+		if key.short and key ~= self.more then
+			local text, width = hint(key)
+			if #gap + width > room then
 				break
 			end
 
 			table.insert(bar, gap .. text)
-			room, gap = room - #gap - wide, "  "
+			room, gap = room - #gap - width, "  "
 		end
 	end
 
-	return table.concat(bar) .. tail
+	return table.concat(bar) .. "%=" .. more .. " "
 end
 
 --- Names agent `who`, on the statusline and over what it says.
