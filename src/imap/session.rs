@@ -14,6 +14,7 @@ use super::{
 };
 use crate::{
     config::Config,
+    correspondence::Correspondence,
     flag,
     folder::{Folder, INBOX, Role},
     message_flags::MessageFlags,
@@ -94,12 +95,15 @@ pub trait MailServer {
     /// The Messages whose UID is at least `first`.
     async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
 
-    /// As `newest`, with nothing but each Message's envelope and date read.
-    async fn newest_envelopes(&mut self, exists: u32, count: u32)
-    -> Result<Vec<NewMessage>, Error>;
+    /// As `newest`, with nothing but each Message's UID and addresses read.
+    async fn newest_envelopes(
+        &mut self,
+        exists: u32,
+        count: u32,
+    ) -> Result<Vec<(u32, Correspondence)>, Error>;
 
-    /// As `since_uid`, with nothing but each Message's envelope and date read.
-    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
+    /// As `since_uid`, with nothing but each Message's UID and addresses read.
+    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<(u32, Correspondence)>, Error>;
 
     /// The Messages with these UIDs; a UID gone is left out.
     async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error>;
@@ -427,18 +431,16 @@ impl MailServer for ImapSession {
         &mut self,
         exists: u32,
         count: u32,
-    ) -> Result<Vec<NewMessage>, Error> {
+    ) -> Result<Vec<(u32, Correspondence)>, Error> {
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
         let command = format!("FETCH {first}:* {ENVELOPE_ITEMS}");
-        self.rows(command, |_| {}).await
+        Ok(addressed(self.rows(command, |_| {}).await?, 0))
     }
 
-    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<NewMessage>, Error> {
+    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<(u32, Correspondence)>, Error> {
         let command = format!("UID FETCH {first}:* {ENVELOPE_ITEMS}");
-        let mut messages = self.rows(command, |_| {}).await?;
         // `first:*` always matches the last Message, even below `first`.
-        messages.retain(|m| m.row.uid >= first);
-        Ok(messages)
+        Ok(addressed(self.rows(command, |_| {}).await?, first))
     }
 
     async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error> {
@@ -636,4 +638,12 @@ fn flags(fetch: &Fetch) -> MessageFlags {
         unread: !fetch.flags().any(|flag| flag == Flag::Seen),
         answered: fetch.flags().any(|flag| flag == Flag::Answered),
     }
+}
+
+/// The UID and addresses of each of `rows` from `first` on.
+fn addressed(rows: Vec<NewMessage>, first: u32) -> Vec<(u32, Correspondence)> {
+    rows.into_iter()
+        .filter(|m| m.row.uid >= first)
+        .map(|m| (m.row.uid, m.correspondence))
+        .collect()
 }

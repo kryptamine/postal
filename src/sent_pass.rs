@@ -51,12 +51,12 @@ pub async fn read(
 
     // Each was sent by the Account, from whichever address: none of those
     // is a Correspondent, and all in `To` were written to.
-    for new in &mut read {
-        new.correspondence.sent = true;
-        new.correspondence.from.clear();
+    for (_, correspondence) in &mut read {
+        correspondence.sent = true;
+        correspondence.from.clear();
     }
 
-    let last_uid = read.iter().map(|m| m.row.uid).max().max(last);
+    let last_uid = read.iter().map(|(uid, _)| *uid).max().max(last);
     let pass = SentPass {
         folder: folder.to_string(),
         uid_validity,

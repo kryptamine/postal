@@ -69,11 +69,15 @@ impl Cache {
 
     /// Learns from `read`, the Messages of the Sent pass, and keeps how far
     /// it read, in one transaction.
-    pub fn write_sent_pass(&self, pass: &SentPass, read: &[NewMessage]) -> Result<(), Error> {
+    pub fn write_sent_pass(
+        &self,
+        pass: &SentPass,
+        read: &[(u32, Correspondence)],
+    ) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            for new in read {
-                record(&transaction, self.email(), &new.correspondence)?;
+            for (_, correspondence) in read {
+                record(&transaction, self.email(), correspondence)?;
             }
 
             transaction.execute(
