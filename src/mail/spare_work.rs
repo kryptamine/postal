@@ -60,10 +60,10 @@ impl SpareWork {
         examined: &mut Option<FolderName>,
         send: &impl Fn(Update),
     ) -> Result<(), Error> {
-        if let Some((folder, below)) = self.snippets_below.clone() {
+        if let Some((folder, below)) = &self.snippets_below {
             let written = || send(Update::Inbox);
-            if !open(server, examined, &folder).await?
-                || !snippets::batch(server, cache, &folder, Some(below), written).await?
+            if !open(server, examined, folder).await?
+                || !snippets::batch(server, cache, folder, Some(*below), written).await?
             {
                 self.snippets_below = None;
             }

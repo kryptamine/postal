@@ -98,10 +98,10 @@ pub async fn listen<S: MailServer>(
             continue;
         }
 
-        let folder = steering.folder.clone();
-        if let Some(why) = resync_for(cache, &folder, &sequence, &pushed)? {
+        let folder = &steering.folder;
+        if let Some(why) = resync_for(cache, folder, &sequence, &pushed)? {
             tracing::info!("{why}: resyncing");
-            sequence = resynced(&mut server, cache, &folder, tell).await?;
+            sequence = resynced(&mut server, cache, folder, tell).await?;
             pushed = server.pushed();
             continue;
         }

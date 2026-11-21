@@ -36,11 +36,10 @@ impl Cache {
              FROM message WHERE account = ?3 AND mailbox = ?1
              ORDER BY received DESC, uid DESC LIMIT ?2"
         ))?;
-        let name = folder.clone();
         let messages = statement
             .query_map(params![folder, limit, self.email()], |row| {
                 Ok(Message {
-                    folder: Some(name.clone()),
+                    folder: Some(folder.clone()),
                     ..self.message(row)?
                 })
             })?
