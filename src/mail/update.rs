@@ -12,8 +12,7 @@ pub enum Update {
     /// The server no longer has this Folder; the sync went back to the Inbox.
     FolderGone(FolderName),
     Bodies(FolderName, Fetched),
-    /// The connection for bodies is up, or has gone down.
-    BodyLink(bool),
+    BodyLink(BodyLink),
     Rendered(PreviewKey, Preview),
     Status(Status),
     Backfill(Backfill),
@@ -25,4 +24,11 @@ pub enum Update {
     Sent,
     /// SMTP refused a Message from the Outbox: it is a Draft again.
     Refused,
+}
+
+/// The state of the connection for bodies.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum BodyLink {
+    Up,
+    Down,
 }

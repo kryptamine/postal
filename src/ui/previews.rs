@@ -16,7 +16,7 @@ use crate::{
     domain::uid::Uid,
     mail::body_fetch::{BodyRequest, Fetched, Request},
     mail::routes::Routes,
-    mail::update::Update,
+    mail::update::{BodyLink, Update},
     render::body::Body,
     render::mail_look::MailLook,
     render::preview::Preview,
@@ -318,7 +318,8 @@ impl Previews {
 
     /// Down, what was asked for will not come; back up, every body that
     /// could not come is asked for again as it is wanted.
-    pub fn link(&mut self, account: AccountId, live: bool) {
+    pub fn link(&mut self, account: AccountId, link: BodyLink) {
+        let live = link == BodyLink::Up;
         self.links[account] = if live { Link::Live } else { Link::Down };
 
         if Some(account) != self.account {

@@ -92,7 +92,7 @@ fn act(
         Some(Action::Delete) => Step::Steer(Steer::Delete),
         Some(Action::Undo) => Step::Steer(Steer::Undo),
         Some(Action::Compose) => Step::Draft(Drafting::Compose),
-        Some(Action::Reply { all }) => Step::Reply(all),
+        Some(Action::Reply(to)) => Step::Reply(to),
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
             Step::Stay

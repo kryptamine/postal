@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    account::config::IconChoice, domain::per_account::AccountId, domain::shown::Shown,
-    domain::thread_id::ThreadId, ui::exit::Exit, ui::open_outside::Outside,
+    account::config::IconChoice, compose::recipients::Recipients, domain::per_account::AccountId,
+    domain::shown::Shown, domain::thread_id::ThreadId, ui::exit::Exit, ui::open_outside::Outside,
 };
 
 /// What the event loop does after one input event.
@@ -11,8 +11,7 @@ pub enum Step {
     Links,
     Steer(Steer),
     Draft(Drafting),
-    /// Reply, or Reply All when true.
-    Reply(bool),
+    Reply(Recipients),
     Browse(Arc<str>),
     Open(Outside),
     LocalDrafts,

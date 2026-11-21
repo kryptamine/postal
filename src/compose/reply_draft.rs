@@ -2,8 +2,8 @@ use lettre::message::Mailbox;
 use mail_parser::{Address, MessageParser};
 
 use crate::{
-    domain::answering::Answering, domain::message::Message, render::body_text, render::header_date,
-    render::html_preview::Links,
+    compose::recipients::Recipients, domain::answering::Answering, domain::message::Message,
+    render::body_text, render::header_date, render::html_preview::Links,
 };
 
 /// Columns HTML is laid out in before it is quoted, so that with `> ` a
@@ -11,9 +11,14 @@ use crate::{
 const QUOTE_WIDTH: usize = 76;
 
 /// The Draft a Reply to `original` opens on, from its body `raw`, and what
-/// puts it in the Thread. Reply All, with `all`, copies everyone else the
-/// original went to but the `account`.
-pub fn reply(raw: &[u8], original: &Message, account: &str, all: bool) -> (String, Answering) {
+/// puts it in the Thread. Reply All copies everyone else the original went
+/// to but the `account`.
+pub fn reply(
+    raw: &[u8],
+    original: &Message,
+    account: &str,
+    recipients: Recipients,
+) -> (String, Answering) {
     let answering = |in_reply_to, references| Answering {
         in_reply_to,
         references,
@@ -36,7 +41,7 @@ pub fn reply(raw: &[u8], original: &Message, account: &str, all: bool) -> (Strin
     let mut cc: Vec<Mailbox> = Vec::new();
     for mailbox in mailboxes([message.to(), message.cc()])
         .into_iter()
-        .filter(|_| all)
+        .filter(|_| recipients == Recipients::All)
     {
         let address = mailbox.email.to_string();
         let taken = |m: &Mailbox| m.email.to_string().eq_ignore_ascii_case(&address);

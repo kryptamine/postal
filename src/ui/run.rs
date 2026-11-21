@@ -17,7 +17,7 @@ use crate::{
     mail::status::Status,
     mail::steering::Ask,
     mail::sync,
-    mail::update::Update,
+    mail::update::{BodyLink, Update},
     render::icons::Icons,
     ui::alloc_count,
     ui::apply,
@@ -142,7 +142,7 @@ pub async fn run(
     let mut frame_start = alloc_count::count();
     frame_start = model.first_frame(frame_start)?;
     loop {
-        let text = model.frame(true)?;
+        let text = model.frame()?;
         alloc_count::report(frame_start);
         let change = next_change(&mut model.ui, model.previews, text);
         tokio::select! {
@@ -175,23 +175,27 @@ impl Model<'_> {
     /// Draws the first frame from the rows it read, then reads the rest of
     /// the list; the next frame's allocations count from here.
     fn first_frame(&mut self, start: u64) -> Result<u64, Error> {
-        self.frame(false)?;
+        self.draw()?;
         alloc_count::report(start);
         let start = alloc_count::count();
         show(&mut self.ui.view, self.world.caches, None)?;
         Ok(start)
     }
 
-    /// Draws the screen, after readying the Previews and older pages it wants
-    /// unless on the first frame; returns where the Preview's text goes.
-    fn frame(&mut self, whole: bool) -> Result<Option<Rect>, Error> {
+    /// Readies the Previews and older pages the screen wants, then draws it;
+    /// returns where the Preview's text goes.
+    fn frame(&mut self) -> Result<Option<Rect>, Error> {
         let text = panes(self.tty.terminal, self.ui.screen.showing.mode())?
             .preview
             .map(preview_pane::text_area);
-        let caches = self.world.caches;
-        want(self.previews, caches, &self.ui, text.filter(|_| whole))?;
-        whole.then(|| self.older.want(&self.ui.view));
-        self.ui.screen.notice_write_failure(caches);
+        want(self.previews, self.world.caches, &self.ui, text)?;
+        self.older.want(&self.ui.view);
+        self.draw()?;
+        Ok(text)
+    }
+
+    fn draw(&mut self) -> Result<(), Error> {
+        self.ui.screen.notice_write_failure(self.world.caches);
         let accounts = self.world.accounts;
         draw::draw(
             self.tty.terminal,
@@ -200,7 +204,7 @@ impl Model<'_> {
             &mut self.ui,
             self.previews,
         )?;
-        Ok(text)
+        Ok(())
     }
 
     fn arrive(&mut self, account: AccountId, update: Update) -> Result<(), Error> {
@@ -245,7 +249,7 @@ impl Model<'_> {
                 ui.screen.toast = open_outside::open(to, tty, self.theme, world.caches, ui)?;
             }
             Step::Draft(drafting) => drafting::draft(drafting, &mut self.tty, ui, world)?,
-            Step::Reply(all) => drafting::reply(all, &mut self.tty, ui, world, &self.replies)?,
+            Step::Reply(to) => drafting::reply(to, &mut self.tty, ui, world, &self.replies)?,
             Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
             Step::Settings => match Settings::open(world.config_dir) {
                 Ok(settings) => ui.screen.over.settings = Some(settings),
@@ -278,7 +282,7 @@ fn opening(
     let mut screen = Screen::opening(rebuilt, statuses, failure);
     screen.outbox = world.outbox.count();
     for (account, &status) in screen.statuses.iter() {
-        (status == Status::SignedOut).then(|| previews.link(account, false));
+        (status == Status::SignedOut).then(|| previews.link(account, BodyLink::Down));
     }
 
     Ok(Ui { view, screen })

@@ -3,7 +3,7 @@ use crate::{
     mail::backfill::Backfill,
     mail::body_fetch::Request,
     mail::routes::Routes,
-    mail::update::Update,
+    mail::update::{BodyLink, Update},
     ui::inbox_view::InboxView,
 };
 
@@ -58,8 +58,8 @@ impl OlderPages {
     /// flight when the connection went down was dropped with it.
     pub fn notice(&mut self, (account, update): (AccountId, Update)) -> (AccountId, Update) {
         match &update {
-            Update::BodyLink(live) => {
-                self.live[account] = *live;
+            Update::BodyLink(link) => {
+                self.live[account] = *link == BodyLink::Up;
 
                 self.asked = false;
             }

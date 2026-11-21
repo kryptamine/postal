@@ -4,7 +4,7 @@ use crate::{
     mail::body_fetch::{Fetched, Request},
     mail::routes::Routes,
     mail::status::Status,
-    mail::update::Update,
+    mail::update::{BodyLink, Update},
 };
 
 /// Asks the fetch connection for the bodies an `AwaitedReply` waits on,
@@ -39,8 +39,8 @@ impl ReplyFetch {
         awaited: Option<&mut AwaitedReply>,
     ) -> Option<Result<(), String>> {
         let awaited = match update {
-            Update::BodyLink(live) => {
-                self.live[account] = *live;
+            Update::BodyLink(link) => {
+                self.live[account] = *link == BodyLink::Up;
 
                 if let Some(awaited) = awaited {
                     self.ask(awaited);

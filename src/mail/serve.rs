@@ -14,7 +14,7 @@ use crate::{
     mail::steering::{Ask, Steering},
     mail::sync::{self, Error},
     mail::tell::Tell,
-    mail::update::Update,
+    mail::update::{BodyLink, Update},
 };
 
 /// The connections of the Account `sender` sends from until the screen
@@ -61,8 +61,8 @@ async fn bodies(
 
     // The status slot follows the sync connection alone, but for a refused Account.
     reconnect::retry(attempt, |status| match status {
-        Status::Live => send(Update::BodyLink(true)),
-        Status::Retrying { .. } => send(Update::BodyLink(false)),
+        Status::Live => send(Update::BodyLink(BodyLink::Up)),
+        Status::Retrying { .. } => send(Update::BodyLink(BodyLink::Down)),
         Status::SignedOut => send(Update::Status(status)),
         Status::Syncing { .. } | Status::Connecting | Status::Fetching => {}
     })

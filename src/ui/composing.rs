@@ -164,7 +164,7 @@ fn answer(
 ) -> Result<(), Error> {
     let account = awaited.message.account;
     let email = accounts.email(account);
-    let (text, answering) = reply_draft::reply(raw, &awaited.message, email, awaited.all);
+    let (text, answering) = reply_draft::reply(raw, &awaited.message, email, awaited.to);
     let Some(path) = create(screen, Some(&text)) else {
         return Ok(());
     };

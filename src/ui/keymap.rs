@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::{ui::mode::Mode, ui::open_outside::Outside};
+use crate::{compose::recipients::Recipients, ui::mode::Mode, ui::open_outside::Outside};
 
 #[derive(Clone, Copy)]
 pub enum Action {
@@ -27,11 +27,8 @@ pub enum Action {
     Undo,
     /// A new Draft in `$EDITOR`.
     Compose,
-    /// A Reply's Draft in `$EDITOR`, to everyone the Message went to when
-    /// `all`.
-    Reply {
-        all: bool,
-    },
+    /// A Reply's Draft in `$EDITOR`.
+    Reply(Recipients),
     /// Hint mode on the links in the Preview window.
     Links,
     /// The other View of HTML mail: rendered or text.
@@ -767,8 +764,8 @@ const fn on_message(code: KeyCode) -> Option<Action> {
         KeyCode::Char('u') => Some(Action::Undo),
         KeyCode::Char('E') => Some(Action::Open(Outside::Editor)),
         KeyCode::Char('c') => Some(Action::Compose),
-        KeyCode::Char('r') => Some(Action::Reply { all: false }),
-        KeyCode::Char('R') => Some(Action::Reply { all: true }),
+        KeyCode::Char('r') => Some(Action::Reply(Recipients::Sender)),
+        KeyCode::Char('R') => Some(Action::Reply(Recipients::All)),
         _ => None,
     }
 }

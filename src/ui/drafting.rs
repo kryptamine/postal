@@ -1,8 +1,8 @@
 use crate::{
     compose::awaited_reply::AwaitedReply, compose::draft_notes::DraftNotes,
-    domain::message::Message, domain::per_account::AccountId, domain::shown::Shown,
-    mail::reply_fetch::ReplyFetch, ui::composing, ui::inbox_view::InboxView, ui::main_screen::Ui,
-    ui::run::Error, ui::step::Drafting, ui::tty::Tty, ui::world::World,
+    compose::recipients::Recipients, domain::message::Message, domain::per_account::AccountId,
+    domain::shown::Shown, mail::reply_fetch::ReplyFetch, ui::composing, ui::inbox_view::InboxView,
+    ui::main_screen::Ui, ui::run::Error, ui::step::Drafting, ui::tty::Tty, ui::world::World,
 };
 
 /// Compose, the editor again on the shown Draft, or its Send.
@@ -29,9 +29,9 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
     Ok(())
 }
 
-/// Reply, or Reply All when `all`, to what the screen answers.
+/// A Reply to what the screen answers.
 pub fn reply(
-    all: bool,
+    to: Recipients,
     tty: &mut Tty,
     ui: &mut Ui,
     world: World,
@@ -43,7 +43,7 @@ pub fn reply(
 
     let awaited = AwaitedReply {
         message,
-        all,
+        to,
         missing: Vec::new(),
     };
 

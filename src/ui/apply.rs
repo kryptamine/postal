@@ -8,7 +8,7 @@ use crate::{
     domain::uid::Uid,
     mail::backfill::Backfill,
     mail::status::Status,
-    mail::update::Update,
+    mail::update::{BodyLink, Update},
     ui::folder_show::{relist, show, switch},
     ui::inbox_view::InboxView,
     ui::local_list::relist_local,
@@ -44,8 +44,8 @@ pub fn apply(
             relist(ui, caches)?;
         }
         Update::Bodies(folder, fetched) => previews.fetched(account, &folder, fetched),
-        Update::BodyLink(live) => {
-            previews.link(account, live);
+        Update::BodyLink(link) => {
+            previews.link(account, link);
             ui.screen.backfill = None;
         }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
@@ -122,7 +122,7 @@ fn paged(
 /// The sync connection of `account` is in `status` now.
 fn report(screen: &mut Screen, previews: &mut Previews, account: AccountId, status: Status) {
     if status == Status::SignedOut {
-        previews.link(account, false);
+        previews.link(account, BodyLink::Down);
     }
 
     screen.statuses[account] = status;

@@ -9,5 +9,6 @@ pub mod local_drafts;
 pub mod notes;
 pub mod outbox;
 pub mod outgoing;
+pub mod recipients;
 pub mod reply_draft;
 mod unique_id;
