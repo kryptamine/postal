@@ -1,5 +1,9 @@
 # Recipients expand after the editor, from Correspondents learnt from mail
 
+Superseded by ADR 0017: recipients are completed in the editor, and
+nothing is expanded once it exits. The way Correspondents are learnt and
+ranked, below, still holds.
+
 A Draft is written in the user's own `$EDITOR`, which Postal cannot reach
 while it runs, so there is no completion as one types. Instead a recipient
 in `To:` or `Cc:` that is not an address, such as `маша` or `ivan@g`, is

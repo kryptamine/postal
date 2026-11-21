@@ -121,12 +121,8 @@ Writing a new Message with `c` from the Account of the shown Folder; in All Inbo
 _Avoid_: new mail, write
 
 **Correspondent**:
-An address an Account has mail from or has written to, with the name it goes by, as the Cache knows it; those the Account wrote to rank first. Postal learns them from mail alone and never keeps an address book.
+An address an Account has mail from or has written to, with the name it goes by, as the Cache knows it; those the Account wrote to rank first. Postal learns them from mail alone and never keeps an address book. The CLI lists them, for an editor to complete a Draft's recipients from.
 _Avoid_: contact, address book, recipient
-
-**Expand**:
-Replacing a recipient of a Draft written as words rather than an address, such as `маша` or `ivan@g`, with the Correspondent every word begins a word of, once `$EDITOR` exits. With several, the Draft's preview offers them to choose from; with none, the recipient stays as written and the Draft cannot be sent.
-_Avoid_: autocomplete, resolve, lookup
 
 **Reply**:
 Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft.
@@ -167,3 +163,7 @@ _Avoid_: service, host, backend
 **All Inboxes**:
 The Inbox of every Account in one Message List, by newest arrival, at the top of the Folder Picker and where every run starts when there is more than one Account. Every other Folder belongs to one Account.
 _Avoid_: unified inbox, combined inbox, merged view
+
+**CLI**:
+Postal's commands run from a shell or by an agent, beside the TUI or without it: `postal <noun> <verb>`, the nouns those of this glossary, each answering in a table, or in JSON with `--json`.
+_Avoid_: API, scripting mode
