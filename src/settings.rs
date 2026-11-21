@@ -6,8 +6,8 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    atomic_file,
     config::{self, IconChoice, SecretStore},
+    config_file::ConfigFile,
     onboarding::field::{self, Edit},
     partial_config::PartialConfig,
     provider::Provider,
@@ -151,7 +151,7 @@ impl Settings {
             Row::Add => return Step::AddAccount,
             Row::Icons => {
                 let icons = self.icons.next();
-                if self.change(|settings| settings.write(|config| config.icons = icons)) {
+                if self.change(|settings| settings.write(|config| config.set_icons(icons))) {
                     self.icons = icons;
                     return Step::Icons(icons);
                 }
@@ -175,7 +175,7 @@ impl Settings {
     }
 
     fn rename(&mut self, name: Option<String>) -> Result<(), Box<dyn Error>> {
-        self.write(|config| config.name.clone_from(&name))?;
+        self.write(|config| config.set_name(name.as_deref()))?;
         self.name = name;
         self.reload = true;
         Ok(())
@@ -191,7 +191,7 @@ impl Settings {
                 .map_or(Ok(()), |secret| to.write(dir, email, &secret))
         });
 
-        let written = copied.and_then(|()| self.write(|config| config.secrets = to));
+        let written = copied.and_then(|()| self.write(|config| config.set_secrets(to)));
         let (kept, dropped) = if written.is_ok() {
             (to, from)
         } else {
@@ -210,11 +210,10 @@ impl Settings {
     }
 
     /// Writes `config.toml` as it is now, with `change` made.
-    fn write(&self, change: impl FnOnce(&mut PartialConfig)) -> Result<(), Box<dyn Error>> {
-        let path = self.dir.join("config.toml");
-        let mut config = PartialConfig::load(&path)?;
+    fn write(&self, change: impl FnOnce(&mut ConfigFile)) -> Result<(), Box<dyn Error>> {
+        let mut config = ConfigFile::load(&self.dir.join("config.toml"))?;
         change(&mut config);
-        atomic_file::write(&path, config.to_toml().as_bytes(), 0o644)?;
+        config.save()?;
         Ok(())
     }
 }

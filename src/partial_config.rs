@@ -1,4 +1,4 @@
-use std::{fmt::Write, io, net::IpAddr, ops::Range, path::Path, time::Duration};
+use std::{io, net::IpAddr, ops::Range, path::Path, time::Duration};
 
 use serde::Deserialize;
 use toml::Spanned;
@@ -97,30 +97,6 @@ impl RawImap {
             tls: tls.map_or(default.tls, |tls| *tls.get_ref()),
         }
     }
-
-    const fn is_empty(&self) -> bool {
-        self.host.is_none() && self.port.is_none() && self.tls.is_none()
-    }
-
-    fn write(&self, text: &mut String, table: &str) {
-        if self.is_empty() {
-            return;
-        }
-
-        // Writing to a String cannot fail.
-        write!(text, "\n[{table}]\n").ok();
-        if let Some(host) = &self.host {
-            writeln!(text, "host = {}", toml::Value::from(host.as_str())).ok();
-        }
-
-        if let Some(port) = self.port {
-            writeln!(text, "port = {port}").ok();
-        }
-
-        if let Some(tls) = &self.tls {
-            writeln!(text, "tls = {}", tls.get_ref()).ok();
-        }
-    }
 }
 
 impl RawSmtp {
@@ -136,33 +112,6 @@ impl RawSmtp {
             port: self.port.or(base.port).unwrap_or(default.port),
             tls: tls.map_or(default.tls, |tls| *tls.get_ref()),
             starttls: self.starttls.or(base.starttls).unwrap_or(default.starttls),
-        }
-    }
-
-    const fn is_empty(&self) -> bool {
-        self.host.is_none() && self.port.is_none() && self.tls.is_none() && self.starttls.is_none()
-    }
-
-    fn write(&self, text: &mut String, table: &str) {
-        if self.is_empty() {
-            return;
-        }
-
-        write!(text, "\n[{table}]\n").ok();
-        if let Some(host) = &self.host {
-            writeln!(text, "host = {}", toml::Value::from(host.as_str())).ok();
-        }
-
-        if let Some(port) = self.port {
-            writeln!(text, "port = {port}").ok();
-        }
-
-        if let Some(tls) = &self.tls {
-            writeln!(text, "tls = {}", tls.get_ref()).ok();
-        }
-
-        if let Some(starttls) = self.starttls {
-            writeln!(text, "starttls = {starttls}").ok();
         }
     }
 }
@@ -209,15 +158,8 @@ impl PartialConfig {
     }
 
     fn parse(path: &Path, text: &str) -> Result<Self, Error> {
-        let invalid = |span: Range<usize>, message: &str| {
-            let (line, column) = line_and_column(text, span.start);
-            Error::Invalid {
-                path: path.to_owned(),
-                line,
-                column,
-                message: message.trim_end().to_owned(),
-            }
-        };
+        let invalid =
+            |span: Range<usize>, message: &str| Error::invalid(path, text, span.start, message);
 
         let raw: RawConfig =
             toml::from_str(text).map_err(|e| invalid(e.span().unwrap_or(0..0), e.message()))?;
@@ -292,34 +234,11 @@ impl PartialConfig {
         self.find(email).map(|at| self.accounts[at].provider)
     }
 
-    /// The file with this Account added, or with its Provider replaced
-    /// when the address is written already.
-    pub fn with(mut self, email: &str, provider: Provider) -> String {
-        match self.find(email) {
-            Some(at) => self.accounts[at].provider = provider,
-            None => self.accounts.push(RawAccount {
-                email: email.to_owned(),
-                provider,
-                name: None,
-                imap: RawImap::default(),
-                smtp: RawSmtp::default(),
-            }),
-        }
-
-        self.to_toml()
-    }
-
     /// Every Account named, in the order written.
     pub fn accounts(&self) -> impl Iterator<Item = (&str, Provider)> {
         self.accounts
             .iter()
             .map(|account| (account.email.as_str(), account.provider))
-    }
-
-    pub fn remove(&mut self, email: &str) {
-        if let Some(at) = self.find(email) {
-            self.accounts.remove(at);
-        }
     }
 
     fn find(&self, email: &str) -> Option<usize> {
@@ -340,87 +259,9 @@ impl PartialConfig {
             icons: self.icons,
         }
     }
-
-    /// The file `load` reads back as this; the defaults are left out.
-    pub fn to_toml(&self) -> String {
-        let mut text = String::new();
-        // Only an Account setting nothing of its own goes at the top level,
-        // where its tables would be every Account's.
-        let first = self
-            .accounts
-            .first()
-            .filter(|first| first.name.is_none() && first.imap.is_empty() && first.smtp.is_empty());
-        let more = &self.accounts[usize::from(first.is_some())..];
-        if let Some(first) = first {
-            write_account(&mut text, first);
-        }
-
-        if let Some(name) = &self.name {
-            writeln!(text, "name = {}", toml::Value::from(name.as_str())).ok();
-        }
-
-        if self.icons != IconChoice::Auto {
-            writeln!(text, "icons = \"{}\"", self.icons.key()).ok();
-        }
-
-        self.imap.write(&mut text, "imap");
-        self.smtp.write(&mut text, "smtp");
-        if matches!(self.secrets, SecretStore::File) {
-            text += "\n[secrets]\nstore = \"file\"\n";
-        }
-
-        if self.oauth != Endpoints::google() {
-            let Endpoints {
-                authorization_url,
-                token_url,
-                redirect_timeout,
-            } = &self.oauth;
-
-            write!(
-                text,
-                "\n[oauth]\nauthorization-url = {}\ntoken-url = {}\nredirect-timeout = {}\n",
-                toml::Value::from(authorization_url.as_str()),
-                toml::Value::from(token_url.as_str()),
-                redirect_timeout.as_secs()
-            )
-            .ok();
-        }
-
-        for account in more {
-            text += "\n[[account]]\n";
-            write_account(&mut text, account);
-            if let Some(name) = &account.name {
-                writeln!(text, "name = {}", toml::Value::from(name.as_str())).ok();
-            }
-
-            account.imap.write(&mut text, "account.imap");
-            account.smtp.write(&mut text, "account.smtp");
-        }
-
-        text
-    }
-}
-
-fn write_account(text: &mut String, account: &RawAccount) {
-    writeln!(
-        text,
-        "email = {}",
-        toml::Value::from(account.email.as_str())
-    )
-    .ok();
-    if account.provider != Provider::default() {
-        writeln!(text, "provider = \"{}\"", account.provider.key()).ok();
-    }
 }
 
 fn is_loopback(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost")
         || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
-}
-
-/// Both are 1-based; the column counts characters, not bytes.
-fn line_and_column(text: &str, offset: usize) -> (usize, usize) {
-    let before = text.get(..offset).unwrap_or(text);
-    let line = before.rsplit('\n').next().unwrap_or_default();
-    (before.matches('\n').count() + 1, line.chars().count() + 1)
 }

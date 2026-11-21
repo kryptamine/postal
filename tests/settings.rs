@@ -131,6 +131,31 @@ fn the_name_is_typed_in_place() {
     quit(t);
 }
 
+// A change edits its own key: the user's comments stay where they were.
+#[test]
+fn a_change_keeps_the_comments() {
+    let server = inbox();
+    let home = Home::for_server(&server);
+    let seed = format!("# hand-written\n{}", config(&home));
+    fs::write(home.config_path(), &seed).unwrap();
+    let mut t = postal(&home, false);
+    settings(&mut t);
+    t.send(Key::Down).unwrap();
+    t.send(Key::Down).unwrap();
+    t.send(Key::Enter).unwrap();
+    wait_for(|| config(&home).contains("icons = \"nerd\""));
+    assert!(
+        config(&home).starts_with("# hand-written\n"),
+        "{}",
+        config(&home)
+    );
+    // Back to the default, the key goes and the file is as it was.
+    t.send(Key::Enter).unwrap();
+    t.send(Key::Enter).unwrap();
+    wait_for(|| config(&home) == seed);
+    quit(t);
+}
+
 // A store that refuses the secrets leaves every secret where it was.
 #[test]
 fn a_refused_store_switch_changes_nothing() {

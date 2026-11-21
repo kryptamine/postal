@@ -116,6 +116,21 @@ pub enum Error {
     },
 }
 
+impl Error {
+    /// `message` about byte `offset` of the file's `text`.
+    pub fn invalid(path: &Path, text: &str, offset: usize, message: &str) -> Self {
+        let before = text.get(..offset).unwrap_or(text);
+        let line = before.rsplit('\n').next().unwrap_or_default();
+        Self::Invalid {
+            path: path.to_owned(),
+            line: before.matches('\n').count() + 1,
+            // Characters, not bytes.
+            column: line.chars().count() + 1,
+            message: message.trim_end().to_owned(),
+        }
+    }
+}
+
 impl Config {
     /// Every Account the file names; none while it is missing.
     pub fn load(path: &Path) -> Result<Vec<Self>, Error> {

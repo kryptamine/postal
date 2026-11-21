@@ -88,7 +88,6 @@ impl Consent {
         let sign_in = SignIn::OAuth(Tokens::new(grant.refresh, token_url, grant.access));
         verify(&config, &sign_in).await?;
         Ok(Granted {
-            partial: self.partial,
             config,
             sign_in,
             writes,

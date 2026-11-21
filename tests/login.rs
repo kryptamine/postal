@@ -368,7 +368,56 @@ fn tokens_never_reach_the_log() {
     }
 }
 
-// The config is written whole on login, so what it set before must stay.
+// A login adds the Account's keys and leaves the rest of the file as written.
+#[test]
+fn a_login_keeps_the_comments_and_the_layout() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let seed = fs::read_to_string(home.config_path())
+        .unwrap()
+        .replace("tls = false\n", "tls = false # loopback\n");
+    let seed = format!("# hand-written\n{seed}");
+    fs::write(home.config_path(), &seed).unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
+    grant(&query::of_url(&consent_url(&browser)));
+    t.wait_until(|s| s.contains("Signed in")).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    assert_eq!(config, format!("email = \"{EMAIL}\"\n\n{seed}"));
+}
+
+// Accounts written inline become tables, the only form a new one has.
+#[test]
+fn a_login_adds_an_account_beside_inline_ones() {
+    let server = FakeImap::start(Vec::new());
+    let oauth = FakeOAuth::start();
+    let home = seeded(&server, &oauth);
+    let seed = fs::read_to_string(home.config_path()).unwrap();
+    let inline = "account = [{ email = \"old@example.com\" }]\n\n";
+    fs::write(home.config_path(), format!("{inline}{seed}")).unwrap();
+    let browser = Browser::new();
+    let mut t = spawn(&home, &browser, &["login"]);
+    choose_google(&mut t);
+    grant(&query::of_url(&consent_url(&browser)));
+    t.wait_until(|s| s.contains("Signed in")).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    assert!(
+        config.contains("[[account]]\nemail = \"old@example.com\"\n"),
+        "{config}"
+    );
+    assert!(
+        config.contains(&format!("[[account]]\nemail = \"{EMAIL}\"\n")),
+        "{config}"
+    );
+}
+
+// What the config set before a login must stay.
 #[test]
 fn a_login_keeps_the_name_the_icons_and_the_smtp_server() {
     let server = FakeImap::start(Vec::new());
@@ -414,7 +463,7 @@ fn a_login_with_the_same_email_replaces_only_the_secret() {
     let server = FakeImap::start(Vec::new());
     let oauth = FakeOAuth::start();
     let home = signed_in(&server, &oauth);
-    // Comments survive only if the config is left alone.
+    // Not a byte of the config changes.
     let config = format!(
         "# hand-written\n{}",
         fs::read_to_string(home.config_path()).unwrap()

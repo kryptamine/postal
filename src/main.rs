@@ -22,6 +22,7 @@ mod clipboard;
 mod command_output;
 mod composing;
 mod config;
+mod config_file;
 mod correspondence;
 mod correspondent;
 mod correspondent_list;

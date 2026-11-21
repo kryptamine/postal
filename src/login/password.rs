@@ -29,7 +29,6 @@ pub async fn check_password(
     }
 
     Ok(Granted {
-        partial,
         config,
         sign_in,
         writes,

@@ -2,13 +2,11 @@ use std::path::Path;
 
 use super::Writes;
 use crate::{
-    atomic_file, cache, config::Config, partial_config::PartialConfig, provider::Provider,
-    sign_in::SignIn, xdg,
+    cache, config::Config, config_file::ConfigFile, provider::Provider, sign_in::SignIn, xdg,
 };
 
 /// A sign-in the IMAP server accepted, not yet written.
 pub struct Granted {
-    pub(super) partial: PartialConfig,
     pub(super) config: Config,
     pub(super) sign_in: SignIn,
     pub(super) writes: Writes,
@@ -47,8 +45,9 @@ impl Granted {
         }
 
         if !matches!(self.writes, Writes::SecretOnly) {
-            let text = self.partial.with(&config.email, config.provider);
-            atomic_file::write(&config_path, text.as_bytes(), 0o644)?;
+            let mut file = ConfigFile::load(&config_path)?;
+            file.set_account(&config.email, config.provider);
+            file.save()?;
         }
 
         Ok(())
