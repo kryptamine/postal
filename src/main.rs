@@ -11,6 +11,7 @@ mod backoff;
 mod body;
 mod body_fetch;
 mod body_key;
+mod body_text;
 mod border;
 mod browser;
 mod cache;

@@ -1,9 +1,9 @@
 use lettre::message::Mailbox;
-use mail_parser::{Address, MessageParser, PartType};
+use mail_parser::{Address, MessageParser};
 
 use crate::{
     answering::Answering,
-    html_preview::{self, Links},
+    body_text,
     message::Message,
     message_header::DATE,
 };
@@ -64,7 +64,7 @@ pub fn reply(raw: &[u8], original: &Message, account: &str, all: bool) -> (Strin
         "On {}, {} wrote:\n{}",
         original.received.format(DATE),
         original.sender,
-        quote(&text(&message))
+        quote(&body_text::plain(&message, QUOTE_WIDTH))
     );
     let subject = subject(message.subject().unwrap_or(&original.subject));
     (draft(&to, &cc, &subject, &said), answering(id, references))
@@ -107,25 +107,6 @@ fn mailboxes<'a>(headers: impl IntoIterator<Item = Option<&'a Address<'a>>>) -> 
             Some(Mailbox::new(addr.name().map(str::to_owned), email))
         })
         .collect()
-}
-
-/// The `text/plain` part, else the HTML one as the Text View shows it.
-fn text(message: &mail_parser::Message<'_>) -> String {
-    if let Some(PartType::Text(text)) = message.text_part(0).map(|p| &p.body) {
-        return text.to_string();
-    }
-
-    let Some(PartType::Html(html)) = message.html_part(0).map(|p| &p.body) else {
-        return String::new();
-    };
-
-    html_preview::render(html, QUOTE_WIDTH, Links::Inline).map_or_else(
-        |_| String::new(),
-        |lines| {
-            let each: Vec<&str> = lines.iter().map(|line| line.text.trim_end()).collect();
-            each.join("\n")
-        },
-    )
 }
 
 /// `text` with each line behind `> `, or behind `>` alone where it is
