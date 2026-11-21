@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stands in for `postal correspondent list --json` in `make smoke`, with the
+# Correspondents tests/nvim.rs gives the real one.
+printf '%s\n' '[{"address":"petr@example.com","name":"Petr Novak","mailbox":"Petr Novak <petr@example.com>","account":"me@example.com","written":false},{"address":"pan@example.com","name":"Peter Pan","mailbox":"Peter Pan <pan@example.com>","account":"me@example.com","written":false},{"address":"ada@example.com","name":"Ada Lovelace","mailbox":"Ada Lovelace <ada@example.com>","account":"me@example.com","written":false}]'
