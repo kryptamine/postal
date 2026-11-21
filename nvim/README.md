@@ -3,8 +3,9 @@
 Completes the recipients of a Postal Draft in `To:` and `Cc:` from the
 addresses your accounts have mail from or wrote to, best first, as
 `postal correspondent list` gives them. It works through
-[blink.cmp](https://github.com/saghen/blink.cmp) when installed, and with
-`<C-x><C-o>` without it.
+[blink.cmp](https://github.com/saghen/blink.cmp) when installed; without
+it, Neovim's own menu opens as you type (`'autocomplete'`, Neovim 0.12),
+and `<C-x><C-o>` asks for it on an older one.
 
 With [lazy.nvim](https://github.com/folke/lazy.nvim):
 

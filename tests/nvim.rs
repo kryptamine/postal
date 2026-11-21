@@ -1,6 +1,7 @@
 //! The Neovim plugin in `nvim/` completes a Draft's recipients in `To:` and
 //! `Cc:` from `postal correspondent list`, run as the real binary over a
-//! Cache the TUI synced, and offers nothing in the body. Needs `nvim`.
+//! Cache the TUI synced, as they are typed, and offers nothing in the body.
+//! Needs `nvim`.
 
 #![allow(
     clippy::unwrap_used,
@@ -35,10 +36,12 @@ local function at(row, col)
     return { start = start }
   end
   local base = vim.api.nvim_get_current_line():sub(start + 1, col)
-  return { start = start, items = omnifunc(0, base) }
+  return { start = start, items = omnifunc(0, base).words }
 end
 local answer = {
   omnifunc = vim.bo.omnifunc,
+  autocomplete = vim.bo.autocomplete,
+  complete = vim.bo.complete,
   cc = at(2, #"Cc: Ada Lovelace <ada@example.com>, pet"),
   body = at(5, #"pet"),
 }
@@ -117,6 +120,9 @@ fn a_recipient_is_completed_from_correspondents_in_the_header_alone() {
 
     let answer: Value = serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
     assert_eq!(answer["omnifunc"], "v:lua.require'postal'.omnifunc");
+    // Without blink, Neovim's own menu opens as a recipient is typed.
+    assert_eq!(answer["autocomplete"], true);
+    assert_eq!(answer["complete"], "o");
     // The recipient after the comma, not the whole header.
     let cc = &answer["cc"];
     assert_eq!(cc["start"], "Cc: Ada Lovelace <ada@example.com>, ".len());
