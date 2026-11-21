@@ -1,12 +1,11 @@
 use std::fmt::Write;
 
+use chrono::{DateTime, Datelike, FixedOffset, Timelike};
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use unicode_width::UnicodeWidthStr;
 
-use crate::{message::Message, stack_str::StackStr, theme::Theme, truncate};
+use crate::{date_group::month_of, message::Message, stack_str::StackStr, theme::Theme, truncate};
 
-/// How a header shows the date.
-pub const DATE: &str = "%a, %-d %b %Y %H:%M";
 /// The labels, padded so the values line up.
 const LABELS: [&str; 3] = ["From    ", "To      ", "Subject "];
 /// The header rows over a body, with the row under them: a rule in the
@@ -26,9 +25,22 @@ pub fn fields<'a>(theme: &Theme, message: &'a Message) -> [(&'static str, &'a st
     ]
 }
 
-pub fn date(message: &Message) -> StackStr<40> {
+/// How a header shows the date, `Mon, 18 Nov 2024 09:00`. Written by
+/// hand on the stack: chrono's `format` allocates, and a frame draws this.
+pub fn date(received: &DateTime<FixedOffset>) -> StackStr<40> {
     let mut date = StackStr::new();
-    write!(date, "{}", message.received.format(DATE)).ok();
+    let month = month_of(received.date_naive()).name();
+    write!(
+        date,
+        "{}, {} {} {} {:02}:{:02}",
+        received.weekday(),
+        received.day(),
+        month.get(..3).unwrap_or(month),
+        received.year(),
+        received.hour(),
+        received.minute()
+    )
+    .ok();
     date
 }
 
@@ -41,7 +53,7 @@ pub fn draw(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field
 
     let mut row = row;
     if field == 0 {
-        let date = date(message);
+        let date = date(&message.received);
         let width = u16::try_from(date.as_str().width()).unwrap_or(u16::MAX);
         if row.width >= LABEL_WIDTH + DATE_GAP + 2 * width {
             let x = row.right() - width;

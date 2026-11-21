@@ -22,7 +22,11 @@ fn write(
     let [from, rest @ ..] = message_header::fields(theme, message);
     field(out, from, theme)?;
     out.write_all(b"  ")?;
-    ansi::styled(out, message_header::date(message).as_str(), theme.muted)?;
+    ansi::styled(
+        out,
+        message_header::date(&message.received).as_str(),
+        theme.muted,
+    )?;
     for row in rest {
         out.write_all(b"\n")?;
         field(out, row, theme)?;

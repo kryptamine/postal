@@ -11,7 +11,7 @@ use crate::{
     command_output,
     config::Config,
     html_preview::Links,
-    message_header::DATE,
+    message_header,
     notes::Notes,
     xdg,
 };
@@ -113,7 +113,7 @@ fn text(thread: &[ThreadMessage]) -> String {
                 "From: {}\nRecipients: {}\nDate: {}\n\n{}\n",
                 kept.from,
                 kept.to,
-                kept.received.format(DATE),
+                message_header::date(&kept.received).as_str(),
                 body(kept).as_deref().unwrap_or(MISSING)
             )
         })

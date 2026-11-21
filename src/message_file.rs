@@ -9,8 +9,7 @@ use crate::{
     body_text::{self, WIDTH},
     html_preview::Links,
     message::Message,
-    message_header::DATE,
-    xdg,
+    message_header, xdg,
 };
 
 /// A Message as a read-only file for the editor in
@@ -32,7 +31,7 @@ impl MessageFile {
             "From: {}\nTo: {}\nDate: {}\nSubject: {}\n\n{}\n",
             message.from,
             message.to,
-            message.received.format(DATE),
+            message_header::date(&message.received).as_str(),
             message.subject,
             body.trim_end()
         );
