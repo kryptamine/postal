@@ -223,8 +223,13 @@ local function shows(want)
 	end
 end
 
+local function left_text()
+	local win = vim.fn.bufwinid(pane_buf)
+	return vim.api.nvim_eval_statusline(vim.wo[win].winbar, { winid = win, use_winbar = true }).str
+end
+
 local function left(want)
-	local winbar = vim.wo[vim.fn.bufwinid(pane_buf)].winbar
+	local winbar = left_text()
 	if want == "" and winbar:find("hunk") or not winbar:find(want, 1, true) then
 		fail("the pane says " .. vim.inspect(winbar) .. ", not " .. vim.inspect(want))
 	end
@@ -245,6 +250,14 @@ end
 -- The agent's lines are in the buffer, the ones they replace shown over it
 shows({ "hi bob", "> Shall we meet?" })
 left("2 hunks left")
+-- A narrow pane drops whole keys, never the count
+vim.api.nvim_win_set_width(vim.fn.bufwinid(pane_buf), 34)
+left("2 hunks left  <leader>a accept")
+if left_text():find("reject", 1, true) then
+	fail("a key that does not fit is on the winbar")
+end
+
+vim.cmd.wincmd("=")
 press(4, "<leader>a")
 left("1 hunk left")
 press(6, "<leader>r")

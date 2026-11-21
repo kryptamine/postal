@@ -10,6 +10,7 @@ local NS = vim.api.nvim_create_namespace("postal-pane")
 local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 local RULE = { { string.rep("─", 200), "PostalRule" } }
 local ME = "Me"
+local panes = {}
 local Pane = {}
 Pane.__index = Pane
 
@@ -53,7 +54,9 @@ function Pane:buffer()
 		return self.buf
 	end
 
+	panes[self.buf or -1] = nil
 	self.buf = vim.api.nvim_create_buf(false, true)
+	panes[self.buf] = self
 	self.speaker, self.open = nil, nil
 	vim.bo[self.buf].filetype = "markdown"
 	-- Highlights and conceals markdown even where no config starts treesitter.
@@ -120,7 +123,7 @@ function Pane:show(focus)
 		vim.wo[win].statuscolumn = "  "
 		vim.wo[win].conceallevel = 2
 		vim.wo[win].concealcursor = "nc"
-		vim.wo[win].winbar = self.winbar
+		vim.wo[win].winbar = "%{%v:lua.require'postal.pane'.winbar(" .. buf .. ")%}"
 	end
 
 	if focus then
@@ -129,27 +132,42 @@ function Pane:show(focus)
 	end
 end
 
---- The winbar: the keys, and `summary` at its right unless nil; a narrow
---- pane cuts the keys first.
+--- Shows the chat's keys on the winbar or, with `summary` of a review,
+--- it and the review's keys.
 function Pane:status(summary)
-	local hint = {}
-	for _, key in ipairs(self.keys) do
-		if key.short then
-			table.insert(hint, "%#PostalKey#" .. key.lhs .. "%#PostalDim# " .. key.short)
+	self.summary = summary
+	local win = self.buf and vim.fn.bufwinid(self.buf) or -1
+	if win ~= -1 then
+		vim.api.nvim__redraw({ win = win, winbar = true })
+	end
+end
+
+--- The winbar of the pane on buffer `buf`: as many whole keys as fit.
+function M.winbar(buf)
+	local self = panes[buf]
+	if not self then
+		return ""
+	end
+
+	local room = vim.api.nvim_win_get_width(0) - 2
+	local bar, keys, gap = { "  " }, self.keys, ""
+	if self.summary then
+		local glyph, group = icons.get("review")
+		local lead = glyph .. " " .. self.summary
+		table.insert(bar, "%#" .. group .. "#" .. lead:gsub("%%", "%%%%"))
+		room = room - vim.fn.strdisplaywidth(lead)
+		keys, gap = self.kind.review, "  "
+	end
+
+	for _, key in ipairs(keys) do
+		local wide = #gap + vim.fn.strdisplaywidth(key.lhs .. " " .. (key.short or ""))
+		if key.short and wide <= room then
+			table.insert(bar, gap .. "%#PostalKey#" .. key.lhs .. "%#PostalDim# " .. key.short)
+			room, gap = room - wide, "  "
 		end
 	end
 
-	local right = ""
-	if summary then
-		local glyph, group = icons.get("review")
-		right = "%#" .. group .. "#" .. glyph .. " " .. summary:gsub("%%", "%%%%") .. " "
-	end
-
-	self.winbar = "%< " .. table.concat(hint, "  ") .. "%=" .. right
-	local win = self.buf and vim.fn.bufwinid(self.buf) or -1
-	if win ~= -1 then
-		vim.wo[win].winbar = self.winbar
-	end
+	return table.concat(bar)
 end
 
 --- Shows the `## who` header at `row` in the look of `role`, `me` or
@@ -362,6 +380,7 @@ function Pane:close()
 		pcall(vim.api.nvim_win_close, win, true)
 	end
 
+	panes[self.buf] = nil
 	vim.api.nvim_buf_delete(self.buf, { force = true })
 end
 

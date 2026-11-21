@@ -18,7 +18,7 @@ local function all(accept)
 end
 
 --- The keys a review maps in its Draft's buffer while it is open; `short`
---- names one in the summary.
+--- names one in the pane's winbar.
 M.keys = {
 	{ lhs = "<leader>a", short = "accept", desc = "accept the hunk under the cursor", run = under(true) },
 	{ lhs = "<leader>r", short = "reject", desc = "reject the hunk under the cursor", run = under(false) },
@@ -222,10 +222,7 @@ function Review:summary()
 		text = text .. (" (%d %s)"):format(conflicts, conflicts == 1 and "conflict" or "conflicts")
 	end
 
-	local how = vim.tbl_map(function(key)
-		return key.lhs .. " " .. key.short
-	end, M.keys)
-	return text .. "  " .. table.concat(how, "  ")
+	return text
 end
 
 function Review:report()
