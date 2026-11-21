@@ -1,4 +1,4 @@
-// The C ABI between the litehtml cell-grid container and Rust (src/cell_grid.rs).
+// The C ABI between the litehtml cell-grid container and Rust (src/render/cell_grid.rs).
 #ifndef CELL_GRID_H
 #define CELL_GRID_H
 
@@ -38,7 +38,7 @@ enum
 // In a `bg`: the box filled has rounded corners.
 #define CG_BG_ROUND 0x04000000u
 
-// How src/mail_colours.rs moves mail colours, which the layout must know:
+// How src/render/mail_colours.rs moves mail colours, which the layout must know:
 // a background over this WCAG luminance is the page and gives way to the
 // terminal's, and a colour whose channels spread less than this is a grey.
 #define CG_PAGE_LUMINANCE 0.6f

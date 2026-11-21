@@ -96,6 +96,8 @@ checks this.
 
 ## Working here
 
+- `ARCHITECTURE.md` maps the layers of `src/` and the direction imports go;
+  a new module goes in the layer its imports say.
 - Search the repository through the `fff` MCP (`.mcp.json`), for file names and
   contents alike. It needs `fff-mcp` on `PATH`.
 - Non-trivial work starts from an issue, with scope settled there. Small fixes

@@ -221,7 +221,7 @@ chains quoted many levels deep, and 33 at 40 columns.
 ### A process of its own
 
 `postal __lay-out <cols>` reads the HTML on stdin and writes the grid on
-stdout (`src/cell_grid.rs` has the format); the render thread runs one per
+stdout (`src/render/cell_grid.rs` has the format); the render thread runs one per
 Preview and kills it after 5 s. Two reasons:
 
 - **Memory.** litehtml holds about 0.8 KB per byte of HTML while a document
@@ -237,7 +237,7 @@ Preview and kills it after 5 s. Two reasons:
 Mail colours assume a white page. Postal asks the terminal for its background
 with OSC 11 at start (DA1 behind it, so a terminal that does not answer costs
 no wait), takes a dark one when there is no answer, and moves the mail onto it
-(`src/mail_colours.rs`): a background lighter than 0.6 luminance is the page
+(`src/render/mail_colours.rs`): a background lighter than 0.6 luminance is the page
 and becomes the terminal's own; a grey section too close to the terminal's
 background becomes the terminal's too, or it would be moved into a grey slab,
 while a coloured one, or a box small enough to be a control, moves away from
@@ -246,7 +246,7 @@ in place moves until it reads (WCAG 4.5:1); a grey border on the terminal's
 background is drawn dim like Postal's own.
 
 Text on the terminal's background has a role instead of the mail's colour
-(`src/palette.rs`, applied by `src/looks.rs`), so every mail reads in the
+(`src/render/palette.rs`, applied by `src/render/looks.rs`), so every mail reads in the
 same ink:
 
 - A grey, channels under 40 apart, is ordinary text and takes the
@@ -265,7 +265,7 @@ the text colours of a mail from 2 to 1 at the median, from 5 to 3 at the
 ninth decile. The layout marks a background from a box four
 rows high or half the pane wide as a section. It reads the page and grey
 thresholds too, so they are part of the grid's format in `cpp/cell_grid.h`
-and `src/cell_grid.rs`. `NO_COLOR` keeps the layout and drops every
+and `src/render/cell_grid.rs`. `NO_COLOR` keeps the layout and drops every
 colour. No 256- or 16-colour fallback: the target is a 24-bit terminal.
 
 ### Frames for section fills
@@ -273,7 +273,7 @@ colour. No 256- or 16-colour fallback: the target is a 24-bit terminal.
 A section's fill is a slab of colour its text has to be moved against, and
 it reads differently on a light and a dark terminal. After layout, the fill
 of a section goes and a frame in its colour is drawn round it, so the text
-sits on the terminal's own background (`src/outlines.rs`, `src/region.rs`).
+sits on the terminal's own background (`src/render/outlines.rs`, `src/render/region.rs`).
 The pass works on the grid, so the layout, and what fits the pane, does not
 change.
 
@@ -322,7 +322,7 @@ tried: it framed chart bars and footer gutters and improved nothing.
 
 Mail spaces its blocks with padding, margins and empty cells, rows of
 nothing each. After the frames are drawn, a run of equal rows that show
-only the sides of the frames they cross becomes one (`src/rendered_view.rs`):
+only the sides of the frames they cross becomes one (`src/render/rendered_view.rs`):
 one blank row sets two blocks apart as well as five. A row with a fill left
 on it stays, since those rows are a drawing. On 539 cached mails at 74
 columns this cut the rows from 41594 to 34668.
@@ -330,7 +330,7 @@ columns this cut the rows from 41594 to 34668.
 A card pads its text with a blank row under the top of its frame and over
 the bottom. A row that shows only the sides of frames goes when the row
 above it shows only frames with a top corner among them, or the row below
-only frames with a bottom corner (`src/frame_padding.rs`): the frame sets
+only frames with a bottom corner (`src/render/frame_padding.rs`): the frame sets
 the card apart already.
 
 On 388 cached mails at 74 columns, the rules for empty regions, the mail's
@@ -344,7 +344,7 @@ mail drew itself, and the names cut to five letters or fewer from 195 to
 
 Every mail ends the same way, an unsubscribe link, an address, a copyright
 line, in as many styles as there are senders. The rows are drawn muted, in
-the terminal's own colours with no fill, and stay links (`src/footer.rs`).
+the terminal's own colours with no fill, and stay links (`src/render/footer.rs`).
 
 The footer starts at the first row, in the last third of the mail or its
 last 8 rows, that shows `©`, `unsubscribe`, `copyright` or `all rights

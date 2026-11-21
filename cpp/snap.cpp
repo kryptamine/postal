@@ -32,7 +32,7 @@ bool under_a_row(const css_length& l) { return !l.is_predefined() && l.units() =
 
 // A transparent border, or one the colour of the fill under it, takes no
 // room. A page-light or grey fill may give way to the terminal's background
-// (src/mail_colours.rs), and then the border is the box's shape.
+// (src/render/mail_colours.rs), and then the border is the box's shape.
 void hide_unseen(css_borders& b, uint32_t fill)
 {
     bool fill_may_go = !fill || page_light(fill) || grey(fill);
