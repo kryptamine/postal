@@ -1,0 +1,130 @@
+use std::sync::Arc;
+
+use crate::{
+    backfill::Backfill,
+    body_key::BodyKey,
+    cache::Cache,
+    folder::Folder,
+    folder_show::{relist, show, switch},
+    inbox_view::InboxView,
+    local_list::relist_local,
+    per_account::{AccountId, PerAccount},
+    previews::Previews,
+    run::Error,
+    screen::Screen,
+    showing::Showing,
+    shown::Shown,
+    status::Status,
+    toast::Toast,
+    ui::Ui,
+    uid::Uid,
+    update::Update,
+    world::World,
+};
+
+/// What one `Update` of `account` from the background work does to the screen.
+pub fn apply(
+    account: AccountId,
+    update: Update,
+    ui: &mut Ui,
+    world: World,
+    previews: &mut Previews,
+) -> Result<(), Error> {
+    let (caches, outbox) = (world.caches, world.outbox);
+    match update {
+        Update::Inbox => reshow_inbox(ui, caches)?,
+        Update::Folders => relist(ui, caches)?,
+        Update::FolderGone(folder) => {
+            if ui.view.folder.is(account, &folder) {
+                let gone = format!("Folder {} no longer exists", ui.view.folder.label());
+                // The sync connection is back on the Inbox already.
+                switch(ui, caches, Shown::Folder(Folder::inbox(account)))?;
+                ui.screen.toast = Some(Toast::new(gone));
+            }
+
+            relist(ui, caches)?;
+        }
+        Update::Bodies(folder, fetched) => previews.fetched(account, &folder, fetched),
+        Update::BodyLink(live) => {
+            previews.link(account, live);
+            ui.screen.backfill = None;
+        }
+        Update::Rendered(key, preview) => previews.rendered(key, preview),
+        Update::Status(status) => report(&mut ui.screen, previews, account, status),
+        Update::Backfill(Backfill::Fetching { done, total }) => {
+            ui.screen.backfill = Some(Status::Syncing { done, total });
+        }
+        Update::Backfill(Backfill::Paged {
+            folder,
+            nothing_below,
+        }) => {
+            ui.screen.backfill = None;
+            paged(&mut ui.view, caches, account, folder, nothing_below)?;
+        }
+        Update::NoTrash => ui.screen.toast = Some(Toast::error("no Trash Folder")),
+        Update::Unrestored => ui.screen.toast = Some(Toast::error("nothing to undo")),
+        Update::Sent => {
+            relist_local(&mut ui.screen, outbox);
+            ui.screen.outbox = outbox.count();
+            ui.screen.toast = Some(Toast::new("Sent"));
+        }
+        Update::Refused => {
+            relist_local(&mut ui.screen, outbox);
+            ui.screen.outbox = outbox.count();
+            ui.screen.toast = Some(Toast::error("refused · back in Drafts"));
+        }
+    }
+
+    Ok(())
+}
+
+/// The shown Folder again as the Cache reads it now.
+fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
+    let view = &ui.view;
+    let (thread, selected) = (view.selected_key(), view.selected_body());
+    let stack: Vec<BodyKey> = match ui.screen.showing {
+        Showing::Reading(_) => view.stack().map(|m| m.body_key).collect(),
+        Showing::List | Showing::Query => Vec::new(),
+    };
+
+    show(&mut ui.view, caches, None)?;
+    let Ui { view, screen } = &mut *ui;
+    // The labels belong to the Messages they were laid out on, and
+    // Reading to the Thread it was opened on; a Query being typed stays.
+    if screen.showing.reading().is_none() {
+        if view.selected_body() != selected {
+            screen.over.hints = None;
+        }
+    } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
+        screen.over.hints = None;
+        if let Some(reading) = screen.showing.reading_mut() {
+            reading.hold = true;
+        }
+    }
+
+    relist(ui, caches)
+}
+
+/// A page of older Messages of `folder` of `account` is in; the server had
+/// nothing below `nothing_below` when it says so.
+fn paged(
+    view: &mut InboxView,
+    caches: &PerAccount<Cache>,
+    account: AccountId,
+    folder: Arc<str>,
+    nothing_below: Option<Uid>,
+) -> Result<(), Error> {
+    view.nothing_below[account] = nothing_below.map(|uid| (folder, uid));
+
+    // In All Inboxes, an Account with nothing older sets no edge (ADR 0014).
+    show(view, caches, None)
+}
+
+/// The sync connection of `account` is in `status` now.
+fn report(screen: &mut Screen, previews: &mut Previews, account: AccountId, status: Status) {
+    if status == Status::SignedOut {
+        previews.link(account, false);
+    }
+
+    screen.statuses[account] = status;
+}

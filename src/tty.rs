@@ -14,7 +14,14 @@ pub struct Tty<'a> {
     pub events: Input,
 }
 
-impl Tty<'_> {
+impl<'a> Tty<'a> {
+    pub fn new(terminal: &'a mut Terminal<TerminalBackend>) -> Self {
+        Self {
+            terminal,
+            events: Input::new(),
+        }
+    }
+
     /// Runs `program` in the foreground with the terminal handed back, then
     /// takes the terminal again. A failure of `program` alone is only logged.
     pub fn outside(&mut self, program: impl FnOnce() -> io::Result<()>) -> Result<(), Error> {
