@@ -103,6 +103,9 @@ checks this.
 - The commit that finishes an issue closes it: `Closes #N` in the body, and
   the push to `main` closes the issue. A commit for part of one says `Refs #N`.
 - Tests land with the behaviour they cover.
+- `make` lists the targets: `make check` is lint, tests and the Neovim
+  check; `make install` puts a release build and the plugin where a user
+  has them.
 - While working, run the single test file you touch. Run the full suite once,
   as the last step before the commit: after the code review and its fixes.
 - The code is the source of truth, then the docs, then a comment. A doc that

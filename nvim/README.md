@@ -22,7 +22,9 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```
 
 While working on Postal itself, `{ dir = "~/Work/postal/nvim", config = ... }`
-picks up changes at once. `setup({ cmd = "/path/to/postal" })` runs a
+picks up changes at once. `make install` at the repository's root
+instead installs the checkout as a user runs it: a release `postal` in `~/.cargo/bin`, and a
+copy of the plugin in `~/.local/share/postal/nvim` for `dir` to point at. `setup({ cmd = "/path/to/postal" })` runs a
 `postal` that is not on `PATH`, such as `target/release/postal`.
 
 The list is what Postal has synced: run `postal` once before.
