@@ -42,12 +42,19 @@ pub async fn read(
         .sent_pass()?
         .filter(|pass| *pass.folder == *folder && pass.uid_validity == uid_validity)
         .map(|pass| pass.last_uid);
-    let read = match (last, examined.state.uid_next) {
+    let mut read = match (last, examined.state.uid_next) {
         (Some(last), Some(next)) if next <= last + 1 => Vec::new(),
         (Some(last), _) => server.envelopes_since(last + 1).await?,
         (None, _) if examined.exists == 0 => Vec::new(),
         (None, _) => server.newest_envelopes(examined.exists, WINDOW).await?,
     };
+
+    // Each was sent by the Account, from whichever address: none of those
+    // is a Correspondent, and all in `To` were written to.
+    for new in &mut read {
+        new.correspondence.sent = true;
+        new.correspondence.from.clear();
+    }
 
     let last_uid = read.iter().map(|m| m.row.uid).max().max(last);
     let pass = SentPass {

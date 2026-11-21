@@ -5,7 +5,7 @@ use rusqlite::{Connection, OpenFlags};
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 14;
+pub const VERSION: i64 = 15;
 
 const FILE: &str = "cache.sqlite3";
 

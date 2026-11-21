@@ -41,11 +41,11 @@ impl Cache {
         Ok(seen)
     }
 
-    /// Learns from a Message the Account sent at `at`.
-    pub fn sent(&self, at: DateTime<Utc>, sent: &Correspondence) -> Result<(), Error> {
+    /// Learns from a Message the Outbox sent.
+    pub fn sent(&self, sent: &Correspondence) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            record(&transaction, (self.email(), at.timestamp()), sent)?;
+            record(&transaction, self.email(), sent)?;
             transaction.commit()
         })
     }
@@ -73,8 +73,7 @@ impl Cache {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             for new in read {
-                let at = new.row.received.timestamp();
-                record(&transaction, (self.email(), at), &new.correspondence)?;
+                record(&transaction, self.email(), &new.correspondence)?;
             }
 
             transaction.execute(
@@ -104,30 +103,27 @@ pub(super) fn learn(
     }
 
     for new in rows {
-        let at = new.row.received.timestamp();
-        record(connection, (account, at), &new.correspondence)?;
+        record(connection, account, &new.correspondence)?;
     }
 
     Ok(())
 }
 
-fn record(
-    connection: &Connection,
-    (account, at): (&str, i64),
-    seen: &Correspondence,
-) -> rusqlite::Result<()> {
+fn record(connection: &Connection, account: &str, seen: &Correspondence) -> rusqlite::Result<()> {
     let mut insert = connection.prepare_cached(
         "INSERT OR IGNORE INTO correspondence (account, address, message, name, written, at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     )?;
-    for person in &seen.people {
+    let from = seen.from.iter().map(|person| (person, false));
+    let to = seen.to.iter().map(|person| (person, seen.sent));
+    for (person, written) in from.chain(to) {
         insert.execute(params![
             account,
             person.address,
             seen.message,
             person.name,
-            person.written,
-            at
+            written,
+            seen.at.timestamp()
         ])?;
     }
 

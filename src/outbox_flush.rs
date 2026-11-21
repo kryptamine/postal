@@ -5,7 +5,7 @@ use mail_parser::MessageParser;
 
 use crate::{
     cache::Cache,
-    correspondence::{Correspondence, Person},
+    correspondence::{self, Correspondence, Person},
     draft::Draft,
     folder::Role,
     imap::MailServer,
@@ -167,17 +167,19 @@ async fn submit(
     Ok(Submitted::Refused)
 }
 
-/// Everyone `draft` went out to, under the `Message-ID` of `message`, as
-/// built from it; `None` without one, as it could not be told from others.
+/// Everyone `draft` went out to, under the `Message-ID` Postal gave
+/// `message`; `None` without one, as it could not be told from others.
 fn correspondence(draft: &Draft, message: &[u8]) -> Option<Correspondence> {
     let headers = MessageParser::default().parse_headers(message)?;
-    let id = headers.message_id()?;
     let people = draft.to.iter().chain(draft.cc.iter());
     Some(Correspondence {
-        message: format!("<{id}>"),
-        people: people
-            .map(|to| Person::new(to.email.as_ref(), to.name.clone(), true))
+        message: correspondence::key(headers.message_id()?),
+        at: Utc::now(),
+        from: Vec::new(),
+        to: people
+            .map(|to| Person::new(to.email.as_ref(), to.name.clone()))
             .collect(),
+        sent: true,
     })
 }
 
@@ -196,7 +198,7 @@ fn accept(
     }
 
     if let Some(written) = written {
-        cache.sent(Utc::now(), written)?;
+        cache.sent(written)?;
     }
 
     let original = notes.answering.and_then(|answering| answering.original);

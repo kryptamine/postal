@@ -7,7 +7,7 @@ use chrono::DateTime;
 use super::{Error, Pushed, connect::Transport, tagged, text_part};
 use crate::{
     body_key::body_key,
-    correspondence::{Correspondence, Person},
+    correspondence::{self, Correspondence, Person},
     header,
     message::Message,
     message_flags::MessageFlags,
@@ -131,35 +131,30 @@ fn subject(envelope: Option<&Envelope<'_>>) -> String {
 
 /// Under its `Message-ID`, else under the body key of `row`.
 fn correspondence(envelope: Option<&Envelope<'_>>, row: &Message) -> Correspondence {
+    let listed = |addresses: Option<&Vec<Address<'_>>>| -> Vec<Person> {
+        addresses.into_iter().flatten().filter_map(person).collect()
+    };
+
+    let id = envelope.and_then(|e| e.message_id.as_deref());
+    let id = id
+        .map(String::from_utf8_lossy)
+        .filter(|id| !id.trim().is_empty());
+    let mut to = listed(envelope.and_then(|e| e.to.as_ref()));
+    to.extend(listed(envelope.and_then(|e| e.cc.as_ref())));
     Correspondence {
-        message: envelope
-            .and_then(|e| e.message_id.as_deref())
-            .map(|id| String::from_utf8_lossy(id).trim().to_owned())
-            .filter(|id| !id.is_empty())
-            .unwrap_or_else(|| format!("key:{}", row.body_key)),
-        people: envelope.map(|e| people(e, row.from_me)).unwrap_or_default(),
+        message: id.map_or_else(
+            || format!("key:{}", row.body_key),
+            |id| correspondence::key(&id),
+        ),
+        at: row.received.to_utc(),
+        from: listed(envelope.and_then(|e| e.from.as_ref())),
+        to,
+        sent: row.from_me,
     }
 }
 
-/// Everyone in `From`, `To` and `Cc`; those in `To` and `Cc` are written
-/// to when the Account sent it.
-fn people(envelope: &Envelope<'_>, from_me: bool) -> Vec<Person> {
-    let listed = |addresses: &Option<Vec<Address<'_>>>, written: bool| {
-        addresses
-            .iter()
-            .flatten()
-            .filter_map(move |a| person(a, written))
-            .collect::<Vec<_>>()
-    };
-
-    let mut people = listed(&envelope.from, false);
-    people.extend(listed(&envelope.to, from_me));
-    people.extend(listed(&envelope.cc, from_me));
-    people
-}
-
 /// `None` for a group's start or end, which has no host.
-fn person(address: &Address<'_>, written: bool) -> Option<Person> {
+fn person(address: &Address<'_>) -> Option<Person> {
     let mailbox = address.mailbox.as_deref().filter(|m| !m.is_empty())?;
     let host = address.host.as_deref().filter(|h| !h.is_empty())?;
     let email = format!(
@@ -168,7 +163,7 @@ fn person(address: &Address<'_>, written: bool) -> Option<Person> {
         String::from_utf8_lossy(host)
     );
     let name = address.name.as_deref().map(header::decode);
-    Some(Person::new(&email, name, written))
+    Some(Person::new(&email, name))
 }
 
 /// Whether the first `From` address is `email`; addresses compare without case.

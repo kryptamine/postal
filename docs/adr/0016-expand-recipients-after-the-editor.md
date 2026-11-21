@@ -21,7 +21,9 @@ the sender and recipients of each Message fetched into a Folder but Trash
 and Spam, those of each Message SMTP accepts from the Outbox, and once the
 fetch connection is quiet after it connects, the envelopes alone of the
 newest 1000 Messages in the Folder with the Sent role, which the Cache
-otherwise holds only once that Folder is shown. Messages a Thread brings
+otherwise holds only once that Folder is shown. Everything in Sent counts
+as written by the Account, from whichever of its addresses, and its sender
+is no Correspondent. Messages a Thread brings
 from other Folders are not learnt from.
 
 Every Account's Correspondents are offered, the Draft's Account's first.

@@ -300,3 +300,32 @@ fn without_a_cache_it_fails_and_creates_nothing() {
     assert!(!home.log_path().exists());
     assert!(imap.commands().is_empty());
 }
+
+#[test]
+fn mail_in_sent_from_an_alias_counts_as_written_and_the_alias_is_no_one() {
+    let imap = FakeImap::start(vec![from(
+        "Ivan Petrov",
+        "ivan@example.com",
+        "Notes",
+        "2024-11-18T09:00:00Z",
+    )]);
+    let sent = from("Me", "alias@example.com", "Plans", "2024-01-02T09:00:00Z")
+        .to("Ivan Petrov", "ivan@example.com")
+        .message_id("<plans@example.com>");
+    imap.add_folder(SENT, &["\\Sent"], vec![sent]);
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let (mut t, _editor) = postal(&home, "");
+    t.wait_until(|s| s.contains("Notes")).unwrap();
+    wait_for(|| log_says(&home, &format!("from 1 Messages of {SENT}")));
+    quit(t);
+
+    assert_eq!(
+        listed(&home, &[]),
+        [(
+            "ivan@example.com".to_owned(),
+            Some("Ivan Petrov".to_owned()),
+            true
+        )]
+    );
+}
