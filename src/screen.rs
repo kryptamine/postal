@@ -7,6 +7,7 @@ use crate::{
     inbox_view::InboxView,
     mode::Mode,
     over::{Layer, Over},
+    per_account::{AccountId, PerAccount},
     showing::Showing,
     status::Status,
     thread::Key,
@@ -20,8 +21,8 @@ pub struct Screen {
     /// Over everything, `over` included, taking every key while open.
     pub help: bool,
     pub toast: Option<Toast>,
-    /// Each Account's sync connection's, by its place in this run.
-    pub statuses: Vec<Status>,
+    /// Each Account's sync connection's.
+    pub statuses: PerAccount<Status>,
     /// A page of older Messages under way on the fetch connection.
     pub backfill: Option<Status>,
     pub showing: Showing,
@@ -37,7 +38,11 @@ pub struct Screen {
 impl Screen {
     /// `rebuilt` when opening replaced the Cache; `failure` toasts what
     /// failed before it opened.
-    pub fn opening(rebuilt: bool, statuses: Vec<Status>, failure: Option<&'static str>) -> Self {
+    pub fn opening(
+        rebuilt: bool,
+        statuses: PerAccount<Status>,
+        failure: Option<&'static str>,
+    ) -> Self {
         let toast = failure.map(Toast::error);
         Self {
             statuses,
@@ -76,8 +81,10 @@ impl Screen {
 
     /// The worst sync connection's Status, with its Account when there are
     /// several; while all are live, a Reply's fetch, else the backfill's.
-    pub fn status(&self) -> (Status, Option<usize>) {
-        let worst = (0..self.statuses.len())
+    pub fn status(&self) -> (Status, Option<AccountId>) {
+        let worst = self
+            .statuses
+            .ids()
             .rev()
             .max_by_key(|&i| self.statuses[i].rank());
         let named = worst.filter(|_| self.statuses.len() > 1);
@@ -90,13 +97,13 @@ impl Screen {
     }
 
     /// The first Account the server no longer accepts.
-    pub fn signed_out(&self) -> Option<usize> {
-        self.statuses.iter().position(|&s| s == Status::SignedOut)
+    pub fn signed_out(&self) -> Option<AccountId> {
+        self.statuses.position(|&s| s == Status::SignedOut)
     }
 
     /// A failure is toasted once: the Cache stays in memory after it.
-    pub fn notice_write_failure(&mut self, caches: &[Cache]) {
-        if caches.iter().any(Cache::take_write_failure) {
+    pub fn notice_write_failure(&mut self, caches: &PerAccount<Cache>) {
+        if caches.values().any(Cache::take_write_failure) {
             self.toast = Some(Toast::error("cache write failed"));
         }
     }

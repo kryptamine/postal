@@ -98,6 +98,7 @@ mod paint;
 mod palette;
 mod panic_hook;
 mod partial_config;
+mod per_account;
 mod picker_popup;
 mod preview;
 mod preview_pane;
@@ -184,6 +185,7 @@ use crate::{
     outbox_flush::Sender,
     outgoing::Outgoing,
     partial_config::PartialConfig,
+    per_account::PerAccount,
     previews::Previews,
     provider::Provider,
     reply_fetch::ReplyFetch,
@@ -292,11 +294,8 @@ fn try_main() -> Result<(), Box<dyn Error>> {
             match exit {
                 Exit::Quit => return Ok(()),
                 Exit::SignIn(account) => {
-                    if let (Some(config), Some(sign_in)) =
-                        (configs.get(account), sign_ins.get_mut(account))
-                    {
-                        failure = sign_in_again(slot, &dir, config, sign_in).await?;
-                    }
+                    let (config, sign_in) = (&configs[account], &mut sign_ins[account]);
+                    failure = sign_in_again(slot, &dir, config, sign_in).await?;
 
                     continue;
                 }
@@ -326,9 +325,12 @@ fn try_main() -> Result<(), Box<dyn Error>> {
 async fn opened(
     slot: &mut TerminalSlot,
     dir: &Path,
-) -> Result<(Vec<Config>, Vec<Option<SignIn>>), Box<dyn Error>> {
+) -> Result<(PerAccount<Config>, PerAccount<Option<SignIn>>), Box<dyn Error>> {
     let (configs, sign_ins): (Vec<_>, Vec<_>) = signed_in(slot, dir).await?.into_iter().unzip();
-    Ok((configs, sign_ins.into_iter().map(Some).collect()))
+    Ok((
+        configs.into_iter().collect(),
+        sign_ins.into_iter().map(Some).collect(),
+    ))
 }
 
 /// The Onboarding for `config` alone; what failed, if it did.
@@ -452,22 +454,22 @@ fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn E
 /// its sign-in; `failure` toasts what failed before it.
 async fn session(
     (slot, dir): (&mut TerminalSlot, &Path),
-    (configs, sign_ins): (&[Config], &[Option<SignIn>]),
+    (configs, sign_ins): (&PerAccount<Config>, &PerAccount<Option<SignIn>>),
     failure: Option<&'static str>,
 ) -> Result<Exit, Box<dyn Error>> {
-    let emails: Vec<&str> = configs.iter().map(|config| config.email.as_str()).collect();
+    let emails = configs.map(|config| config.email.as_str());
     let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
     // Without one, Compose says so when it is used.
     let outbox = Outbox::new(xdg::data_dir().ok());
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (mut asks, mut requests, mut works) = (Vec::new(), Vec::new(), Vec::new());
-    for (account, (config, sign_in)) in configs.iter().zip(sign_ins).enumerate() {
+    for (account, config) in configs.iter() {
         let (ask, asked) = futures::channel::mpsc::unbounded();
         let (request, requested) = futures::channel::mpsc::unbounded();
         asks.push(ask);
         requests.push(request);
         // Its channels close with their receivers: what is asked of it is dropped.
-        let Some(sign_in) = sign_in else {
+        let Some(sign_in) = &sign_ins[account] else {
             continue;
         };
 
@@ -481,7 +483,7 @@ async fn session(
             outbox: &outbox,
             outgoing: Outgoing { config },
             sign_in,
-            first: account == 0,
+            first: configs.first() == Some(account),
         };
 
         let cache = &caches[account];
@@ -494,25 +496,26 @@ async fn session(
         )));
     }
 
-    let requests = Routes::new(requests);
-    let older = OlderPages::new(requests.clone(), configs.len());
-    let replies = ReplyFetch::new(requests.clone(), configs.len());
+    let requests = Routes::new(requests.into_iter().collect());
+    let older = OlderPages::new(requests.clone(), configs.map(|_| false));
+    let replies = ReplyFetch::new(requests.clone(), configs.map(|_| false));
     let (terminal, background) = slot.take()?;
     let icons = configs
-        .first()
+        .values()
+        .next()
         .map_or(IconChoice::Auto, |config| config.icons);
     let mut theme = Theme::from_env(background, Icons::choose(icons));
-    let to_previews = (configs.len(), sender);
+    let to_previews = (configs, sender);
     let mut previews = Previews::start(requests, to_previews, theme.mail_look());
     let background = Background {
         work: futures::future::try_join_all(works).map_ok(drop),
         updates,
         older,
         replies,
-        asks: Routes::new(asks),
+        asks: Routes::new(asks.into_iter().collect()),
         accounts: Accounts(configs),
         outbox: &outbox,
-        statuses: sign_ins.iter().map(Option::as_ref).map(starting).collect(),
+        statuses: sign_ins.map(|sign_in| starting(sign_in.as_ref())),
         failure,
         config_dir: dir,
     };

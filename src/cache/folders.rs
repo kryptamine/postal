@@ -35,7 +35,7 @@ impl Cache {
 
     /// Writes what `LIST` answered: a Folder not in `listed` leaves the
     /// Cache with its rows, and the rest keep what they had.
-    pub fn list_folders(&self, listed: &[Folder]) -> Result<(), Error> {
+    pub fn list_folders(&self, listed: &[Folder<()>]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let cached: Vec<String> = transaction

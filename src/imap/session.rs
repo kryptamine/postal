@@ -71,7 +71,7 @@ pub trait MailServer {
     fn gmail(&self) -> bool;
 
     /// Every Folder the server lists that can be opened.
-    async fn folders(&mut self) -> Result<Vec<Folder>, Error>;
+    async fn folders(&mut self) -> Result<Vec<Folder<()>>, Error>;
 
     /// Unread Messages in a Folder other than the examined one, by `STATUS`.
     async fn unread_in(&mut self, folder: &str) -> Result<usize, Error>;
@@ -347,13 +347,13 @@ impl MailServer for ImapSession {
         self.gmail
     }
 
-    async fn folders(&mut self) -> Result<Vec<Folder>, Error> {
+    async fn folders(&mut self) -> Result<Vec<Folder<()>>, Error> {
         let names = self.session.list(Some(""), Some("*")).await?;
         let names: Vec<_> = names.try_collect().await?;
         let mut folders: Vec<_> = names
             .iter()
             .filter(|name| !name.attributes().contains(&NameAttribute::NoSelect))
-            .map(|name| Folder::new(0, name.name(), role(name.attributes())))
+            .map(|name| Folder::new((), name.name(), role(name.attributes())))
             .collect();
         // A `LIST` cut short by a dropped connection ends as if complete,
         // and every server lists INBOX (RFC 3501 5.1).

@@ -11,14 +11,14 @@ use rusqlite::{
 };
 
 use super::{Error, moves, schema};
+use crate::per_account::{AccountId, PerAccount};
 
 /// One Account's rows of the Cache, which every Account shares; each row
 /// names its Account by address.
 #[derive(Clone)]
 pub struct Cache {
     shared: Rc<Shared>,
-    /// The Account's place in this run.
-    account: usize,
+    account: AccountId,
     email: Arc<str>,
 }
 
@@ -33,7 +33,7 @@ struct Shared {
 
 impl Cache {
     /// The Cache in `dir`, one handle per address of `accounts`, in order.
-    pub fn open(dir: &Path, accounts: &[&str]) -> Result<Vec<Self>, Error> {
+    pub fn open(dir: &Path, accounts: &PerAccount<&str>) -> Result<PerAccount<Self>, Error> {
         let (connection, rebuilt) = schema::open(dir)?;
         moves::forget_settled(&connection)?;
         let shared = Rc::new(Shared {
@@ -45,7 +45,6 @@ impl Cache {
 
         Ok(accounts
             .iter()
-            .enumerate()
             .map(|(account, email)| Self {
                 shared: Rc::clone(&shared),
                 account,
@@ -69,7 +68,7 @@ impl Cache {
         self.shared.connection.borrow()
     }
 
-    pub(super) const fn account(&self) -> usize {
+    pub(super) const fn account(&self) -> AccountId {
         self.account
     }
 

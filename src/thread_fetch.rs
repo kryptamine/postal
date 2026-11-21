@@ -95,21 +95,21 @@ async fn all_mail(
     cache: &Cache,
     send: &impl Fn(Update),
 ) -> Result<Option<Arc<str>>, Error> {
-    let find = |folders: Vec<Folder>| {
-        folders
-            .into_iter()
-            .find(|f| f.role == Some(Role::All))
-            .map(|f| f.name)
-    };
-
-    if let Some(name) = find(cache.folders()?) {
+    if let Some(name) = all(cache.folders()?) {
         return Ok(Some(name));
     }
 
     let listed = server.folders().await?;
     cache.list_folders(&listed)?;
     send(Update::Folders);
-    Ok(find(listed))
+    Ok(all(listed))
+}
+
+fn all<A>(folders: Vec<Folder<A>>) -> Option<Arc<str>> {
+    folders
+        .into_iter()
+        .find(|f| f.role == Some(Role::All))
+        .map(|f| f.name)
 }
 
 /// The bodies of `uids`; when the server refuses the batch, each is asked

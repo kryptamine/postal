@@ -3,19 +3,20 @@ use crate::{
     folder::INBOX,
     inbox::Inbox,
     inbox_view::InboxView,
+    per_account::{AccountId, PerAccount},
 };
 
 /// Every Account's Inbox as one, newest first, its newest `limit` rows or
 /// all, ended by the latest cache edge of an Account that may hold older
 /// mail, with that Account (ADR 0014); `None` before any Inbox is resynced.
 pub fn read(
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     view: &InboxView,
     limit: Option<usize>,
-) -> Result<Option<(Inbox, Option<usize>)>, cache::Error> {
+) -> Result<Option<(Inbox, Option<AccountId>)>, cache::Error> {
     let (mut messages, mut elsewhere, mut edge) = (Vec::new(), Vec::new(), None);
     let mut synced = false;
-    for (account, cache) in caches.iter().enumerate() {
+    for (account, cache) in caches.iter() {
         let Some(inbox) = cache.inbox(INBOX, limit)? else {
             continue;
         };

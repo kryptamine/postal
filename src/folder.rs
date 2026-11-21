@@ -1,5 +1,7 @@
 use std::{cmp::Ordering, sync::Arc};
 
+use crate::per_account::AccountId;
+
 /// The Folder every run starts in, as IMAP names it in any case.
 pub const INBOX: &str = "INBOX";
 
@@ -47,9 +49,10 @@ impl Role {
 
 /// One Folder on the server, as the Folder Picker lists it.
 #[derive(Clone, Debug)]
-pub struct Folder {
-    /// The Account's place in this run; a name repeats across Accounts.
-    pub account: usize,
+pub struct Folder<A = AccountId> {
+    /// A name repeats across Accounts. `()` for a Folder the server lists,
+    /// which knows no Account: only the Cache names one.
+    pub account: A,
     /// As the server names it, in every command; nested labels in full.
     pub name: Arc<str>,
     /// `name` decoded from modified UTF-7, for people to read.
@@ -60,12 +63,14 @@ pub struct Folder {
 }
 
 impl Folder {
-    pub fn inbox(account: usize) -> Self {
+    pub fn inbox(account: AccountId) -> Self {
         Self::new(account, INBOX, None)
     }
+}
 
+impl<A> Folder<A> {
     /// The Inbox is known by its name alone (RFC 3501).
-    pub fn new(account: usize, name: &str, role: Option<Role>) -> Self {
+    pub fn new(account: A, name: &str, role: Option<Role>) -> Self {
         let inbox = name.eq_ignore_ascii_case(INBOX);
         let name: Arc<str> = if inbox { INBOX.into() } else { name.into() };
         Self {

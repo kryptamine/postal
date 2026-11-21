@@ -11,10 +11,12 @@ use crate::{
     body_fetch::{BodyRequest, Fetched, Request},
     body_key::BodyKey,
     cache::{self, Cache},
+    config::Config,
     folder,
     inbox_view::InboxView,
     mail_look::MailLook,
     message::Message,
+    per_account::{AccountId, PerAccount},
     preview::Preview,
     preview_render::{self, Job},
     rendered_previews::{PreviewKey, RenderedPreviews},
@@ -39,9 +41,9 @@ enum Link {
 
 /// Gets Previews ready: fetches bodies the Cache lacks, renders on a thread
 /// of its own, and keeps what it rendered. Its UIDs are those of `folder`
-/// of `account`.
+/// of `account`, which is `None` until a Folder is asked of.
 pub struct Previews {
-    account: usize,
+    account: Option<AccountId>,
     folder: Arc<str>,
     rendered: RenderedPreviews,
     rendering: HashSet<PreviewKey>,
@@ -54,8 +56,7 @@ pub struct Previews {
     offline: HashSet<Uid>,
     /// The placeholder of each body the server refused, until a reconnect.
     refused: HashMap<Uid, String>,
-    /// Each Account's, by its place in this run.
-    links: Vec<Link>,
+    links: PerAccount<Link>,
     look: MailLook,
     requests: Routes<Request>,
     jobs: mpsc::Sender<Job>,
@@ -65,7 +66,7 @@ impl Previews {
     /// Starts the render thread, which sends each Preview back to `updates`.
     pub fn start(
         requests: Routes<Request>,
-        (accounts, updates): (usize, UnboundedSender<(usize, Update)>),
+        (accounts, updates): (&PerAccount<Config>, UnboundedSender<(AccountId, Update)>),
         look: MailLook,
     ) -> Self {
         let (jobs, queue) = mpsc::channel::<Job>();
@@ -83,7 +84,7 @@ impl Previews {
         });
 
         Self {
-            account: 0,
+            account: None,
             folder: folder::INBOX.into(),
             rendered: RenderedPreviews::default(),
             rendering: HashSet::new(),
@@ -91,7 +92,7 @@ impl Previews {
             asked: None,
             offline: HashSet::new(),
             refused: HashMap::new(),
-            links: vec![Link::Starting; accounts],
+            links: accounts.map(|_| Link::Starting),
             look,
             requests,
             jobs,
@@ -138,7 +139,7 @@ impl Previews {
     /// When all are rendered already this does not allocate.
     pub fn want(
         &mut self,
-        caches: &[Cache],
+        caches: &PerAccount<Cache>,
         view: &InboxView,
         width: u16,
     ) -> Result<(), cache::Error> {
@@ -157,7 +158,7 @@ impl Previews {
     /// `width`, the one at `cursor` asked for first.
     pub fn want_stack(
         &mut self,
-        caches: &[Cache],
+        caches: &PerAccount<Cache>,
         view: &InboxView,
         (unfolded, cursor): (impl Fn(BodyKey) -> bool, BodyKey),
         width: u16,
@@ -176,20 +177,20 @@ impl Previews {
     /// does not allocate.
     fn ready<'m>(
         &mut self,
-        caches: &[Cache],
-        (view, folder): (&InboxView, Option<(usize, &Arc<str>)>),
+        caches: &PerAccount<Cache>,
+        (view, folder): (&InboxView, Option<(AccountId, &Arc<str>)>),
         wanted: impl Iterator<Item = (&'m Message, bool)>,
         width: u16,
     ) -> Result<(), cache::Error> {
         let shown = view.folder.folder().map(|f| (f.account, &f.name));
         let asking = folder.or(shown);
         if let Some((account, folder)) = asking
-            && (self.account != account || self.folder != *folder)
+            && (self.account != Some(account) || self.folder != *folder)
         {
             self.switch(account, folder);
         }
 
-        let live = self.links.get(self.account).copied();
+        let live = self.account.map(|account| self.links[account]);
 
         let mut request = BodyRequest {
             folder: Arc::clone(&self.folder),
@@ -238,8 +239,8 @@ impl Previews {
 
     /// Forgets what it knew by UID: those were another Folder's. Rendered
     /// Previews are kept by body, shared across Folders.
-    fn switch(&mut self, account: usize, folder: &Arc<str>) {
-        self.account = account;
+    fn switch(&mut self, account: AccountId, folder: &Arc<str>) {
+        self.account = Some(account);
         self.folder = Arc::clone(folder);
         self.fetching.clear();
         self.asked = None;
@@ -249,7 +250,7 @@ impl Previews {
 
     /// Whether `message`'s UID is one of `folder`'s.
     fn holds(&self, message: &Message) -> bool {
-        message.account == self.account && message.folder.as_deref() == Some(&*self.folder)
+        self.account == Some(message.account) && message.folder.as_deref() == Some(&*self.folder)
     }
 
     /// Whether the body of `uid` cannot come for now.
@@ -273,7 +274,9 @@ impl Previews {
         self.fetching.clear();
         self.fetching
             .extend(request.selected.iter().chain(&request.neighbours));
-        self.requests.send(self.account, Request::Bodies(request));
+        if let Some(account) = self.account {
+            self.requests.send(account, Request::Bodies(request));
+        }
     }
 
     fn render(&mut self, key: PreviewKey, body: Vec<u8>) {
@@ -290,8 +293,8 @@ impl Previews {
 
     /// Bodies fetched in `folder`; those of a Folder no longer shown are
     /// in the Cache, and no UID here waits on them.
-    pub fn fetched(&mut self, (account, folder): (usize, &str), fetched: Fetched) {
-        if self.account != account || *self.folder != *folder {
+    pub fn fetched(&mut self, (account, folder): (AccountId, &str), fetched: Fetched) {
+        if self.account != Some(account) || *self.folder != *folder {
             return;
         }
 
@@ -313,12 +316,10 @@ impl Previews {
 
     /// Down, what was asked for will not come; back up, every body that
     /// could not come is asked for again as it is wanted.
-    pub fn link(&mut self, account: usize, live: bool) {
-        if let Some(link) = self.links.get_mut(account) {
-            *link = if live { Link::Live } else { Link::Down };
-        }
+    pub fn link(&mut self, account: AccountId, live: bool) {
+        self.links[account] = if live { Link::Live } else { Link::Down };
 
-        if account != self.account {
+        if Some(account) != self.account {
             return;
         }
 

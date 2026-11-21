@@ -40,6 +40,7 @@ use crate::{
     open_outside::{self, Outside},
     outbox::Outbox,
     over::Layer,
+    per_account::{AccountId, PerAccount},
     picker_popup::PickerPopup,
     preview_pane::{self, PreviewPane},
     previews::Previews,
@@ -82,7 +83,7 @@ pub enum Exit {
     Quit,
     /// `L` asked for the login flow of this Account, run with the terminal
     /// handed back.
-    SignIn(usize),
+    SignIn(AccountId),
     /// Settings asked for the Onboarding from the Provider list.
     AddAccount,
     /// Settings asked to unlink the Account of this address.
@@ -96,7 +97,7 @@ pub enum Exit {
 /// the sync connection is asked, and where a Send leaves from.
 pub struct Background<'a, W, U> {
     pub work: W,
-    /// Each tells the Account it is of, by its place in this run.
+    /// Each tells the Account it is of.
     pub updates: U,
     pub older: OlderPages,
     pub replies: ReplyFetch,
@@ -106,7 +107,7 @@ pub struct Background<'a, W, U> {
     /// Where `config.toml` is, which Settings writes.
     pub config_dir: &'a Path,
     /// Each Account's at the start: signed out until `L` signs it in again.
-    pub statuses: Vec<Status>,
+    pub statuses: PerAccount<Status>,
     /// What failed before the TUI opened again, toasted.
     pub failure: Option<&'static str>,
 }
@@ -121,27 +122,27 @@ pub struct Background<'a, W, U> {
 pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
     theme: &mut Theme,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     previews: &mut Previews,
     background: Background<
         '_,
         impl Future<Output = Result<(), sync::Error>>,
-        impl Stream<Item = (usize, Update)> + Unpin,
+        impl Stream<Item = (AccountId, Update)> + Unpin,
     >,
 ) -> Result<Exit, Error> {
     let mut events = Input::new();
     let accounts = background.accounts;
-    let emails = accounts.0.iter().map(|config| config.email.as_str().into());
-    let mut view = InboxView::loading(emails.collect());
+    let emails = accounts.0.map(|config| config.email.as_str().into());
+    let mut view = InboxView::loading(emails);
     let rows = first_rows(terminal)?;
     show(&mut view, caches, Some(rows))?;
     let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
     let (outbox, config_dir) = (background.outbox, background.config_dir);
     let mut replies = background.replies;
-    let rebuilt = caches.iter().any(Cache::rebuilt);
+    let rebuilt = caches.values().any(Cache::rebuilt);
     let mut screen = Screen::opening(rebuilt, background.statuses, background.failure);
     screen.outbox = outbox.count();
-    for (account, &status) in screen.statuses.iter().enumerate() {
+    for (account, &status) in screen.statuses.iter() {
         (status == Status::SignedOut).then(|| previews.link(account, false));
     }
 
@@ -207,7 +208,7 @@ pub async fn run(
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Open(to) => screen.toast = open_outside::open(to, (terminal, &mut events), theme, caches, (&view, screen.showing.reading()))?,
                     step @ (Step::Compose | Step::Edit | Step::Send) => {
-                        let from = accounts.noted(composing_from(&view));
+                        let from = composing_from(&view).and_then(|account| accounts.noted(account));
                         draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
                     }
                     Step::Reply(all) => {
@@ -258,7 +259,7 @@ fn next_change(
 fn expire(
     view: &mut InboxView,
     screen: &mut Screen,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let now = Instant::now();
@@ -290,7 +291,7 @@ fn finished(result: Result<(), sync::Error>) -> Result<(), Error> {
 /// reading, once `text` is laid out.
 fn want(
     previews: &mut Previews,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     (view, screen): (&InboxView, &Screen),
     text: Option<Rect>,
 ) -> Result<(), Error> {
@@ -403,7 +404,9 @@ fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, 
             }
             Layer::Draft(preview) => {
                 // The `From` a Send adds.
-                let outgoing = accounts.outgoing(accounts.place(preview.account.as_deref()));
+                let outgoing = accounts
+                    .place(preview.account.as_deref())
+                    .map(|account| accounts.outgoing(account));
                 let from = outgoing.map(|outgoing| {
                     let email = || outgoing.config.email.clone();
                     outgoing
@@ -444,10 +447,10 @@ fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, 
 }
 
 fn apply(
-    (account, update): (usize, Update),
+    (account, update): (AccountId, Update),
     view: &mut InboxView,
     screen: &mut Screen,
-    (caches, outbox): (&[Cache], &Outbox),
+    (caches, outbox): (&PerAccount<Cache>, &Outbox),
     previews: &mut Previews,
 ) -> Result<(), Error> {
     match update {
@@ -523,26 +526,22 @@ fn apply(
 /// nothing below `nothing_below` when it says so.
 fn paged(
     view: &mut InboxView,
-    caches: &[Cache],
-    (account, folder, nothing_below): (usize, Arc<str>, Option<Uid>),
+    caches: &PerAccount<Cache>,
+    (account, folder, nothing_below): (AccountId, Arc<str>, Option<Uid>),
 ) -> Result<(), Error> {
-    if let Some(known) = view.nothing_below.get_mut(account) {
-        *known = nothing_below.map(|uid| (folder, uid));
-    }
+    view.nothing_below[account] = nothing_below.map(|uid| (folder, uid));
 
     // In All Inboxes, an Account with nothing older sets no edge (ADR 0014).
     show(view, caches, None)
 }
 
 /// The sync connection of `account` is in `status` now.
-fn report(screen: &mut Screen, previews: &mut Previews, (account, status): (usize, Status)) {
+fn report(screen: &mut Screen, previews: &mut Previews, (account, status): (AccountId, Status)) {
     if status == Status::SignedOut {
         previews.link(account, false);
     }
 
-    if let Some(was) = screen.statuses.get_mut(account) {
-        *was = status;
-    }
+    screen.statuses[account] = status;
 }
 
 /// What the event loop does after one input event.
@@ -554,7 +553,7 @@ enum Step {
     Search,
     /// Reading opened, on the Gmail Thread with this ID if it has one, of
     /// this Account: its Messages in other Folders are asked for.
-    Read(Option<(usize, ThreadId)>),
+    Read(Option<(AccountId, ThreadId)>),
     MarkUnread,
     Delete,
     Undo,
@@ -568,7 +567,7 @@ enum Step {
     Edit,
     Send,
     /// The sign-in of this Account, signed out.
-    SignIn(usize),
+    SignIn(AccountId),
     Settings,
     Icons(IconChoice),
     AddAccount,
@@ -783,7 +782,7 @@ fn dwelling(
 fn mark_read(
     view: &mut InboxView,
     screen: &mut Screen,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let unread: Vec<_> = view
@@ -803,7 +802,7 @@ fn mark_read(
 fn mark_unread(
     view: &mut InboxView,
     screen: &mut Screen,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let message = screen.showing.reading().map_or_else(
@@ -840,9 +839,9 @@ fn mark_unread(
 /// asks its sync connection to tell the server; false when none changed.
 fn mark(
     (view, screen): (&mut InboxView, &mut Screen),
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     asks: &Routes<Ask>,
-    (account, messages, unread): (usize, &[MessageRef], bool),
+    (account, messages, unread): (AccountId, &[MessageRef], bool),
 ) -> Result<bool, Error> {
     if !caches[account].mark(messages, unread)? {
         return Ok(false);
@@ -860,7 +859,7 @@ fn mark(
 fn delete(
     view: &mut InboxView,
     screen: &mut Screen,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     // A Search never shows Trash.
@@ -910,7 +909,7 @@ fn delete(
 fn undo(
     view: &mut InboxView,
     screen: &mut Screen,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     let folders = match screen.undo.pop() {
@@ -1132,7 +1131,7 @@ fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 fn switch(
     view: &mut InboxView,
     screen: &mut Screen,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     folder: Shown,
 ) -> Result<bool, Error> {
     if folder.same(&view.folder) {
@@ -1153,7 +1152,7 @@ fn steer(
     step: Step,
     view: &mut InboxView,
     screen: &mut Screen,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     // Signed out, nothing syncs and the ask is dropped.
@@ -1161,13 +1160,13 @@ fn steer(
         Step::Folders => {
             let folders = folders(caches)?;
             screen.over.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
-            for account in 0..caches.len() {
+            for account in caches.ids() {
                 asks.send(account, Ask::ListFolders);
             }
         }
         Step::Show(folder) => {
             if switch(view, screen, caches, folder)? {
-                for account in 0..caches.len() {
+                for account in caches.ids() {
                     if let Some(shown) = view.folder.of(account) {
                         asks.send(account, Ask::Show(shown.into()));
                     }
@@ -1191,9 +1190,9 @@ fn steer(
 }
 
 /// Every Account's Folders, each Account's in the Folder Picker's order.
-fn folders(caches: &[Cache]) -> Result<Vec<Folder>, Error> {
+fn folders(caches: &PerAccount<Cache>) -> Result<Vec<Folder>, Error> {
     let mut folders = Vec::new();
-    for cache in caches {
+    for cache in caches.values() {
         folders.extend(cache.folders()?);
     }
 
@@ -1201,7 +1200,7 @@ fn folders(caches: &[Cache]) -> Result<Vec<Folder>, Error> {
 }
 
 /// Lists the Folders anew in an open Folder Picker.
-fn relist(screen: &mut Screen, view: &InboxView, caches: &[Cache]) -> Result<(), Error> {
+fn relist(screen: &mut Screen, view: &InboxView, caches: &PerAccount<Cache>) -> Result<(), Error> {
     if let Some(picker) = &mut screen.over.picker {
         picker.reload(folders(caches)?, &view.folder);
     }
@@ -1211,9 +1210,9 @@ fn relist(screen: &mut Screen, view: &InboxView, caches: &[Cache]) -> Result<(),
 
 /// Every Account's Messages a Search matches, newest first, the shown
 /// Folder's copy winning in its Account, the Inbox's in All Inboxes (ADR 0010).
-fn everywhere(caches: &[Cache], shown: &Shown) -> Result<Inbox, cache::Error> {
+fn everywhere(caches: &PerAccount<Cache>, shown: &Shown) -> Result<Inbox, cache::Error> {
     let (mut messages, mut elsewhere) = (Vec::new(), Vec::new());
-    for (account, cache) in caches.iter().enumerate() {
+    for (account, cache) in caches.iter() {
         let found = cache.everywhere(shown.of(account))?;
         messages.extend(found.messages);
         elsewhere.extend(found.elsewhere);
@@ -1228,7 +1227,11 @@ fn everywhere(caches: &[Cache], shown: &Shown) -> Result<Inbox, cache::Error> {
 }
 
 /// Types the Query of a new Search over the whole Cache, or of the one under way.
-fn start_search(view: &mut InboxView, screen: &mut Screen, caches: &[Cache]) -> Result<(), Error> {
+fn start_search(
+    view: &mut InboxView,
+    screen: &mut Screen,
+    caches: &PerAccount<Cache>,
+) -> Result<(), Error> {
     let shown = view.folder.clone();
     if view.start_search(|| everywhere(caches, &shown))? {
         screen.showing = Showing::Query;
@@ -1305,14 +1308,21 @@ pub fn outside(
 
 /// The Account a Compose goes out from: the shown Folder's; in All
 /// Inboxes, the selected Thread's, else the first.
-fn composing_from(view: &InboxView) -> usize {
+fn composing_from(view: &InboxView) -> Option<AccountId> {
     match &view.folder {
-        Shown::Folder(folder) => folder.account,
-        _ => view.selected_message().map_or(0, |m| m.account),
+        Shown::Folder(folder) => Some(folder.account),
+        _ => view
+            .selected_message()
+            .map(|m| m.account)
+            .or_else(|| view.accounts.first()),
     }
 }
 
-fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<(), Error> {
+fn show(
+    view: &mut InboxView,
+    caches: &PerAccount<Cache>,
+    limit: Option<usize>,
+) -> Result<(), Error> {
     let inbox = match &view.folder {
         Shown::AllInboxes { .. } => {
             let read = all_inboxes::read(caches, view, limit)?;

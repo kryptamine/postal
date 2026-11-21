@@ -7,6 +7,7 @@ use nucleo_matcher::{
 
 use crate::{
     folder::{Folder, Role},
+    per_account::PerAccount,
     shown::Shown,
 };
 
@@ -42,9 +43,9 @@ pub enum Row<'a> {
 impl FolderPicker {
     /// Lists `folders`, with `shown` among them and selected; `accounts`
     /// are the addresses of this run.
-    pub fn new(folders: Vec<Folder>, shown: &Shown, accounts: &[Arc<str>]) -> Self {
+    pub fn new(folders: Vec<Folder>, shown: &Shown, accounts: &PerAccount<Arc<str>>) -> Self {
         let headings = if accounts.len() > 1 {
-            accounts.to_vec()
+            accounts.values().cloned().collect()
         } else {
             Vec::new()
         };
@@ -81,7 +82,7 @@ impl FolderPicker {
             _ if self.headings.is_empty() => 0,
             Shown::AllInboxes { .. } => 0,
             Shown::LocalDrafts => self.headings.len() + 1,
-            Shown::Folder(folder) => folder.account + 1,
+            Shown::Folder(folder) => folder.account.place() + 1,
         };
 
         folders.sort_by(|a, b| section(a).cmp(&section(b)).then_with(|| order(a, b)));

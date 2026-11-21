@@ -1,5 +1,10 @@
 use crate::{
-    backfill::Backfill, body_fetch::Request, inbox_view::InboxView, routes::Routes, update::Update,
+    backfill::Backfill,
+    body_fetch::Request,
+    inbox_view::InboxView,
+    per_account::{AccountId, PerAccount},
+    routes::Routes,
+    update::Update,
 };
 
 /// Rows from the end of the Message List at which the next page is asked
@@ -12,15 +17,15 @@ const NEAR_END: usize = 50;
 pub struct OlderPages {
     requests: Routes<Request>,
     /// Whether each Account's fetch connection is up.
-    live: Vec<bool>,
+    live: PerAccount<bool>,
     asked: bool,
 }
 
 impl OlderPages {
-    pub fn new(requests: Routes<Request>, accounts: usize) -> Self {
+    pub const fn new(requests: Routes<Request>, live: PerAccount<bool>) -> Self {
         Self {
             requests,
-            live: vec![false; accounts],
+            live,
             asked: false,
         }
     }
@@ -40,7 +45,7 @@ impl OlderPages {
             return;
         };
 
-        if !self.live.get(account).copied().unwrap_or(false) {
+        if !self.live[account] {
             return;
         }
 
@@ -51,12 +56,10 @@ impl OlderPages {
 
     /// Follows the fetch connection, and passes `update` on. A request in
     /// flight when the connection went down was dropped with it.
-    pub fn notice(&mut self, (account, update): (usize, Update)) -> (usize, Update) {
+    pub fn notice(&mut self, (account, update): (AccountId, Update)) -> (AccountId, Update) {
         match &update {
             Update::BodyLink(live) => {
-                if let Some(was) = self.live.get_mut(account) {
-                    *was = *live;
-                }
+                self.live[account] = *live;
 
                 self.asked = false;
             }

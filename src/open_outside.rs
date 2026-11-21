@@ -8,6 +8,7 @@ use crate::{
     message::Message,
     message_file::MessageFile,
     pager, pager_text,
+    per_account::PerAccount,
     preview_render::{self, Job},
     reading::Reading,
     rendered_previews::PreviewKey,
@@ -33,7 +34,7 @@ pub fn open(
     to: Outside,
     (terminal, events): (&mut Terminal<TerminalBackend>, &mut Input),
     theme: &Theme,
-    caches: &[Cache],
+    caches: &PerAccount<Cache>,
     (view, reading): (&InboxView, Option<&Reading>),
 ) -> Result<Option<Toast>, Error> {
     let message = reading.map_or_else(

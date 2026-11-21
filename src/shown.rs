@@ -1,5 +1,7 @@
 use crate::folder::{Folder, INBOX, Role};
 
+use crate::per_account::AccountId;
+
 /// What the Message List shows and the Folder Picker lists: a server
 /// Folder, or one of the two Postal keeps of its own.
 #[derive(Clone, Debug)]
@@ -20,7 +22,7 @@ impl Shown {
 
     /// The server Folder of `account` this shows: each Account's Inbox in
     /// All Inboxes, else a Folder's own for its Account.
-    pub fn of(&self, account: usize) -> Option<&str> {
+    pub fn of(&self, account: AccountId) -> Option<&str> {
         match self {
             Self::AllInboxes { .. } => Some(INBOX),
             Self::Folder(folder) => (account == folder.account).then_some(&*folder.name),
@@ -40,7 +42,7 @@ impl Shown {
     }
 
     /// Whether this is the server Folder `name` of `account` itself.
-    pub fn is(&self, account: usize, name: &str) -> bool {
+    pub fn is(&self, account: AccountId, name: &str) -> bool {
         self.folder()
             .is_some_and(|folder| folder.account == account && *folder.name == *name)
     }

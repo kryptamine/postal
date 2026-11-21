@@ -2,13 +2,16 @@ use std::sync::Arc;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::{body_key::BodyKey, message_ref::MessageRef, thread_id::ThreadId, uid::Uid};
+use crate::{
+    body_key::BodyKey, message_ref::MessageRef, per_account::AccountId, thread_id::ThreadId,
+    uid::Uid,
+};
 
 /// One Message as the Message List knows it.
 #[derive(Clone)]
-pub struct Message {
+pub struct Message<A = AccountId> {
     pub uid: Uid,
-    /// Where the Message's body is cached, a `BodyKey`.
+    /// Where the Message's body is cached.
     pub body_key: BodyKey,
     /// The server's `INTERNALDATE`: both the sort key and the date column.
     pub received: DateTime<FixedOffset>,
@@ -31,12 +34,12 @@ pub struct Message {
     /// The Folder `uid` is of. `None` for a Message found only with its
     /// Thread, whose body comes with the Thread, and for one not yet cached.
     pub folder: Option<Arc<str>>,
-    /// The Account's place in this run, as the Cache read the row; 0 for
-    /// one not read from it yet.
-    pub account: usize,
+    /// `()` for a Message read from the server, which knows no Account: only
+    /// the Cache names one.
+    pub account: A,
 }
 
-impl Message {
+impl<A> Message<A> {
     /// `None` for a Message found only with its Thread.
     pub fn on_server(&self) -> Option<MessageRef> {
         let folder = Arc::clone(self.folder.as_ref()?);

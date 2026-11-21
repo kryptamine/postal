@@ -11,7 +11,7 @@ const NAMES: [(Role, &[&str]); 4] = [
 
 /// Gives each role no Folder has by its special use to the Folder with one
 /// of its names; a role named by special use is never given twice.
-pub fn fill(folders: &mut [Folder]) {
+pub fn fill(folders: &mut [Folder<()>]) {
     for (role, names) in NAMES {
         if folders.iter().any(|f| f.role == Some(role)) {
             continue;

@@ -73,7 +73,7 @@ impl Widget for LocalDraftsPane<'_> {
             let from_x = list.x.saturating_add(KIND).min(list.right());
             if several {
                 let account = self.accounts.place(row.account.as_deref());
-                let from = self.accounts.email(account);
+                let from = account.map_or("", |account| self.accounts.email(account));
                 truncate::draw(buf, cell(from_x, from_width.saturating_sub(1)), from, style);
             }
 

@@ -11,6 +11,7 @@ use crate::{
     listing::Listing,
     matched::Matched,
     message::Message,
+    per_account::{AccountId, PerAccount},
     rendered_previews::PreviewKey,
     search::Search,
     shown::Shown,
@@ -24,15 +25,15 @@ pub struct InboxView {
     /// The Folder shown; on every run All Inboxes, or the Inbox with one
     /// Account.
     pub folder: Shown,
-    /// Each Account's address, by its place in this run.
-    pub accounts: Vec<Arc<str>>,
+    /// Each Account's address.
+    pub accounts: PerAccount<Arc<str>>,
     /// Each Account's Folder and its oldest cached UID, when the server had
     /// nothing older there.
-    pub nothing_below: Vec<Option<(Arc<str>, Uid)>>,
+    pub nothing_below: PerAccount<Option<(Arc<str>, Uid)>>,
     /// The Account whose cache edge ends the rows, a Backfill of which
     /// shows more: the shown Folder's; in All Inboxes, as ADR 0014 picks;
     /// `None` once the server has nothing older.
-    pub edge: Option<usize>,
+    pub edge: Option<AccountId>,
     /// The shown Folder's rows; `None` until the Cache or the server has some.
     pub list: Option<Listing>,
     /// Shows its own rows, from every Folder; `selected` and `offset` index those.
@@ -46,21 +47,20 @@ pub struct InboxView {
     /// How the Preview shows HTML mail, for every Message.
     pub html: View,
     /// The Messages shown with their Quote, by Account and body key.
-    quoted: HashSet<(usize, BodyKey)>,
+    quoted: HashSet<(AccountId, BodyKey)>,
     /// The local offset as of the last `show`: chrono's `Local` rereads the
     /// time zone every second, and that allocates inside a frame.
     zone: FixedOffset,
 }
 
 impl InboxView {
-    pub fn loading(accounts: Vec<Arc<str>>) -> Self {
+    pub fn loading(accounts: PerAccount<Arc<str>>) -> Self {
         Self {
-            folder: if accounts.len() > 1 {
-                Shown::all_inboxes()
-            } else {
-                Shown::Folder(Folder::inbox(0))
+            folder: match accounts.first() {
+                Some(first) if accounts.len() == 1 => Shown::Folder(Folder::inbox(first)),
+                _ => Shown::all_inboxes(),
             },
-            nothing_below: vec![None; accounts.len()],
+            nothing_below: accounts.map(|_| None),
             edge: None,
             accounts,
             list: None,
@@ -194,7 +194,7 @@ impl InboxView {
     pub fn bottomed(
         &self,
         cache: &Cache,
-        account: usize,
+        account: AccountId,
         folder: &str,
     ) -> Result<bool, cache::Error> {
         if cache.whole(folder)? {
@@ -205,10 +205,8 @@ impl InboxView {
             return Ok(true);
         };
 
-        Ok(self
-            .nothing_below
-            .get(account)
-            .and_then(Option::as_ref)
+        Ok(self.nothing_below[account]
+            .as_ref()
             .is_some_and(|(at, uid)| **at == *folder && *uid == oldest))
     }
 
@@ -224,7 +222,7 @@ impl InboxView {
     }
 
     /// Shows the Quote of the Message `body` of `account`, or hides it.
-    pub fn switch_quoted(&mut self, account: usize, body: BodyKey) {
+    pub fn switch_quoted(&mut self, account: AccountId, body: BodyKey) {
         if !self.quoted.remove(&(account, body)) {
             self.quoted.insert((account, body));
         }

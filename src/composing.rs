@@ -14,6 +14,7 @@ use crate::{
     message::Message,
     notes::{self, Notes},
     outbox::Outbox,
+    per_account::PerAccount,
     reply_draft,
     reply_fetch::ReplyFetch,
     routes::Routes,
@@ -73,7 +74,7 @@ pub fn reply<'a>(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    (caches, fetch): (&[Cache], &ReplyFetch),
+    (caches, fetch): (&PerAccount<Cache>, &ReplyFetch),
     (mut awaited, thread, accounts): (AwaitedReply, impl Iterator<Item = &'a Message>, Accounts),
 ) -> Result<(), Error> {
     screen.replying = None;
@@ -96,10 +97,10 @@ pub fn reply<'a>(
         }
     }
 
-    let status = screen.statuses.get(message.account);
-    let signed_out = status == Some(&Status::SignedOut);
+    let status = screen.statuses[message.account];
+    let signed_out = status == Status::SignedOut;
     match raw {
-        Some(raw) if awaited.missing.is_empty() || status != Some(&Status::Live) => {
+        Some(raw) if awaited.missing.is_empty() || status != Status::Live => {
             answer(terminal, events, screen, (&raw, &awaited, accounts))
         }
         None if message.folder.is_none() => {
@@ -136,7 +137,7 @@ pub fn fetched(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    (caches, accounts): (&[Cache], Accounts),
+    (caches, accounts): (&PerAccount<Cache>, Accounts),
 ) -> Result<(), Error> {
     let Some(awaited) = screen.replying.take() else {
         return Ok(());
@@ -242,11 +243,15 @@ pub fn send(screen: &mut Screen, (accounts, outbox): (Accounts, &Outbox), asks: 
         return;
     };
 
-    let account = accounts.place(preview.account.as_deref());
+    let Some(account) = accounts.place(preview.account.as_deref()) else {
+        preview.failure = Some("no Account to send from".to_owned());
+        screen.over.draft = Some(preview);
+        return;
+    };
+
     let built = accounts
         .outgoing(account)
-        .ok_or_else(|| "no Account to send from".to_owned())
-        .and_then(|outgoing| outgoing.build(draft, preview.answering.as_ref()));
+        .build(draft, preview.answering.as_ref());
 
     let notes = Notes {
         draft: Some(preview.text.clone()),

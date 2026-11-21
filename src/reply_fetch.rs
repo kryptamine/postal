@@ -1,6 +1,7 @@
 use crate::{
     awaited_reply::AwaitedReply,
     body_fetch::{Fetched, Request},
+    per_account::{AccountId, PerAccount},
     routes::Routes,
     status::Status,
     update::Update,
@@ -11,21 +12,18 @@ use crate::{
 pub struct ReplyFetch {
     requests: Routes<Request>,
     /// Whether each Account's fetch connection is up.
-    live: Vec<bool>,
+    live: PerAccount<bool>,
 }
 
 impl ReplyFetch {
-    pub fn new(requests: Routes<Request>, accounts: usize) -> Self {
-        Self {
-            requests,
-            live: vec![false; accounts],
-        }
+    pub const fn new(requests: Routes<Request>, live: PerAccount<bool>) -> Self {
+        Self { requests, live }
     }
 
     /// Asks now while the fetch connection is up, else once it is.
     pub fn ask(&self, awaited: &AwaitedReply) {
         let account = awaited.message.account;
-        if self.live.get(account).copied().unwrap_or(false) {
+        if self.live[account] {
             let request = Request::Reply(awaited.missing.clone());
             self.requests.send(account, request);
         }
@@ -36,14 +34,12 @@ impl ReplyFetch {
     /// `awaited` waits on, or why the answered one will not come.
     pub fn notice(
         &mut self,
-        (account, update): (usize, &Update),
+        (account, update): (AccountId, &Update),
         awaited: Option<&mut AwaitedReply>,
     ) -> Option<Result<(), String>> {
         let awaited = match update {
             Update::BodyLink(live) => {
-                if let Some(was) = self.live.get_mut(account) {
-                    *was = *live;
-                }
+                self.live[account] = *live;
 
                 if let Some(awaited) = awaited {
                     self.ask(awaited);

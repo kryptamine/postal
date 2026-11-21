@@ -107,7 +107,7 @@ fn message(
         thread,
         from_me: envelope.is_some_and(|e| from(e, email)),
         folder: None,
-        account: 0,
+        account: (),
     };
 
     let structure = attributes.iter().find_map(|a| match a {
@@ -130,7 +130,7 @@ fn subject(envelope: Option<&Envelope<'_>>) -> String {
 }
 
 /// Under its `Message-ID`, else under the body key of `row`.
-fn correspondence(envelope: Option<&Envelope<'_>>, row: &Message) -> Correspondence {
+fn correspondence(envelope: Option<&Envelope<'_>>, row: &Message<()>) -> Correspondence {
     let listed = |addresses: Option<&Vec<Address<'_>>>| -> Vec<Person> {
         addresses.into_iter().flatten().filter_map(person).collect()
     };

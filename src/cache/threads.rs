@@ -17,7 +17,7 @@ impl Cache {
     pub fn write_thread(
         &self,
         id: ThreadId,
-        (messages, learnt): (&[Message], &[Correspondence]),
+        (messages, learnt): (&[Message<()>], &[Correspondence]),
         bodies: &[(BodyKey, Vec<u8>)],
     ) -> Result<(), Error> {
         self.write(|connection| {
