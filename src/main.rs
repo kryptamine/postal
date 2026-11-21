@@ -153,7 +153,7 @@ mod xdg;
 
 use std::{
     error::Error,
-    path::{Path, PathBuf},
+    path::Path,
     process::ExitCode,
 };
 
@@ -164,7 +164,7 @@ use crate::{
     accounts::Accounts,
     body_fetch::Request,
     cache::Cache,
-    cli::Command,
+    cli::{Command, Correspondent},
     config::{Config, IconChoice},
     icons::Icons,
     imap::ImapSession,
@@ -188,66 +188,60 @@ use crate::{
     update::Update,
 };
 
-#[expect(
-    clippy::print_stderr,
-    reason = "the terminal is restored, so stderr reaches the user"
-)]
 fn main() -> ExitCode {
     if let Some(code) = render_process::serve() {
         return code;
     }
 
-    let (log, command) = match start() {
-        Ok(Some(started)) => started,
-        Ok(None) => return ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("postal: {error}");
-            return ExitCode::FAILURE;
-        }
-    };
-
-    let code = match command {
-        Command::Run => logged(&log, try_main),
-        Command::Login => logged(&log, login),
+    let log = xdg::state_dir().map(|dir| logging::path(&dir));
+    let args = cli::parse(log.as_deref().ok());
+    match args.command {
         // A command beside the TUI leaves its log alone.
-        Command::CorrespondentList(list) => match correspondent_list::run(&list) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => {
-                eprintln!("postal: {error}");
-                ExitCode::FAILURE
-            }
-        },
-    };
+        Some(Command::Correspondent {
+            verb: Correspondent::List(list),
+        }) => answered(correspondent_list::run(&list)),
+        tui => {
+            let run = if matches!(tui, Some(Command::Login)) {
+                login
+            } else {
+                try_main
+            };
+            let code = match log {
+                Ok(log) => logged(&log, args.verbose, run),
+                Err(error) => answered(Err(error.into())),
+            };
 
-    logging::flush();
-    code
+            logging::flush();
+            code
+        }
+    }
 }
 
-/// Parses the flags and opens the log; `None` once `--help` is printed.
-#[expect(clippy::print_stdout, reason = "--help prints to stdout")]
-fn start() -> Result<Option<(PathBuf, Command)>, Box<dyn std::error::Error>> {
-    let args = cli::parse(std::env::args_os().skip(1))?;
-    let log = logging::path(&xdg::state_dir()?);
-    if args.help {
-        print!("{}", cli::help(&log));
-        return Ok(None);
-    }
-
-    if !matches!(args.command, Command::CorrespondentList(_)) {
-        logging::init(&log, args.verbosity)?;
-        panic_hook::install(log.clone());
-    }
-
-    Ok(Some((log, args.command)))
+/// A command's end, its error on stderr.
+#[expect(clippy::print_stderr, reason = "a command answers on stderr")]
+fn answered(result: Result<(), Box<dyn Error>>) -> ExitCode {
+    result.map_or_else(
+        |error| {
+            eprintln!("postal: {error}");
+            ExitCode::FAILURE
+        },
+        |()| ExitCode::SUCCESS,
+    )
 }
 
 #[expect(
     clippy::print_stderr,
     reason = "the terminal is restored, so stderr reaches the user"
 )]
-fn logged(log: &Path, command: fn() -> Result<(), Box<dyn Error>>) -> ExitCode {
+fn logged(log: &Path, verbose: u8, run: fn() -> Result<(), Box<dyn Error>>) -> ExitCode {
+    if let Err(error) = logging::init(log, verbose.into()) {
+        eprintln!("postal: {error}");
+        return ExitCode::FAILURE;
+    }
+
+    panic_hook::install(log.to_owned());
     tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
-    let result = command();
+    let result = run();
     match result {
         Ok(()) => {
             tracing::info!("exiting");
