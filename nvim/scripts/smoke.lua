@@ -1,12 +1,23 @@
 -- Run by `make smoke` and tests/nvim.rs: in a bare nvim, a Draft's `Cc:`
--- completes a recipient from Postal's Correspondents, and its body nothing.
+-- completes a recipient from Postal's Correspondents, and its body nothing;
+-- `:PostalAgent` chats with a stub ACP agent about a Draft.
 local function fail(msg)
 	io.stderr:write("smoke: " .. msg .. "\n")
 	vim.cmd("cquit 1")
 end
 
 local stub = vim.fn.fnamemodify("scripts/postal-stub", ":p")
-require("postal").setup({ cmd = os.getenv("POSTAL_BIN") or stub })
+local acp_stub = vim.fn.fnamemodify("scripts/acp-stub.lua", ":p")
+local agent_log = vim.fn.tempname()
+local function acp(arg)
+	return { cmd = { vim.v.progpath, "--clean", "-l", acp_stub, arg } }
+end
+
+require("postal").setup({
+	cmd = os.getenv("POSTAL_BIN") or stub,
+	agents = { stub = acp(agent_log), locked = acp("locked") },
+	agent = "stub",
+})
 
 local drafts = vim.fn.tempname() .. "/postal/drafts"
 vim.fn.mkdir(drafts, "p")
@@ -57,6 +68,156 @@ end
 
 if at(5, #"pet") ~= -3 then
 	fail("the body offered recipients")
+end
+
+local reply = drafts .. "/2.eml"
+vim.fn.writefile({ "To: bob@example.com", "Subject: Re: Hi", "", "hi bob", "", "> Shall we meet?" }, reply)
+vim.cmd.edit(reply)
+local draft_buf = vim.api.nvim_get_current_buf()
+local function body()
+	return vim.api.nvim_buf_get_lines(draft_buf, 2, -1, false)
+end
+
+local instruction
+vim.ui.input = function(_, on_confirm)
+	on_confirm(instruction)
+end
+
+local function sent()
+	local messages = {}
+	for _, line in ipairs(vim.fn.filereadable(agent_log) == 1 and vim.fn.readfile(agent_log) or {}) do
+		table.insert(messages, vim.json.decode(line, { luanil = { object = true, array = true } }))
+	end
+
+	return messages
+end
+
+local function prompts()
+	return vim.tbl_filter(function(message)
+		return message.method == "session/prompt"
+	end, sent())
+end
+
+local function answers()
+	return vim.tbl_filter(function(message)
+		return message.id and not message.method
+	end, sent())
+end
+
+-- Each turn the stub asks twice and reads and writes thrice
+local function turn(want)
+	if not vim.wait(10000, function()
+		return vim.deep_equal(body(), want) and #answers() == 5 * #prompts()
+	end) then
+		fail("the body is " .. vim.inspect(body()) .. ", not " .. vim.inspect(want))
+	end
+end
+
+instruction = "make it formal"
+vim.cmd("PostalAgent")
+turn({ "", "HI BOB", "", "> SHALL WE MEET?" })
+if vim.api.nvim_buf_get_lines(draft_buf, 0, 2, false)[1] ~= "To: bob@example.com" then
+	fail("the headers changed")
+end
+
+local function right_pane()
+	return vim.fn.winbufnr(vim.fn.winnr("l"))
+end
+
+local pane_buf = right_pane()
+local pane = table.concat(vim.api.nvim_buf_get_lines(pane_buf, 0, -1, false), "\n")
+for _, said in ipairs({ "You: make it formal", "stub: Rewriting the body.\nDone soon.", "Denied: Run ls" }) do
+	if not pane:find(said, 1, true) then
+		fail("the pane lacks " .. vim.inspect(said) .. " in " .. vim.inspect(pane))
+	end
+end
+
+local first = prompts()[1].params.prompt
+local thread = vim.tbl_filter(function(block)
+	return block.type == "resource" and block.resource.uri:match("^postal%-thread:")
+end, first)
+
+local types = vim.tbl_map(function(block)
+	return block.type
+end, first)
+
+if not first[1].text:find(reply, 1, true) or not first[1].text:find("Never send") then
+	fail("the first prompt lacks the Draft's rules: " .. vim.inspect(first[1]))
+end
+
+-- With the real binary the Draft answers no Message, so there is no Thread
+local want_types = os.getenv("POSTAL_BIN") and { "text", "resource", "text" }
+	or { "text", "resource", "resource", "text" }
+
+if not vim.deep_equal(types, want_types) then
+	fail("the first prompt holds " .. vim.inspect(types))
+end
+
+if not os.getenv("POSTAL_BIN") and not thread[1].resource.text:find("Shall we meet?", 1, true) then
+	fail("the Thread is " .. vim.inspect(thread))
+end
+
+if first[#first - 1].resource.text ~= "hi bob\n\n> Shall we meet?\n" or first[#first].text ~= "make it formal" then
+	fail("the first prompt's body and instruction: " .. vim.inspect(first))
+end
+
+local outcomes = vim.tbl_map(function(message)
+	return message.result and message.result.outcome and message.result.outcome.optionId or message.error ~= nil
+end, answers())
+
+-- run denied, the Draft's edit allowed, a write elsewhere refused, the read and the write answered
+if not vim.deep_equal(outcomes, { "no", "yes", true, false, false }) then
+	fail("the agent was answered " .. vim.inspect(outcomes))
+end
+
+vim.api.nvim_buf_call(draft_buf, function()
+	vim.cmd("silent undo")
+end)
+
+if not vim.deep_equal(body(), { "", "hi bob", "", "> Shall we meet?" }) then
+	fail("undo left " .. vim.inspect(body()))
+end
+
+-- A hand edit goes with the next turn, which carries no rules again
+vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "hello bob" })
+instruction = "shorter"
+vim.cmd("PostalAgent")
+turn({ "", "HELLO BOB", "", "> SHALL WE MEET?" })
+local second = prompts()[2].params.prompt
+if #second ~= 2 or second[1].resource.text ~= "hello bob\n\n> Shall we meet?\n" or second[2].text ~= "shorter" then
+	fail("the second prompt is " .. vim.inspect(second))
+end
+
+-- An agent wanting a sign-in shows its command
+local locked = drafts .. "/3.eml"
+vim.fn.writefile({ "To: bob@example.com", "", "hi" }, locked)
+vim.cmd.edit(locked)
+local locked_buf = vim.api.nvim_get_current_buf()
+instruction = "anything"
+vim.cmd("PostalAgent locked")
+local locked_pane = right_pane()
+if
+	not vim.wait(10000, function()
+		local said = table.concat(vim.api.nvim_buf_get_lines(locked_pane, 0, -1, false), "\n")
+		return said:find("Run `acp-stub login`.", 1, true) ~= nil
+	end)
+then
+	fail("no sign-in shown: " .. vim.inspect(vim.api.nvim_buf_get_lines(locked_pane, 0, -1, false)))
+end
+
+vim.cmd("bwipeout! " .. locked_buf)
+
+-- The session ends with its Draft's buffer
+vim.cmd("bwipeout! " .. draft_buf)
+if vim.api.nvim_buf_is_valid(pane_buf) then
+	fail("the pane outlived its Draft")
+end
+
+local pid = sent()[1].pid
+if not vim.wait(5000, function()
+	return vim.uv.kill(pid, 0) ~= 0
+end) then
+	fail("the agent outlived its Draft")
 end
 
 io.stdout:write("smoke: ok\n")

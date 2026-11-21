@@ -68,8 +68,9 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   `modernize` as errors (`.clang-tidy`, flags in `compile_flags.txt`).
 - **`make -C nvim check` passes after a change to `nvim/`**: `stylua`
   formats and checks the Lua (`nvim/.stylua.toml`), and `make smoke` runs
-  `nvim/scripts/smoke.lua` in a bare headless Neovim against a stub `postal`.
-  `tests/nvim.rs` runs the same check with the real binary; both need `nvim`.
+  `nvim/scripts/smoke.lua` in a bare headless Neovim against a stub `postal`
+  and a stub ACP agent. `tests/nvim.rs` runs the same check with the real
+  binary; both need `nvim`.
 - **`scripts/sanitize.sh` passes after a change to `cpp/` or `vendor/`**: it
   lays out every cached HTML mail under ASan and UBSan.
 - **A review finding a linter could have caught becomes a rule.** Where a lint

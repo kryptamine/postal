@@ -27,5 +27,31 @@ picks up changes at once. `setup({ cmd = "/path/to/postal" })` runs a
 
 The list is what Postal has synced: run `postal` once before.
 
-`make check` formats, lints and runs the headless smoke check, the gate
-before a commit; `make` lists every target.
+## Writing with an agent
+
+`:PostalAgent` in a Draft opens a chat pane beside it with an agent that
+speaks [ACP](https://agentclientprotocol.com), and asks what to change;
+`<CR>` in the pane asks again. The agent reads the Thread the Draft
+answers, from `postal thread show`, and the body as it stands each turn,
+your own edits included. Its edit replaces the body in the buffer, never
+on disk, and `u` takes it back; it cannot see or change the headers, run
+commands, or send. The Draft's text goes to whichever provider the agent
+talks to, and only once you ask.
+
+```lua
+require("postal").setup({
+  agents = {
+    claude = { cmd = { "claude-agent-acp" } },
+    gemini = { cmd = { "gemini", "--experimental-acp" } },
+  },
+  agent = "claude",
+})
+```
+
+`claude` is set up by default. `:PostalAgent gemini` starts another agent
+by name. The agent signs in through its own CLI (`claude /login`); when it
+asks for that, the pane says how. A session lasts as long as the Draft's
+buffer.
+
+`make check` formats, lints and runs the headless smoke check, against
+stub `postal` and ACP agents, the gate before a commit; `make` lists every target.

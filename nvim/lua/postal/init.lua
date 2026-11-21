@@ -1,6 +1,7 @@
 -- Completes the recipients of a Postal Draft from its Correspondents as
--- they are typed: through blink.cmp when it is installed, else Neovim's own
--- menu, or `<C-x><C-o>` before Neovim 0.12.
+-- they are typed (blink.cmp, else Neovim's own menu or `<C-x><C-o>`), and
+-- chats with an ACP agent about the Draft through `:PostalAgent`.
+local agent = require("postal.agent")
 local recipients = require("postal.recipients")
 
 local M = {}
@@ -38,10 +39,20 @@ local function native(buf)
 	vim.bo[buf].completeopt = "menuone,noselect"
 end
 
---- `opts.cmd` is the command Postal runs as, `postal` by default.
+local function complete_agent(typed)
+	return vim.tbl_filter(function(name)
+		return vim.startswith(name, typed)
+	end, vim.tbl_keys(agent.agents))
+end
+
+--- `opts.cmd` is the command Postal runs as, `postal` by default;
+--- `opts.agents` adds ACP agents by name, `{ cmd = { ... } }`, and
+--- `opts.agent` names the one `:PostalAgent` starts.
 function M.setup(opts)
 	opts = opts or {}
 	recipients.cmd = opts.cmd or recipients.cmd
+	agent.agents = vim.tbl_deep_extend("force", agent.agents, opts.agents or {})
+	agent.default = opts.agent or agent.default
 	local group = vim.api.nvim_create_augroup("postal", { clear = true })
 	vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
 		group = group,
@@ -53,6 +64,18 @@ function M.setup(opts)
 			if not blink() then
 				native(event.buf)
 			end
+
+			vim.api.nvim_buf_create_user_command(event.buf, "PostalAgent", function(command)
+				agent.ask(event.buf, command.fargs[1])
+			end, { nargs = "?", complete = complete_agent, desc = "Chat with an ACP agent about this Draft" })
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("BufUnload", {
+		group = group,
+		pattern = DRAFTS,
+		callback = function(event)
+			agent.close(event.buf)
 		end,
 	})
 

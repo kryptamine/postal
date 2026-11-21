@@ -12,7 +12,7 @@ lint: ## fail if a Lua file is not formatted
 	stylua --check .
 
 # POSTAL_BIN runs a real postal; without it, scripts/postal-stub answers.
-smoke: ## complete a Draft's recipients in a bare nvim headless
+smoke: ## complete a Draft's recipients and chat with a stub agent, headless
 	nvim --clean --headless --cmd "set rtp^=." -c "lua vim.schedule(function() dofile('scripts/smoke.lua') end)"
 
 check: fmt lint smoke ## the gate before any commit
