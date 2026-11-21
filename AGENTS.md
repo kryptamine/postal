@@ -66,6 +66,9 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   `clang-format -i cpp/*` before the commit. `vendor/` keeps upstream's style.
 - **`clang-tidy cpp/*.cpp` passes** with `bugprone`, `performance` and
   `modernize` as errors (`.clang-tidy`, flags in `compile_flags.txt`).
+- **The Lua in `nvim/` is formatted by `stylua`** (`nvim/.stylua.toml`):
+  `stylua nvim/` before the commit. Its test, `tests/nvim.rs`, needs `nvim`
+  on `PATH`.
 - **`scripts/sanitize.sh` passes after a change to `cpp/` or `vendor/`**: it
   lays out every cached HTML mail under ASan and UBSan.
 - **A review finding a linter could have caught becomes a rule.** Where a lint
