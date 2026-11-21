@@ -22,6 +22,7 @@ use crate::{
     sign_in::SignIn,
     snippet,
     sync_state::SyncState,
+    thread_id::ThreadId,
 };
 
 /// The raw `From` header rides along, for a `From` the server cannot parse.
@@ -109,7 +110,7 @@ pub trait MailServer {
     async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error>;
 
     /// The UIDs of the examined Folder's Messages in Gmail's Thread `id`.
-    async fn thread(&mut self, id: u64) -> Result<Vec<u32>, Error>;
+    async fn thread(&mut self, id: ThreadId) -> Result<Vec<u32>, Error>;
 
     /// `None` when no Message has this UID any more.
     async fn sequence_number(&mut self, uid: u32) -> Result<Option<u32>, Error>;
@@ -434,7 +435,7 @@ impl MailServer for ImapSession {
         Ok(messages)
     }
 
-    async fn thread(&mut self, id: u64) -> Result<Vec<u32>, Error> {
+    async fn thread(&mut self, id: ThreadId) -> Result<Vec<u32>, Error> {
         let found = self.session.uid_search(format!("X-GM-THRID {id}")).await?;
         let mut uids: Vec<_> = found.into_iter().collect();
         uids.sort_unstable();

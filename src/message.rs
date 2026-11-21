@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use chrono::{DateTime, FixedOffset};
 
+use crate::thread_id::ThreadId;
+
 /// One Message as the Message List knows it.
 #[derive(Clone)]
 pub struct Message {
@@ -23,7 +25,7 @@ pub struct Message {
     pub snippet: String,
     /// Gmail's `X-GM-THRID`; `None` elsewhere, where the Message is a Thread
     /// of its own.
-    pub thread: Option<u64>,
+    pub thread: Option<ThreadId>,
     /// Sent from the Account's address: the Message List names its sender `me`.
     pub from_me: bool,
     /// The Folder `uid` is of. `None` for a Message found only with its

@@ -12,6 +12,7 @@ use crate::{
     message::Message,
     message_flags::MessageFlags,
     new_message::NewMessage,
+    thread_id::ThreadId,
 };
 
 /// Messages between two progress reports, each a redraw.
@@ -66,7 +67,7 @@ fn message(
         _ => None,
     });
     let thread = attributes.iter().find_map(|a| match a {
-        AttributeValue::GmailThrId(id) => Some(*id),
+        AttributeValue::GmailThrId(id) => Some(ThreadId::new(*id)),
         _ => None,
     });
     let received = attributes

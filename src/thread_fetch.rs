@@ -6,6 +6,7 @@ use crate::{
     imap::MailServer,
     snippets,
     sync::{self, Error},
+    thread_id::ThreadId,
     update::Update,
 };
 
@@ -15,7 +16,7 @@ use crate::{
 pub async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
-    id: u64,
+    id: ThreadId,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     match fetched(server, cache, id, send).await {
@@ -34,7 +35,7 @@ pub async fn fetch(
 async fn fetched(
     server: &mut impl MailServer,
     cache: &Cache,
-    id: u64,
+    id: ThreadId,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     let Some(all) = all_mail(server, cache, send).await? else {

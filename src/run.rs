@@ -57,6 +57,7 @@ use crate::{
     terminal_backend::{self, TerminalBackend},
     theme::Theme,
     thread::Key,
+    thread_id::ThreadId,
     thread_pane::ThreadPane,
     toast::Toast,
     undo::Undo,
@@ -550,7 +551,7 @@ enum Step {
     Search,
     /// Reading opened, on the Gmail Thread with this ID if it has one, of
     /// this Account: its Messages in other Folders are asked for.
-    Read(Option<(usize, u64)>),
+    Read(Option<(usize, ThreadId)>),
     MarkUnread,
     Delete,
     Undo,

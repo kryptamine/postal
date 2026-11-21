@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::thread_id::ThreadId;
+
 /// What a Reply's Draft carries beside its file: the headers that put it in
 /// the Thread, and the Message it answers.
 #[derive(Clone, Serialize, Deserialize)]
@@ -15,5 +17,5 @@ pub struct Answering {
     /// The answered Message's Gmail Thread, which `original` cannot name
     /// for a Message found only with its Thread.
     #[serde(default)]
-    pub thread: Option<u64>,
+    pub thread: Option<ThreadId>,
 }

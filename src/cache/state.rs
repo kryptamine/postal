@@ -208,7 +208,7 @@ fn insert(
             part.map(|p| &p.charset),
             part.map(|p| p.html),
             folder,
-            m.thread.map(u64::cast_signed),
+            m.thread,
             m.from_me,
             m.answered,
             account,

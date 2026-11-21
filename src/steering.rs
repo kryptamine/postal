@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures::{FutureExt, StreamExt, channel::mpsc::UnboundedReceiver, stream::Peekable};
 
-use crate::folder::INBOX;
+use crate::{folder::INBOX, thread_id::ThreadId};
 
 /// What the screen asks of the sync connection.
 pub enum Ask {
@@ -11,7 +11,7 @@ pub enum Ask {
     /// `LIST` and `STATUS (UNSEEN)`, for the Folder Picker.
     ListFolders,
     /// The Messages of Gmail's Thread with this ID in other Folders.
-    Thread(u64),
+    Thread(ThreadId),
     /// The Cache holds flag changes or moves for the server.
     Changes,
     /// The Outbox holds a Message to send.
@@ -29,7 +29,7 @@ pub struct Asked {
     pub switched: bool,
     pub list: bool,
     /// The Thread last asked for, when the Messages of one were.
-    pub thread: Option<u64>,
+    pub thread: Option<ThreadId>,
     pub changes: bool,
     pub send: bool,
 }

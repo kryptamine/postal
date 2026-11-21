@@ -1,13 +1,13 @@
 use std::{cmp::Reverse, collections::HashMap};
 
-use crate::message::Message;
+use crate::{message::Message, thread_id::ThreadId};
 
 /// What tells one Thread from another across reloads of the Message List.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// Each names its Account first: a Thread never spans Accounts, and their
 /// IDs and body keys may repeat.
 pub enum Key {
-    Gmail(usize, u64),
+    Gmail(usize, ThreadId),
     /// A Message with no thread ID, a Thread of its own, by body key: UIDs
     /// repeat across Folders.
     Lone(usize, i64),

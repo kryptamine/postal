@@ -4,7 +4,7 @@ use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{OptionalExtension, Row, params};
 
 use super::{Cache, Error, threads::THREAD_ROW};
-use crate::{folder::Role, inbox::Inbox, message::Message};
+use crate::{folder::Role, inbox::Inbox, message::Message, thread_id::ThreadId};
 
 /// The columns `Cache::message` reads, in its order, of a `message` row.
 const MESSAGE_ROW: &str = "uid, body_key, received, received_offset, unread, sender, subject,
@@ -90,7 +90,7 @@ impl Cache {
         }
 
         messages.sort_unstable_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
-        let threads: HashSet<u64> = messages.iter().filter_map(|m| m.thread).collect();
+        let threads: HashSet<ThreadId> = messages.iter().filter_map(|m| m.thread).collect();
         let mut statement = connection.prepare_cached(&format!(
             "SELECT {THREAD_ROW}
              FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
@@ -125,7 +125,7 @@ impl Cache {
             sender: row.get(5)?,
             subject: row.get(6)?,
             snippet: row.get(7)?,
-            thread: row.get::<_, Option<i64>>(8)?.map(i64::cast_unsigned),
+            thread: row.get(8)?,
             from_me: row.get(9)?,
             answered: row.get(10)?,
             from: row.get(11)?,

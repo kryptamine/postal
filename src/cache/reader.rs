@@ -83,12 +83,7 @@ impl Reader {
                      FROM thread_message WHERE account = ?1 AND thread = ?2
                      ORDER BY 2, 1"
                 ))?;
-                let args = params![
-                    account,
-                    thread.cast_signed(),
-                    Role::Trash.label(),
-                    Role::Spam.label()
-                ];
+                let args = params![account, thread, Role::Trash.label(), Role::Spam.label()];
                 statement
                     .query_map(args, thread_message)?
                     .collect::<Result<_, _>>()?

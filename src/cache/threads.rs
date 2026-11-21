@@ -1,7 +1,7 @@
 use rusqlite::params;
 
 use super::{Cache, Error, bodies, correspondence};
-use crate::{correspondence::Correspondence, message::Message};
+use crate::{correspondence::Correspondence, message::Message, thread_id::ThreadId};
 
 /// The columns `Cache::message` reads, in its order, of a `thread_message`
 /// row `t`, which has no UID.
@@ -14,7 +14,7 @@ impl Cache {
     /// what `learnt` says of them, in one transaction.
     pub fn write_thread(
         &self,
-        id: u64,
+        id: ThreadId,
         (messages, learnt): (&[Message], &[Correspondence]),
         bodies: &[(i64, Vec<u8>)],
     ) -> Result<(), Error> {
@@ -25,7 +25,6 @@ impl Cache {
                 correspondence::record(&transaction, self.email(), seen)?;
             }
 
-            let id = id.cast_signed();
             transaction.execute(
                 "DELETE FROM thread_message WHERE account = ?2 AND thread = ?1",
                 params![id, self.email()],

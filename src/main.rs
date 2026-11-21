@@ -147,6 +147,7 @@ mod text_part;
 mod theme;
 mod thread;
 mod thread_fetch;
+mod thread_id;
 mod thread_pane;
 mod thread_show;
 mod toast;
