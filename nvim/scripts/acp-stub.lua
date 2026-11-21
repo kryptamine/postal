@@ -171,6 +171,10 @@ local function turn(session, prompt)
 	end
 
 	mcp.call("tools/call", { name = "write_draft", arguments = { body = text } })
+	-- Told `quit`, it ends as soon as it has written.
+	if prompt[#prompt].text == "quit" then
+		os.exit(0)
+	end
 end
 
 record({ pid = vim.uv.os_getpid() })

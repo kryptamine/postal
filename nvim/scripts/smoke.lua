@@ -334,6 +334,36 @@ if vim.fn.maparg("<leader>a", "n", false, true).buffer == 1 then
 	fail("the review's keys outlived the undo")
 end
 
+-- An agent that ends with its edit under review hands the review to the
+-- next one, whose first instruction waits for it
+vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "bye bob" })
+ask("quit")
+turn({ "", "BYE BOB", "", "> SHALL WE MEET?", "" })
+if not vim.wait(5000, function()
+	return said(pane_buf):find("stub ended", 1, true) ~= nil
+end) then
+	fail("the quitting agent never ended: " .. vim.inspect(said(pane_buf)))
+end
+
+local before_restart = #prompts()
+ask("after")
+vim.wait(500)
+if #prompts() ~= before_restart then
+	fail("the restarted chat prompted while a review was open")
+end
+
+left("1 hunk left")
+press(4, "<leader>a")
+is({ "", "BYE BOB", "", "> SHALL WE MEET?", "" })
+left("")
+if not vim.wait(10000, function()
+	return #prompts() == before_restart + 1
+end) then
+	fail("the restarted chat never sent the waiting instruction")
+end
+
+turn({ "", "BYE BOB", "", "> SHALL WE MEET?", "" })
+
 -- `q` in the pane stops a turn, and the pane says so; a chunk after the
 -- user deleted the blank line over the input still ends the agent's text
 ask("hang")
@@ -487,7 +517,10 @@ if vim.api.nvim_buf_is_valid(pane_buf) then
 	fail("the pane outlived its Draft")
 end
 
-local pid = sent()[1].pid
+-- The chat's agent is the one started after `quit`, the second to log.
+local pid = vim.tbl_filter(function(message)
+	return message.pid ~= nil
+end, sent())[2].pid
 if not vim.wait(5000, function()
 	return vim.uv.kill(pid, 0) ~= 0
 end) then

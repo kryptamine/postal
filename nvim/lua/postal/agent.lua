@@ -282,14 +282,23 @@ function Chat:begin(cwd)
 	end)
 end
 
---- Starts agent `name` on mail buffer `mail`, its pane reused when given.
-local function start(mail, name, shown)
+--- Starts agent `name` on mail buffer `mail`, taking over the pane and the
+--- open review of chat `ended` when given.
+local function start(mail, name, ended)
 	local kind = kinds[vim.b[mail].postal_kind]
 	local self = setmetatable({ mail = mail, kind = kind, name = name, calls = {}, queue = {} }, Chat)
 	self.path = vim.api.nvim_buf_get_name(mail)
+	-- A review left open holds back the new chat's first prompt.
+	self.review = ended and ended.review
+	if self.review then
+		self.review.changed = function(summary, undone)
+			self:reviewed(summary, undone)
+		end
+	end
+
 	-- The pane outlives an agent that ends, so its keys reach whichever
 	-- chat is the mail's now.
-	self.pane = shown
+	self.pane = ended and ended.pane
 		or pane.new(mail, kind, {
 			send = function(text)
 				M.send(mail, text)
@@ -365,7 +374,7 @@ function M.ask(mail, name)
 	end
 
 	if not chat or chat.ended then
-		chat = start(mail, name, chat and chat.pane)
+		chat = start(mail, name, chat)
 	end
 
 	chat.pane:show(true)
@@ -376,7 +385,7 @@ end
 function M.send(mail, text)
 	local chat = chats[mail]
 	if chat.ended then
-		chat = start(mail, chat.name, chat.pane)
+		chat = start(mail, chat.name, chat)
 	end
 
 	if not chat.ended then

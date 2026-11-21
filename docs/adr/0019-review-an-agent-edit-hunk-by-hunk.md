@@ -21,7 +21,8 @@ A later write in the same turn replaces the open review, its placed hunks
 taken back first; a read in that turn gets the agent's last write, so an
 agent editing twice builds on its own text. An instruction given while a
 review is open waits for it to end, so each prompt carries a body the
-user has settled.
+user has settled. A chat started again after its agent ended takes over
+the review still open, and waits for it the same way.
 
 The placed hunks are their own undo step. An undo past it ends the
 review, the body left as the undo made it, since the hunks' marks would
