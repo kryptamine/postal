@@ -1,25 +1,9 @@
 -- The MCP server an agent edits a Draft through (ADR 0020), run as
 -- `nvim -l mcp.lua <servername> <buffer>`: JSON-RPC over stdio, one message
--- per line, each tool call passed to the editor that owns the Draft.
+-- per line. It knows no tool: the editor that owns the Draft lists and runs
+-- them (`postal.tools`).
 local server, draft = arg[1], tonumber(arg[2])
 local editor = vim.fn.sockconnect("pipe", server, { rpc = true })
-
-local TOOLS = {
-	{
-		name = "read_draft",
-		description = "The body of the email Draft as it stands, without its headers.",
-		inputSchema = { type = "object", properties = vim.empty_dict() },
-	},
-	{
-		name = "write_draft",
-		description = "Replace the Draft's body; the user reviews the change hunk by hunk.",
-		inputSchema = {
-			type = "object",
-			properties = { body = { type = "string", description = "The whole new body." } },
-			required = { "body" },
-		},
-	},
-}
 
 local function send(message)
 	message.jsonrpc = "2.0"
@@ -27,15 +11,9 @@ local function send(message)
 	io.stdout:flush()
 end
 
-local function call(params)
-	local answer = vim.rpcrequest(
-		editor,
-		"nvim_exec_lua",
-		"return require('postal.agent').serve(...)",
-		{ draft, params.name, params.arguments or vim.empty_dict() }
-	)
-
-	return { content = { { type = "text", text = answer.text } }, isError = answer.failed }
+-- Runs Lua `code` in the editor that owns the Draft, on the arguments after it.
+local function ask(code, ...)
+	return vim.rpcrequest(editor, "nvim_exec_lua", code, { ... })
 end
 
 for line in io.lines() do
@@ -48,9 +26,11 @@ for line in io.lines() do
 			serverInfo = { name = "postal", version = "0" },
 		}
 	elseif message.method == "tools/list" then
-		result = { tools = TOOLS }
+		result = { tools = ask("return require('postal.tools').list()") }
 	elseif message.method == "tools/call" then
-		result = call(message.params)
+		local params = message.params
+		local code = "return require('postal.agent').serve(...)"
+		result = ask(code, draft, params.name, params.arguments or vim.empty_dict())
 	elseif message.method == "ping" then
 		result = vim.empty_dict()
 	end

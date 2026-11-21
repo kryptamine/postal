@@ -7,6 +7,7 @@ local pane = require("postal.pane")
 local recipients = require("postal.recipients")
 local requirements = require("postal.requirements")
 local review = require("postal.review")
+local tools = require("postal.tools")
 
 local M = {}
 
@@ -26,14 +27,6 @@ You are helping the user write the email Draft open in their editor.
 - Each prompt carries the body as it stands, the user's own edits included, then what the user asks.]]
 
 local chats = {}
-
--- The tools of Postal's MCP server, as Claude names them and as the server does.
-local TOOLS = {
-	mcp__postal__read_draft = true,
-	mcp__postal__write_draft = true,
-	read_draft = true,
-	write_draft = true,
-}
 
 local MCP = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h") .. "/mcp.lua"
 
@@ -154,16 +147,9 @@ function Chat:update(update)
 	end
 end
 
---- Whether a tool call is one of Postal's MCP server, known by its exact
---- name: a title alone could be a shell command that merely says it.
-local function postal_tool(call)
-	local meta = call._meta and call._meta.claudeCode
-	return TOOLS[meta and meta.toolName or call.title] == true
-end
-
 function Chat:permit(params, respond)
 	local call = vim.tbl_extend("force", self.calls[params.toolCall.toolCallId] or {}, params.toolCall)
-	local allowed = postal_tool(call)
+	local allowed = tools.asked(call)
 	-- Never `allow_always`: the agent would stop asking for that tool.
 	local wanted = allowed and { "allow_once" } or { "reject_once", "reject_always" }
 	for _, kind in ipairs(wanted) do
@@ -190,17 +176,10 @@ function Chat:request(method, params, respond)
 	end
 end
 
---- Runs tool `name` of Postal's MCP server; `{ text = ..., failed = ... }`.
-function Chat:tool(name, args)
-	if name == "read_draft" then
-		-- The agent's last write this turn, whatever the review made of it.
-		return { text = self.proposed or body.get(self.draft) }
-	elseif name == "write_draft" and type(args.body) == "string" then
-		self:propose(args.body)
-		return { text = "The new body is in the Draft for the user's review." }
-	end
-
-	return { text = "no tool " .. tostring(name) .. " with those arguments", failed = true }
+--- The body the agent sees: its last write this turn, whatever the review
+--- made of it, else the Draft's own.
+function Chat:body()
+	return self.proposed or body.get(self.draft)
 end
 
 --- Opens a review of the agent's body `text` against the one its turn was
@@ -402,10 +381,10 @@ end
 function M.serve(draft, name, args)
 	local chat = chats[draft]
 	if not chat or chat.ended then
-		return { text = "the chat about this Draft has ended", failed = true }
+		return { content = { { type = "text", text = "the chat about this Draft has ended" } }, isError = true }
 	end
 
-	return chat:tool(name, args)
+	return tools.run(chat, name, args)
 end
 
 --- Ends Draft buffer `draft`'s chat and closes its pane.

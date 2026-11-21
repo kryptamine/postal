@@ -9,8 +9,8 @@ headers and write past the hunk review of ADR 0019.
 
 So the plugin hands every session, in `session/new`'s `mcpServers`, a stdio
 MCP server of its own: `nvim -l lua/postal/mcp.lua <servername> <buffer>`.
-It serves two tools, and passes each call to the editor over its
-`v:servername`:
+It knows no tool itself: it asks the editor, over its `v:servername`, for
+the list `postal.tools` holds and passes each call there. There are two:
 
 - `read_draft` gives the body as it stands, the user's unsaved edits
   included, or the agent's last write in this turn.
