@@ -48,8 +48,8 @@ ask.
 
 The agent's edit lands in the buffer, never on disk, for review hunk by
 hunk: its lines highlighted, the ones they replace shown over them.
-`<LocalLeader>a` accepts the hunk under the cursor and `<LocalLeader>r`
-rejects it; `<LocalLeader>A` and `<LocalLeader>R` take or reject every
+`<leader>a` accepts the hunk under the cursor and `<leader>r`
+rejects it; `<leader>A` and `<leader>R` take or reject every
 hunk left, and the pane's top line counts them. A hunk over lines you
 changed while the agent worked is a conflict: your lines stay until you
 accept the agent's, for the whole hunk. The next instruction waits for

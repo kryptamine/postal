@@ -20,10 +20,10 @@ end
 --- The keys a review maps in its Draft's buffer while it is open; `short`
 --- names one in the summary.
 M.keys = {
-	{ lhs = "<LocalLeader>a", short = "accept", desc = "accept the hunk under the cursor", run = under(true) },
-	{ lhs = "<LocalLeader>r", short = "reject", desc = "reject the hunk under the cursor", run = under(false) },
-	{ lhs = "<LocalLeader>A", short = "all", desc = "accept every hunk", run = all(true) },
-	{ lhs = "<LocalLeader>R", short = "none", desc = "reject every hunk", run = all(false) },
+	{ lhs = "<leader>a", short = "accept", desc = "accept the hunk under the cursor", run = under(true) },
+	{ lhs = "<leader>r", short = "reject", desc = "reject the hunk under the cursor", run = under(false) },
+	{ lhs = "<leader>A", short = "all", desc = "accept every hunk", run = all(true) },
+	{ lhs = "<leader>R", short = "none", desc = "reject every hunk", run = all(false) },
 }
 
 local NS = vim.api.nvim_create_namespace("postal-review")
