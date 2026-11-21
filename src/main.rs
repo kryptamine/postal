@@ -31,6 +31,7 @@ mod date_group;
 mod date_label;
 mod draft;
 mod draft_file;
+mod draft_notes;
 mod draft_pane;
 mod draft_preview;
 mod dwell;

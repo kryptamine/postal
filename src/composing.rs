@@ -4,10 +4,10 @@ use ratatui::Terminal;
 
 use crate::{
     accounts::Accounts,
-    answering::Answering,
     awaited_reply::AwaitedReply,
     cache::Cache,
     draft_file,
+    draft_notes::DraftNotes,
     draft_preview::DraftPreview,
     editor,
     input::Input,
@@ -41,8 +41,12 @@ pub fn compose(
         return Ok(());
     };
 
-    let account = from.map(str::to_owned);
-    if let Err(error) = draft_file::note(&path, (from, None)) {
+    let notes = DraftNotes {
+        account: from.map(str::to_owned),
+        answering: None,
+    };
+
+    if let Err(error) = draft_file::note(&path, &notes) {
         tracing::error!("noting the Account of a Draft failed: {error}");
     }
 
@@ -52,7 +56,7 @@ pub fn compose(
         return Ok(());
     }
 
-    preview(screen, (path, (account, None)));
+    preview(screen, path, notes);
     Ok(())
 }
 
@@ -80,7 +84,7 @@ pub fn reply<'a>(
     screen.replying = None;
     let message = &awaited.message;
     if let Some(path) = answered_by(message, accounts) {
-        return edit(terminal, events, screen, (path, (None, None)));
+        return edit(terminal, events, screen, path, DraftNotes::default());
     }
 
     let cache = &caches[message.account];
@@ -124,7 +128,7 @@ fn answered_by(message: &Message, accounts: Accounts) -> Option<PathBuf> {
     let folder = message.folder.as_deref()?;
     let email = accounts.email(message.account);
     let found =
-        draft_file::dir().and_then(|dir| draft_file::answering(&dir, email, (folder, message.uid)));
+        draft_file::dir().and_then(|dir| draft_file::answering(&dir, email, folder, message.uid));
     found.unwrap_or_else(|error| {
         tracing::error!("looking for a Draft answering the Message failed: {error}");
         None
@@ -175,13 +179,16 @@ fn answer(
     };
 
     // Without its notes, the Draft no longer answers once its preview closes.
-    let from = accounts.noted(account);
-    if let Err(error) = draft_file::note(&path, (from, Some(&answering))) {
+    let notes = DraftNotes {
+        account: accounts.noted(account).map(str::to_owned),
+        answering: Some(answering),
+    };
+
+    if let Err(error) = draft_file::note(&path, &notes) {
         tracing::error!("noting what a Draft answers failed: {error}");
     }
 
-    let from = from.map(str::to_owned);
-    edit(terminal, events, screen, (path, (from, Some(answering))))
+    edit(terminal, events, screen, path, notes)
 }
 
 /// A new Draft's file holding `text`, else the template; `None` once the
@@ -204,22 +211,20 @@ pub fn edit(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    (path, (account, answering)): (PathBuf, (Option<String>, Option<Answering>)),
+    path: PathBuf,
+    notes: DraftNotes,
 ) -> Result<(), Error> {
     run::outside(terminal, events, || editor::edit(&path))?;
-    preview(screen, (path, (account, answering)));
+    preview(screen, path, notes);
     Ok(())
 }
 
 /// The preview of the Draft at `path` as the file reads now; `notes` win
 /// over those beside it.
-fn preview(
-    screen: &mut Screen,
-    (path, (account, answering)): (PathBuf, (Option<String>, Option<Answering>)),
-) {
-    screen.over.draft = match DraftPreview::read(path, answering) {
+fn preview(screen: &mut Screen, path: PathBuf, notes: DraftNotes) {
+    screen.over.draft = match DraftPreview::read(path, notes.answering) {
         Ok(mut preview) => {
-            preview.account = account.or(preview.account);
+            preview.account = notes.account.or(preview.account);
             Some(preview)
         }
         Err(error) => {
@@ -317,7 +322,11 @@ pub fn discard(screen: &mut Screen) {
         return;
     }
 
-    let notes = (preview.account, preview.answering);
+    let notes = DraftNotes {
+        account: preview.account,
+        answering: preview.answering,
+    };
+
     screen
         .undo
         .push(Undo::Discard(preview.path, preview.text, notes));
@@ -325,19 +334,13 @@ pub fn discard(screen: &mut Screen) {
 }
 
 /// Undo of a discard: the file as it was, and its preview again.
-pub fn restore(
-    screen: &mut Screen,
-    (path, text, (account, answering)): (PathBuf, String, (Option<String>, Option<Answering>)),
-) {
-    let notes = (account.as_deref(), answering.as_ref());
-    if let Err(error) = draft_file::restore(&path, &text, notes) {
+pub fn restore(screen: &mut Screen, path: PathBuf, text: String, notes: DraftNotes) {
+    if let Err(error) = draft_file::restore(&path, &text, &notes) {
         tracing::error!("restoring the Draft failed: {error}");
         screen.toast = Some(Toast::error("could not restore the Draft"));
-        screen
-            .undo
-            .push(Undo::Discard(path, text, (account, answering)));
+        screen.undo.push(Undo::Discard(path, text, notes));
         return;
     }
 
-    screen.over.draft = Some(DraftPreview::new(path, text, (account, answering)));
+    screen.over.draft = Some(DraftPreview::new(path, text, notes));
 }

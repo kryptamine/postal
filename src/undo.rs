@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{answering::Answering, per_account::AccountId, thread::Key};
+use crate::{draft_notes::DraftNotes, per_account::AccountId, thread::Key};
 
 /// What an Undo takes back.
 pub enum Undo {
@@ -9,5 +9,5 @@ pub enum Undo {
     Delete(AccountId, i64, Option<Key>),
     /// A discarded Draft: its file, what the file held, the address it goes
     /// out from and what it answers.
-    Discard(PathBuf, String, (Option<String>, Option<Answering>)),
+    Discard(PathBuf, String, DraftNotes),
 }

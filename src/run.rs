@@ -16,6 +16,7 @@ use crate::{
     cache::{self, Cache},
     composing,
     config::IconChoice,
+    draft_notes::DraftNotes,
     draft_pane::DraftPane,
     draft_preview::DraftPreview,
     folder::{Folder, Role},
@@ -910,7 +911,7 @@ fn undo(
 ) -> Result<(), Error> {
     let folders = match screen.undo.pop() {
         Some(Undo::Discard(path, text, notes)) => {
-            composing::restore(screen, (path, text, notes));
+            composing::restore(screen, path, text, notes);
             return Ok(());
         }
         Some(Undo::Delete(account, batch, thread)) => {
@@ -1081,8 +1082,12 @@ fn draft(
         Step::Compose => composing::compose(terminal, events, screen, from)?,
         Step::Edit => {
             if let Some(preview) = screen.over.draft.take() {
-                let notes = (preview.account, preview.answering);
-                composing::edit(terminal, events, screen, (preview.path, notes))?;
+                let notes = DraftNotes {
+                    account: preview.account,
+                    answering: preview.answering,
+                };
+
+                composing::edit(terminal, events, screen, preview.path, notes)?;
             }
         }
         Step::Send => composing::send(screen, (accounts, outbox), asks),

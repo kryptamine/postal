@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use crate::{answering::Answering, draft::Draft, notes::Notes};
+use crate::{answering::Answering, draft::Draft, draft_notes::DraftNotes, notes::Notes};
 
 /// A Draft shown after the editor exits, for `y` to send, `e` to edit again,
 /// `d` to keep or `q` to discard.
@@ -27,7 +27,14 @@ impl DraftPreview {
     pub fn read(path: PathBuf, answering: Option<Answering>) -> io::Result<Self> {
         let text = std::fs::read_to_string(&path)?;
         let notes = Notes::read(&path)?.unwrap_or_default();
-        let mut preview = Self::new(path, text, (notes.account, answering.or(notes.answering)));
+        let mut preview = Self::new(
+            path,
+            text,
+            DraftNotes {
+                account: notes.account,
+                answering: answering.or(notes.answering),
+            },
+        );
         preview.failure = notes.error;
         Ok(preview)
     }
@@ -37,23 +44,26 @@ impl DraftPreview {
     pub fn queued(path: PathBuf) -> io::Result<Self> {
         let notes = Notes::read(&path)?.unwrap_or_default();
         let text = notes.draft.unwrap_or_default();
-        let mut preview = Self::new(path, text, (notes.account, notes.answering));
+        let mut preview = Self::new(
+            path,
+            text,
+            DraftNotes {
+                account: notes.account,
+                answering: notes.answering,
+            },
+        );
         (preview.failure, preview.queued) = (notes.error, true);
         Ok(preview)
     }
 
-    pub fn new(
-        path: PathBuf,
-        text: String,
-        (account, answering): (Option<String>, Option<Answering>),
-    ) -> Self {
+    pub fn new(path: PathBuf, text: String, notes: DraftNotes) -> Self {
         Self {
-            account,
+            account: notes.account,
             draft: Draft::parse(&text),
             path,
             text,
             failure: None,
-            answering,
+            answering: notes.answering,
             queued: false,
         }
     }

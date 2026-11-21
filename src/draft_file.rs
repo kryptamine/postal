@@ -6,7 +6,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{answering::Answering, atomic_file, notes::Notes, uid::Uid, unique_id::unique_id, xdg};
+use crate::{
+    atomic_file, draft_notes::DraftNotes, notes::Notes, uid::Uid, unique_id::unique_id, xdg,
+};
 
 /// What `$EDITOR` opens on Compose: the headers to fill in, then the body.
 const TEMPLATE: &str = "To: \nCc: \nSubject: \n\n";
@@ -63,24 +65,20 @@ pub fn untouched(path: &Path) -> bool {
 }
 
 /// Writes a discarded Draft's `text` back to its file, with its notes.
-pub fn restore(path: &Path, text: &str, notes: DraftNotes<'_>) -> io::Result<()> {
+pub fn restore(path: &Path, text: &str, notes: &DraftNotes) -> io::Result<()> {
     note(path, notes)?;
     atomic_file::write(path, text.as_bytes(), MODE)
 }
 
-/// The notes of a Draft: the address of the Account it goes out from, and
-/// for a Reply, what it answers.
-pub type DraftNotes<'a> = (Option<&'a str>, Option<&'a Answering>);
-
 /// Writes the notes of the Draft at `path`, unless it has none.
-pub fn note(path: &Path, (account, answering): DraftNotes<'_>) -> io::Result<()> {
-    if account.is_none() && answering.is_none() {
+pub fn note(path: &Path, notes: &DraftNotes) -> io::Result<()> {
+    if notes.account.is_none() && notes.answering.is_none() {
         return Ok(());
     }
 
     let notes = Notes {
-        account: account.map(str::to_owned),
-        answering: answering.cloned(),
+        account: notes.account.clone(),
+        answering: notes.answering.clone(),
         ..Notes::default()
     };
 
@@ -92,7 +90,8 @@ pub fn note(path: &Path, (account, answering): DraftNotes<'_>) -> io::Result<()>
 pub fn answering(
     drafts: &Path,
     account: &str,
-    (folder, uid): (&str, Uid),
+    folder: &str,
+    uid: Uid,
 ) -> io::Result<Option<PathBuf>> {
     for path in listed(drafts)? {
         let notes = Notes::read(&path).unwrap_or_else(|error| {
