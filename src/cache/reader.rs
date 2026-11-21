@@ -22,8 +22,12 @@ pub struct Seen {
     pub at: DateTime<Utc>,
 }
 
+/// The columns `thread_message` reads after the body key, named alike in
+/// the `message` and `thread_message` tables.
+const THREAD_ROW: &str = "received, received_offset, from_line, to_line";
+
 /// One Message of a Thread as the Cache holds it.
-pub struct Kept {
+pub struct ThreadMessage {
     /// As `Message::from` and `Message::to` hold them.
     pub from: String,
     pub to: String,
@@ -62,34 +66,40 @@ impl Reader {
     /// The Messages of the Thread `answering` names in the Account
     /// `account`, oldest first, each once, none from Trash or Spam; `None` when it
     /// names neither a Thread nor a Message.
-    pub fn thread(&self, account: &str, answering: &Answering) -> Result<Option<Vec<Kept>>, Error> {
-        let rows: Vec<(i64, Kept)> = match (answering.thread, &answering.original) {
+    pub fn thread(
+        &self,
+        account: &str,
+        answering: &Answering,
+    ) -> Result<Option<Vec<ThreadMessage>>, Error> {
+        let rows: Vec<(i64, ThreadMessage)> = match (answering.thread, &answering.original) {
             (Some(thread), _) => {
-                let mut statement = self.connection.prepare(
-                    "SELECT body_key, received, received_offset, from_line, to_line
+                let mut statement = self.connection.prepare(&format!(
+                    "SELECT body_key, {THREAD_ROW}
                      FROM message WHERE account = ?1 AND thread = ?2
                        AND mailbox NOT IN (SELECT name FROM mailbox
                                            WHERE account = ?1 AND role IN (?3, ?4))
                      UNION ALL
-                     SELECT key, received, received_offset, from_line, to_line
+                     SELECT key, {THREAD_ROW}
                      FROM thread_message WHERE account = ?1 AND thread = ?2
-                     ORDER BY 2, 1",
-                )?;
+                     ORDER BY 2, 1"
+                ))?;
                 let args = params![
                     account,
                     thread.cast_signed(),
                     Role::Trash.label(),
                     Role::Spam.label()
                 ];
-                statement.query_map(args, row)?.collect::<Result<_, _>>()?
+                statement
+                    .query_map(args, thread_message)?
+                    .collect::<Result<_, _>>()?
             }
             (None, Some((folder, uid))) => {
-                let mut statement = self.connection.prepare(
-                    "SELECT body_key, received, received_offset, from_line, to_line
-                     FROM message WHERE account = ?1 AND mailbox = ?2 AND uid = ?3",
-                )?;
+                let mut statement = self.connection.prepare(&format!(
+                    "SELECT body_key, {THREAD_ROW}
+                     FROM message WHERE account = ?1 AND mailbox = ?2 AND uid = ?3"
+                ))?;
                 statement
-                    .query_map(params![account, &**folder, uid], row)?
+                    .query_map(params![account, &**folder, uid], thread_message)?
                     .collect::<Result<_, _>>()?
             }
             (None, None) => return Ok(None),
@@ -113,14 +123,13 @@ impl Reader {
     }
 }
 
-/// A row of body key, arrival and its offset, `From` and recipients, its
-/// body yet unread.
-fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(i64, Kept)> {
+/// A row of the body key, then `THREAD_ROW`, as its Message without a body.
+fn thread_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<(i64, ThreadMessage)> {
     let offset = FixedOffset::east_opt(row.get(2)?).unwrap_or_else(|| Utc.fix());
     let received = DateTime::from_timestamp(row.get(1)?, 0)
         .unwrap_or_default()
         .with_timezone(&offset);
-    let kept = Kept {
+    let kept = ThreadMessage {
         from: row.get(3)?,
         to: row.get(4)?,
         received,
