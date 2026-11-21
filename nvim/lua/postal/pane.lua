@@ -9,6 +9,7 @@ local icons = require("postal.icons")
 local M = {}
 
 local NS = vim.api.nvim_create_namespace("postal-pane")
+local HINT = vim.api.nvim_create_namespace("postal-pane-hint")
 local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 local RULE = { { string.rep("─", 200), "PostalRule" } }
 local ME = "Me"
@@ -100,23 +101,13 @@ end
 
 --- Says how to send over the input while it is empty.
 function Pane:placeholder()
+	vim.api.nvim_buf_clear_namespace(self.buf, HINT, 0, -1)
 	local row = self:bottom() + 1
 	local lines = vim.api.nvim_buf_get_lines(self.buf, row, -1, false)
-	if #lines == 0 or vim.trim(table.concat(lines)) ~= "" then
-		if self.hint then
-			vim.api.nvim_buf_del_extmark(self.buf, NS, self.hint)
-			self.hint = nil
-		end
-
-		return
+	if #lines > 0 and vim.trim(table.concat(lines)) == "" then
+		local text = { { "Type here, <C-s> to send", "PostalDim" } }
+		vim.api.nvim_buf_set_extmark(self.buf, HINT, row, 0, { virt_text = text, virt_text_pos = "overlay" })
 	end
-
-	local text = { { "Type here, <C-s> to send", "PostalDim" } }
-	self.hint = vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, {
-		id = self.hint,
-		virt_text = text,
-		virt_text_pos = "overlay",
-	})
 end
 
 --- Opens the pane's window right of the mail's, unless one shows it; with
