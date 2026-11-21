@@ -113,7 +113,11 @@ pub(super) fn learn(
     Ok(())
 }
 
-fn record(connection: &Connection, account: &str, seen: &Correspondence) -> rusqlite::Result<()> {
+pub(super) fn record(
+    connection: &Connection,
+    account: &str,
+    seen: &Correspondence,
+) -> rusqlite::Result<()> {
     let mut insert = connection.prepare_cached(
         "INSERT OR IGNORE INTO correspondence (account, address, message, name, written, at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",

@@ -72,13 +72,14 @@ async fn fetched(
         .filter_map(|(uid, raw)| Some((*keys.get(&uid)?, raw)))
         .collect();
 
-    let (mut rows, mut pending) = (Vec::new(), Vec::new());
+    let (mut rows, mut pending, mut learnt) = (Vec::new(), Vec::new(), Vec::new());
     for new in found {
         if let Some(part) = new.text_part {
             pending.push((new.row.uid, part));
         }
 
         rows.push(new.row);
+        learnt.push(new.correspondence);
     }
 
     let mut snippets: HashMap<_, _> = snippets::cut(server, &pending).await?.into_iter().collect();
@@ -86,7 +87,7 @@ async fn fetched(
         row.snippet = snippets.remove(&row.uid).unwrap_or_default();
     }
 
-    cache.write_thread(id, &rows, &bodies)?;
+    cache.write_thread(id, (&rows, &learnt), &bodies)?;
     tracing::info!("Thread {id} holds {} Messages in All Mail", rows.len());
     send(Update::Inbox);
     Ok(())

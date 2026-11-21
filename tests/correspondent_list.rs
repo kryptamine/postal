@@ -329,3 +329,35 @@ fn mail_in_sent_from_an_alias_counts_as_written_and_the_alias_is_no_one() {
         )]
     );
 }
+
+#[test]
+fn reading_a_thread_learns_whom_all_mail_holds_in_it() {
+    let imap = FakeImap::start(vec![
+        from("Bob", "bob@example.com", "Trip", "2024-03-03T09:00:00Z").in_thread(0),
+    ]);
+    // Dora's answer sits under a label never shown.
+    imap.add_folder(
+        "Work",
+        &[],
+        vec![
+            from(
+                "Dora",
+                "dora@example.com",
+                "Re: Trip",
+                "2024-03-04T09:00:00Z",
+            )
+            .in_thread(0),
+        ],
+    );
+    imap.add_all_mail("[Gmail]/All Mail");
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let (mut t, _editor) = postal(&home, "");
+    t.wait_until(|s| s.contains("Trip")).unwrap();
+    t.send(Key::Enter).unwrap();
+    wait_for(|| log_says(&home, "holds 2 Messages in All Mail"));
+    quit(t);
+
+    let addresses: Vec<String> = listed(&home, &[]).into_iter().map(|(a, _, _)| a).collect();
+    assert_eq!(addresses, ["dora@example.com", "bob@example.com"]);
+}

@@ -15,6 +15,7 @@ use rusqlite::{
 
 use super::{Changes, Error, correspondence, moves, schema};
 use crate::{
+    correspondence::Correspondence,
     flag::Flag,
     flag_change::FlagChange,
     folder::{Folder, Role},
@@ -208,16 +209,21 @@ impl Cache {
     }
 
     /// Replaces what is cached of Gmail's Thread `id` from other Folders
-    /// with `messages`, storing `bodies` by key first, in one transaction.
+    /// with `messages`, storing `bodies` by key first and learning from
+    /// what `learnt` says of them, in one transaction.
     pub fn write_thread(
         &self,
         id: u64,
-        messages: &[Message],
+        (messages, learnt): (&[Message], &[Correspondence]),
         bodies: &[(i64, Vec<u8>)],
     ) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             store_bodies(&transaction, self.email(), bodies)?;
+            for seen in learnt {
+                correspondence::record(&transaction, self.email(), seen)?;
+            }
+
             let id = id.cast_signed();
             transaction.execute(
                 "DELETE FROM thread_message WHERE account = ?2 AND thread = ?1",
