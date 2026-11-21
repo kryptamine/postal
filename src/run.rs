@@ -58,15 +58,18 @@ use crate::{
     status::Status,
     steering::Ask,
     sync,
-    terminal_backend::{self, TerminalBackend},
+    terminal_backend::TerminalBackend,
     theme::Theme,
     thread::Key,
     thread_id::ThreadId,
     thread_pane::ThreadPane,
     toast::Toast,
+    tty::Tty,
+    ui::Ui,
     uid::Uid,
     undo::Undo,
     update::Update,
+    world::World,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -131,22 +134,34 @@ pub async fn run(
         impl Stream<Item = (AccountId, Update)> + Unpin,
     >,
 ) -> Result<Exit, Error> {
-    let mut events = Input::new();
+    let mut tty = Tty {
+        terminal,
+        events: Input::new(),
+    };
+
     let accounts = background.accounts;
     let emails = accounts.0.map(|config| config.email.as_str().into());
     let mut view = InboxView::loading(emails);
-    let rows = first_rows(terminal)?;
+    let rows = first_rows(tty.terminal)?;
     show(&mut view, caches, Some(rows))?;
     let (mut updates, mut older, asks) = (background.updates, background.older, background.asks);
-    let (outbox, config_dir) = (background.outbox, background.config_dir);
     let mut replies = background.replies;
+    let world = World {
+        caches,
+        asks: &asks,
+        outbox: background.outbox,
+        accounts,
+        config_dir: background.config_dir,
+    };
+
     let rebuilt = caches.values().any(Cache::rebuilt);
     let mut screen = Screen::opening(rebuilt, background.statuses, background.failure);
-    screen.outbox = outbox.count();
+    screen.outbox = world.outbox.count();
     for (account, &status) in screen.statuses.iter() {
         (status == Status::SignedOut).then(|| previews.link(account, false));
     }
 
+    let mut ui = Ui { view, screen };
     let mut work = std::pin::pin!(background.work.fuse());
     let mut whole = false;
     let mut listening = true;
@@ -154,32 +169,26 @@ pub async fn run(
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
     loop {
-        let text = panes(terminal, screen.showing.mode())?
+        let text = panes(tty.terminal, ui.screen.showing.mode())?
             .preview
             .map(preview_pane::text_area);
-        want(previews, caches, (&view, &screen), text.filter(|_| whole))?;
-        whole.then(|| older.want(&view));
-        screen.notice_write_failure(caches);
-        draw(
-            terminal,
-            (theme, accounts),
-            &mut view,
-            previews,
-            &mut screen,
-        )?;
+        want(previews, caches, &ui, text.filter(|_| whole))?;
+        whole.then(|| older.want(&ui.view));
+        ui.screen.notice_write_failure(caches);
+        draw(tty.terminal, theme, accounts, &mut ui, previews)?;
         alloc_count::report(frame_start);
         if !whole {
             whole = true;
             frame_start = alloc_count::count();
-            show(&mut view, caches, None)?;
+            show(&mut ui.view, caches, None)?;
             continue;
         }
 
-        let change = next_change(&view, &mut screen, previews, text);
+        let change = next_change(&mut ui, previews, text);
         tokio::select! {
             () = tokio::time::sleep_until(change.unwrap_or_else(Instant::now)), if change.is_some() => {
                 frame_start = alloc_count::count();
-                expire(&mut view, &mut screen, caches, &asks)?;
+                expire(&mut ui, world)?;
             }
             result = &mut work, if !work.is_terminated() => {
                 frame_start = alloc_count::count();
@@ -192,37 +201,35 @@ pub async fn run(
                     continue;
                 };
 
-                let arrived = replies.notice((account, &update), screen.replying.as_mut());
-                apply(older.notice((account, update)), &mut view, &mut screen, (caches, outbox), previews)?;
+                let arrived = replies.notice((account, &update), ui.screen.replying.as_mut());
+                let (account, update) = older.notice((account, update));
+                apply(account, update, &mut ui, world, previews)?;
                 if let Some(result) = arrived {
-                    composing::fetched(result, terminal, &mut events, &mut screen, (caches, accounts))?;
+                    composing::fetched(result, &mut tty, &mut ui.screen, world)?;
                 }
             }
-            event = events.next() => {
+            event = tty.events.next() => {
                 frame_start = alloc_count::count();
                 // A Draft opened, closed, discarded or brought back changes the list.
-                let drafts_before = (screen.over.draft.is_some(), screen.undo.len());
-                match handle(event, &mut view, &mut screen, half_page(text))? {
+                let drafts_before = (ui.screen.over.draft.is_some(), ui.screen.undo.len());
+                match handle(event, &mut ui, half_page(text))? {
                     Step::Stay => {}
-                    Step::Links => label_links(&mut screen, previews, &view, text),
-                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, caches, &asks)?,
-                    Step::Browse(url) => screen.toast = browse(&url),
-                    Step::Open(to) => screen.toast = open_outside::open(to, (terminal, &mut events), theme, caches, (&view, screen.showing.reading()))?,
-                    step @ (Step::Compose | Step::Edit | Step::Send) => {
-                        let from = composing_from(&view).and_then(|account| accounts.noted(account));
-                        draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
-                    }
+                    Step::Links => label_links(&mut ui, previews, text),
+                    step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut ui, world)?,
+                    Step::Browse(url) => ui.screen.toast = browse(&url),
+                    Step::Open(to) => ui.screen.toast = open_outside::open(to, &mut tty, theme, caches, &ui)?,
+                    step @ (Step::Compose | Step::Edit | Step::Send) => draft(&step, &mut tty, &mut ui, world)?,
                     Step::Reply(all) => {
-                        if let Some(message) = answered(&view, &screen) {
+                        if let Some(message) = answered(&ui) {
                             let awaited = AwaitedReply { message, all, missing: Vec::new() };
-                            composing::reply(terminal, &mut events, &mut screen, (caches, &replies), (awaited, view.stack(), accounts))?;
+                            composing::reply(&mut tty, &mut ui, world, &replies, awaited)?;
                         }
                     }
-                    Step::LocalDrafts => open_local(&mut screen, outbox),
+                    Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
                     Step::SignIn(account) => return Ok(Exit::SignIn(account)),
-                    Step::Settings => match Settings::open(config_dir) {
-                        Ok(settings) => screen.over.settings = Some(settings),
-                        Err(error) => screen.toast = Some(Toast::error(error.to_string())),
+                    Step::Settings => match Settings::open(world.config_dir) {
+                        Ok(settings) => ui.screen.over.settings = Some(settings),
+                        Err(error) => ui.screen.toast = Some(Toast::error(error.to_string())),
                     },
                     Step::Icons(choice) => {
                         theme.icons = Icons::choose(choice);
@@ -234,8 +241,8 @@ pub async fn run(
                     Step::Quit => return Ok(Exit::Quit),
                 }
 
-                if drafts_before != (screen.over.draft.is_some(), screen.undo.len()) {
-                    relist_local(&mut screen, outbox);
+                if drafts_before != (ui.screen.over.draft.is_some(), ui.screen.undo.len()) {
+                    relist_local(&mut ui.screen, world.outbox);
                 }
             }
         }
@@ -243,13 +250,9 @@ pub async fn run(
 }
 
 /// Follows the Dwell, then says when the screen next changes on its own.
-fn next_change(
-    view: &InboxView,
-    screen: &mut Screen,
-    previews: &Previews,
-    text: Option<Rect>,
-) -> Option<Instant> {
-    let target = dwelling(view, screen, previews, text);
+fn next_change(ui: &mut Ui, previews: &Previews, text: Option<Rect>) -> Option<Instant> {
+    let target = dwelling(ui, previews, text);
+    let Ui { view, screen } = ui;
     screen
         .dwell
         .follow(view.selected_key(), target, Instant::now());
@@ -257,16 +260,11 @@ fn next_change(
 }
 
 /// Drops the Toast and ends the Dwell when their time is up.
-fn expire(
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-    asks: &Routes<Ask>,
-) -> Result<(), Error> {
+fn expire(ui: &mut Ui, world: World) -> Result<(), Error> {
     let now = Instant::now();
-    screen.expire(now);
-    if screen.dwell.ended(now) {
-        mark_read(view, screen, caches, asks)?;
+    ui.screen.expire(now);
+    if ui.screen.dwell.ended(now) {
+        mark_read(ui, world)?;
     }
 
     Ok(())
@@ -293,14 +291,15 @@ fn finished(result: Result<(), sync::Error>) -> Result<(), Error> {
 fn want(
     previews: &mut Previews,
     caches: &PerAccount<Cache>,
-    (view, screen): (&InboxView, &Screen),
+    ui: &Ui,
     text: Option<Rect>,
 ) -> Result<(), Error> {
     let Some(text) = text else {
         return Ok(());
     };
 
-    match screen.showing.reading() {
+    let view = &ui.view;
+    match ui.screen.showing.reading() {
         Some(reading) => {
             let stack = (|key| reading.unfolded(key), reading.cursor);
             previews.want_stack(caches, view, stack, text.width)
@@ -327,11 +326,12 @@ fn panes(terminal: &Terminal<TerminalBackend>, mode: Mode) -> Result<layout::Pan
 
 fn draw(
     terminal: &mut Terminal<TerminalBackend>,
-    (theme, accounts): (&Theme, Accounts),
-    view: &mut InboxView,
+    theme: &Theme,
+    accounts: Accounts,
+    ui: &mut Ui,
     previews: &Previews,
-    screen: &mut Screen,
 ) -> Result<(), Error> {
+    let Ui { view, screen } = ui;
     terminal
         .draw(|frame| {
             let panes = layout::split(frame.area(), screen.showing.mode());
@@ -378,7 +378,7 @@ fn draw(
             }
 
             frame.render_widget(hint_line, panes.hint);
-            popups(frame, (theme, accounts), panes.body, screen);
+            popups(frame, theme, accounts, panes.body, screen);
         })
         .map_err(Error::Terminal)?;
     Ok(())
@@ -386,7 +386,7 @@ fn draw(
 
 /// What shows over the panes in `body`, the layer taking the keys on top,
 /// then the `?` popup over any.
-fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, screen: &Screen) {
+fn popups(frame: &mut Frame, theme: &Theme, accounts: Accounts, body: Rect, screen: &Screen) {
     for layer in screen.over.layers().rev() {
         match layer {
             Layer::Picker(picker) => {
@@ -448,79 +448,85 @@ fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, 
 }
 
 fn apply(
-    (account, update): (AccountId, Update),
-    view: &mut InboxView,
-    screen: &mut Screen,
-    (caches, outbox): (&PerAccount<Cache>, &Outbox),
+    account: AccountId,
+    update: Update,
+    ui: &mut Ui,
+    world: World,
     previews: &mut Previews,
 ) -> Result<(), Error> {
+    let (caches, outbox) = (world.caches, world.outbox);
     match update {
-        Update::Inbox => {
-            let (thread, selected) = (view.selected_key(), view.selected_body());
-            let stack: Vec<BodyKey> = match screen.showing {
-                Showing::Reading(_) => view.stack().map(|m| m.body_key).collect(),
-                Showing::List | Showing::Query => Vec::new(),
-            };
-
-            show(view, caches, None)?;
-            // The labels belong to the Messages they were laid out on, and
-            // Reading to the Thread it was opened on; a Query being typed stays.
-            if screen.showing.reading().is_none() {
-                if view.selected_body() != selected {
-                    screen.over.hints = None;
-                }
-            } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
-                screen.over.hints = None;
-                if let Some(reading) = screen.showing.reading_mut() {
-                    reading.hold = true;
-                }
-            }
-
-            relist(screen, view, caches)?;
-        }
-        Update::Folders => relist(screen, view, caches)?,
+        Update::Inbox => reshow_inbox(ui, caches)?,
+        Update::Folders => relist(ui, caches)?,
         Update::FolderGone(folder) => {
-            if view.folder.is(account, &folder) {
-                let gone = format!("Folder {} no longer exists", view.folder.label());
+            if ui.view.folder.is(account, &folder) {
+                let gone = format!("Folder {} no longer exists", ui.view.folder.label());
                 // The sync connection is back on the Inbox already.
-                switch(view, screen, caches, Shown::Folder(Folder::inbox(account)))?;
-                screen.toast = Some(Toast::new(gone));
+                switch(ui, caches, Shown::Folder(Folder::inbox(account)))?;
+                ui.screen.toast = Some(Toast::new(gone));
             }
 
-            relist(screen, view, caches)?;
+            relist(ui, caches)?;
         }
         Update::Bodies(folder, fetched) => previews.fetched((account, &folder), fetched),
         Update::BodyLink(live) => {
             previews.link(account, live);
-            screen.backfill = None;
+            ui.screen.backfill = None;
         }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
-        Update::Status(status) => report(screen, previews, (account, status)),
+        Update::Status(status) => report(&mut ui.screen, previews, account, status),
         Update::Backfill(Backfill::Fetching { done, total }) => {
-            screen.backfill = Some(Status::Syncing { done, total });
+            ui.screen.backfill = Some(Status::Syncing { done, total });
         }
         Update::Backfill(Backfill::Paged {
             folder,
             nothing_below,
         }) => {
-            screen.backfill = None;
-            paged(view, caches, (account, folder, nothing_below))?;
+            ui.screen.backfill = None;
+            paged(&mut ui.view, caches, account, folder, nothing_below)?;
         }
-        Update::NoTrash => screen.toast = Some(Toast::error("no Trash Folder")),
-        Update::Unrestored => screen.toast = Some(Toast::error("nothing to undo")),
+        Update::NoTrash => ui.screen.toast = Some(Toast::error("no Trash Folder")),
+        Update::Unrestored => ui.screen.toast = Some(Toast::error("nothing to undo")),
         Update::Sent => {
-            relist_local(screen, outbox);
-            screen.outbox = outbox.count();
-            screen.toast = Some(Toast::new("Sent"));
+            relist_local(&mut ui.screen, outbox);
+            ui.screen.outbox = outbox.count();
+            ui.screen.toast = Some(Toast::new("Sent"));
         }
         Update::Refused => {
-            relist_local(screen, outbox);
-            screen.outbox = outbox.count();
-            screen.toast = Some(Toast::error("refused · back in Drafts"));
+            relist_local(&mut ui.screen, outbox);
+            ui.screen.outbox = outbox.count();
+            ui.screen.toast = Some(Toast::error("refused · back in Drafts"));
         }
     }
 
     Ok(())
+}
+
+/// The shown Folder again as the Cache reads it now.
+fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
+    let view = &ui.view;
+    let (thread, selected) = (view.selected_key(), view.selected_body());
+    let stack: Vec<BodyKey> = match ui.screen.showing {
+        Showing::Reading(_) => view.stack().map(|m| m.body_key).collect(),
+        Showing::List | Showing::Query => Vec::new(),
+    };
+
+    show(&mut ui.view, caches, None)?;
+    let Ui { view, screen } = &mut *ui;
+    // The labels belong to the Messages they were laid out on, and
+    // Reading to the Thread it was opened on; a Query being typed stays.
+    if screen.showing.reading().is_none() {
+        if view.selected_body() != selected {
+            screen.over.hints = None;
+        }
+    } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
+        screen.over.hints = None;
+        if let Some(reading) = screen.showing.reading_mut() {
+            reading.hold = true;
+        }
+    }
+
+    relist(ui, caches)
 }
 
 /// A page of older Messages of `folder` of `account` is in; the server had
@@ -528,7 +534,9 @@ fn apply(
 fn paged(
     view: &mut InboxView,
     caches: &PerAccount<Cache>,
-    (account, folder, nothing_below): (AccountId, Arc<str>, Option<Uid>),
+    account: AccountId,
+    folder: Arc<str>,
+    nothing_below: Option<Uid>,
 ) -> Result<(), Error> {
     view.nothing_below[account] = nothing_below.map(|uid| (folder, uid));
 
@@ -537,7 +545,7 @@ fn paged(
 }
 
 /// The sync connection of `account` is in `status` now.
-fn report(screen: &mut Screen, previews: &mut Previews, (account, status): (AccountId, Status)) {
+fn report(screen: &mut Screen, previews: &mut Previews, account: AccountId, status: Status) {
     if status == Status::SignedOut {
         previews.link(account, false);
     }
@@ -578,12 +586,8 @@ enum Step {
 }
 
 /// Acts on one input event, where the view alone can take it.
-fn handle(
-    event: Option<io::Result<Event>>,
-    view: &mut InboxView,
-    screen: &mut Screen,
-    half_page: usize,
-) -> Result<Step, Error> {
+fn handle(event: Option<io::Result<Event>>, ui: &mut Ui, half_page: usize) -> Result<Step, Error> {
+    let Ui { view, screen } = ui;
     match event {
         None => Ok(Step::Quit),
         Some(Err(source)) => Err(Error::Terminal(source)),
@@ -748,8 +752,9 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
 
 /// What a Reply answers: the newest Message of the selected Thread not from
 /// the Account, else its newest; in Reading, the one at the cursor.
-fn answered(view: &InboxView, screen: &Screen) -> Option<Message> {
-    let message = screen.showing.reading().map_or_else(
+fn answered(ui: &Ui) -> Option<Message> {
+    let view = &ui.view;
+    let message = ui.screen.showing.reading().map_or_else(
         || {
             view.stack()
                 .filter(|m| !m.from_me)
@@ -764,12 +769,8 @@ fn answered(view: &InboxView, screen: &Screen) -> Option<Message> {
 
 /// The selected Thread and its newest body key, while a Dwell may run on
 /// it: listed, Unread, and its body shown in the Preview `text`.
-fn dwelling(
-    view: &InboxView,
-    screen: &Screen,
-    previews: &Previews,
-    text: Option<Rect>,
-) -> Option<(Key, BodyKey)> {
+fn dwelling(ui: &Ui, previews: &Previews, text: Option<Rect>) -> Option<(Key, BodyKey)> {
+    let Ui { view, screen } = ui;
     let listed = matches!(screen.showing.mode(), Mode::List | Mode::Query)
         && screen.over.picker.is_none()
         && screen.over.local.is_none()
@@ -780,32 +781,24 @@ fn dwelling(
 }
 
 /// Mark Read on the selected Thread's Messages in their Folders.
-fn mark_read(
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-    asks: &Routes<Ask>,
-) -> Result<(), Error> {
-    let unread: Vec<_> = view
+fn mark_read(ui: &mut Ui, world: World) -> Result<(), Error> {
+    let unread: Vec<_> = ui
+        .view
         .stack()
         .filter(|m| m.unread)
         .filter_map(Message::on_server)
         .collect();
-    let Some(account) = view.stack().next().map(|m| m.account) else {
+    let Some(account) = ui.view.stack().next().map(|m| m.account) else {
         return Ok(());
     };
 
-    mark((view, screen), caches, asks, (account, &unread, false)).map(drop)
+    mark(ui, world, account, &unread, false).map(drop)
 }
 
 /// Mark Unread on the selected Thread's newest Message, or in Reading on
 /// the one at the cursor.
-fn mark_unread(
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-    asks: &Routes<Ask>,
-) -> Result<(), Error> {
+fn mark_unread(ui: &mut Ui, world: World) -> Result<(), Error> {
+    let Ui { view, screen } = &mut *ui;
     let message = screen.showing.reading().map_or_else(
         || view.selected_message(),
         |reading| view.stack().find(|m| m.body_key == reading.cursor),
@@ -825,8 +818,8 @@ fn mark_unread(
         screen.dwell.spare(key);
     }
 
-    if mark((view, screen), caches, asks, (account, &marked, true))? {
-        screen.toast = Some(Toast::new("marked Unread"));
+    if mark(ui, world, account, &marked, true)? {
+        ui.screen.toast = Some(Toast::new("marked Unread"));
     }
 
     Ok(())
@@ -835,30 +828,27 @@ fn mark_unread(
 /// Sets Unread on `messages` of `account` in the Cache and the screen, and
 /// asks its sync connection to tell the server; false when none changed.
 fn mark(
-    (view, screen): (&mut InboxView, &mut Screen),
-    caches: &PerAccount<Cache>,
-    asks: &Routes<Ask>,
-    (account, messages, unread): (AccountId, &[MessageRef], bool),
+    ui: &mut Ui,
+    world: World,
+    account: AccountId,
+    messages: &[MessageRef],
+    unread: bool,
 ) -> Result<bool, Error> {
-    if !caches[account].mark(messages, unread)? {
+    if !world.caches[account].mark(messages, unread)? {
         return Ok(false);
     }
 
-    show(view, caches, None)?;
-    relist(screen, view, caches)?;
+    show(&mut ui.view, world.caches, None)?;
+    relist(ui, world.caches)?;
     // Signed out, the change waits in the Cache.
-    asks.send(account, Ask::Changes);
+    world.asks.send(account, Ask::Changes);
     Ok(true)
 }
 
 /// Delete on the selected Thread's Messages in their Folders, or in
 /// Reading on the one at the cursor.
-fn delete(
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-    asks: &Routes<Ask>,
-) -> Result<(), Error> {
+fn delete(ui: &mut Ui, world: World) -> Result<(), Error> {
+    let (caches, Ui { view, screen }) = (world.caches, &mut *ui);
     // A Search never shows Trash.
     if view.search.is_none() && view.folder.role() == Some(Role::Trash) {
         screen.toast = Some(Toast::new("already in Trash"));
@@ -894,21 +884,17 @@ fn delete(
     screen.over.hints = None;
     screen.follow(view, thread);
 
-    relist(screen, view, caches)?;
+    relist(ui, caches)?;
     // Signed out, the move waits in the Cache.
-    asks.send(account, Ask::Changes);
-    screen.toast = Some(Toast::new("deleted · u to undo"));
+    world.asks.send(account, Ask::Changes);
+    ui.screen.toast = Some(Toast::new("deleted · u to undo"));
     Ok(())
 }
 
 /// Undo of the latest Delete not yet taken back, selecting its Thread, or
 /// of the latest Draft discarded, showing it again.
-fn undo(
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-    asks: &Routes<Ask>,
-) -> Result<(), Error> {
+fn undo(ui: &mut Ui, world: World) -> Result<(), Error> {
+    let (caches, Ui { view, screen }) = (world.caches, &mut *ui);
     let folders = match screen.undo.pop() {
         Some(Undo::Discard(path, text, notes)) => {
             composing::restore(screen, path, text, notes);
@@ -933,8 +919,9 @@ fn undo(
         view.select(key);
     }
 
-    relist(screen, view, caches)?;
-    asks.send(account, Ask::Changes);
+    relist(ui, caches)?;
+    world.asks.send(account, Ask::Changes);
+    let Ui { view, screen } = ui;
     let shown = view
         .folder
         .of(account)
@@ -1071,15 +1058,13 @@ fn relist_local(screen: &mut Screen, outbox: &Outbox) {
 }
 
 /// Compose, the editor again on the shown Draft, or its Send.
-fn draft(
-    step: &Step,
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
-    screen: &mut Screen,
-    (accounts, from, outbox, asks): (Accounts, Option<&str>, &Outbox, &Routes<Ask>),
-) -> Result<(), Error> {
+fn draft(step: &Step, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<(), Error> {
+    let screen = &mut ui.screen;
     match step {
-        Step::Compose => composing::compose(terminal, events, screen, from)?,
+        Step::Compose => {
+            let from = composing_from(&ui.view).and_then(|account| world.accounts.noted(account));
+            composing::compose(tty, screen, from)?;
+        }
         Step::Edit => {
             if let Some(preview) = screen.over.draft.take() {
                 let notes = DraftNotes {
@@ -1087,10 +1072,10 @@ fn draft(
                     answering: preview.answering,
                 };
 
-                composing::edit(terminal, events, screen, preview.path, notes)?;
+                composing::edit(tty, screen, preview.path, notes)?;
             }
         }
-        Step::Send => composing::send(screen, (accounts, outbox), asks),
+        Step::Send => composing::send(screen, world),
         _ => {}
     }
 
@@ -1129,61 +1114,52 @@ fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 
 /// Shows `folder` in the Message List, from the Cache, unless it is shown
 /// already; true when it was not, for the sync connection to follow.
-fn switch(
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-    folder: Shown,
-) -> Result<bool, Error> {
-    if folder.same(&view.folder) {
+fn switch(ui: &mut Ui, caches: &PerAccount<Cache>, folder: Shown) -> Result<bool, Error> {
+    if folder.same(&ui.view.folder) {
         return Ok(false);
     }
 
-    screen.list();
-    screen.over.hints = None;
-    view.switch(folder);
-    show(view, caches, None)?;
+    ui.screen.list();
+    ui.screen.over.hints = None;
+    ui.view.switch(folder);
+    show(&mut ui.view, caches, None)?;
     Ok(true)
 }
 
 /// Opens the Folder Picker as the Cache last saw the Folders, starts a
 /// Search, shows the Folder picked, or marks, deletes or restores Messages,
 /// asking the sync connection to follow.
-fn steer(
-    step: Step,
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-    asks: &Routes<Ask>,
-) -> Result<(), Error> {
+fn steer(step: Step, ui: &mut Ui, world: World) -> Result<(), Error> {
+    let (caches, asks) = (world.caches, world.asks);
     // Signed out, nothing syncs and the ask is dropped.
     match step {
         Step::Folders => {
             let folders = folders(caches)?;
-            screen.over.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
+            let view = &ui.view;
+            ui.screen.over.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
             for account in caches.ids() {
                 asks.send(account, Ask::ListFolders);
             }
         }
         Step::Show(folder) => {
-            if switch(view, screen, caches, folder)? {
+            if switch(ui, caches, folder)? {
                 for account in caches.ids() {
-                    if let Some(shown) = view.folder.of(account) {
+                    if let Some(shown) = ui.view.folder.of(account) {
                         asks.send(account, Ask::Show(shown.into()));
                     }
                 }
             }
         }
         Step::Read(thread) => {
-            mark_read(view, screen, caches, asks)?;
+            mark_read(ui, world)?;
             if let Some((account, id)) = thread {
                 asks.send(account, Ask::Thread(id));
             }
         }
-        Step::MarkUnread => mark_unread(view, screen, caches, asks)?,
-        Step::Delete => delete(view, screen, caches, asks)?,
-        Step::Undo => undo(view, screen, caches, asks)?,
-        Step::Search => start_search(view, screen, caches)?,
+        Step::MarkUnread => mark_unread(ui, world)?,
+        Step::Delete => delete(ui, world)?,
+        Step::Undo => undo(ui, world)?,
+        Step::Search => start_search(ui, caches)?,
         _ => {}
     }
 
@@ -1201,9 +1177,9 @@ fn folders(caches: &PerAccount<Cache>) -> Result<Vec<Folder>, Error> {
 }
 
 /// Lists the Folders anew in an open Folder Picker.
-fn relist(screen: &mut Screen, view: &InboxView, caches: &PerAccount<Cache>) -> Result<(), Error> {
-    if let Some(picker) = &mut screen.over.picker {
-        picker.reload(folders(caches)?, &view.folder);
+fn relist(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
+    if let Some(picker) = &mut ui.screen.over.picker {
+        picker.reload(folders(caches)?, &ui.view.folder);
     }
 
     Ok(())
@@ -1228,14 +1204,10 @@ fn everywhere(caches: &PerAccount<Cache>, shown: &Shown) -> Result<Inbox, cache:
 }
 
 /// Types the Query of a new Search over the whole Cache, or of the one under way.
-fn start_search(
-    view: &mut InboxView,
-    screen: &mut Screen,
-    caches: &PerAccount<Cache>,
-) -> Result<(), Error> {
-    let shown = view.folder.clone();
-    if view.start_search(|| everywhere(caches, &shown))? {
-        screen.showing = Showing::Query;
+fn start_search(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
+    let shown = ui.view.folder.clone();
+    if ui.view.start_search(|| everywhere(caches, &shown))? {
+        ui.screen.showing = Showing::Query;
     }
 
     Ok(())
@@ -1243,7 +1215,8 @@ fn start_search(
 
 /// Enters hint mode on the links the Preview window shows, or says there
 /// are none. `text` is where the Preview's text goes, if it is shown.
-fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text: Option<Rect>) {
+fn label_links(ui: &mut Ui, previews: &Previews, text: Option<Rect>) {
+    let Ui { view, screen } = ui;
     screen.over.hints = text.and_then(|text| {
         if let Some(reading) = screen.showing.reading() {
             return stack_links(view, previews, reading, text);
@@ -1285,26 +1258,6 @@ fn browse(url: &str) -> Option<Toast> {
     let error = browser::open(url).err()?;
     tracing::error!("opening a link failed: {error}");
     Some(Toast::new("could not open the link"))
-}
-
-/// Runs `program` in the foreground with the terminal handed back, then
-/// takes the terminal again. A failure of `program` alone is only logged.
-pub fn outside(
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
-    program: impl FnOnce() -> io::Result<()>,
-) -> Result<(), Error> {
-    // A live EventStream keeps reading the terminal, and would take the
-    // pager's keys; dropping it stops its reader thread.
-    events.restart();
-    terminal_backend::leave(terminal).map_err(Error::Terminal)?;
-    let result = program();
-    terminal_backend::resume(terminal).map_err(Error::Terminal)?;
-    if let Err(error) = result {
-        tracing::error!("leaving the screen failed: {error}");
-    }
-
-    Ok(())
 }
 
 /// The Account a Compose goes out from: the shown Folder's; in All

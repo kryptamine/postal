@@ -1,40 +1,30 @@
 use std::path::{Path, PathBuf};
 
-use ratatui::Terminal;
-
 use crate::{
     accounts::Accounts,
     awaited_reply::AwaitedReply,
-    cache::Cache,
     draft_file,
     draft_notes::DraftNotes,
     draft_preview::DraftPreview,
     editor,
-    input::Input,
     message::Message,
     notes::{self, Notes},
-    outbox::Outbox,
-    per_account::PerAccount,
     reply_draft,
     reply_fetch::ReplyFetch,
-    routes::Routes,
-    run::{self, Error},
+    run::Error,
     screen::Screen,
     status::Status,
     steering::Ask,
-    terminal_backend::TerminalBackend,
     toast::Toast,
+    tty::Tty,
+    ui::Ui,
     undo::Undo,
+    world::World,
 };
 
 /// Compose from the Account `from`: a new Draft's file in the editor,
 /// then its preview, unless it was left as the template.
-pub fn compose(
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
-    screen: &mut Screen,
-    from: Option<&str>,
-) -> Result<(), Error> {
+pub fn compose(tty: &mut Tty, screen: &mut Screen, from: Option<&str>) -> Result<(), Error> {
     // A Reply still waiting on its body would open over this Draft.
     screen.replying = None;
     let Some(path) = create(screen, None) else {
@@ -50,7 +40,7 @@ pub fn compose(
         tracing::error!("noting the Account of a Draft failed: {error}");
     }
 
-    run::outside(terminal, events, || editor::edit(&path))?;
+    tty.outside(|| editor::edit(&path))?;
     if draft_file::untouched(&path) {
         drop_untouched(screen, &path);
         return Ok(());
@@ -71,27 +61,28 @@ fn drop_untouched(screen: &mut Screen, path: &Path) {
     screen.toast = Some(Toast::new("Empty Draft dropped"));
 }
 
-/// Reply, or Reply All, once every body of the `thread` it answers in is
-/// in the Cache, which the fetch connection may first bring; while it is
+/// Reply, or Reply All, once every body of the selected Thread is in
+/// the Cache, which the fetch connection may first bring; while it is
 /// not live, at once on the answered body alone.
-pub fn reply<'a>(
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
-    screen: &mut Screen,
-    (caches, fetch): (&PerAccount<Cache>, &ReplyFetch),
-    (mut awaited, thread, accounts): (AwaitedReply, impl Iterator<Item = &'a Message>, Accounts),
+pub fn reply(
+    tty: &mut Tty,
+    ui: &mut Ui,
+    world: World,
+    fetch: &ReplyFetch,
+    mut awaited: AwaitedReply,
 ) -> Result<(), Error> {
+    let Ui { view, screen } = ui;
     screen.replying = None;
     let message = &awaited.message;
-    if let Some(path) = answered_by(message, accounts) {
-        return edit(terminal, events, screen, path, DraftNotes::default());
+    if let Some(path) = answered_by(message, world.accounts) {
+        return edit(tty, screen, path, DraftNotes::default());
     }
 
-    let cache = &caches[message.account];
+    let cache = &world.caches[message.account];
     let raw = cache.body(message.body_key)?;
     // The answered Message may be the List's selection, outside the stack.
     let answered = (message.on_server(), message.body_key);
-    let each = thread.map(|m| (m.on_server(), m.body_key));
+    let each = view.stack().map(|m| (m.on_server(), m.body_key));
     for (on_server, key) in each.chain([answered]) {
         if let Some(on_server) = on_server
             && !cache.has_body(key)?
@@ -105,7 +96,7 @@ pub fn reply<'a>(
     let signed_out = status == Status::SignedOut;
     match raw {
         Some(raw) if awaited.missing.is_empty() || status != Status::Live => {
-            answer(terminal, events, screen, (&raw, &awaited, accounts))
+            answer(tty, screen, &raw, &awaited, world.accounts)
         }
         None if message.folder.is_none() => {
             screen.toast = Some(Toast::new("not downloaded"));
@@ -138,10 +129,9 @@ fn answered_by(message: &Message, accounts: Accounts) -> Option<PathBuf> {
 /// The end of the fetch a Reply waits on: its editor, or why not.
 pub fn fetched(
     result: Result<(), String>,
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
+    tty: &mut Tty,
     screen: &mut Screen,
-    (caches, accounts): (&PerAccount<Cache>, Accounts),
+    world: World,
 ) -> Result<(), Error> {
     let Some(awaited) = screen.replying.take() else {
         return Ok(());
@@ -153,23 +143,24 @@ pub fn fetched(
     }
 
     let message = &awaited.message;
-    let body = caches[message.account].body(message.body_key)?;
+    let body = world.caches[message.account].body(message.body_key)?;
 
     let Some(raw) = body else {
         screen.toast = Some(Toast::error("could not fetch the Message"));
         return Ok(());
     };
 
-    answer(terminal, events, screen, (&raw, &awaited, accounts))
+    answer(tty, screen, &raw, &awaited, world.accounts)
 }
 
 /// A Reply's Draft from the answered Message's body `raw`, in the editor,
 /// going out from the Account the Message reached.
 fn answer(
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
+    tty: &mut Tty,
     screen: &mut Screen,
-    (raw, awaited, accounts): (&[u8], &AwaitedReply, Accounts),
+    raw: &[u8],
+    awaited: &AwaitedReply,
+    accounts: Accounts,
 ) -> Result<(), Error> {
     let account = awaited.message.account;
     let email = accounts.email(account);
@@ -188,7 +179,7 @@ fn answer(
         tracing::error!("noting what a Draft answers failed: {error}");
     }
 
-    edit(terminal, events, screen, path, notes)
+    edit(tty, screen, path, notes)
 }
 
 /// A new Draft's file holding `text`, else the template; `None` once the
@@ -208,13 +199,12 @@ fn create(screen: &mut Screen, text: Option<&str>) -> Option<PathBuf> {
 /// The editor on the Draft at `path`, then its preview as the file reads
 /// now; `notes` win over those beside it.
 pub fn edit(
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
+    tty: &mut Tty,
     screen: &mut Screen,
     path: PathBuf,
     notes: DraftNotes,
 ) -> Result<(), Error> {
-    run::outside(terminal, events, || editor::edit(&path))?;
+    tty.outside(|| editor::edit(&path))?;
     preview(screen, path, notes);
     Ok(())
 }
@@ -237,7 +227,8 @@ fn preview(screen: &mut Screen, path: PathBuf, notes: DraftNotes) {
 
 /// Send: the Draft shown moves to the Outbox, unless it does not parse,
 /// and its Account is asked to send it.
-pub fn send(screen: &mut Screen, (accounts, outbox): (Accounts, &Outbox), asks: &Routes<Ask>) {
+pub fn send(screen: &mut Screen, world: World) {
+    let (accounts, outbox) = (world.accounts, world.outbox);
     let Some(mut preview) = screen.over.draft.take() else {
         return;
     };
@@ -285,7 +276,7 @@ pub fn send(screen: &mut Screen, (accounts, outbox): (Accounts, &Outbox), asks: 
     screen.outbox = outbox.count();
     screen.toast = Some(Toast::new("Sending"));
     // Signed out, the Outbox waits for a sync.
-    asks.send(account, Ask::Send);
+    world.asks.send(account, Ask::Send);
 }
 
 /// Closes the shown Draft's preview, its file kept for Local Drafts.

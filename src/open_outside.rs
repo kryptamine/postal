@@ -1,21 +1,17 @@
-use ratatui::Terminal;
-
 use crate::{
     cache::Cache,
     editor,
-    inbox_view::InboxView,
-    input::Input,
     message::Message,
     message_file::MessageFile,
     pager, pager_text,
     per_account::PerAccount,
     preview_render::{self, Job},
-    reading::Reading,
     rendered_previews::PreviewKey,
-    run::{self, Error},
-    terminal_backend::TerminalBackend,
+    run::Error,
     theme::Theme,
     toast::Toast,
+    tty::Tty,
+    ui::Ui,
     view::View,
 };
 
@@ -32,11 +28,12 @@ pub enum Outside {
 /// Returns the Toast to show instead; `None` drops any shown.
 pub fn open(
     to: Outside,
-    (terminal, events): (&mut Terminal<TerminalBackend>, &mut Input),
+    tty: &mut Tty,
     theme: &Theme,
     caches: &PerAccount<Cache>,
-    (view, reading): (&InboxView, Option<&Reading>),
+    ui: &Ui,
 ) -> Result<Option<Toast>, Error> {
+    let (view, reading) = (&ui.view, ui.screen.showing.reading());
     let message = reading.map_or_else(
         || view.selected_message(),
         |reading| view.stack().find(|m| m.body_key == reading.cursor),
@@ -53,9 +50,9 @@ pub fn open(
 
     match to {
         Outside::Pager => {
-            let width = terminal.size().map_err(Error::Terminal)?.width;
-            let text = paged(message, body, (width, view.html), theme);
-            run::outside(terminal, events, || pager::page(&text))?;
+            let width = tty.terminal.size().map_err(Error::Terminal)?.width;
+            let text = paged(message, body, width, view.html, theme);
+            tty.outside(|| pager::page(&text))?;
         }
         Outside::Editor => {
             let file = match MessageFile::write(message, &body) {
@@ -63,7 +60,7 @@ pub fn open(
                 Err(error) => return Ok(Some(Toast::error(error.to_string()))),
             };
 
-            run::outside(terminal, events, || editor::edit(file.path()))?;
+            tty.outside(|| editor::edit(file.path()))?;
         }
     }
 
@@ -72,7 +69,7 @@ pub fn open(
 
 /// The bytes piped to the pager: the Preview laid out in `width` columns,
 /// in the View `html` says, its Quote shown.
-fn paged(message: &Message, body: Vec<u8>, (width, html): (u16, View), theme: &Theme) -> Vec<u8> {
+fn paged(message: &Message, body: Vec<u8>, width: u16, html: View, theme: &Theme) -> Vec<u8> {
     let preview = preview_render::paged(&Job {
         key: PreviewKey {
             account: message.account,

@@ -156,6 +156,8 @@ mod thread_show;
 mod toast;
 mod transfer_encoding;
 mod truncate;
+mod tty;
+mod ui;
 mod uid;
 mod undo;
 mod unique_id;
@@ -163,6 +165,7 @@ mod unlink;
 mod update;
 mod view;
 mod wake;
+mod world;
 mod wrap;
 mod xdg;
 
