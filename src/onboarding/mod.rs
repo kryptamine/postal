@@ -357,7 +357,7 @@ async fn password(
         match screen.field(&mut password, field).await? {
             Typed::Entered => {
                 let secret = Credential::new(password.trim().to_owned());
-                let checking = login::check_password(dir, Provider::ICloud, (email, secret));
+                let checking = login::check_password(dir, Provider::ICloud, email, secret);
                 return settle(screen, dir, pin!(checking)).await;
             }
             Typed::Back if choosing => password.clear(),

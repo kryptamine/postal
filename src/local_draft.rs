@@ -14,7 +14,7 @@ pub struct LocalDraft {
 }
 
 impl LocalDraft {
-    fn new(path: PathBuf, queued: bool, (text, account): (&str, Option<String>)) -> Self {
+    fn new(path: PathBuf, queued: bool, text: &str, account: Option<String>) -> Self {
         Self {
             account,
             path,
@@ -36,7 +36,7 @@ pub fn list(outbox: &Outbox) -> io::Result<Vec<LocalDraft>> {
                     .ok()
                     .flatten()
                     .and_then(|notes| notes.account);
-                rows.push(LocalDraft::new(path, false, (&text, account)));
+                rows.push(LocalDraft::new(path, false, &text, account));
             }
             Err(error) => tracing::warn!("reading {} failed: {error}", path.display()),
         }
@@ -47,7 +47,7 @@ pub fn list(outbox: &Outbox) -> io::Result<Vec<LocalDraft>> {
             Ok(notes) => {
                 let notes = notes.unwrap_or_default();
                 let text = notes.draft.unwrap_or_default();
-                rows.push(LocalDraft::new(queued.path, true, (&text, notes.account)));
+                rows.push(LocalDraft::new(queued.path, true, &text, notes.account));
             }
             Err(error) => tracing::warn!("reading {} failed: {error}", queued.path.display()),
         }

@@ -40,7 +40,8 @@ impl Error {
 pub async fn send(
     config: &Config,
     sign_in: &SignIn,
-    (envelope, message): (&Envelope, &[u8]),
+    envelope: &Envelope,
+    message: &[u8],
 ) -> Result<(), Error> {
     let (secret, mechanisms) = match sign_in {
         SignIn::OAuth(tokens) => {

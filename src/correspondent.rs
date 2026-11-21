@@ -65,7 +65,8 @@ struct Tally {
 /// written to, then by how often and how lately at `now`.
 pub fn ranked(
     seen: Vec<Seen>,
-    (accounts, first): (&[&str], &str),
+    accounts: &[&str],
+    first: &str,
     now: DateTime<Utc>,
 ) -> Vec<Correspondent> {
     let mut tallies: HashMap<String, Tally> = HashMap::new();

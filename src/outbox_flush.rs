@@ -124,10 +124,10 @@ async fn submit(
     let refusal = match parsed {
         Ok((envelope, draft)) => {
             let config = sender.outgoing.config;
-            match smtp::send(config, sender.sign_in, (&envelope, &message)).await {
+            match smtp::send(config, sender.sign_in, &envelope, &message).await {
                 Ok(()) => {
                     let written = correspondence(&draft, &message);
-                    return accept(cache, queued, (notes, written.as_ref()), send)
+                    return accept(cache, queued, notes, written.as_ref(), send)
                         .map(|()| Submitted::Accepted);
                 }
                 Err(error) if error.refused() => error.to_string(),
@@ -152,7 +152,7 @@ async fn submit(
         error: Some(refusal),
     };
 
-    if let Err(error) = sender.outbox.give_back(queued, (&text, notes)) {
+    if let Err(error) = sender.outbox.give_back(queued, &text, &notes) {
         tracing::error!("giving a refused Message back failed: {error}");
     }
 
@@ -181,7 +181,8 @@ fn correspondence(draft: &Draft, message: &[u8]) -> Option<Correspondence> {
 fn accept(
     cache: &Cache,
     queued: &mut Queued,
-    (notes, written): (Notes, Option<&Correspondence>),
+    notes: Notes,
+    written: Option<&Correspondence>,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     tracing::info!("SMTP accepted {}", queued.path.display());

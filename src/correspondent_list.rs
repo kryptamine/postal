@@ -33,7 +33,7 @@ pub fn run(list: &CorrespondentList) -> Result<(), Box<dyn Error>> {
     let seen = Reader::open(&xdg::cache_dir()?)?.correspondence()?;
     let first = first_account(list)?.or_else(|| emails.first().map(|&e| e.to_owned()));
     let first = first.unwrap_or_default();
-    let ranked = correspondent::ranked(seen, (&emails, &first), Utc::now());
+    let ranked = correspondent::ranked(seen, &emails, &first, Utc::now());
 
     let text = if list.json {
         json(&ranked)?

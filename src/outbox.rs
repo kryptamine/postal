@@ -95,7 +95,7 @@ impl Outbox {
 
     /// Gives `queued` back to `drafts/` as the Draft `text` it was, `notes`
     /// beside it holding the server's answer.
-    pub fn give_back(&self, queued: &Queued, (text, notes): (&str, Notes)) -> io::Result<()> {
+    pub fn give_back(&self, queued: &Queued, text: &str, notes: &Notes) -> io::Result<()> {
         let draft = self
             .dir("drafts")?
             .join(queued.path.file_name().unwrap_or_default());

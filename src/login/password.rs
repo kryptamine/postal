@@ -10,7 +10,8 @@ use crate::{
 pub async fn check_password(
     dir: &Path,
     provider: Provider,
-    (email, password): (String, Credential),
+    email: String,
+    password: Credential,
 ) -> Result<Granted, Box<dyn std::error::Error>> {
     let partial = PartialConfig::load(&dir.join("config.toml"))?;
     let writes = writes(&partial, &email, provider);

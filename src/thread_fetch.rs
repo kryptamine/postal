@@ -82,7 +82,7 @@ async fn fetched(
         row.snippet = snippets.remove(&row.uid).unwrap_or_default();
     }
 
-    cache.write_thread(id, (&rows, &learnt), &bodies)?;
+    cache.write_thread(id, &rows, &learnt, &bodies)?;
     tracing::info!("Thread {id} holds {} Messages in All Mail", rows.len());
     send(Update::Inbox);
     Ok(())
