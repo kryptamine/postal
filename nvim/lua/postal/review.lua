@@ -71,6 +71,31 @@ function Review:place()
 	end
 end
 
+-- Virtual lines never wrap: cuts `line` at spaces into pieces at most
+-- `width` cells wide. A window resized later keeps the old cuts.
+local function fold(line, width)
+	local pieces = {}
+	while vim.fn.strdisplaywidth(line) > width do
+		local chars = 1
+		while vim.fn.strdisplaywidth(vim.fn.strcharpart(line, 0, chars + 1)) <= width do
+			chars = chars + 1
+		end
+
+		local head = vim.fn.strcharpart(line, 0, chars)
+		local space = head:match(".*() ")
+		if space and space > 1 then
+			table.insert(pieces, line:sub(1, space - 1))
+			line = line:sub(space + 1)
+		else
+			table.insert(pieces, head)
+			line = line:sub(#head + 1)
+		end
+	end
+
+	table.insert(pieces, line)
+	return pieces
+end
+
 -- Marks the lines `hunk` shows from `row` on, the lines it would replace
 -- as virtual ones over them.
 function Review:mark(hunk, row)
@@ -78,8 +103,13 @@ function Review:mark(hunk, row)
 	local over = hunk.conflict and hunk.new or hunk.old
 	local group = hunk.conflict and "PostalReviewAdd" or "PostalReviewDelete"
 	local mark = { virt_lines_above = true, virt_lines = {} }
+	local win = vim.fn.bufwinid(self.draft)
+	local width = win == -1 and math.huge
+		or math.max(20, vim.api.nvim_win_get_width(win) - vim.fn.getwininfo(win)[1].textoff)
 	for _, line in ipairs(over) do
-		table.insert(mark.virt_lines, { { line, group } })
+		for _, piece in ipairs(fold(line, width)) do
+			table.insert(mark.virt_lines, { { piece, group } })
+		end
 	end
 
 	if #shown > 0 then
