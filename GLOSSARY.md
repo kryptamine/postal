@@ -120,6 +120,14 @@ _Avoid_: pattern, search string
 Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers and an empty body.
 _Avoid_: new mail, write
 
+**Correspondent**:
+An address an Account has mail from or has written to, with the name it goes by, as the Cache knows it; those the Account wrote to rank first. Postal learns them from mail alone and never keeps an address book.
+_Avoid_: contact, address book, recipient
+
+**Expand**:
+Replacing a recipient of a Draft written as words rather than an address, such as `маша` or `ivan@g`, with the Correspondent every word begins a word of, once `$EDITOR` exits. With several, the Draft's preview offers them to choose from; with none, the recipient stays as written and the Draft cannot be sent.
+_Avoid_: autocomplete, resolve, lookup
+
 **Reply**:
 Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft.
 _Avoid_: respond, answer
