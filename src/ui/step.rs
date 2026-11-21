@@ -2,13 +2,28 @@ use std::sync::Arc;
 
 use crate::{
     account::config::IconChoice, domain::per_account::AccountId, domain::shown::Shown,
-    domain::thread_id::ThreadId, ui::open_outside::Outside,
+    domain::thread_id::ThreadId, ui::exit::Exit, ui::open_outside::Outside,
 };
 
 /// What the event loop does after one input event.
 pub enum Step {
     Stay,
     Links,
+    Steer(Steer),
+    Draft(Drafting),
+    /// Reply, or Reply All when true.
+    Reply(bool),
+    Browse(Arc<str>),
+    Open(Outside),
+    LocalDrafts,
+    Settings,
+    Icons(IconChoice),
+    Exit(Exit),
+}
+
+/// What changes the Folder shown or the Messages, the sync connection asked
+/// to follow.
+pub enum Steer {
     Folders,
     Show(Shown),
     Search,
@@ -18,21 +33,13 @@ pub enum Step {
     MarkUnread,
     Delete,
     Undo,
-    Browse(Arc<str>),
-    Open(Outside),
-    LocalDrafts,
+}
+
+/// What a Draft goes through in the editor and the Outbox.
+#[derive(Clone, Copy)]
+pub enum Drafting {
     Compose,
-    /// Reply, or Reply All when true.
-    Reply(bool),
     /// The shown Draft in the editor again.
     Edit,
     Send,
-    /// The sign-in of this Account, signed out.
-    SignIn(AccountId),
-    Settings,
-    Icons(IconChoice),
-    AddAccount,
-    Unlink(String),
-    Reload,
-    Quit,
 }

@@ -25,6 +25,7 @@ use crate::{
     ui::deleting,
     ui::drafting,
     ui::draw,
+    ui::exit::Exit,
     ui::folder_picker::FolderPicker,
     ui::folder_show::{folders, show, start_search, switch},
     ui::handle,
@@ -42,7 +43,7 @@ use crate::{
     ui::previews::Previews,
     ui::screen::Screen,
     ui::settings::Settings,
-    ui::step::Step,
+    ui::step::{Steer, Step},
     ui::terminal_backend::TerminalBackend,
     ui::theme::Theme,
     ui::toast::Toast,
@@ -58,20 +59,6 @@ pub enum Error {
     Cache(#[from] cache::Error),
     #[error(transparent)]
     Sync(#[from] sync::Error),
-}
-
-/// How the TUI ended.
-pub enum Exit {
-    Quit,
-    /// `L` asked for the login flow of this Account, run with the terminal
-    /// handed back.
-    SignIn(AccountId),
-    /// Settings asked for the Onboarding from the Provider list.
-    AddAccount,
-    /// Settings asked to unlink the Account of this address.
-    Unlink(String),
-    /// Settings changed what the Accounts read at start.
-    Reload,
 }
 
 /// The network work behind the screen, what it reports as it goes, the
@@ -251,24 +238,15 @@ impl Model<'_> {
         match step {
             Step::Stay => {}
             Step::Links => label_links(ui, self.previews, text),
-            step @ (Step::Folders
-            | Step::Show(_)
-            | Step::Search
-            | Step::Read(_)
-            | Step::MarkUnread
-            | Step::Delete
-            | Step::Undo) => steer(step, ui, world)?,
+            Step::Steer(steer) => steering(steer, ui, world)?,
             Step::Browse(url) => ui.screen.toast = browse(&url),
             Step::Open(to) => {
                 let tty = &mut self.tty;
                 ui.screen.toast = open_outside::open(to, tty, self.theme, world.caches, ui)?;
             }
-            step @ (Step::Compose | Step::Edit | Step::Send) => {
-                drafting::draft(&step, &mut self.tty, ui, world)?;
-            }
+            Step::Draft(drafting) => drafting::draft(drafting, &mut self.tty, ui, world)?,
             Step::Reply(all) => drafting::reply(all, &mut self.tty, ui, world, &self.replies)?,
             Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
-            Step::SignIn(account) => return Ok(Some(Exit::SignIn(account))),
             Step::Settings => match Settings::open(world.config_dir) {
                 Ok(settings) => ui.screen.over.settings = Some(settings),
                 Err(error) => ui.screen.toast = Some(Toast::error(error.to_string())),
@@ -277,10 +255,7 @@ impl Model<'_> {
                 self.theme.icons = Icons::choose(choice);
                 self.previews.set_look(self.theme.mail_look());
             }
-            Step::AddAccount => return Ok(Some(Exit::AddAccount)),
-            Step::Unlink(email) => return Ok(Some(Exit::Unlink(email))),
-            Step::Reload => return Ok(Some(Exit::Reload)),
-            Step::Quit => return Ok(Some(Exit::Quit)),
+            Step::Exit(exit) => return Ok(Some(exit)),
         }
 
         Ok(None)
@@ -397,11 +372,11 @@ fn panes(terminal: &Terminal<TerminalBackend>, mode: Mode) -> Result<layout::Pan
 /// Opens the Folder Picker as the Cache last saw the Folders, starts a
 /// Search, shows the Folder picked, or marks, deletes or restores Messages,
 /// asking the sync connection to follow.
-fn steer(step: Step, ui: &mut Ui, world: World) -> Result<(), Error> {
+fn steering(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
     let (caches, asks) = (world.caches, world.asks);
     // Signed out, nothing syncs and the ask is dropped.
-    match step {
-        Step::Folders => {
+    match steer {
+        Steer::Folders => {
             let folders = folders(caches)?;
             let view = &ui.view;
             ui.screen.over.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
@@ -409,7 +384,7 @@ fn steer(step: Step, ui: &mut Ui, world: World) -> Result<(), Error> {
                 asks.send(account, Ask::ListFolders);
             }
         }
-        Step::Show(folder) => {
+        Steer::Show(folder) => {
             if switch(ui, caches, folder)? {
                 for account in caches.ids() {
                     if let Some(shown) = ui.view.folder.of(account) {
@@ -418,17 +393,16 @@ fn steer(step: Step, ui: &mut Ui, world: World) -> Result<(), Error> {
                 }
             }
         }
-        Step::Read(thread) => {
+        Steer::Read(thread) => {
             mark_read(ui, world)?;
             if let Some((account, id)) = thread {
                 asks.send(account, Ask::Thread(id));
             }
         }
-        Step::MarkUnread => mark_unread(ui, world)?,
-        Step::Delete => deleting::delete(ui, world)?,
-        Step::Undo => deleting::undo(ui, world)?,
-        Step::Search => start_search(ui, caches)?,
-        _ => {}
+        Steer::MarkUnread => mark_unread(ui, world)?,
+        Steer::Delete => deleting::delete(ui, world)?,
+        Steer::Undo => deleting::undo(ui, world)?,
+        Steer::Search => start_search(ui, caches)?,
     }
 
     Ok(())

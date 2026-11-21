@@ -14,6 +14,7 @@ mod draft_preview;
 mod drafting;
 mod draw;
 mod dwell;
+pub mod exit;
 mod folder_picker;
 mod folder_show;
 mod handle;

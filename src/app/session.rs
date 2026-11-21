@@ -17,9 +17,10 @@ use crate::{
     mail::serve::serve,
     mail::status::Status,
     render::icons::Icons,
+    ui::exit::Exit,
     ui::older_pages::OlderPages,
     ui::previews::Previews,
-    ui::run::{self, Background, Exit},
+    ui::run::{self, Background},
     ui::terminal_slot::TerminalSlot,
     ui::theme::Theme,
 };

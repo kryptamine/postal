@@ -2,18 +2,18 @@ use crate::{
     compose::awaited_reply::AwaitedReply, compose::draft_notes::DraftNotes,
     domain::message::Message, domain::per_account::AccountId, domain::shown::Shown,
     mail::reply_fetch::ReplyFetch, ui::composing, ui::inbox_view::InboxView, ui::main_screen::Ui,
-    ui::run::Error, ui::step::Step, ui::tty::Tty, ui::world::World,
+    ui::run::Error, ui::step::Drafting, ui::tty::Tty, ui::world::World,
 };
 
 /// Compose, the editor again on the shown Draft, or its Send.
-pub fn draft(step: &Step, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<(), Error> {
+pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<(), Error> {
     let screen = &mut ui.screen;
-    match step {
-        Step::Compose => {
+    match drafting {
+        Drafting::Compose => {
             let from = composing_from(&ui.view).and_then(|account| world.accounts.noted(account));
             composing::compose(tty, screen, from)?;
         }
-        Step::Edit => {
+        Drafting::Edit => {
             if let Some(preview) = screen.over.draft.take() {
                 let notes = DraftNotes {
                     account: preview.account,
@@ -23,8 +23,7 @@ pub fn draft(step: &Step, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<()
                 composing::edit(tty, screen, preview.path, notes)?;
             }
         }
-        Step::Send => composing::send(screen, world),
-        _ => {}
+        Drafting::Send => composing::send(screen, world),
     }
 
     Ok(())

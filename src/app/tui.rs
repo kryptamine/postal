@@ -7,8 +7,8 @@ use crate::{
     app::onboard,
     app::session::session,
     app::signed_in::opened,
+    ui::exit::Exit,
     ui::onboarding::{self, Outcome, Start},
-    ui::run::Exit,
 };
 
 /// The TUI, left for the Onboarding on `L` or from Settings, and opened

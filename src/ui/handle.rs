@@ -8,6 +8,7 @@ use crate::{
     domain::thread::Key,
     ui::composing,
     ui::draft_preview::DraftPreview,
+    ui::exit::Exit,
     ui::inbox_view::InboxView,
     ui::keymap::{self, Action, DraftKey, LocalKey, Pick, QueuedKey},
     ui::link_hints::Typed,
@@ -19,7 +20,7 @@ use crate::{
     ui::search::Search,
     ui::settings,
     ui::showing::Showing,
-    ui::step::Step,
+    ui::step::{Drafting, Steer, Step},
     ui::toast::Toast,
 };
 
@@ -31,7 +32,7 @@ pub fn handle(
 ) -> Result<Step, Error> {
     let Ui { view, screen } = ui;
     match event {
-        None => Ok(Step::Quit),
+        None => Ok(Step::Exit(Exit::Quit)),
         Some(Err(source)) => Err(Error::Terminal(source)),
         Some(Ok(Event::Key(key))) if screen.help => {
             screen.help = !keymap::closes_help(key);
@@ -83,24 +84,26 @@ fn act(
     half_page: usize,
 ) -> Step {
     match action {
-        Some(Action::Quit) => Step::Quit,
+        Some(Action::Quit) => Step::Exit(Exit::Quit),
         Some(action @ (Action::Read | Action::Step(_) | Action::Fold)) => {
             read(action, view, screen)
         }
-        Some(Action::MarkUnread) => Step::MarkUnread,
-        Some(Action::Delete) => Step::Delete,
-        Some(Action::Undo) => Step::Undo,
-        Some(Action::Compose) => Step::Compose,
+        Some(Action::MarkUnread) => Step::Steer(Steer::MarkUnread),
+        Some(Action::Delete) => Step::Steer(Steer::Delete),
+        Some(Action::Undo) => Step::Steer(Steer::Undo),
+        Some(Action::Compose) => Step::Draft(Drafting::Compose),
         Some(Action::Reply { all }) => Step::Reply(all),
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
             Step::Stay
         }
         Some(Action::Open(to)) => Step::Open(to),
-        Some(Action::SignIn) => screen.signed_out().map_or(Step::Stay, Step::SignIn),
+        Some(Action::SignIn) => screen
+            .signed_out()
+            .map_or(Step::Stay, |account| Step::Exit(Exit::SignIn(account))),
         Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
-        Some(Action::Folders) => Step::Folders,
+        Some(Action::Folders) => Step::Steer(Steer::Folders),
         Some(action @ (Action::SwitchView | Action::SwitchQuoted)) => {
             reshow(action, view, screen);
             Step::Stay
@@ -109,7 +112,7 @@ fn act(
             screen.help = true;
             Step::Stay
         }
-        Some(Action::Search) => Step::Search,
+        Some(Action::Search) => Step::Steer(Steer::Search),
         Some(Action::Type(c)) => {
             view.edit_query(|search| search.push(c));
             Step::Stay
@@ -182,7 +185,7 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
                 _ => None,
             };
 
-            return Step::Read(gmail);
+            return Step::Steer(Steer::Read(gmail));
         }
         (Action::Step(direction), Some(reading)) => reading.step(direction, view.stack()),
         (Action::Fold, Some(reading)) => reading.fold(),
@@ -202,16 +205,20 @@ fn on_settings(key: KeyEvent, screen: &mut Screen) -> Step {
         settings::Step::Stay => Step::Stay,
         settings::Step::Close { reload } => {
             screen.over.settings = None;
-            if reload { Step::Reload } else { Step::Stay }
+            if reload {
+                Step::Exit(Exit::Reload)
+            } else {
+                Step::Stay
+            }
         }
         settings::Step::Help => {
             screen.help = true;
             Step::Stay
         }
         settings::Step::Icons(choice) => Step::Icons(choice),
-        settings::Step::AddAccount => Step::AddAccount,
-        settings::Step::Unlink(email) => Step::Unlink(email),
-        settings::Step::Quit => Step::Quit,
+        settings::Step::AddAccount => Step::Exit(Exit::AddAccount),
+        settings::Step::Unlink(email) => Step::Exit(Exit::Unlink(email)),
+        settings::Step::Quit => Step::Exit(Exit::Quit),
     }
 }
 
@@ -226,7 +233,7 @@ fn on_draft(key: KeyEvent, screen: &mut Screen) -> Step {
         match keymap::queued(key) {
             Some(QueuedKey::Close) => screen.over.draft = None,
             Some(QueuedKey::Help) => screen.help = true,
-            Some(QueuedKey::Quit) => return Step::Quit,
+            Some(QueuedKey::Quit) => return Step::Exit(Exit::Quit),
             None => {}
         }
 
@@ -234,13 +241,13 @@ fn on_draft(key: KeyEvent, screen: &mut Screen) -> Step {
     }
 
     match keymap::draft(key) {
-        Some(DraftKey::Quit) => Step::Quit,
+        Some(DraftKey::Quit) => Step::Exit(Exit::Quit),
         Some(DraftKey::Help) => {
             screen.help = true;
             Step::Stay
         }
-        Some(DraftKey::Send) => Step::Send,
-        Some(DraftKey::Edit) => Step::Edit,
+        Some(DraftKey::Send) => Step::Draft(Drafting::Send),
+        Some(DraftKey::Edit) => Step::Draft(Drafting::Edit),
         Some(DraftKey::Keep) => {
             composing::keep(screen);
             Step::Stay
@@ -287,10 +294,10 @@ fn on_local(key: KeyEvent, screen: &mut Screen) -> Step {
                 composing::discard_file(screen, path);
             }
         }
-        Some(LocalKey::Undo) => return Step::Undo,
+        Some(LocalKey::Undo) => return Step::Steer(Steer::Undo),
         Some(LocalKey::Close) => screen.over.local = None,
         Some(LocalKey::Help) => screen.help = true,
-        Some(LocalKey::Quit) => return Step::Quit,
+        Some(LocalKey::Quit) => return Step::Exit(Exit::Quit),
         None => {}
     }
 
@@ -316,11 +323,11 @@ fn pick(key: KeyEvent, screen: &mut Screen) -> Step {
                     return Step::LocalDrafts;
                 }
 
-                return Step::Show(folder);
+                return Step::Steer(Steer::Show(folder));
             }
         }
         Some(Pick::Close) => screen.over.picker = None,
-        Some(Pick::Quit) => return Step::Quit,
+        Some(Pick::Quit) => return Step::Exit(Exit::Quit),
         None => {}
     }
 
