@@ -6,13 +6,15 @@ mod correspondence;
 mod error;
 mod forget;
 mod moves;
+mod reader;
 mod schema;
 mod store;
 
 pub use changes::Changes;
-pub use correspondence::{Seen, SentPass};
+pub use correspondence::SentPass;
 pub use error::Error;
 pub use forget::forget;
 pub use moves::{Destination, PendingMove};
+pub use reader::{Reader, Seen};
 pub use schema::delete;
 pub use store::Cache;

@@ -1,18 +1,7 @@
-use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
 use crate::{correspondence::Correspondence, folder::Role, new_message::NewMessage};
-
-/// An address as one Message named it.
-pub struct Seen {
-    /// The Account's address, lowercased.
-    pub account: String,
-    pub address: String,
-    pub name: Option<String>,
-    pub written: bool,
-    pub at: DateTime<Utc>,
-}
 
 /// How far the pass over the Folder with the Sent role has read.
 pub struct SentPass {
@@ -22,25 +11,6 @@ pub struct SentPass {
 }
 
 impl Cache {
-    /// What every Account's mail says of its Correspondents.
-    pub fn correspondence(&self) -> Result<Vec<Seen>, Error> {
-        let connection = self.connection();
-        let mut statement = connection
-            .prepare_cached("SELECT account, address, name, written, at FROM correspondence")?;
-        let seen = statement
-            .query_map([], |row| {
-                Ok(Seen {
-                    account: row.get(0)?,
-                    address: row.get(1)?,
-                    name: row.get(2)?,
-                    written: row.get(3)?,
-                    at: DateTime::from_timestamp(row.get(4)?, 0).unwrap_or_default(),
-                })
-            })?
-            .collect::<Result<_, _>>()?;
-        Ok(seen)
-    }
-
     /// Learns from a Message the Outbox sent.
     pub fn sent(&self, sent: &Correspondence) -> Result<(), Error> {
         self.write(|connection| {

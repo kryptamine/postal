@@ -8,7 +8,7 @@ use serde::Serialize;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    cache::Cache,
+    cache::Reader,
     cli::CorrespondentList,
     config::Config,
     correspondent::{self, Correspondent},
@@ -32,14 +32,10 @@ struct Row<'a> {
 pub fn run(list: &CorrespondentList) -> Result<(), Box<dyn Error>> {
     let configs = Config::load(&xdg::config_dir()?.join("config.toml"))?;
     let emails: Vec<&str> = configs.iter().map(|c| c.email.as_str()).collect();
-    let caches = Cache::open_read_only(&xdg::cache_dir()?, &emails)?;
-    let ranked = match caches.first() {
-        Some(cache) => {
-            let first = first_account(list)?.unwrap_or_else(|| emails[0].to_owned());
-            correspondent::ranked(cache.correspondence()?, (&emails, &first), Utc::now())
-        }
-        None => Vec::new(),
-    };
+    let seen = Reader::open(&xdg::cache_dir()?)?.correspondence()?;
+    let first = first_account(list)?.or_else(|| emails.first().map(|&e| e.to_owned()));
+    let first = first.unwrap_or_default();
+    let ranked = correspondent::ranked(seen, (&emails, &first), Utc::now());
 
     let text = if list.json {
         json(&ranked)?
