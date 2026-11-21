@@ -127,6 +127,7 @@ mod sequence_numbers;
 mod settings;
 mod settings_popup;
 mod showing;
+mod shown;
 mod sign_in;
 mod smtp;
 mod snippet;

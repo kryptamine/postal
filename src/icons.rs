@@ -1,4 +1,4 @@
-use crate::{config::IconChoice, folder::Role, outage::Outage, status::Status};
+use crate::{config::IconChoice, folder::Role, outage::Outage, shown::Shown, status::Status};
 
 /// Nerd Font glyphs (v3 code points), or the plain look that any font draws.
 #[derive(Clone, Copy)]
@@ -45,18 +45,22 @@ impl Icons {
     }
 
     /// Before a Folder's name; `None` in the plain look.
-    pub const fn folder(self, role: Option<Role>) -> Option<&'static str> {
+    pub const fn folder(self, shown: &Shown) -> Option<&'static str> {
         if matches!(self, Self::Plain) {
             return None;
         }
 
+        let role = match shown {
+            Shown::AllInboxes { .. } => return Some("\u{f08b0}"),
+            Shown::LocalDrafts => return Some("\u{f0322}"),
+            Shown::Folder(folder) => folder.role,
+        };
+
         Some(match role {
-            Some(Role::AllInboxes) => "\u{f08b0}",
             Some(Role::Inbox) => "\u{f0687}",
             Some(Role::Starred) => "\u{f04ce}",
             Some(Role::Sent) => "\u{f048a}",
             Some(Role::Drafts) => DRAFT,
-            Some(Role::LocalDrafts) => "\u{f0322}",
             Some(Role::All) => "\u{f0ee7}",
             Some(Role::Spam) => "\u{f0029}",
             Some(Role::Trash) => "\u{f01b4}",

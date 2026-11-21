@@ -12,6 +12,7 @@ use crate::{
     message::Message,
     rendered_previews::PreviewKey,
     search::Search,
+    shown::Shown,
     thread::{Key, Thread},
     view::View,
 };
@@ -20,7 +21,7 @@ use crate::{
 pub struct InboxView {
     /// The Folder shown; on every run All Inboxes, or the Inbox with one
     /// Account.
-    pub folder: Folder,
+    pub folder: Shown,
     /// Each Account's address, by its place in this run.
     pub accounts: Vec<Arc<str>>,
     /// Each Account's Folder and its oldest cached UID, when the server had
@@ -53,9 +54,9 @@ impl InboxView {
     pub fn loading(accounts: Vec<Arc<str>>) -> Self {
         Self {
             folder: if accounts.len() > 1 {
-                Folder::all_inboxes()
+                Shown::all_inboxes()
             } else {
-                Folder::inbox(0)
+                Shown::Folder(Folder::inbox(0))
             },
             nothing_below: vec![None; accounts.len()],
             edge: None,
@@ -118,7 +119,7 @@ impl InboxView {
 
     /// Shows `folder` in place of the one shown, without its rows until
     /// `show`: any Search ends, and the newest Message will be selected.
-    pub fn switch(&mut self, folder: Folder) {
+    pub fn switch(&mut self, folder: Shown) {
         self.folder = folder;
         self.list = None;
         self.search = None;

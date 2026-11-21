@@ -49,6 +49,7 @@ use crate::{
     settings::{self, Settings},
     settings_popup::SettingsPopup,
     showing::Showing,
+    shown::Shown,
     stack,
     status::Status,
     steering::Ask,
@@ -474,10 +475,10 @@ fn apply(
         }
         Update::Folders => relist(screen, view, caches)?,
         Update::FolderGone(folder) => {
-            if account == view.folder.account && folder == view.folder.name {
+            if view.folder.is(account, &folder) {
                 let gone = format!("Folder {} no longer exists", view.folder.label());
                 // The sync connection is back on the Inbox already.
-                switch(view, screen, caches, Folder::inbox(account))?;
+                switch(view, screen, caches, Shown::Folder(Folder::inbox(account)))?;
                 screen.toast = Some(Toast::new(gone));
             }
 
@@ -548,7 +549,7 @@ enum Step {
     Stay,
     Links,
     Folders,
-    Show(Folder),
+    Show(Shown),
     Search,
     /// Reading opened, on the Gmail Thread with this ID if it has one, of
     /// this Account: its Messages in other Folders are asked for.
@@ -727,8 +728,8 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
             screen.showing = Showing::Reading(reading);
             // Gmail keeps Trash and Spam out of All Mail, and their Threads
             // apart; a Search never shows theirs.
-            let apart =
-                view.search.is_none() && matches!(view.folder.role, Some(Role::Trash | Role::Spam));
+            let apart = view.search.is_none()
+                && matches!(view.folder.role(), Some(Role::Trash | Role::Spam));
             let gmail = match view.selected_key() {
                 Some(Key::Gmail(account, id)) if !apart => Some((account, id)),
                 _ => None,
@@ -861,7 +862,7 @@ fn delete(
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
     // A Search never shows Trash.
-    if view.search.is_none() && view.folder.role == Some(Role::Trash) {
+    if view.search.is_none() && view.folder.role() == Some(Role::Trash) {
         screen.toast = Some(Toast::new("already in Trash"));
         return Ok(());
     }
@@ -1109,7 +1110,7 @@ fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
             let chosen = picker.chosen().cloned();
             if let Some(folder) = chosen {
                 screen.over.picker = None;
-                if folder.role == Some(Role::LocalDrafts) {
+                if matches!(folder, Shown::LocalDrafts) {
                     return Step::LocalDrafts;
                 }
 
@@ -1130,7 +1131,7 @@ fn switch(
     view: &mut InboxView,
     screen: &mut Screen,
     caches: &[Cache],
-    folder: Folder,
+    folder: Shown,
 ) -> Result<bool, Error> {
     if folder.same(&view.folder) {
         return Ok(false);
@@ -1208,7 +1209,7 @@ fn relist(screen: &mut Screen, view: &InboxView, caches: &[Cache]) -> Result<(),
 
 /// Every Account's Messages a Search matches, newest first, the shown
 /// Folder's copy winning in its Account, the Inbox's in All Inboxes (ADR 0010).
-fn everywhere(caches: &[Cache], shown: &Folder) -> Result<Inbox, cache::Error> {
+fn everywhere(caches: &[Cache], shown: &Shown) -> Result<Inbox, cache::Error> {
     let (mut messages, mut elsewhere) = (Vec::new(), Vec::new());
     for (account, cache) in caches.iter().enumerate() {
         let found = cache.everywhere(shown.of(account))?;
@@ -1306,26 +1307,29 @@ pub fn outside(
 /// The Account a Compose goes out from: the shown Folder's; in All
 /// Inboxes, the selected Thread's, else the first.
 fn composing_from(view: &InboxView) -> usize {
-    if view.folder.is_all_inboxes() {
-        return view.selected_message().map_or(0, |m| m.account);
+    match &view.folder {
+        Shown::Folder(folder) => folder.account,
+        _ => view.selected_message().map_or(0, |m| m.account),
     }
-
-    view.folder.account
 }
 
 fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<(), Error> {
-    let inbox = if view.folder.is_all_inboxes() {
-        let read = all_inboxes::read(caches, view, limit).map_err(Error::Cache)?;
-        read.map(|(inbox, edge)| {
-            view.edge = edge;
-            inbox
-        })
-    } else {
-        let (account, cache) = (view.folder.account, &caches[view.folder.account]);
-        let bottomed = view.bottomed(cache, account, &view.folder.name);
-        view.edge = (!bottomed.map_err(Error::Cache)?).then_some(account);
-        let read = cache.inbox(&view.folder.name, limit);
-        read.map_err(Error::Cache)?
+    let inbox = match &view.folder {
+        Shown::AllInboxes { .. } => {
+            let read = all_inboxes::read(caches, view, limit).map_err(Error::Cache)?;
+            read.map(|(inbox, edge)| {
+                view.edge = edge;
+                inbox
+            })
+        }
+        Shown::Folder(folder) => {
+            let (account, cache) = (folder.account, &caches[folder.account]);
+            let bottomed = view.bottomed(cache, account, &folder.name);
+            view.edge = (!bottomed.map_err(Error::Cache)?).then_some(account);
+            cache.inbox(&folder.name, limit).map_err(Error::Cache)?
+        }
+        // Local Drafts opens over the Message List and never shows in it.
+        Shown::LocalDrafts => None,
     };
 
     if let Some(inbox) = inbox {

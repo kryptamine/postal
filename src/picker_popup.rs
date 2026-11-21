@@ -11,8 +11,8 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     centred::centred,
-    folder::Folder,
     folder_picker::{FolderPicker, Row},
+    shown::Shown,
     stack_str::StackStr,
     theme::Theme,
     truncate,
@@ -106,9 +106,9 @@ impl Widget for PickerPopup<'_> {
 
 impl PickerPopup<'_> {
     /// One Folder in `row`: its icon and label, then its Unread count.
-    fn folder(&self, buf: &mut Buffer, row: Rect, (folder, style): (&Folder, Style)) {
+    fn folder(&self, buf: &mut Buffer, row: Rect, (folder, style): (&Shown, Style)) {
         let mut count = StackStr::<24>::new();
-        if let Some(unread) = folder.unread.filter(|&n| n > 0) {
+        if let Some(unread) = folder.unread().filter(|&n| n > 0) {
             write!(count, "{unread}").ok();
         }
 
@@ -118,7 +118,7 @@ impl PickerPopup<'_> {
             ..row
         };
 
-        let icon = self.theme.icons.folder(folder.role);
+        let icon = self.theme.icons.folder(folder);
         let label = icon.map_or(label, |icon| after_icon(buf, label, icon, style));
         truncate::draw(buf, label, folder.label(), style);
         let count_x = row.right().saturating_sub(count_width);

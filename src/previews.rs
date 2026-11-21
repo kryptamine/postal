@@ -169,8 +169,9 @@ impl Previews {
     }
 
     /// Renders each `(message, selected)` whose body is cached and asks the
-    /// server in `folder` for the rest of that Folder's; the shown one when
-    /// `None`. When all are rendered already this does not allocate.
+    /// server in `folder` for the rest of that Folder's: the shown one when
+    /// `None`, and none in All Inboxes. When all are rendered already this
+    /// does not allocate.
     fn ready<'m>(
         &mut self,
         caches: &[Cache],
@@ -178,12 +179,15 @@ impl Previews {
         wanted: impl Iterator<Item = (&'m Message, bool)>,
         width: u16,
     ) -> Result<(), cache::Error> {
-        let (account, folder) = folder.unwrap_or((view.folder.account, &view.folder.name));
-        if self.account != account || self.folder != *folder {
+        let shown = view.folder.folder().map(|f| (f.account, &f.name));
+        let asking = folder.or(shown);
+        if let Some((account, folder)) = asking
+            && (self.account != account || self.folder != *folder)
+        {
             self.switch(account, folder);
         }
 
-        let live = self.links.get(account).copied();
+        let live = self.links.get(self.account).copied();
 
         let mut request = BodyRequest {
             folder: Arc::clone(&self.folder),
@@ -193,7 +197,7 @@ impl Previews {
 
         for (message, selected) in wanted {
             let key = view.preview_key(message, width);
-            let here = self.holds(message);
+            let here = asking.is_some() && self.holds(message);
             if self.rendered.touch(key)
                 || self.rendering.contains(&key)
                 || (here && self.unavailable(message.uid))

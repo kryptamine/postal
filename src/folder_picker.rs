@@ -1,18 +1,21 @@
-use std::sync::Arc;
+use std::{cmp::Ordering, sync::Arc};
 
 use nucleo_matcher::{
     Config, Matcher, Utf32String,
     pattern::{AtomKind, CaseMatching, Normalization, Pattern},
 };
 
-use crate::folder::{Folder, Role};
+use crate::{
+    folder::{Folder, Role},
+    shown::Shown,
+};
 
 /// The Folder Picker: every Folder, narrowed by a typed Query with the
 /// Search matcher, and the row selected. With several Accounts, All Inboxes
 /// comes first, each Account has a section headed by its address, and Local
 /// Drafts comes after them all.
 pub struct FolderPicker {
-    folders: Vec<Folder>,
+    folders: Vec<Shown>,
     /// The section each Folder is listed in: All Inboxes', each Account's,
     /// then Local Drafts'; one section with one Account.
     sections: Vec<usize>,
@@ -33,13 +36,13 @@ pub struct FolderPicker {
 pub enum Row<'a> {
     /// The address heading an Account's section.
     Heading(&'a str),
-    Folder(&'a Folder),
+    Folder(&'a Shown),
 }
 
 impl FolderPicker {
     /// Lists `folders`, with `shown` among them and selected; `accounts`
     /// are the addresses of this run.
-    pub fn new(folders: Vec<Folder>, shown: &Folder, accounts: &[Arc<str>]) -> Self {
+    pub fn new(folders: Vec<Folder>, shown: &Shown, accounts: &[Arc<str>]) -> Self {
         let headings = if accounts.len() > 1 {
             accounts.to_vec()
         } else {
@@ -64,25 +67,24 @@ impl FolderPicker {
     /// Lists `folders` anew, with All Inboxes, Local Drafts, the Query and
     /// the selected Folder kept; `shown` is listed even before the Cache
     /// knows it.
-    pub fn reload(&mut self, mut folders: Vec<Folder>, shown: &Folder) {
+    pub fn reload(&mut self, folders: Vec<Folder>, shown: &Shown) {
         let selected = self.chosen().unwrap_or(shown).clone();
-        if !shown.is_all_inboxes() && !folders.iter().any(|f| f.same(shown)) {
+        let all_inboxes = (!self.headings.is_empty()).then(|| counted_all_inboxes(&folders));
+        let mut folders: Vec<_> = folders.into_iter().map(Shown::Folder).collect();
+        if matches!(shown, Shown::Folder(_)) && !folders.iter().any(|f| f.same(shown)) {
             folders.push(shown.clone());
         }
 
-        if !self.headings.is_empty() {
-            folders.push(counted_all_inboxes(&folders));
-        }
-
-        folders.push(Folder::local_drafts());
-        let section = |folder: &Folder| match folder.role {
+        folders.extend(all_inboxes);
+        folders.push(Shown::LocalDrafts);
+        let section = |shown: &Shown| match shown {
             _ if self.headings.is_empty() => 0,
-            Some(Role::AllInboxes) => 0,
-            Some(Role::LocalDrafts) => self.headings.len() + 1,
-            _ => folder.account + 1,
+            Shown::AllInboxes { .. } => 0,
+            Shown::LocalDrafts => self.headings.len() + 1,
+            Shown::Folder(folder) => folder.account + 1,
         };
 
-        folders.sort_by(|a, b| section(a).cmp(&section(b)).then_with(|| a.order(b)));
+        folders.sort_by(|a, b| section(a).cmp(&section(b)).then_with(|| order(a, b)));
         self.sections = folders.iter().map(section).collect();
         self.haystacks = folders.iter().map(haystack).collect();
         self.folders = folders;
@@ -120,7 +122,7 @@ impl FolderPicker {
     }
 
     /// The selected Folder; `None` while the Query matches none.
-    pub fn chosen(&self) -> Option<&Folder> {
+    pub fn chosen(&self) -> Option<&Shown> {
         self.folders.get(*self.hits.get(self.selected)?)
     }
 
@@ -195,18 +197,33 @@ impl FolderPicker {
 }
 
 /// All Inboxes, its Unread count the sum of the Inboxes' counted.
-fn counted_all_inboxes(folders: &[Folder]) -> Folder {
+fn counted_all_inboxes(folders: &[Folder]) -> Shown {
     let counts = folders.iter().filter(|f| f.role == Some(Role::Inbox));
-    Folder {
+    Shown::AllInboxes {
         unread: counts.filter_map(|f| f.unread).reduce(|a, b| a + b),
-        ..Folder::all_inboxes()
+    }
+}
+
+/// All Inboxes first, then the server's Folders in their own order, Local
+/// Drafts right after the Drafts role.
+fn order(a: &Shown, b: &Shown) -> Ordering {
+    let rank = |shown: &Shown| match shown {
+        Shown::AllInboxes { .. } => (false, None, false),
+        Shown::Folder(folder) => (folder.role.is_none(), folder.role, false),
+        Shown::LocalDrafts => (false, Some(Role::Drafts), true),
+    };
+
+    match (a, b) {
+        (Shown::Folder(a), Shown::Folder(b)) => a.order(b),
+        _ => rank(a).cmp(&rank(b)),
     }
 }
 
 /// A special-use Folder answers to its label as well as to its path.
-fn haystack(folder: &Folder) -> Utf32String {
-    match folder.role {
-        Some(_) => Utf32String::from(format!("{}\n{}", folder.label(), folder.path)),
-        None => Utf32String::from(&*folder.path),
+fn haystack(shown: &Shown) -> Utf32String {
+    match shown.folder() {
+        Some(folder) if folder.role.is_none() => Utf32String::from(&*folder.path),
+        Some(folder) => Utf32String::from(format!("{}\n{}", folder.label(), folder.path)),
+        None => Utf32String::from(shown.label()),
     }
 }
