@@ -591,15 +591,19 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
     let bye = outage == Some(Outage::Bye);
     let mut server = Server::new(Options::default(), greeting(bye));
     let mut view = Vec::new();
-    // With whether it was `SELECT`ed: only then is a `STORE` accepted.
-    let mut opened = (INBOX.to_owned(), false);
+    // Only a Folder `SELECT`ed takes a `STORE`.
+    let mut opened = Opened {
+        folder: INBOX.to_owned(),
+        writable: false,
+    };
+
     let mut idling = None;
     let mut authenticating = None;
     loop {
         let next = tokio::select! {
             next = stream.next(&mut server) => next,
             () = tokio::time::sleep(Duration::from_millis(10)) => {
-                if !tick(&mut server, (&mut view, &opened.0), &inbox, cut, idling.is_some()) {
+                if !tick(&mut server, &mut view, &inbox, cut, idling.is_some().then_some(&*opened.folder)) {
                     return;
                 }
 
@@ -640,7 +644,7 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                     return;
                 }
 
-                answer(&mut server, command, (&inbox, &opened), &mut view);
+                answer(&mut server, command, &inbox, &opened, &mut view);
             }
             _ => {}
         }
@@ -664,20 +668,17 @@ fn start_idle(server: &mut Server, tag: Tag<'static>, listed: bool) -> Option<Ta
 fn answer(
     server: &mut Server,
     command: Command<'static>,
-    (inbox, opened): (&Mutex<Inbox>, &Opened),
+    inbox: &Mutex<Inbox>,
+    opened: &Opened,
     view: &mut Vec<(u32, bool)>,
 ) {
     let mut inbox = inbox.lock().unwrap();
     if let CommandBody::Login { username, password } = &command.body {
-        let status = login(
-            &inbox,
-            command.tag.clone(),
-            (username, password.declassify()),
-        );
+        let status = login(&inbox, command.tag.clone(), username, password.declassify());
         server.enqueue_status(status);
     } else if matches!(command.body, CommandBody::Noop) {
         // A client without IDLE learns what changed from the NOOP's answer.
-        if let Some(folder) = inbox.folder(&opened.0) {
+        if let Some(folder) = inbox.folder(&opened.folder) {
             announce(server, view, folder);
         }
 
@@ -689,7 +690,7 @@ fn answer(
         command.body,
         CommandBody::Move { .. } | CommandBody::Copy { .. } | CommandBody::ExpungeUid { .. }
     ) {
-        let status = moves::transfer(server, command, (&mut inbox, opened), view);
+        let status = moves::transfer(server, command, &mut inbox, opened, view);
         server.enqueue_status(status);
     } else {
         respond(server, command, &mut inbox, opened);
@@ -698,8 +699,12 @@ fn answer(
     drop(inbox);
 }
 
-/// A Folder's name, and whether it was `SELECT`ed rather than `EXAMINE`d.
-type Opened = (String, bool);
+/// The Folder opened last.
+struct Opened {
+    folder: String,
+    /// `SELECT`ed rather than `EXAMINE`d.
+    writable: bool,
+}
 
 /// The Folder an `EXAMINE` or a `SELECT` opens, with whether it was a
 /// `SELECT`, and what an idling client is told of it.
@@ -711,7 +716,12 @@ fn examined(body: &CommandBody<'_>, inbox: &Mutex<Inbox>) -> Option<(Opened, Vec
     let name = mailbox_name(mailbox);
     let view = inbox.lock().unwrap().folder(&name).map(seen);
     let writable = matches!(body, CommandBody::Select { .. });
-    Some(((name, writable), view.unwrap_or_default()))
+    let opened = Opened {
+        folder: name,
+        writable,
+    };
+
+    Some((opened, view.unwrap_or_default()))
 }
 
 fn greeting(bye: bool) -> Greeting<'static> {
@@ -724,21 +734,21 @@ fn greeting(bye: bool) -> Greeting<'static> {
     greeting.unwrap()
 }
 
-/// Announces what changed to an idling client; `false` once the connection
-/// opened at `cut` is to be dropped.
+/// Announces what changed to a client idling on `selected`; `false` once the
+/// connection opened at `cut` is to be dropped.
 fn tick(
     server: &mut Server,
-    (view, selected): (&mut Vec<(u32, bool)>, &str),
+    view: &mut Vec<(u32, bool)>,
     inbox: &Mutex<Inbox>,
     cut: u64,
-    idling: bool,
+    selected: Option<&str>,
 ) -> bool {
     let inbox = inbox.lock().unwrap();
     if inbox.cut != cut {
         return false;
     }
 
-    if idling && let Some(folder) = inbox.folder(selected) {
+    if let Some(folder) = selected.and_then(|selected| inbox.folder(selected)) {
         announce(server, view, folder);
     }
 
@@ -845,7 +855,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
 
     let inbox = &*inbox;
     let tag = Some(command.tag);
-    let Some(folder) = selected_folder(&command.body, inbox, &opened.0) else {
+    let Some(folder) = selected_folder(&command.body, inbox, &opened.folder) else {
         let status = Status::no(tag, Some(code("NONEXISTENT")), "Unknown Mailbox");
         server.enqueue_status(status.unwrap());
         return;
@@ -861,7 +871,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
             server.enqueue_status(status);
         }
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
-            examine(server, folder, (tag, opened.1));
+            examine(server, folder, tag, opened.writable);
         }
         CommandBody::Search {
             criteria,
@@ -878,7 +888,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
             }
         },
         body @ CommandBody::Fetch { .. } => {
-            let status = answer_fetch(server, tag, body, (inbox, folder));
+            let status = answer_fetch(server, tag, body, inbox, folder);
             server.enqueue_status(status);
         }
         _ => {
@@ -929,7 +939,7 @@ fn listed(folder: &Folder) -> Data<'static> {
 }
 
 /// Answers `tag` with `READ-WRITE` when `writable`, as for a `SELECT`.
-fn examine(server: &mut Server, inbox: &Folder, (tag, writable): (Option<Tag<'static>>, bool)) {
+fn examine(server: &mut Server, inbox: &Folder, tag: Option<Tag<'static>>, writable: bool) {
     let exists = u32::try_from(inbox.messages.len()).unwrap();
     server.enqueue_data(Data::Exists(exists));
     server.enqueue_data(Data::Flags(vec![Flag::Seen]));

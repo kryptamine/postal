@@ -30,15 +30,16 @@ pub async fn relay(
     let gmail = ids.is_some();
     let examined = Arc::new(Mutex::new(String::from("INBOX")));
     tokio::join!(
-        commands(client_read, server_write, (record, &examined), gmail),
-        responses(server_read, client_write, (ids, &examined)),
+        commands(client_read, server_write, record, &examined, gmail),
+        responses(server_read, client_write, ids, &examined),
     );
 }
 
 async fn commands(
     from: OwnedReadHalf,
     mut to: OwnedWriteHalf,
-    (record, examined): (impl Fn(String), &Mutex<String>),
+    record: impl Fn(String),
+    examined: &Mutex<String>,
     gmail: bool,
 ) {
     let mut reader = BufReader::new(from);
@@ -106,10 +107,8 @@ async fn pass_literals(
 async fn responses(
     from: OwnedReadHalf,
     mut to: OwnedWriteHalf,
-    (ids, examined): (
-        Option<impl Fn(&str, u32) -> Option<(u64, u64)>>,
-        &Mutex<String>,
-    ),
+    ids: Option<impl Fn(&str, u32) -> Option<(u64, u64)>>,
+    examined: &Mutex<String>,
 ) {
     let mut reader = BufReader::new(from);
     let mut line = Vec::new();

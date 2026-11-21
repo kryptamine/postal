@@ -30,7 +30,7 @@ pub(super) fn store(
         return Status::bad(tag, None, "not faked").unwrap();
     };
 
-    let Some(folder) = inbox.folder(&opened.0).filter(|_| opened.1) else {
+    let Some(folder) = inbox.folder(&opened.folder).filter(|_| opened.writable) else {
         return Status::no(tag, None, "STORE needs a Folder selected read-write").unwrap();
     };
 
@@ -47,7 +47,7 @@ pub(super) fn store(
         let uids: Vec<u32> = fetched(folder, &sequence_set, true, None)
             .map(|(_, stored)| stored.uid)
             .collect();
-        let folder = inbox.folder_mut(&opened.0);
+        let folder = inbox.folder_mut(&opened.folder);
         for uid in uids {
             mark(folder.stored(uid));
         }

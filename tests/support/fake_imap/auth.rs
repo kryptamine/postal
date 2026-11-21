@@ -62,7 +62,8 @@ pub(super) fn finish_authenticate(
 pub(super) fn login(
     inbox: &Inbox,
     tag: Tag<'static>,
-    (user, password): (&AString, &AString),
+    user: &AString,
+    password: &AString,
 ) -> Status<'static> {
     let text = |value: &AString| String::from_utf8(value.as_ref().to_vec()).unwrap();
     let ok = text(user) == inbox.login_user && text(password) == APP_PASSWORD;

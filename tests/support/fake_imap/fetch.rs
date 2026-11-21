@@ -23,7 +23,8 @@ pub(super) fn answer_fetch(
     server: &mut Server,
     tag: Option<Tag<'static>>,
     body: CommandBody<'static>,
-    (inbox, folder): (&Inbox, &Folder),
+    inbox: &Inbox,
+    folder: &Folder,
 ) -> Status<'static> {
     let CommandBody::Fetch {
         sequence_set,

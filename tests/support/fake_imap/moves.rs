@@ -20,11 +20,12 @@ use super::{FakeMessage, Inbox, Opened, announce, code, fetch::fetched, mailbox_
 pub(super) fn transfer(
     server: &mut Server,
     command: Command<'static>,
-    (inbox, opened): (&mut Inbox, &Opened),
+    inbox: &mut Inbox,
+    opened: &Opened,
     view: &mut Vec<(u32, bool)>,
 ) -> Status<'static> {
     let tag = Some(command.tag);
-    if inbox.folder(&opened.0).is_none() || !opened.1 {
+    if inbox.folder(&opened.folder).is_none() || !opened.writable {
         return Status::no(tag, None, "needs a Folder selected read-write").unwrap();
     }
 
@@ -43,7 +44,7 @@ pub(super) fn transfer(
         _ => return Status::bad(tag, None, "not faked").unwrap(),
     };
 
-    let source = inbox.folder(&opened.0).unwrap();
+    let source = inbox.folder(&opened.folder).unwrap();
     let picked: Vec<(u32, u64, FakeMessage, bool)> = fetched(source, &set, true, None)
         .map(|(_, s)| (s.uid, s.msgid, s.message.clone(), s.deleted))
         .collect();
@@ -51,7 +52,7 @@ pub(super) fn transfer(
         return Status::no(tag, Some(code("TRYCREATE")), "no such Folder").unwrap();
     }
 
-    let copyuid = to.and_then(|to| copy_into(inbox, &opened.0, &to, &picked));
+    let copyuid = to.and_then(|to| copy_into(inbox, &opened.folder, &to, &picked));
 
     if moving {
         let gone: Vec<u32> = picked
@@ -59,7 +60,7 @@ pub(super) fn transfer(
             .filter(|(.., deleted)| copyuid.is_some() || *deleted)
             .map(|&(uid, ..)| uid)
             .collect();
-        let source = inbox.folder_mut(&opened.0);
+        let source = inbox.folder_mut(&opened.folder);
         source.bump();
         source.messages.retain(|m| !gone.contains(&m.uid));
         if let Some(code) = copyuid.clone() {
@@ -67,7 +68,7 @@ pub(super) fn transfer(
             server.enqueue_status(Status::ok(None, Some(code), "moved").unwrap());
         }
 
-        announce(server, view, inbox.folder(&opened.0).unwrap());
+        announce(server, view, inbox.folder(&opened.folder).unwrap());
         return Status::ok(tag, None, "completed").unwrap();
     }
 
