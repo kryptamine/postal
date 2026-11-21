@@ -129,6 +129,8 @@ impl ThreadPane<'_> {
         let first = placed.header - rows;
         for (y, offset) in (text.y..text.bottom()).zip(first..placed.header) {
             if offset + 1 == placed.header {
+                // A rule only patches its style: a body's background would show.
+                Clear.render(Rect::new(pane.x, y, pane.width, 1), buf);
                 border::rule(buf, pane, y, self.theme.border);
             } else {
                 let line = Rect::new(text.x, y, text.width, 1);

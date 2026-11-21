@@ -223,3 +223,43 @@ fn a_run_of_blank_rows_is_one() {
     assert_eq!(row("Inside") - row("Above"), 3, "{}", rows.join("\n"));
     assert_eq!(row("Below") - row("Inside"), 3, "{}", rows.join("\n"));
 }
+
+// The rule under Reading's pinned header covers a button scrolled beneath
+// it: the button's background left on the rule drew a block across it.
+#[test]
+fn the_rule_under_a_pinned_header_hides_a_background_under_it() {
+    let filler = "<p>Filler</p>".repeat(40);
+    let body = html(&format!(
+        "<p>One</p><p>Two</p><p>Three</p>\
+         <div style=\"color:#fff;background:#0a66c2\">Button</div><p>After</p>{filler}"
+    ));
+    let (mut t, _server) = started(body, &DEFAULT);
+    t.wait_until(|s| s.contains("Button")).unwrap();
+    t.send(Key::Enter).unwrap();
+    let screen = t
+        .snapshot_after(|s| !s.contains(" Inbox ") && s.contains("Button"))
+        .unwrap();
+    let row = |s: &Screen, text: &str| (0..s.rows()).find(|&r| s.row_text(r).contains(text));
+    let (button, after) = (
+        row(&screen, "Button").unwrap(),
+        row(&screen, "After").unwrap(),
+    );
+
+    // The rule is the fourth row of the pane's text.
+    let scroll = button - 4;
+    for _ in 0..scroll {
+        t.send(Key::Char('j')).unwrap();
+    }
+
+    let screen = t
+        .snapshot_after(|s| s.row_text(after - scroll).contains("After"))
+        .unwrap();
+    assert!(screen.row_text(4).starts_with('├'), "{}", screen.text());
+    for col in 0..screen.cols() {
+        assert_eq!(bg(&screen, 4, col), Color::Default, "{}", screen.text());
+    }
+
+    t.send(Key::Char('q')).unwrap();
+    t.wait_until(|s| s.contains(" Inbox ")).unwrap();
+    quit(t);
+}
