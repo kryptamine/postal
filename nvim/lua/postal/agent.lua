@@ -136,6 +136,17 @@ function Chat:update(update)
 	end
 end
 
+--- Tool call `call`'s title, each absolute path cut to its last two
+--- parts, so that a call on a temporary file fits on one line.
+local function title(call)
+	return (
+		tostring(call.title):gsub("/[^%s]+", function(path)
+			local tail = path:match("[^/]+/[^/]+$")
+			return tail and #tail + 1 < #path and "…/" .. tail or path
+		end)
+	)
+end
+
 function Chat:permit(params, respond)
 	local call = vim.tbl_extend("force", self.calls[params.toolCall.toolCallId] or {}, params.toolCall)
 	local allowed = tools.asked(self.kind.tools, call)
@@ -145,7 +156,7 @@ function Chat:permit(params, respond)
 		for _, option in ipairs(params.options or {}) do
 			if option.kind == option_kind then
 				if not allowed then
-					self.pane:dim("denied", "Denied: " .. tostring(call.title))
+					self.pane:dim("denied", "Denied: " .. title(call))
 				end
 
 				respond({ outcome = { outcome = "selected", optionId = option.optionId } })

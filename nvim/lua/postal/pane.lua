@@ -327,23 +327,12 @@ function Pane:stream(who, text)
 	end)
 end
 
---- `text` with each absolute path cut to its last two parts, so that a
---- tool call on a temporary file fits on one line.
-local function shorten(text)
-	return (
-		text:gsub("/[^%s]+", function(path)
-			local tail = path:match("[^/]+/[^/]+$")
-			return tail and #tail + 1 < #path and "…/" .. tail or path
-		end)
-	)
-end
-
 --- One dim line, the icon of `kind` (`ok`, `denied`, `context`) before
 --- `text`; a run of them has no blank lines between.
 function Pane:dim(kind, text)
 	self:write(function(buf)
 		local glyph, group = icons.get(kind)
-		local line = { glyph .. " " .. shorten(text:gsub("\n", " ")) }
+		local line = { glyph .. " " .. text:gsub("\n", " ") }
 		local row
 		if self.open and self.open.kind == "dim" then
 			row = self:tail() + 1
