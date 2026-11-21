@@ -22,7 +22,7 @@ function M.new(mail, kind, actions)
 		self:submit()
 	end
 
-	-- `short` puts a key on the winbar.
+	-- `short` puts a key on the winbar; the last lists them all.
 	self.keys = {
 		{ modes = "n", lhs = "<CR>", short = "send", desc = "send what is typed under the last Me", run = submit },
 		{ modes = { "n", "i" }, lhs = "<C-s>", desc = "send, from insert mode too", run = submit },
@@ -133,7 +133,7 @@ function Pane:show(focus)
 end
 
 --- Shows the chat's keys on the winbar or, with `summary` of a review,
---- it and the review's keys.
+--- it, the review's keys and the one listing them all.
 function Pane:status(summary)
 	self.summary = summary
 	local win = self.buf and vim.fn.bufwinid(self.buf) or -1
@@ -142,33 +142,46 @@ function Pane:status(summary)
 	end
 end
 
---- The winbar of the pane on buffer `buf`: as many whole keys as fit.
+--- The winbar of the pane on buffer `buf`: as many whole keys, in order,
+--- as fit.
 function M.winbar(buf)
 	local self = panes[buf]
 	if not self then
 		return ""
 	end
 
+	local function hint(key)
+		local label = help.label(key.lhs)
+		local text = "%#PostalKey#" .. label:gsub("%%", "%%%%") .. "%#PostalDim# " .. key.short
+		return text, vim.fn.strdisplaywidth(label .. " " .. key.short)
+	end
+
 	local room = vim.api.nvim_win_get_width(0) - 2
-	local bar, keys, gap = { "  " }, self.keys, ""
+	local bar, keys, gap, tail = { "  " }, self.keys, "", ""
 	if self.summary then
 		local glyph, group = icons.get("review")
 		local lead = glyph .. " " .. self.summary
 		table.insert(bar, "%#" .. group .. "#" .. lead:gsub("%%", "%%%%"))
-		room = room - vim.fn.strdisplaywidth(lead)
 		keys, gap = self.kind.review, "  "
+		-- The key listing every key stays at the right, room kept for it.
+		local text, wide = hint(self.keys[#self.keys])
+		tail = "%=" .. text .. " "
+		room = room - vim.fn.strdisplaywidth(lead) - wide - 3
 	end
 
 	for _, key in ipairs(keys) do
-		local label = help.label(key.lhs):gsub("%%", "%%%%")
-		local wide = #gap + vim.fn.strdisplaywidth(help.label(key.lhs) .. " " .. (key.short or ""))
-		if key.short and wide <= room then
-			table.insert(bar, gap .. "%#PostalKey#" .. label .. "%#PostalDim# " .. key.short)
-			room, gap = room - wide, "  "
+		if key.short then
+			local text, wide = hint(key)
+			if #gap + wide > room then
+				break
+			end
+
+			table.insert(bar, gap .. text)
+			room, gap = room - #gap - wide, "  "
 		end
 	end
 
-	return table.concat(bar)
+	return table.concat(bar) .. tail
 end
 
 --- Shows the `## who` header at `row` in the look of `role`, `me` or

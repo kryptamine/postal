@@ -250,11 +250,12 @@ end
 -- The agent's lines are in the buffer, the ones they replace shown over it
 shows({ "hi bob", "> Shall we meet?" })
 left("2 hunks left")
--- A narrow pane drops whole keys, never the count
-vim.api.nvim_win_set_width(vim.fn.bufwinid(pane_buf), 34)
-left("2 hunks left  \\a accept")
-if left_text():find("reject", 1, true) then
-	fail("a key that does not fit is on the winbar")
+left("? keys")
+-- A narrow pane drops whole keys, never the count or the key list
+vim.api.nvim_win_set_width(vim.fn.bufwinid(pane_buf), 46)
+left("2 hunks left  \\a accept ")
+if left_text():find("reject", 1, true) or not vim.endswith(left_text(), "? keys ") then
+	fail("the narrow winbar is " .. vim.inspect(left_text()))
 end
 
 vim.cmd.wincmd("=")
