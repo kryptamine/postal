@@ -5,8 +5,9 @@ local M = {}
 --- The command Postal runs as; `setup` may point it at a build.
 M.cmd = "postal"
 
--- Each Draft's Correspondents, asked for once per buffer.
+-- Each Draft's Correspondents once read, and the asking still running.
 local lists = {}
+local asking = {}
 
 --- The 0-based byte column where the recipient under the cursor starts, in
 --- the `To` or `Cc` header of buffer `buf` or a line folded into it; nil
@@ -53,35 +54,46 @@ function M.start(buf, row, col)
 	return start
 end
 
+--- Asks Postal for buffer `buf`'s Correspondents without waiting, so the
+--- answer is in by the first recipient typed.
+function M.ask(buf)
+	local path = vim.api.nvim_buf_get_name(buf)
+	local command = { M.cmd, "correspondent", "list", "--json", "--draft", path }
+	local ok, job = pcall(vim.system, command, { text = true })
+	if ok then
+		asking[buf] = job
+	else
+		vim.notify_once("postal: " .. tostring(job), vim.log.levels.WARN)
+		lists[buf] = {}
+	end
+end
+
 --- The Correspondents for buffer `buf`'s Draft, best first, each with
 --- `address`, `name`, `mailbox`, `account` and `written`; empty when Postal
 --- cannot answer, which it says once.
 function M.list(buf)
-	if lists[buf] then
-		return lists[buf]
+	if not lists[buf] and not asking[buf] then
+		M.ask(buf)
 	end
 
-	local path = vim.api.nvim_buf_get_name(buf)
-	local command = { M.cmd, "correspondent", "list", "--json", "--draft", path }
-	local ok, result = pcall(function()
-		return vim.system(command, { text = true }):wait()
-	end)
-
-	local list = {}
-	if not ok then
-		vim.notify_once("postal: " .. tostring(result), vim.log.levels.WARN)
-	elseif result.code ~= 0 then
-		vim.notify_once(vim.trim(result.stderr), vim.log.levels.WARN)
-	else
-		list = vim.json.decode(result.stdout, { luanil = { object = true } })
+	local job = asking[buf]
+	if job then
+		asking[buf] = nil
+		local result = job:wait()
+		if result.code == 0 then
+			lists[buf] = vim.json.decode(result.stdout, { luanil = { object = true } })
+		else
+			vim.notify_once(vim.trim(result.stderr), vim.log.levels.WARN)
+			lists[buf] = {}
+		end
 	end
 
-	lists[buf] = list
-	return list
+	return lists[buf]
 end
 
 function M.forget(buf)
 	lists[buf] = nil
+	asking[buf] = nil
 end
 
 --- Whether each word of `query` is found in the Correspondent's name or

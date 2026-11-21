@@ -8,6 +8,36 @@ local M = {}
 -- Where Postal keeps its Drafts, whatever `$XDG_DATA_HOME` is.
 local DRAFTS = "*/postal/drafts/*.eml"
 
+-- Registers the source with blink.cmp once, on the first Draft, so blink
+-- loads no earlier than it would. False without blink.
+local registered = false
+local function blink()
+	local ok, cmp = pcall(require, "blink.cmp")
+	if not ok then
+		return false
+	end
+
+	if not registered then
+		registered = true
+		cmp.add_source_provider("postal", { name = "Postal", module = "postal.blink" })
+		cmp.add_filetype_source("mail", "postal")
+	end
+
+	return true
+end
+
+--- Without blink, Neovim's own menu opens as a recipient is typed, fed by
+--- `omnifunc` alone, so the body offers nothing.
+local function native(buf)
+	if vim.fn.exists("+autocomplete") == 0 then
+		return
+	end
+
+	vim.bo[buf].autocomplete = true
+	vim.bo[buf].complete = "o"
+	vim.bo[buf].completeopt = "menuone,noselect"
+end
+
 --- `opts.cmd` is the command Postal runs as, `postal` by default.
 function M.setup(opts)
 	opts = opts or {}
@@ -19,8 +49,9 @@ function M.setup(opts)
 		callback = function(event)
 			vim.b[event.buf].postal_draft = true
 			vim.bo[event.buf].omnifunc = "v:lua.require'postal'.omnifunc"
-			if not M.blink() then
-				M.native(event.buf)
+			recipients.ask(event.buf)
+			if not blink() then
+				native(event.buf)
 			end
 		end,
 	})
@@ -32,36 +63,6 @@ function M.setup(opts)
 			recipients.forget(event.buf)
 		end,
 	})
-end
-
--- Registers the source with blink.cmp once, on the first Draft, so blink
--- loads no earlier than it would. False without blink.
-local registered = false
-function M.blink()
-	local ok, blink = pcall(require, "blink.cmp")
-	if not ok then
-		return false
-	end
-
-	if not registered then
-		registered = true
-		blink.add_source_provider("postal", { name = "Postal", module = "postal.blink" })
-		blink.add_filetype_source("mail", "postal")
-	end
-
-	return true
-end
-
---- Without blink, Neovim's own menu opens as a recipient is typed, fed by
---- `omnifunc` alone, so the body offers nothing.
-function M.native(buf)
-	if vim.fn.exists("+autocomplete") == 0 then
-		return
-	end
-
-	vim.bo[buf].autocomplete = true
-	vim.bo[buf].complete = "o"
-	vim.bo[buf].completeopt = "menuone,noselect"
 end
 
 --- `:h complete-functions` over the recipient under the cursor.
