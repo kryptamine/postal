@@ -3,7 +3,7 @@ use std::fmt::Write;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Block, StatefulWidget, Widget},
+    widgets::{Block, Clear, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -71,6 +71,8 @@ impl StatefulWidget for ThreadPane<'_> {
                     buf.set_string(text.x - 1, y, CURSOR, self.theme.title);
                 }
             }
+
+            self.pin(buf, (area, text), &placed, placed.pinned(&window));
         }
 
         let mut title = StackStr::<24>::new();
@@ -118,6 +120,21 @@ impl ThreadPane<'_> {
             }
             Body::Loading => truncate::draw(buf, row, "Loading…", self.theme.muted),
             Body::Unavailable(why) => truncate::draw(buf, row, why, self.theme.muted),
+        }
+    }
+
+    /// Draws the last `rows` rows of the header of `placed` over the top of
+    /// `text`, the last of them a rule across `pane` as in the Preview.
+    fn pin(&self, buf: &mut Buffer, (pane, text): (Rect, Rect), placed: &Placed<'_>, rows: usize) {
+        let first = placed.header - rows;
+        for (y, offset) in (text.y..text.bottom()).zip(first..placed.header) {
+            if offset + 1 == placed.header {
+                border::rule(buf, pane, y, self.theme.border);
+            } else {
+                let line = Rect::new(text.x, y, text.width, 1);
+                Clear.render(line, buf);
+                self.row(buf, line, placed, offset);
+            }
         }
     }
 

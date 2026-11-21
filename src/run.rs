@@ -1265,7 +1265,9 @@ fn stack_links(
             return None;
         };
 
-        Some((placed.index, &preview.body[..], placed.body_lines(&window)))
+        // Links under a pinned header cannot be seen.
+        let shown = window.start + placed.pinned(&window)..window.end;
+        Some((placed.index, &preview.body[..], placed.body_lines(&shown)))
     });
 
     LinkHints::find(bodies)

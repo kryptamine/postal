@@ -134,7 +134,7 @@ fn a_reply_in_sent_joins_the_stack_and_the_count() {
     t.send(Key::Char('j')).unwrap();
     t.send(Key::Char('j')).unwrap();
     let scrolled = t
-        .snapshot_after(|s| !s.contains("From    Bob") && s.contains("Line 05"))
+        .snapshot_after(|s| !s.contains("Line 01") && s.contains("Line 05"))
         .unwrap();
     let line = row_of(&scrolled, "Line 05");
     server.release();

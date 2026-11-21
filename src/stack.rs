@@ -30,6 +30,22 @@ impl Placed<'_> {
         self.top < rows.end && rows.start < self.bottom()
     }
 
+    /// The top rows of `window` its header covers, pinned there while the
+    /// rest of it is scrolled into view; the next Message pushes it up.
+    pub const fn pinned(&self, window: &Range<usize>) -> usize {
+        let scrolled = self.top < window.start && window.start < self.bottom();
+        if self.body.is_none() || !scrolled {
+            return 0;
+        }
+
+        let left = self.bottom() - window.start;
+        if left < self.header {
+            left
+        } else {
+            self.header
+        }
+    }
+
     /// The lines of its rendered body that `rows` of the stack show.
     pub fn body_lines(&self, rows: &Range<usize>) -> Range<usize> {
         let start = self.top + self.header;

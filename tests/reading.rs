@@ -70,7 +70,7 @@ fn enter_reads_the_message_full_screen_and_q_goes_back() {
 
     t.send(Key::Char('j')).unwrap();
     t.send(Key::Char('j')).unwrap();
-    t.wait_until(|s| !s.contains("From    Bob") && s.contains("Line 01"))
+    t.wait_until(|s| s.contains("Line 03") && !s.contains("Line 01"))
         .unwrap();
     t.send(Key::Char('G')).unwrap();
     let screen = t.snapshot_after(|s| s.contains("Line 40")).unwrap();
@@ -305,18 +305,64 @@ fn numbered(tag: &str) -> FakeBody {
     FakeBody::plain(&lines.join("\r\n"))
 }
 
+// A Message scrolled past its top keeps its header pinned over the window
+// with a rule under it, as the Preview does; the body scrolls beneath.
+#[test]
+fn a_scrolled_message_keeps_its_header_on_top() {
+    let server = FakeImap::start(two_messages());
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    t.wait_until(listed).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(reading).unwrap();
+
+    for _ in 0..10 {
+        t.send(Key::Char('j')).unwrap();
+    }
+
+    let screen = t
+        .snapshot_after(|s| s.row_text(5).contains("Line 11"))
+        .unwrap();
+    insta::assert_snapshot!(screen);
+    quit(t);
+}
+
+fn long(sender: &'static str, day: u32) -> FakeMessage {
+    let date = format!("2024-03-{day:02}T09:00:00Z");
+    FakeMessage::new(sender, "Long", &date)
+        .body(numbered(sender))
+        .in_thread(0)
+        .unread()
+}
+
+// The next Message pushes a pinned header up as the last rows of its own
+// Message leave, so the two headers never overlap.
+#[test]
+fn the_next_message_pushes_a_pinned_header_up() {
+    let server = FakeImap::start(vec![long("Ada", 1), long("Bob", 2)]);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains("Bob 01")).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains(" 1/2 ") && s.contains("Ada 01"))
+        .unwrap();
+
+    // Ada's 44 rows end three rows below the top: her header's last three.
+    for _ in 0..41 {
+        t.send(Key::Char('j')).unwrap();
+    }
+
+    let screen = t
+        .snapshot_after(|s| s.row_text(1).contains("To") && s.row_text(5).contains("From    Bob"))
+        .unwrap();
+    insta::assert_snapshot!(screen);
+    quit(t);
+}
+
 // j/k, ^d/^u and g/G scroll the stack as one page, from the end of one
 // Message into the next, and the cursor follows to a Message still shown.
 #[test]
 fn scrolling_runs_across_messages_and_the_cursor_follows() {
-    let long = |sender: &'static str, day: u32| {
-        let date = format!("2024-03-{day:02}T09:00:00Z");
-        FakeMessage::new(sender, "Long", &date)
-            .body(numbered(sender))
-            .in_thread(0)
-            .unread()
-    };
-
     let server = FakeImap::start(vec![long("Ada", 1), long("Bob", 2)]);
     let home = Home::for_server(&server);
     let mut t = postal(&home);

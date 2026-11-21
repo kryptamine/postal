@@ -1,0 +1,21 @@
+---
+source: tests/reading.rs
+expression: screen
+---
+size: 100x16  cursor: hidden
+┌ 1/1 ─────────────────────────────────────────────────────────────────────────────────────────────┐
+│ From    Bob <someone@example.com>                                         Mon, 18 Nov 2024 09:00 │
+│ To                                                                                               │
+│ Subject Newer                                                                                    │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Line 11                                                                                          │
+│ Line 12                                                                                          │
+│ Line 13                                                                                          │
+│ Line 14                                                                                          │
+│ Line 15                                                                                          │
+│ Line 16                                                                                          │
+│ Line 17                                                                                          │
+│ Line 18                                                                                          │
+│ Line 19                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  o links  ?: help
