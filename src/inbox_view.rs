@@ -3,6 +3,7 @@ use std::{collections::HashSet, sync::Arc};
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 use crate::{
+    cache::{self, Cache},
     folder::Folder,
     inbox::Inbox,
     keymap::{By, Direction, Move, Scroll},
@@ -26,7 +27,8 @@ pub struct InboxView {
     /// nothing older there.
     pub nothing_below: Vec<Option<(Arc<str>, u32)>>,
     /// The Account whose cache edge ends the rows, a Backfill of which
-    /// shows more: the shown Folder's; in All Inboxes, as ADR 0014 picks.
+    /// shows more: the shown Folder's; in All Inboxes, as ADR 0014 picks;
+    /// `None` once the server has nothing older.
     pub edge: Option<usize>,
     /// The shown Folder's rows; `None` until the Cache or the server has some.
     pub list: Option<Listing>,
@@ -184,13 +186,27 @@ impl InboxView {
         }
     }
 
-    /// Whether the server had nothing older than what `account` caches of
-    /// `folder`, whose oldest cached UID is `oldest`.
-    pub fn bottomed(&self, account: usize, folder: &str, oldest: u32) -> bool {
-        self.nothing_below
+    /// Whether the server has nothing older than what `cache`, of `account`,
+    /// holds of `folder`: as the last resync counted it, or a Backfill found.
+    pub fn bottomed(
+        &self,
+        cache: &Cache,
+        account: usize,
+        folder: &str,
+    ) -> Result<bool, cache::Error> {
+        if cache.whole(folder)? {
+            return Ok(true);
+        }
+
+        let Some(oldest) = cache.oldest_uid(folder)? else {
+            return Ok(true);
+        };
+
+        Ok(self
+            .nothing_below
             .get(account)
             .and_then(Option::as_ref)
-            .is_some_and(|(at, uid)| **at == *folder && *uid == oldest)
+            .is_some_and(|(at, uid)| **at == *folder && *uid == oldest))
     }
 
     /// What tells the Preview of `message` at `width` from its others.

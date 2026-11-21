@@ -29,12 +29,9 @@ impl OlderPages {
     /// Does not allocate unless it asks. A Search never asks: it matches
     /// only the Cache.
     pub fn want(&mut self, view: &InboxView) {
-        let Some(list) = &view.list else {
-            return;
-        };
-
         let searching = view.search.is_some();
-        if self.asked || searching || view.selected + NEAR_END < view.rows() {
+        if view.list.is_none() || self.asked || searching || view.selected + NEAR_END < view.rows()
+        {
             return;
         }
 
@@ -43,13 +40,7 @@ impl OlderPages {
             return;
         };
 
-        let live = self.live.get(account).copied().unwrap_or(false);
-        let mine = list.messages.iter().filter(|m| m.account == account);
-        let Some(oldest) = mine.map(|m| m.uid).min() else {
-            return;
-        };
-
-        if !live || view.bottomed(account, folder, oldest) {
+        if !self.live.get(account).copied().unwrap_or(false) {
             return;
         }
 

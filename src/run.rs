@@ -1313,8 +1313,10 @@ fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<
             inbox
         })
     } else {
-        view.edge = Some(view.folder.account);
-        let read = caches[view.folder.account].inbox(&view.folder.name, limit);
+        let (account, cache) = (view.folder.account, &caches[view.folder.account]);
+        let bottomed = view.bottomed(cache, account, &view.folder.name);
+        view.edge = (!bottomed.map_err(Error::Cache)?).then_some(account);
+        let read = cache.inbox(&view.folder.name, limit);
         read.map_err(Error::Cache)?
     };
 

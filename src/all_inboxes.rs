@@ -23,10 +23,7 @@ pub fn read(
         synced = true;
         messages.extend(inbox.messages);
         elsewhere.extend(inbox.elsewhere);
-        let bottomed = cache.whole(INBOX)?
-            || cache
-                .oldest_uid(INBOX)?
-                .is_none_or(|oldest| view.bottomed(account, INBOX, oldest));
+        let bottomed = view.bottomed(cache, account, INBOX)?;
         let arrival = cache.oldest_arrival(INBOX)?;
         if !bottomed && arrival > edge.map(|(at, _)| at) {
             edge = arrival.map(|at| (at, account));

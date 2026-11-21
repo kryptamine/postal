@@ -236,3 +236,24 @@ fn a_preview_does_not_wait_for_a_pages_snippets() {
     let last_snippet = commands.iter().rposition(|c| c.contains("BODY.PEEK[1]<"));
     assert!(body.is_some() && body < last_snippet, "{commands:#?}");
 }
+
+// A Folder the Cache holds whole has nothing older to page in: asking
+// anyway spent a round trip on every run.
+#[test]
+fn a_wholly_cached_inbox_asks_for_no_older_page() {
+    let server = FakeImap::start(messages(3));
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    place(&mut t, "1/3");
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+    t.send(Key::Char('G')).unwrap();
+    place(&mut t, "3/3");
+    std::thread::sleep(Duration::from_millis(300));
+    quit(t);
+    let lookup = format!("UID FETCH {FIRST_UID} UID");
+    assert!(
+        !server.commands().contains(&lookup),
+        "{:#?}",
+        server.commands()
+    );
+}
