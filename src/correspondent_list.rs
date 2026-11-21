@@ -1,7 +1,4 @@
-use std::{
-    error::Error,
-    io::{self, Write},
-};
+use std::{error::Error, io};
 
 use chrono::Utc;
 use serde::Serialize;
@@ -10,6 +7,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::{
     cache::Reader,
     cli::CorrespondentList,
+    command_output,
     config::Config,
     correspondent::{self, Correspondent},
     notes::Notes,
@@ -43,11 +41,7 @@ pub fn run(list: &CorrespondentList) -> Result<(), Box<dyn Error>> {
         table(&ranked, emails.len() > 1)
     };
 
-    match io::stdout().lock().write_all(text.as_bytes()) {
-        // A reader that stops early, such as `head`, is no failure.
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
-        result => Ok(result?),
-    }
+    Ok(command_output::print(&text)?)
 }
 
 /// The address `--draft`'s notes or `--account` name; `None` for neither.

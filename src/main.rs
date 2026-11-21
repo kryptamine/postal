@@ -18,6 +18,7 @@ mod cell_grid;
 mod centred;
 mod cli;
 mod clipboard;
+mod command_output;
 mod composing;
 mod config;
 mod correspondence;
