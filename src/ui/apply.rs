@@ -11,6 +11,7 @@ use crate::{
     mail::update::{BodyLink, Update},
     ui::folder_show::{relist, show, switch},
     ui::inbox_view::InboxView,
+    ui::link_hints::LinkHints,
     ui::local_list::relist_local,
     ui::main_screen::Ui,
     ui::previews::Previews,
@@ -92,10 +93,10 @@ fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     // Reading to the Thread it was opened on; a Query being typed stays.
     if screen.showing.reading().is_none() {
         if view.selected_body() != selected {
-            screen.over.hints = None;
+            screen.over.close::<LinkHints>();
         }
     } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
-        screen.over.hints = None;
+        screen.over.close::<LinkHints>();
         if let Some(reading) = screen.showing.reading_mut() {
             reading.hold = true;
         }

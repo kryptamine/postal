@@ -4,6 +4,7 @@ use crate::{
     mail::steering::Ask,
     ui::composing,
     ui::folder_show::{relist, show},
+    ui::link_hints::LinkHints,
     ui::main_screen::Ui,
     ui::run::Error,
     ui::toast::Toast,
@@ -47,7 +48,7 @@ pub fn delete(ui: &mut Ui, world: World) -> Result<(), Error> {
 
     screen.undo.push(Undo::Delete(account, batch, thread));
     show(view, caches, None)?;
-    screen.over.hints = None;
+    screen.over.close::<LinkHints>();
     screen.follow(view, thread);
 
     relist(ui, caches)?;
@@ -79,7 +80,7 @@ pub fn undo(ui: &mut Ui, world: World) -> Result<(), Error> {
     };
 
     show(view, caches, None)?;
-    screen.over.hints = None;
+    screen.over.close::<LinkHints>();
     if let Some(key) = thread {
         screen.follow(view, thread);
         view.select(key);

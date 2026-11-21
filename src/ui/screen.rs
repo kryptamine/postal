@@ -8,8 +8,10 @@ use crate::{
     mail::status::Status,
     ui::dwell::Dwell,
     ui::inbox_view::InboxView,
+    ui::layer::Layer,
+    ui::link_hints::LinkHints,
     ui::mode::Mode,
-    ui::over::{Layer, Over},
+    ui::over::Over,
     ui::showing::Showing,
     ui::toast::Toast,
     ui::undo::Undo,
@@ -60,7 +62,7 @@ impl Screen {
     pub fn follow(&mut self, view: &InboxView, thread: Option<Key>) -> bool {
         let left = self.showing.reading().is_some() && view.selected_key() != thread;
         if left {
-            self.over.hints = None;
+            self.over.close::<LinkHints>();
             self.list();
         }
 
@@ -70,13 +72,10 @@ impl Screen {
     /// What the keys act on, below the `?` popup: the top layer over the
     /// panes, else the panes.
     pub fn keys(&self) -> Mode {
-        match self.over.top() {
-            Some(Layer::Settings(_)) => Mode::Settings,
-            Some(Layer::Draft(preview)) if preview.queued => Mode::Queued,
-            Some(Layer::Draft(_)) => Mode::Draft,
-            Some(Layer::LocalDrafts(_)) => Mode::LocalDrafts,
-            Some(Layer::Picker(_) | Layer::Hints) | None => self.showing.mode(),
-        }
+        self.over
+            .top()
+            .and_then(Layer::mode)
+            .unwrap_or_else(|| self.showing.mode())
     }
 
     /// The worst sync connection's Status, with its Account when there are

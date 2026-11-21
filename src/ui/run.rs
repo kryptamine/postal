@@ -8,6 +8,7 @@ use tokio::time::Instant;
 use crate::{
     cache::{self, Cache},
     compose::accounts::Accounts,
+    compose::local_drafts::LocalDrafts,
     compose::outbox::Outbox,
     domain::body_key::BodyKey,
     domain::per_account::{AccountId, PerAccount},
@@ -23,6 +24,7 @@ use crate::{
     ui::apply,
     ui::composing,
     ui::deleting,
+    ui::draft_preview::DraftPreview,
     ui::drafting,
     ui::draw,
     ui::exit::Exit,
@@ -226,7 +228,7 @@ impl Model<'_> {
         text: Option<Rect>,
     ) -> Result<Option<Exit>, Error> {
         // A Draft opened, closed, discarded or brought back changes the list.
-        let drafts = |screen: &Screen| (screen.over.draft.is_some(), screen.undo.len());
+        let drafts = |screen: &Screen| (screen.over.is_open::<DraftPreview>(), screen.undo.len());
         let before = drafts(&self.ui.screen);
         let step = handle::handle(event, &mut self.ui, half_page(text))?;
         let exit = self.take(step, text)?;
@@ -252,7 +254,7 @@ impl Model<'_> {
             Step::Reply(to) => drafting::reply(to, &mut self.tty, ui, world, &self.replies)?,
             Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
             Step::Settings => match Settings::open(world.config_dir) {
-                Ok(settings) => ui.screen.over.settings = Some(settings),
+                Ok(settings) => ui.screen.over.open(settings),
                 Err(error) => ui.screen.toast = Some(Toast::error(error.to_string())),
             },
             Step::Icons(choice) => {
@@ -303,9 +305,9 @@ fn next_change(ui: &mut Ui, previews: &Previews, text: Option<Rect>) -> Option<I
 fn dwelling(ui: &Ui, previews: &Previews, text: Option<Rect>) -> Option<(Key, BodyKey)> {
     let Ui { view, screen } = ui;
     let listed = matches!(screen.showing.mode(), Mode::List | Mode::Query)
-        && screen.over.picker.is_none()
-        && screen.over.local.is_none()
-        && screen.over.draft.is_none();
+        && !screen.over.is_open::<FolderPicker>()
+        && !screen.over.is_open::<LocalDrafts>()
+        && !screen.over.is_open::<DraftPreview>();
     let text = text.filter(|_| listed && !screen.help && view.selected_unread())?;
     previews.get(view, text.width)?;
     Some((view.selected_key()?, view.selected_body()?))
@@ -383,7 +385,8 @@ fn steering(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
         Steer::Folders => {
             let folders = folders(caches)?;
             let view = &ui.view;
-            ui.screen.over.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
+            let picker = FolderPicker::new(folders, &view.folder, &view.accounts);
+            ui.screen.over.open(picker);
             for account in caches.ids() {
                 asks.send(account, Ask::ListFolders);
             }

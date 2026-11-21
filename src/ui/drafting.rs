@@ -1,11 +1,12 @@
 use crate::{
     compose::awaited_reply::AwaitedReply, compose::draft_notes::DraftNotes,
     compose::recipients::Recipients, domain::message::Message, domain::per_account::AccountId,
-    domain::shown::Shown, mail::reply_fetch::ReplyFetch, ui::composing, ui::inbox_view::InboxView,
-    ui::main_screen::Ui, ui::run::Error, ui::step::Drafting, ui::tty::Tty, ui::world::World,
+    domain::shown::Shown, mail::reply_fetch::ReplyFetch, ui::composing,
+    ui::draft_preview::DraftPreview, ui::inbox_view::InboxView, ui::main_screen::Ui,
+    ui::run::Error, ui::step::Drafting, ui::tty::Tty, ui::world::World,
 };
 
-/// Compose, the editor again on the shown Draft, or its Send.
+/// Compose, or the shown Draft edited again, sent, kept or discarded.
 pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<(), Error> {
     let screen = &mut ui.screen;
     match drafting {
@@ -14,7 +15,7 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
             composing::compose(tty, screen, from)?;
         }
         Drafting::Edit => {
-            if let Some(preview) = screen.over.draft.take() {
+            if let Some(preview) = screen.over.take::<DraftPreview>() {
                 let notes = DraftNotes {
                     account: preview.account,
                     answering: preview.answering,
@@ -24,6 +25,9 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
             }
         }
         Drafting::Send => composing::send(screen, world),
+        Drafting::Keep => composing::keep(screen),
+        Drafting::Discard => composing::discard(screen),
+        Drafting::DiscardFile(path) => composing::discard_file(screen, path),
     }
 
     Ok(())

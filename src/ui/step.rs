@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     account::config::IconChoice, compose::recipients::Recipients, domain::per_account::AccountId,
@@ -34,11 +34,17 @@ pub enum Steer {
     Undo,
 }
 
-/// What a Draft goes through in the editor and the Outbox.
-#[derive(Clone, Copy)]
+/// What a Draft goes through: the editor, the Outbox, Local Drafts or a
+/// discard.
 pub enum Drafting {
     Compose,
     /// The shown Draft in the editor again.
     Edit,
     Send,
+    /// Closes the shown Draft's preview, its file kept for Local Drafts.
+    Keep,
+    /// Deletes the shown Draft's file, for an Undo to write back.
+    Discard,
+    /// The Draft at this path, as from its preview.
+    DiscardFile(PathBuf),
 }

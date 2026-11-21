@@ -212,36 +212,36 @@ pub fn edit(
 /// The preview of the Draft at `path` as the file reads now; `notes` win
 /// over those beside it.
 fn preview(screen: &mut Screen, path: PathBuf, notes: DraftNotes) {
-    screen.over.draft = match DraftPreview::read(path, notes.answering) {
+    match DraftPreview::read(path, notes.answering) {
         Ok(mut preview) => {
             preview.account = notes.account.or(preview.account);
-            Some(preview)
+            screen.over.open(preview);
         }
         Err(error) => {
+            screen.over.close::<DraftPreview>();
             tracing::error!("reading the Draft failed: {error}");
             screen.toast = Some(Toast::error("could not read the Draft"));
-            None
         }
-    };
+    }
 }
 
 /// Send: the Draft shown moves to the Outbox, unless it does not parse,
 /// and its Account is asked to send it.
 pub fn send(screen: &mut Screen, world: World) {
     let (accounts, outbox) = (world.accounts, world.outbox);
-    let Some(mut preview) = screen.over.draft.take() else {
+    let Some(mut preview) = screen.over.take::<DraftPreview>() else {
         return;
     };
 
     let Ok(draft) = &preview.draft else {
         screen.toast = Some(Toast::error("the Draft does not parse"));
-        screen.over.draft = Some(preview);
+        screen.over.open(preview);
         return;
     };
 
     let Some(account) = accounts.place(preview.account.as_deref()) else {
         preview.failure = Some("no Account to send from".to_owned());
-        screen.over.draft = Some(preview);
+        screen.over.open(preview);
         return;
     };
 
@@ -269,7 +269,7 @@ pub fn send(screen: &mut Screen, world: World) {
 
     if let Err(error) = queued {
         preview.failure = Some(error);
-        screen.over.draft = Some(preview);
+        screen.over.open(preview);
         return;
     }
 
@@ -281,7 +281,7 @@ pub fn send(screen: &mut Screen, world: World) {
 
 /// Closes the shown Draft's preview, its file kept for Local Drafts.
 pub fn keep(screen: &mut Screen) {
-    if screen.over.draft.take().is_some() {
+    if screen.over.take::<DraftPreview>().is_some() {
         screen.toast = Some(Toast::new("Saved to Drafts"));
     }
 }
@@ -290,7 +290,7 @@ pub fn keep(screen: &mut Screen) {
 pub fn discard_file(screen: &mut Screen, path: PathBuf) {
     match DraftPreview::read(path, None) {
         Ok(preview) => {
-            screen.over.draft = Some(preview);
+            screen.over.open(preview);
             discard(screen);
         }
         Err(error) => {
@@ -302,14 +302,14 @@ pub fn discard_file(screen: &mut Screen, path: PathBuf) {
 
 /// Deletes the shown Draft's file, for an Undo to write back.
 pub fn discard(screen: &mut Screen) {
-    let Some(preview) = screen.over.draft.take() else {
+    let Some(preview) = screen.over.take::<DraftPreview>() else {
         return;
     };
 
     if let Err(error) = notes::remove_message(&preview.path) {
         tracing::error!("discarding the Draft failed: {error}");
         screen.toast = Some(Toast::error("could not discard the Draft"));
-        screen.over.draft = Some(preview);
+        screen.over.open(preview);
         return;
     }
 
@@ -333,5 +333,5 @@ pub fn restore(screen: &mut Screen, path: PathBuf, text: String, notes: DraftNot
         return;
     }
 
-    screen.over.draft = Some(DraftPreview::new(path, text, notes));
+    screen.over.open(DraftPreview::new(path, text, notes));
 }

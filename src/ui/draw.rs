@@ -3,22 +3,18 @@ use tokio::time::Instant;
 
 use crate::{
     compose::accounts::Accounts,
-    ui::draft_pane::DraftPane,
     ui::help_popup::HelpPopup,
     ui::hint_line::HintLine,
     ui::layout,
-    ui::local_drafts_pane::LocalDraftsPane,
+    ui::link_hints::LinkHints,
     ui::main_screen::Ui,
     ui::message_list::MessageList,
     ui::mode::Mode,
-    ui::over::Layer,
-    ui::picker_popup::PickerPopup,
     ui::preview_pane::{self, PreviewPane},
     ui::previews::Previews,
     ui::run::Error,
     ui::screen::Screen,
     ui::search::Search,
-    ui::settings_popup::SettingsPopup,
     ui::terminal_backend::TerminalBackend,
     ui::theme::Theme,
     ui::thread_pane::ThreadPane,
@@ -40,7 +36,7 @@ pub fn draw(
             }
 
             if let (Some(pane), Some(reading)) = (panes.preview, screen.showing.reading_mut()) {
-                let hints = screen.over.hints.as_ref();
+                let hints = screen.over.get::<LinkHints>();
                 let widget = ThreadPane {
                     theme,
                     view,
@@ -51,7 +47,7 @@ pub fn draw(
                 frame.render_stateful_widget(widget, pane, reading);
             } else if let Some(pane) = panes.preview {
                 let body = previews.selected(view, preview_pane::text_area(pane).width);
-                let hints = screen.over.hints.as_ref();
+                let hints = screen.over.get::<LinkHints>();
                 let widget = PreviewPane { theme, body, hints };
 
                 frame.render_stateful_widget(widget, pane, view);
@@ -87,53 +83,8 @@ pub fn draw(
 /// What shows over the panes in `body`, the layer taking the keys on top,
 /// then the `?` popup over any.
 fn popups(frame: &mut Frame, theme: &Theme, accounts: Accounts, body: Rect, screen: &Screen) {
-    for layer in screen.over.layers().rev() {
-        match layer {
-            Layer::Picker(picker) => {
-                let popup = PickerPopup { theme, picker };
-                frame.set_cursor_position(popup.cursor(body));
-                frame.render_widget(popup, body);
-            }
-            Layer::LocalDrafts(local) => {
-                let pane = LocalDraftsPane {
-                    theme,
-                    local,
-                    accounts,
-                };
-
-                frame.render_widget(pane, body);
-            }
-            Layer::Draft(preview) => {
-                // The `From` a Send adds.
-                let outgoing = accounts
-                    .place(preview.account.as_deref())
-                    .map(|account| accounts.outgoing(account));
-                let from = outgoing.map(|outgoing| {
-                    let email = || outgoing.config.email.clone();
-                    outgoing
-                        .from()
-                        .map_or_else(|_bad| email(), |from| from.to_string())
-                });
-
-                let pane = DraftPane {
-                    theme,
-                    preview,
-                    from: from.as_deref().unwrap_or_default(),
-                };
-
-                frame.render_widget(pane, body);
-            }
-            Layer::Settings(settings) => {
-                let popup = SettingsPopup { theme, settings };
-                if let Some(cursor) = popup.cursor(body) {
-                    frame.set_cursor_position(cursor);
-                }
-
-                frame.render_widget(popup, body);
-            }
-            // The panes draw their own labels.
-            Layer::Hints => {}
-        }
+    for layer in screen.over.layers() {
+        layer.draw(frame, theme, accounts, body);
     }
 
     if screen.help {

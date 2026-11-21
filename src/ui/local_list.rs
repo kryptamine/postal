@@ -5,7 +5,7 @@ use crate::{
 
 pub fn open_local(screen: &mut Screen, outbox: &Outbox) {
     match LocalDrafts::open(outbox) {
-        Ok(local) => screen.over.local = Some(local),
+        Ok(local) => screen.over.open(local),
         Err(error) => {
             tracing::error!("listing Local Drafts failed: {error}");
             screen.toast = Some(Toast::error("could not list Local Drafts"));
@@ -14,7 +14,11 @@ pub fn open_local(screen: &mut Screen, outbox: &Outbox) {
 }
 
 pub fn relist_local(screen: &mut Screen, outbox: &Outbox) {
-    if let Some(Err(error)) = screen.over.local.as_mut().map(|local| local.reload(outbox)) {
+    if let Some(Err(error)) = screen
+        .over
+        .get_mut::<LocalDrafts>()
+        .map(|local| local.reload(outbox))
+    {
         tracing::error!("listing Local Drafts failed: {error}");
     }
 }

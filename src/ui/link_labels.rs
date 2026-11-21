@@ -10,7 +10,7 @@ use crate::{
 /// are none. `text` is where the Preview's text goes, if it is shown.
 pub fn label_links(ui: &mut Ui, previews: &Previews, text: Option<Rect>) {
     let Ui { view, screen } = ui;
-    screen.over.hints = text.and_then(|text| {
+    let hints = text.and_then(|text| {
         if let Some(reading) = screen.showing.reading() {
             return stack_links(view, previews, reading, text);
         }
@@ -20,8 +20,9 @@ pub fn label_links(ui: &mut Ui, previews: &Previews, text: Option<Rect>) {
         LinkHints::find([(0, &preview.body[..], lines)])
     });
 
-    if screen.over.hints.is_none() {
-        screen.toast = Some(Toast::new("no links"));
+    match hints {
+        Some(hints) => screen.over.open(hints),
+        None => screen.toast = Some(Toast::new("no links")),
     }
 }
 

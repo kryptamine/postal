@@ -1,6 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::{compose::recipients::Recipients, ui::mode::Mode, ui::open_outside::Outside};
+use crate::{
+    compose::recipients::Recipients, ui::layer, ui::mode::Mode, ui::open_outside::Outside,
+};
 
 #[derive(Clone, Copy)]
 pub enum Action {
@@ -56,53 +58,6 @@ pub enum Action {
     Quit,
 }
 
-/// What a key does while a Draft's preview is open.
-#[derive(Clone, Copy)]
-pub enum DraftKey {
-    Send,
-    Edit,
-    /// Closes the preview, the Draft kept in Local Drafts.
-    Keep,
-    Discard,
-    Help,
-    Quit,
-}
-
-/// What a key does in Local Drafts.
-#[derive(Clone, Copy)]
-pub enum LocalKey {
-    Down,
-    Up,
-    /// A Draft's preview, or an Outbox Message read-only.
-    Open,
-    Discard,
-    Undo,
-    Close,
-    Help,
-    Quit,
-}
-
-/// What a key does while an Outbox Message is shown read-only.
-#[derive(Clone, Copy)]
-pub enum QueuedKey {
-    Close,
-    Help,
-    Quit,
-}
-
-/// What a key does while the Folder Picker is open.
-#[derive(Clone, Copy)]
-pub enum Pick {
-    Type(char),
-    Erase,
-    Down,
-    Up,
-    /// Shows the selected Folder.
-    Choose,
-    Close,
-    Quit,
-}
-
 #[derive(Clone, Copy)]
 pub enum Move {
     Down,
@@ -151,9 +106,6 @@ pub struct Hint {
 const LIST: &[Mode] = &[Mode::List];
 const READING: &[Mode] = &[Mode::Reading];
 const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
-const DRAFT: &[Mode] = &[Mode::Draft];
-const LOCAL: &[Mode] = &[Mode::LocalDrafts];
-const SETTINGS: &[Mode] = &[Mode::Settings];
 const ANY: &[Mode] = &[
     Mode::List,
     Mode::Reading,
@@ -163,9 +115,10 @@ const ANY: &[Mode] = &[
     Mode::Settings,
 ];
 
-/// The keymap as the hint line and the `?` popup show it, in their order.
-/// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 47] = [
+/// The panes' keymap and the keys every layer shares, as the hint line and
+/// the `?` popup show them. `action` below reads the same keys; change the
+/// two together.
+const BINDINGS: [Binding; 33] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -511,174 +464,14 @@ const BINDINGS: [Binding; 47] = [
             description: "folders",
         }),
     },
-    Binding {
-        group: "Draft",
-        modes: DRAFT,
-        signed_out: false,
-        keys: "y",
-        aliases: "",
-        description: "send the Draft",
-        hint: Some(Hint {
-            keys: "y",
-            description: "send",
-        }),
-    },
-    Binding {
-        group: "Draft",
-        modes: DRAFT,
-        signed_out: false,
-        keys: "e",
-        aliases: "",
-        description: "edit it again",
-        hint: Some(Hint {
-            keys: "e",
-            description: "edit",
-        }),
-    },
-    Binding {
-        group: "Draft",
-        modes: DRAFT,
-        signed_out: false,
-        keys: "q",
-        aliases: "",
-        description: "discard it; u brings it back",
-        hint: Some(Hint {
-            keys: "q",
-            description: "discard",
-        }),
-    },
-    Binding {
-        group: "Draft",
-        modes: DRAFT,
-        signed_out: false,
-        keys: "d",
-        aliases: "",
-        description: "keep it in Local Drafts",
-        hint: Some(Hint {
-            keys: "d",
-            description: "keep",
-        }),
-    },
-    Binding {
-        group: "Local Drafts",
-        modes: LOCAL,
-        signed_out: false,
-        keys: "j / k",
-        aliases: "↓ / ↑",
-        description: "next / previous",
-        hint: Some(Hint {
-            keys: "j/k",
-            description: "move",
-        }),
-    },
-    Binding {
-        group: "Local Drafts",
-        modes: LOCAL,
-        signed_out: false,
-        keys: "Enter",
-        aliases: "",
-        description: "open the Draft or the Outbox Message",
-        hint: Some(Hint {
-            keys: "Enter",
-            description: "open",
-        }),
-    },
-    Binding {
-        group: "Local Drafts",
-        modes: LOCAL,
-        signed_out: false,
-        keys: "Backspace",
-        aliases: "",
-        description: "discard the Draft",
-        hint: None,
-    },
-    Binding {
-        group: "Local Drafts",
-        modes: LOCAL,
-        signed_out: false,
-        keys: "u",
-        aliases: "",
-        description: "undo a discard",
-        hint: None,
-    },
-    Binding {
-        group: "Local Drafts",
-        modes: LOCAL,
-        signed_out: false,
-        keys: "q",
-        aliases: "Esc",
-        description: "back to the Message List",
-        hint: Some(Hint {
-            keys: "q",
-            description: "back",
-        }),
-    },
-    Binding {
-        group: "Outbox",
-        modes: &[Mode::Queued],
-        signed_out: false,
-        keys: "q",
-        aliases: "Esc",
-        description: "back to Local Drafts",
-        hint: Some(Hint {
-            keys: "q",
-            description: "back",
-        }),
-    },
-    Binding {
-        group: "Settings",
-        modes: SETTINGS,
-        signed_out: false,
-        keys: "j / k",
-        aliases: "↓ / ↑",
-        description: "next / previous",
-        hint: Some(Hint {
-            keys: "j/k",
-            description: "move",
-        }),
-    },
-    Binding {
-        group: "Settings",
-        modes: SETTINGS,
-        signed_out: false,
-        keys: "Enter",
-        aliases: "",
-        description: "change the setting, or add an Account",
-        hint: Some(Hint {
-            keys: "Enter",
-            description: "change",
-        }),
-    },
-    Binding {
-        group: "Settings",
-        modes: SETTINGS,
-        signed_out: false,
-        keys: "d",
-        aliases: "Backspace",
-        description: "unlink the Account",
-        hint: Some(Hint {
-            keys: "d",
-            description: "unlink",
-        }),
-    },
-    Binding {
-        group: "Settings",
-        modes: SETTINGS,
-        signed_out: false,
-        keys: "q",
-        aliases: "Esc / ,",
-        description: "back to the Message List",
-        hint: Some(Hint {
-            keys: "q",
-            description: "back",
-        }),
-    },
 ];
 
-/// The bindings listed in `mode` now, in `BINDINGS` order.
+/// The bindings listed in `mode` now: the panes' and the shared ones in
+/// `BINDINGS` order, then the layers'.
 pub fn bindings(mode: Mode, signed_out: bool) -> impl Iterator<Item = &'static Binding> + Clone {
     BINDINGS
         .iter()
+        .chain(layer::help())
         .filter(move |b| b.modes.contains(&mode) && (signed_out || !b.signed_out))
 }
 
@@ -766,97 +559,6 @@ const fn on_message(code: KeyCode) -> Option<Action> {
         KeyCode::Char('c') => Some(Action::Compose),
         KeyCode::Char('r') => Some(Action::Reply(Recipients::Sender)),
         KeyCode::Char('R') => Some(Action::Reply(Recipients::All)),
-        _ => None,
-    }
-}
-
-/// What `key` does in a Draft's preview, which takes them all.
-pub const fn draft(key: KeyEvent) -> Option<DraftKey> {
-    if !pressed(key) {
-        return None;
-    }
-
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        return match key.code {
-            KeyCode::Char('c') => Some(DraftKey::Quit),
-            _ => None,
-        };
-    }
-
-    match key.code {
-        KeyCode::Char('y') => Some(DraftKey::Send),
-        KeyCode::Char('e') => Some(DraftKey::Edit),
-        KeyCode::Char('d') => Some(DraftKey::Keep),
-        KeyCode::Char('q') => Some(DraftKey::Discard),
-        KeyCode::Char('?') => Some(DraftKey::Help),
-        _ => None,
-    }
-}
-
-/// What `key` does in Local Drafts, which takes them all.
-pub const fn local(key: KeyEvent) -> Option<LocalKey> {
-    if !pressed(key) {
-        return None;
-    }
-
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        return match key.code {
-            KeyCode::Char('c') => Some(LocalKey::Quit),
-            _ => None,
-        };
-    }
-
-    match key.code {
-        KeyCode::Char('j') | KeyCode::Down => Some(LocalKey::Down),
-        KeyCode::Char('k') | KeyCode::Up => Some(LocalKey::Up),
-        KeyCode::Enter => Some(LocalKey::Open),
-        KeyCode::Backspace => Some(LocalKey::Discard),
-        KeyCode::Char('u') => Some(LocalKey::Undo),
-        KeyCode::Char('q') | KeyCode::Esc => Some(LocalKey::Close),
-        KeyCode::Char('?') => Some(LocalKey::Help),
-        _ => None,
-    }
-}
-
-/// What `key` does while an Outbox Message is shown, which takes them all.
-pub const fn queued(key: KeyEvent) -> Option<QueuedKey> {
-    if !pressed(key) {
-        return None;
-    }
-
-    match key.code {
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            Some(QueuedKey::Quit)
-        }
-        _ if key.modifiers.contains(KeyModifiers::CONTROL) => None,
-        KeyCode::Char('q') | KeyCode::Esc => Some(QueuedKey::Close),
-        KeyCode::Char('?') => Some(QueuedKey::Help),
-        _ => None,
-    }
-}
-
-/// What `key` does in the Folder Picker; every character is the Query's.
-pub const fn pick(key: KeyEvent) -> Option<Pick> {
-    if !pressed(key) {
-        return None;
-    }
-
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        return match key.code {
-            KeyCode::Char('c') => Some(Pick::Quit),
-            KeyCode::Char('n') => Some(Pick::Down),
-            KeyCode::Char('p') => Some(Pick::Up),
-            _ => None,
-        };
-    }
-
-    match key.code {
-        KeyCode::Enter => Some(Pick::Choose),
-        KeyCode::Esc => Some(Pick::Close),
-        KeyCode::Backspace => Some(Pick::Erase),
-        KeyCode::Down => Some(Pick::Down),
-        KeyCode::Up => Some(Pick::Up),
-        KeyCode::Char(c) => Some(Pick::Type(c)),
         _ => None,
     }
 }

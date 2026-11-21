@@ -5,7 +5,9 @@ use crate::{
     domain::per_account::PerAccount,
     domain::shown::Shown,
     ui::all_inboxes,
+    ui::folder_picker::FolderPicker,
     ui::inbox_view::InboxView,
+    ui::link_hints::LinkHints,
     ui::main_screen::Ui,
     ui::run::Error,
     ui::showing::Showing,
@@ -55,7 +57,7 @@ pub fn switch(ui: &mut Ui, caches: &PerAccount<Cache>, folder: Shown) -> Result<
     }
 
     ui.screen.list();
-    ui.screen.over.hints = None;
+    ui.screen.over.close::<LinkHints>();
     ui.view.switch(folder);
     show(&mut ui.view, caches, None)?;
     Ok(true)
@@ -73,7 +75,7 @@ pub fn folders(caches: &PerAccount<Cache>) -> Result<Vec<Folder>, Error> {
 
 /// Lists the Folders anew in an open Folder Picker.
 pub fn relist(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
-    if let Some(picker) = &mut ui.screen.over.picker {
+    if let Some(picker) = ui.screen.over.get_mut::<FolderPicker>() {
         picker.reload(folders(caches)?, &ui.view.folder);
     }
 
