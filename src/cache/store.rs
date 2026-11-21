@@ -13,7 +13,7 @@ use rusqlite::{
     params,
 };
 
-use super::{Changes, Error, moves, schema};
+use super::{Changes, Error, correspondence, moves, schema};
 use crate::{
     flag::Flag,
     flag_change::FlagChange,
@@ -868,7 +868,8 @@ fn insert(
         ])?;
     }
 
-    Ok(())
+    drop(insert);
+    correspondence::learn(connection, (account, folder), rows)
 }
 
 /// The text part in the four columns from `first`: section, encoding,

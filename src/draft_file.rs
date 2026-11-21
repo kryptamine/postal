@@ -62,6 +62,11 @@ pub fn untouched(path: &Path) -> bool {
     })
 }
 
+/// Replaces the Draft at `path` with `text`, its notes left as they are.
+pub fn rewrite(path: &Path, text: &str) -> io::Result<()> {
+    atomic_file::write(path, text.as_bytes(), MODE)
+}
+
 /// Writes a discarded Draft's `text` back to its file, with its notes.
 pub fn restore(path: &Path, text: &str, notes: DraftNotes<'_>) -> io::Result<()> {
     note(path, notes)?;

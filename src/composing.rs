@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use chrono::Utc;
 use ratatui::Terminal;
 
 use crate::{
@@ -7,13 +8,17 @@ use crate::{
     answering::Answering,
     awaited_reply::AwaitedReply,
     cache::Cache,
+    correspondent::{self, Correspondent},
+    draft::Draft,
     draft_file,
     draft_preview::DraftPreview,
     editor,
+    expand::{self, Expanded},
     input::Input,
     message::Message,
     notes::{self, Notes},
     outbox::Outbox,
+    recipient_picker::RecipientPicker,
     reply_draft,
     reply_fetch::ReplyFetch,
     routes::Routes,
@@ -26,13 +31,17 @@ use crate::{
     undo::Undo,
 };
 
+/// What a Draft's recipients are expanded against: every Account's Cache,
+/// and the Accounts.
+pub type Known<'a> = (&'a [Cache], Accounts<'a>);
+
 /// Compose from the Account `from`: a new Draft's file in the editor,
 /// then its preview, unless it was left as the template.
 pub fn compose(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    from: Option<&str>,
+    (known, from): (Known<'_>, Option<&str>),
 ) -> Result<(), Error> {
     // A Reply still waiting on its body would open over this Draft.
     screen.replying = None;
@@ -51,7 +60,7 @@ pub fn compose(
         return Ok(());
     }
 
-    preview(screen, (path, (account, None)));
+    preview(screen, known, (path, (account, None)));
     Ok(())
 }
 
@@ -78,14 +87,25 @@ pub fn reply(
     screen.replying = None;
     let message = &awaited.message;
     if let Some(path) = answered_by(message, accounts) {
-        return edit(terminal, events, screen, (path, (None, None)));
+        return edit(
+            terminal,
+            events,
+            screen,
+            (caches, accounts),
+            (path, (None, None)),
+        );
     }
 
     if let Some(raw) = caches[message.account]
         .body(message.body_key)
         .map_err(Error::Cache)?
     {
-        return answer(terminal, events, screen, (&raw, &awaited, accounts));
+        return answer(
+            terminal,
+            events,
+            screen,
+            (&raw, &awaited, (caches, accounts)),
+        );
     }
 
     if message.folder.is_none() {
@@ -140,7 +160,12 @@ pub fn fetched(
         return Ok(());
     };
 
-    answer(terminal, events, screen, (&raw, &awaited, accounts))
+    answer(
+        terminal,
+        events,
+        screen,
+        (&raw, &awaited, (caches, accounts)),
+    )
 }
 
 /// A Reply's Draft from the answered Message's body `raw`, in the editor,
@@ -149,8 +174,9 @@ fn answer(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    (raw, awaited, accounts): (&[u8], &AwaitedReply, Accounts),
+    (raw, awaited, known): (&[u8], &AwaitedReply, Known<'_>),
 ) -> Result<(), Error> {
+    let accounts = known.1;
     let account = awaited.message.account;
     let email = accounts.email(account);
     let (text, answering) = reply_draft::reply(raw, &awaited.message, email, awaited.all);
@@ -165,7 +191,13 @@ fn answer(
     }
 
     let from = from.map(str::to_owned);
-    edit(terminal, events, screen, (path, (from, Some(answering))))
+    edit(
+        terminal,
+        events,
+        screen,
+        known,
+        (path, (from, Some(answering))),
+    )
 }
 
 /// A new Draft's file holding `text`, else the template; `None` once the
@@ -188,22 +220,31 @@ pub fn edit(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
+    known: Known<'_>,
     (path, (account, answering)): (PathBuf, (Option<String>, Option<Answering>)),
 ) -> Result<(), Error> {
     run::outside(terminal, events, || editor::edit(&path))?;
-    preview(screen, (path, (account, answering)));
+    preview(screen, known, (path, (account, answering)));
     Ok(())
 }
 
-/// The preview of the Draft at `path` as the file reads now; `notes` win
-/// over those beside it.
+/// The preview of the Draft at `path` once its recipients are expanded, as
+/// the file reads then; `notes` win over those beside it.
 fn preview(
     screen: &mut Screen,
+    known: Known<'_>,
     (path, (account, answering)): (PathBuf, (Option<String>, Option<Answering>)),
 ) {
+    let expanded = expanded(&path, known, account.as_deref());
     screen.draft = match DraftPreview::read(path, answering) {
         Ok(mut preview) => {
             preview.account = account.or(preview.account);
+            if let Some(expanded) = expanded {
+                let open = expanded.open.into_iter();
+                preview.choosing = open.map(|(e, m)| RecipientPicker::new(e, m)).collect();
+                preview.unmatched = expanded.unmatched;
+            }
+
             Some(preview)
         }
         Err(error) => {
@@ -212,6 +253,65 @@ fn preview(
             None
         }
     };
+}
+
+/// Expands the recipients of the Draft at `path` written as words, the
+/// Account `from`'s Correspondents first, and writes the file back when one
+/// changed; `None` when none is written so.
+fn expanded(path: &Path, (caches, accounts): Known<'_>, from: Option<&str>) -> Option<Expanded> {
+    let text = std::fs::read_to_string(path).ok()?;
+    if !expand::needed(&text) {
+        return None;
+    }
+
+    let seen = caches.first()?.correspondence();
+    let seen = seen
+        .inspect_err(|error| tracing::error!("reading Correspondents failed: {error}"))
+        .ok()?;
+    let emails: Vec<&str> = (0..accounts.0.len()).map(|n| accounts.email(n)).collect();
+    let first = from.unwrap_or_else(|| accounts.email(0));
+    let known = correspondent::ranked(seen, (&emails, first), Utc::now());
+    let expanded = expand::expand(&text, &known);
+    if expanded.text != text
+        && let Err(error) = draft_file::rewrite(path, &expanded.text)
+    {
+        tracing::error!("writing the expanded Draft failed: {error}");
+    }
+
+    Some(expanded)
+}
+
+/// Ends the shown recipient picker: `chosen` writes its selected
+/// Correspondent in place of the recipient, else it stays as written.
+pub fn choose(screen: &mut Screen, chosen: bool) {
+    let Some(preview) = screen.draft.as_mut() else {
+        return;
+    };
+
+    if preview.choosing.is_empty() {
+        return;
+    }
+
+    let picker = preview.choosing.remove(0);
+    let mailbox = picker
+        .chosen()
+        .filter(|_| chosen)
+        .map(Correspondent::mailbox);
+    let Some(mailbox) = mailbox else {
+        preview.unmatched.push(picker.entry);
+        return;
+    };
+
+    let text = expand::choose(&preview.text, &picker.entry, &mailbox);
+    if let Err(error) = draft_file::rewrite(&preview.path, &text) {
+        tracing::error!("writing the chosen recipient failed: {error}");
+        screen.toast = Some(Toast::error("could not write the Draft"));
+        preview.choosing.insert(0, picker);
+        return;
+    }
+
+    preview.draft = Draft::parse(&text);
+    preview.text = text;
 }
 
 /// Send: the Draft shown moves to the Outbox, unless it does not parse,

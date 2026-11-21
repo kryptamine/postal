@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 13;
+pub const VERSION: i64 = 14;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -122,6 +122,27 @@ CREATE TABLE moved (
     text_html INTEGER
 );
 -- What the server holds in `mailbox` that the Message List leaves out.
+-- An address a Message names, once per Message whichever Folders hold it;
+-- none from Trash or Spam: docs/adr/0016-expand-recipients-after-the-editor.md.
+CREATE TABLE correspondence (
+    account TEXT NOT NULL,
+    -- Lowercased.
+    address TEXT NOT NULL,
+    -- Its `Message-ID`, else a key of its own.
+    message TEXT NOT NULL,
+    name TEXT,
+    -- Whether the Account wrote to it, rather than had mail from or with it.
+    written INTEGER NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (account, address, message)
+);
+-- How far the pass over the Folder with the Sent role has read.
+CREATE TABLE sent_pass (
+    account TEXT PRIMARY KEY,
+    mailbox TEXT NOT NULL,
+    uid_validity INTEGER NOT NULL,
+    last_uid INTEGER NOT NULL
+);
 CREATE VIEW deleted AS
     SELECT account, mailbox, at_uid AS uid FROM moved WHERE want_trash AND NOT at_trash;
 -- Rows an Undo put back under `uid`, with where the server has the Message.

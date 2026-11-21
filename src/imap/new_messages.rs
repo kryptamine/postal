@@ -1,12 +1,16 @@
 use async_imap::{
     Session,
-    imap_proto::{AttributeValue, Envelope, MessageSection, Response, SectionPath},
+    imap_proto::{Address, AttributeValue, Envelope, MessageSection, Response, SectionPath},
 };
 use chrono::DateTime;
 
 use super::{Error, Pushed, connect::Transport, tagged, text_part};
 use crate::{
-    body_key::body_key, header, message::Message, message_flags::MessageFlags,
+    body_key::body_key,
+    correspondence::{Correspondence, Person},
+    header,
+    message::Message,
+    message_flags::MessageFlags,
     new_message::NewMessage,
 };
 
@@ -89,11 +93,6 @@ fn message(
     );
 
     let envelope = envelope(attributes);
-    let subject = envelope
-        .and_then(|e| e.subject.as_deref())
-        .map(header::decode)
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "(no subject)".to_owned());
     let row = Message {
         uid,
         body_key: body_key(gmail_id, uid_validity, uid),
@@ -103,7 +102,7 @@ fn message(
         sender: envelope
             .and_then(sender)
             .unwrap_or_else(|| raw_from(attributes)),
-        subject,
+        subject: subject(envelope),
         snippet: String::new(),
         thread,
         from_me: envelope.is_some_and(|e| from(e, email)),
@@ -116,9 +115,60 @@ fn message(
         _ => None,
     });
     Some(NewMessage {
+        correspondence: correspondence(envelope, &row),
         row,
         text_part: structure.and_then(text_part::find),
     })
+}
+
+fn subject(envelope: Option<&Envelope<'_>>) -> String {
+    envelope
+        .and_then(|e| e.subject.as_deref())
+        .map(header::decode)
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "(no subject)".to_owned())
+}
+
+/// Under its `Message-ID`, else under the body key of `row`.
+fn correspondence(envelope: Option<&Envelope<'_>>, row: &Message) -> Correspondence {
+    Correspondence {
+        message: envelope
+            .and_then(|e| e.message_id.as_deref())
+            .map(|id| String::from_utf8_lossy(id).trim().to_owned())
+            .filter(|id| !id.is_empty())
+            .unwrap_or_else(|| format!("key:{}", row.body_key)),
+        people: envelope.map(|e| people(e, row.from_me)).unwrap_or_default(),
+    }
+}
+
+/// Everyone in `From`, `To` and `Cc`; those in `To` and `Cc` are written
+/// to when the Account sent it.
+fn people(envelope: &Envelope<'_>, from_me: bool) -> Vec<Person> {
+    let listed = |addresses: &Option<Vec<Address<'_>>>, written: bool| {
+        addresses
+            .iter()
+            .flatten()
+            .filter_map(move |a| person(a, written))
+            .collect::<Vec<_>>()
+    };
+
+    let mut people = listed(&envelope.from, false);
+    people.extend(listed(&envelope.to, from_me));
+    people.extend(listed(&envelope.cc, from_me));
+    people
+}
+
+/// `None` for a group's start or end, which has no host.
+fn person(address: &Address<'_>, written: bool) -> Option<Person> {
+    let mailbox = address.mailbox.as_deref().filter(|m| !m.is_empty())?;
+    let host = address.host.as_deref().filter(|h| !h.is_empty())?;
+    let email = format!(
+        "{}@{}",
+        String::from_utf8_lossy(mailbox),
+        String::from_utf8_lossy(host)
+    );
+    let name = address.name.as_deref().map(header::decode);
+    Some(Person::new(&email, name, written))
 }
 
 /// Whether the first `From` address is `email`; addresses compare without case.

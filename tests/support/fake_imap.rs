@@ -76,6 +76,10 @@ pub struct FakeMessage {
     /// More header lines of the whole Message, each ending in CRLF.
     pub headers: String,
     pub answered: bool,
+    /// Each `(name, address)` of its envelope's `To`, then of its `Cc`.
+    pub to: Vec<(&'static str, &'static str)>,
+    pub cc: Vec<(&'static str, &'static str)>,
+    pub message_id: Option<&'static str>,
 }
 
 impl FakeMessage {
@@ -91,7 +95,26 @@ impl FakeMessage {
             thread: None,
             headers: String::new(),
             answered: false,
+            to: Vec::new(),
+            cc: Vec::new(),
+            message_id: None,
         }
+    }
+
+    /// Sent to `name` at `address`.
+    pub fn to(mut self, name: &'static str, address: &'static str) -> Self {
+        self.to.push((name, address));
+        self
+    }
+
+    pub fn cc(mut self, name: &'static str, address: &'static str) -> Self {
+        self.cc.push((name, address));
+        self
+    }
+
+    pub const fn message_id(mut self, id: &'static str) -> Self {
+        self.message_id = Some(id);
+        self
     }
 
     /// Adds `name: value` to the whole Message's header.
@@ -1449,6 +1472,23 @@ fn whole_body_item(message: &FakeMessage) -> MessageDataItem<'static> {
     }
 }
 
+/// An envelope's address list of each `(name, address)`.
+fn addresses(listed: &[(&str, &str)]) -> Vec<Address<'static>> {
+    let nstring = |s: &str| NString(Some(IString::try_from(s.to_owned()).unwrap()));
+    listed
+        .iter()
+        .map(|(name, address)| {
+            let (mailbox, host) = address.split_once('@').unwrap();
+            Address {
+                name: nstring(name),
+                adl: NString(None),
+                mailbox: nstring(mailbox),
+                host: nstring(host),
+            }
+        })
+        .collect()
+}
+
 /// Every item whatever the client asked for, as a client must cope with extras.
 fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
     let message = &stored.message;
@@ -1473,11 +1513,11 @@ fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
         from: from.clone(),
         sender: from.clone(),
         reply_to: from,
-        to: vec![],
-        cc: vec![],
+        to: addresses(&message.to),
+        cc: addresses(&message.cc),
         bcc: vec![],
         in_reply_to: NString(None),
-        message_id: NString(None),
+        message_id: message.message_id.map_or(NString(None), nstring),
     };
 
     let received = chrono::DateTime::parse_from_rfc3339(&message.internal_date).unwrap();

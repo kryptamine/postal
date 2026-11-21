@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
 
@@ -6,10 +6,14 @@ use crate::{
     backfill,
     cache::Cache,
     imap::MailServer,
-    snippets,
+    sent_pass, snippets,
     sync::{self, Error},
     update::Update,
 };
+
+/// How long the fetch connection goes without a request before its pass
+/// over Sent, so the first Preview never waits on it.
+const QUIET: Duration = Duration::from_secs(1);
 
 /// Work for the fetch connection.
 pub enum Request {
@@ -27,6 +31,8 @@ struct Pending {
     bodies: Option<BodyRequest>,
     older: Option<Arc<str>>,
     reply: Option<(Arc<str>, u32)>,
+    /// Whether this connection made its pass over Sent.
+    sent_read: bool,
 }
 
 impl Pending {
@@ -67,9 +73,9 @@ pub enum Fetched {
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each went:
-/// a Reply's body, bodies, then a page of older Messages, then one batch of
-/// its Snippets, each in its own Folder. Only a failure other than a refusal
-/// ends the serving.
+/// a Reply's body, bodies, a page of older Messages, one batch of its
+/// Snippets, each in its own Folder, and once quiet, the pass over Sent.
+/// Only a failure other than a refusal ends the serving.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -85,11 +91,10 @@ pub async fn serve(
     let mut snippets_below: Option<(Arc<str>, u32)> = None;
     loop {
         if pending.is_empty() && snippets_below.is_none() {
-            let Some(first) = requests.next().await else {
+            let state = (&mut pending, &mut examined);
+            if !wait(server, cache, requests, state, &send).await? {
                 return Ok(());
-            };
-
-            pending.take(first);
+            }
         }
 
         pending.receive(requests);
@@ -151,6 +156,42 @@ pub async fn serve(
             }
         }
     }
+}
+
+/// Takes the next request into `pending`; false once the channel closes.
+/// The pass over Sent goes first, should `QUIET` pass before one comes and
+/// none was made yet.
+#[expect(
+    clippy::future_not_send,
+    reason = "Postal runs on a current-thread runtime"
+)]
+async fn wait(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    requests: &mut UnboundedReceiver<Request>,
+    (pending, examined): (&mut Pending, &mut Option<Arc<str>>),
+    send: &impl Fn(Update),
+) -> Result<bool, Error> {
+    let next = if pending.sent_read {
+        Some(requests.next().await)
+    } else {
+        tokio::time::timeout(QUIET, requests.next()).await.ok()
+    };
+
+    let next = if let Some(next) = next {
+        next
+    } else {
+        pending.sent_read = true;
+        *examined = sent_pass::read(server, cache, send).await?;
+        requests.next().await
+    };
+
+    let Some(request) = next else {
+        return Ok(false);
+    };
+
+    pending.take(request);
+    Ok(true)
 }
 
 /// Fetches the body a Reply waits on; one whose Folder is gone is refused.

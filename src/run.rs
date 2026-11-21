@@ -13,7 +13,7 @@ use crate::{
     body::Body,
     browser,
     cache::{self, Cache},
-    composing,
+    composing::{self, Known},
     config::IconChoice,
     draft_pane::DraftPane,
     draft_preview::DraftPreview,
@@ -41,6 +41,7 @@ use crate::{
     preview_render::{self, Job},
     previews::Previews,
     reading::Reading,
+    recipient_popup::RecipientPopup,
     rendered_previews::PreviewKey,
     reply_fetch::ReplyFetch,
     routes::Routes,
@@ -215,7 +216,7 @@ pub async fn run(
                     Step::Page => screen.toast = open(terminal, &mut events, theme, caches, (&view, screen.reading.as_ref()))?,
                     step @ (Step::Compose | Step::Edit | Step::Send) => {
                         let from = accounts.noted(composing_from(&view));
-                        draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
+                        draft(&step, terminal, &mut events, &mut screen, ((caches, accounts), from, outbox, &asks))?;
                     }
                     Step::Reply(all) => {
                         if let Some(message) = answered(&view, &screen) {
@@ -428,6 +429,17 @@ fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, 
         };
 
         frame.render_widget(pane, body);
+        if let Some(picker) = preview.choosing.first() {
+            let accounts = accounts.0.len() > 1;
+            let popup = RecipientPopup {
+                theme,
+                picker,
+                accounts,
+            };
+
+            frame.set_cursor_position(popup.cursor(body));
+            frame.render_widget(popup, body);
+        }
     }
 
     if let Some(settings) = &screen.settings {
@@ -988,6 +1000,21 @@ fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
         return Step::Stay;
     }
 
+    if let Some(picker) = screen.draft.as_mut().and_then(|p| p.choosing.first_mut()) {
+        match keymap::pick(key) {
+            Some(Pick::Type(c)) => picker.push(c),
+            Some(Pick::Erase) => picker.pop(),
+            Some(Pick::Down) => picker.down(),
+            Some(Pick::Up) => picker.up(),
+            Some(Pick::Choose) if picker.chosen().is_some() => composing::choose(screen, true),
+            Some(Pick::Close) => composing::choose(screen, false),
+            Some(Pick::Quit) => return Step::Quit,
+            Some(Pick::Choose) | None => {}
+        }
+
+        return Step::Stay;
+    }
+
     match keymap::draft(key) {
         Some(DraftKey::Quit) => Step::Quit,
         Some(DraftKey::Help) => {
@@ -1074,17 +1101,17 @@ fn draft(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
-    (accounts, from, outbox, asks): (Accounts, Option<&str>, &Outbox, &Routes<Ask>),
+    (known, from, outbox, asks): (Known<'_>, Option<&str>, &Outbox, &Routes<Ask>),
 ) -> Result<(), Error> {
     match step {
-        Step::Compose => composing::compose(terminal, events, screen, from)?,
+        Step::Compose => composing::compose(terminal, events, screen, (known, from))?,
         Step::Edit => {
             if let Some(preview) = screen.draft.take() {
                 let notes = (preview.account, preview.answering);
-                composing::edit(terminal, events, screen, (preview.path, notes))?;
+                composing::edit(terminal, events, screen, known, (preview.path, notes))?;
             }
         }
-        Step::Send => composing::send(screen, (accounts, outbox), asks),
+        Step::Send => composing::send(screen, (known.1, outbox), asks),
         _ => {}
     }
 

@@ -34,6 +34,9 @@ const GMAIL_ITEMS: &str = concat!(
     "BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])"
 );
 
+/// What a Correspondent is learnt from, for the pass over Sent.
+const ENVELOPE_ITEMS: &str = "(UID INTERNALDATE ENVELOPE)";
+
 /// How often a server without `IDLE` is asked what changed.
 const POLL: Duration = Duration::from_secs(60);
 
@@ -90,6 +93,13 @@ pub trait MailServer {
 
     /// The Messages whose UID is at least `first`.
     async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
+
+    /// As `newest`, with nothing but each Message's envelope and date read.
+    async fn newest_envelopes(&mut self, exists: u32, count: u32)
+    -> Result<Vec<NewMessage>, Error>;
+
+    /// As `since_uid`, with nothing but each Message's envelope and date read.
+    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
 
     /// The Messages with these UIDs; a UID gone is left out.
     async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error>;
@@ -410,6 +420,24 @@ impl MailServer for ImapSession {
         // `first:*` always matches the last Message, even below `first`.
         messages.retain(|m| m.row.uid >= first);
         tracing::info!("fetched {} new Messages", messages.len());
+        Ok(messages)
+    }
+
+    async fn newest_envelopes(
+        &mut self,
+        exists: u32,
+        count: u32,
+    ) -> Result<Vec<NewMessage>, Error> {
+        let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
+        let command = format!("FETCH {first}:* {ENVELOPE_ITEMS}");
+        self.rows(command, |_| {}).await
+    }
+
+    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<NewMessage>, Error> {
+        let command = format!("UID FETCH {first}:* {ENVELOPE_ITEMS}");
+        let mut messages = self.rows(command, |_| {}).await?;
+        // `first:*` always matches the last Message, even below `first`.
+        messages.retain(|m| m.row.uid >= first);
         Ok(messages)
     }
 

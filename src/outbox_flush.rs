@@ -1,7 +1,11 @@
 use std::sync::Arc;
 
+use chrono::Utc;
+use mail_parser::MessageParser;
+
 use crate::{
     cache::Cache,
+    correspondence::{Correspondence, Person},
     draft::Draft,
     folder::Role,
     imap::MailServer,
@@ -122,12 +126,17 @@ async fn submit(
     };
 
     let text = notes.draft.clone().unwrap_or_default();
-    let envelope = Draft::parse(&text).and_then(|draft| sender.outgoing.envelope(&draft));
-    let refusal = match envelope {
-        Ok(envelope) => {
+    let parsed =
+        Draft::parse(&text).and_then(|draft| Ok((sender.outgoing.envelope(&draft)?, draft)));
+    let refusal = match parsed {
+        Ok((envelope, draft)) => {
             let config = sender.outgoing.config;
             match smtp::send(config, sender.sign_in, (&envelope, &message)).await {
-                Ok(()) => return accept(cache, queued, notes, send).map(|()| Submitted::Accepted),
+                Ok(()) => {
+                    let written = correspondence(&draft, &message);
+                    return accept(cache, queued, (notes, written.as_ref()), send)
+                        .map(|()| Submitted::Accepted);
+                }
                 Err(error) if error.refused() => error.to_string(),
                 Err(error) => {
                     tracing::warn!("sending {} failed: {error}", queued.path.display());
@@ -158,18 +167,36 @@ async fn submit(
     Ok(Submitted::Refused)
 }
 
-/// What follows SMTP's acceptance: the sent mark, then `\Answered` queued
-/// on the Message a Reply answers.
+/// Everyone `draft` went out to, under the `Message-ID` of `message`, as
+/// built from it; `None` without one, as it could not be told from others.
+fn correspondence(draft: &Draft, message: &[u8]) -> Option<Correspondence> {
+    let headers = MessageParser::default().parse_headers(message)?;
+    let id = headers.message_id()?;
+    let people = draft.to.iter().chain(draft.cc.iter());
+    Some(Correspondence {
+        message: format!("<{id}>"),
+        people: people
+            .map(|to| Person::new(to.email.as_ref(), to.name.clone(), true))
+            .collect(),
+    })
+}
+
+/// What follows SMTP's acceptance: the sent mark, Correspondents learnt
+/// from `written`, then `\Answered` queued on the Message a Reply answers.
 fn accept(
     cache: &Cache,
     queued: &mut Queued,
-    notes: Notes,
+    (notes, written): (Notes, Option<&Correspondence>),
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     tracing::info!("SMTP accepted {}", queued.path.display());
     if let Err(error) = queued.mark_sent() {
         // Unmarked, the Message is sent again should its removal fail too.
         tracing::error!("marking {} sent failed: {error}", queued.path.display());
+    }
+
+    if let Some(written) = written {
+        cache.sent(Utc::now(), written)?;
     }
 
     let original = notes.answering.and_then(|answering| answering.original);
