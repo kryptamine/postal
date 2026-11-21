@@ -13,7 +13,7 @@ pub async fn sign_in(
 ) -> Result<Session<Box<dyn Transport>>, Error> {
     let password = match sign_in {
         SignIn::OAuth(tokens) => {
-            let token = tokens.access().await.map_err(Error::Token)?;
+            let token = tokens.access().await?;
             let xoauth2 = XOAuth2 {
                 email: &config.email,
                 token: token.expose(),

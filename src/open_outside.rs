@@ -46,7 +46,7 @@ pub fn open(
     };
 
     let found = caches[message.account].body(message.body_key);
-    let Some(body) = found.map_err(Error::Cache)? else {
+    let Some(body) = found? else {
         return Ok(Some(Toast::new("not downloaded")));
     };
 

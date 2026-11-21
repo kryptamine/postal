@@ -24,7 +24,7 @@ pub enum Error {
     #[error("the IMAP server did not answer within {}s", VERIFY_TIMEOUT.as_secs())]
     Timeout,
     #[error(transparent)]
-    Imap(imap::Error),
+    Imap(#[from] imap::Error),
     /// Google's consent page sent back this `error` code.
     #[error("Google refused the sign-in: {0}")]
     Denied(String),
@@ -65,11 +65,10 @@ async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
     let verified = async {
         let mut session = ImapSession::open(config, sign_in).await?;
         session.examine(folder::INBOX).await?;
-        Ok(())
+        Ok::<(), Error>(())
     };
 
     tokio::time::timeout(VERIFY_TIMEOUT, verified)
         .await
         .map_err(|_elapsed| Error::Timeout)?
-        .map_err(Error::Imap)
 }

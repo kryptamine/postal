@@ -86,13 +86,13 @@ pub fn reply<'a>(
     }
 
     let cache = &caches[message.account];
-    let raw = cache.body(message.body_key).map_err(Error::Cache)?;
+    let raw = cache.body(message.body_key)?;
     // The answered Message may be the List's selection, outside the stack.
     let answered = (message.folder.clone(), message.uid, message.body_key);
     let each = thread.map(|m| (m.folder.clone(), m.uid, m.body_key));
     for (folder, uid, key) in each.chain([answered]) {
         if let Some(folder) = folder
-            && !cache.has_body(key).map_err(Error::Cache)?
+            && !cache.has_body(key)?
             && !awaited.missing.contains(&(Arc::clone(&folder), uid))
         {
             awaited.missing.push((folder, uid));
@@ -151,9 +151,7 @@ pub fn fetched(
     }
 
     let message = &awaited.message;
-    let body = caches[message.account]
-        .body(message.body_key)
-        .map_err(Error::Cache)?;
+    let body = caches[message.account].body(message.body_key)?;
 
     let Some(raw) = body else {
         screen.toast = Some(Toast::error("could not fetch the Message"));

@@ -20,7 +20,7 @@ pub enum Error {
     Imap(#[from] async_imap::error::Error),
     /// No access token to sign in with.
     #[error(transparent)]
-    Token(oauth::Error),
+    Token(#[from] oauth::Error),
 }
 
 impl Error {

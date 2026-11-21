@@ -14,10 +14,10 @@ use crate::{config::Config, oauth, sign_in::SignIn};
 pub enum Error {
     /// The OAuth access token could not be refreshed.
     #[error(transparent)]
-    Token(oauth::Error),
+    Token(#[from] oauth::Error),
     /// The connection failed, or the server refused: its answer, as it said it.
     #[error("SMTP: {0}")]
-    Smtp(smtp::Error),
+    Smtp(#[from] smtp::Error),
 }
 
 impl Error {
@@ -44,7 +44,7 @@ pub async fn send(
 ) -> Result<(), Error> {
     let (secret, mechanisms) = match sign_in {
         SignIn::OAuth(tokens) => {
-            let access = tokens.access().await.map_err(Error::Token)?;
+            let access = tokens.access().await?;
             (access.expose().to_owned(), vec![Mechanism::Xoauth2])
         }
         SignIn::Password(password) => (
@@ -58,9 +58,9 @@ pub async fn send(
     let tls = if !server.tls {
         Tls::None
     } else if server.starttls {
-        Tls::Required(TlsParameters::new(server.host.clone()).map_err(Error::Smtp)?)
+        Tls::Required(TlsParameters::new(server.host.clone())?)
     } else {
-        Tls::Wrapper(TlsParameters::new(server.host.clone()).map_err(Error::Smtp)?)
+        Tls::Wrapper(TlsParameters::new(server.host.clone())?)
     };
 
     AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&server.host)
@@ -70,7 +70,6 @@ pub async fn send(
         .authentication(mechanisms)
         .build()
         .send_raw(envelope, message)
-        .await
-        .map_err(Error::Smtp)?;
+        .await?;
     Ok(())
 }

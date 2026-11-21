@@ -68,9 +68,9 @@ pub enum Error {
     #[error("terminal: {0}")]
     Terminal(io::Error),
     #[error(transparent)]
-    Cache(cache::Error),
+    Cache(#[from] cache::Error),
     #[error(transparent)]
-    Sync(sync::Error),
+    Sync(#[from] sync::Error),
 }
 
 /// How the TUI ended.
@@ -278,7 +278,7 @@ fn finished(result: Result<(), sync::Error>) -> Result<(), Error> {
             tracing::warn!("{error}");
             Ok(())
         }
-        result => result.map_err(Error::Sync),
+        result => Ok(result?),
     }
 }
 
@@ -300,8 +300,9 @@ fn want(
             previews.want_stack(caches, view, stack, text.width)
         }
         None => previews.want(caches, view, text.width),
-    }
-    .map_err(Error::Cache)
+    }?;
+
+    Ok(())
 }
 
 /// How many cards the list shows on the first frame.
@@ -835,10 +836,7 @@ fn mark(
     asks: &Routes<Ask>,
     (account, messages, unread): (usize, &[(Arc<str>, u32)], bool),
 ) -> Result<bool, Error> {
-    if !caches[account]
-        .mark(messages, unread)
-        .map_err(Error::Cache)?
-    {
+    if !caches[account].mark(messages, unread)? {
         return Ok(false);
     }
 
@@ -883,7 +881,7 @@ fn delete(
     };
 
     let thread = view.selected_key();
-    let Some(batch) = caches[account].delete(&messages).map_err(Error::Cache)? else {
+    let Some(batch) = caches[account].delete(&messages)? else {
         return Ok(());
     };
 
@@ -913,7 +911,7 @@ fn undo(
             return Ok(());
         }
         Some(Undo::Delete(account, batch, thread)) => {
-            let folders = caches[account].undo(batch).map_err(Error::Cache)?;
+            let folders = caches[account].undo(batch)?;
             (!folders.is_empty()).then_some((account, folders, thread))
         }
         None => None,
@@ -942,7 +940,7 @@ fn undo(
     screen.toast = Some(if here {
         Toast::new("restored")
     } else {
-        let folder = caches[account].folder(&folders[0]).map_err(Error::Cache)?;
+        let folder = caches[account].folder(&folders[0])?;
         Toast::new(format!("restored to {}", folder.label()))
     });
     Ok(())
@@ -1188,7 +1186,7 @@ fn steer(
 fn folders(caches: &[Cache]) -> Result<Vec<Folder>, Error> {
     let mut folders = Vec::new();
     for cache in caches {
-        folders.extend(cache.folders().map_err(Error::Cache)?);
+        folders.extend(cache.folders()?);
     }
 
     Ok(folders)
@@ -1224,10 +1222,7 @@ fn everywhere(caches: &[Cache], shown: &Shown) -> Result<Inbox, cache::Error> {
 /// Types the Query of a new Search over the whole Cache, or of the one under way.
 fn start_search(view: &mut InboxView, screen: &mut Screen, caches: &[Cache]) -> Result<(), Error> {
     let shown = view.folder.clone();
-    if view
-        .start_search(|| everywhere(caches, &shown))
-        .map_err(Error::Cache)?
-    {
+    if view.start_search(|| everywhere(caches, &shown))? {
         screen.showing = Showing::Query;
     }
 
@@ -1312,7 +1307,7 @@ fn composing_from(view: &InboxView) -> usize {
 fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<(), Error> {
     let inbox = match &view.folder {
         Shown::AllInboxes { .. } => {
-            let read = all_inboxes::read(caches, view, limit).map_err(Error::Cache)?;
+            let read = all_inboxes::read(caches, view, limit)?;
             read.map(|(inbox, edge)| {
                 view.edge = edge;
                 inbox
@@ -1321,8 +1316,8 @@ fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<
         Shown::Folder(folder) => {
             let (account, cache) = (folder.account, &caches[folder.account]);
             let bottomed = view.bottomed(cache, account, &folder.name);
-            view.edge = (!bottomed.map_err(Error::Cache)?).then_some(account);
-            cache.inbox(&folder.name, limit).map_err(Error::Cache)?
+            view.edge = (!bottomed?).then_some(account);
+            cache.inbox(&folder.name, limit)?
         }
         // Local Drafts opens over the Message List and never shows in it.
         Shown::LocalDrafts => None,
@@ -1333,7 +1328,7 @@ fn show(view: &mut InboxView, caches: &[Cache], limit: Option<usize>) -> Result<
     }
 
     if view.search.is_some() {
-        view.research(everywhere(caches, &view.folder).map_err(Error::Cache)?);
+        view.research(everywhere(caches, &view.folder)?);
     }
 
     Ok(())
