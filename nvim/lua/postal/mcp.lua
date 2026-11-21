@@ -1,7 +1,7 @@
 -- The MCP server an agent reaches a mail through (ADR 0020), run as
--- `nvim -l mcp.lua <servername> <buffer> <kind>`: JSON-RPC over stdio, one
--- message per line. The editor that owns the mail lists and runs its tools.
-local server, mail, kind = arg[1], tonumber(arg[2]), arg[3]
+-- `nvim -l mcp.lua <servername> <buffer>`: JSON-RPC over stdio, one message
+-- per line. The editor that owns the mail lists and runs its tools.
+local server, mail = arg[1], tonumber(arg[2])
 local editor = vim.fn.sockconnect("pipe", server, { rpc = true })
 
 local function send(message)
@@ -25,7 +25,7 @@ for line in io.lines() do
 			serverInfo = { name = "postal", version = "0" },
 		}
 	elseif message.method == "tools/list" then
-		result = { tools = ask("return require('postal.tools').list(...)", kind) }
+		result = { tools = ask("return require('postal.agent').tools(...)", mail) }
 	elseif message.method == "tools/call" then
 		local params = message.params
 		local code = "return require('postal.agent').serve(...)"

@@ -3,6 +3,7 @@
 -- agent is allowed, to the body, reviewed hunk by hunk (ADR 0018, 0019, 0020).
 local acp = require("postal.acp")
 local body = require("postal.body")
+local kinds = require("postal.kinds")
 local pane = require("postal.pane")
 local recipients = require("postal.recipients")
 local requirements = require("postal.requirements")
@@ -17,20 +18,6 @@ M.agents = {
 	claude = { cmd = { "claude-agent-acp" }, npx = "@agentclientprotocol/claude-agent-acp" },
 }
 M.default = "claude"
-
-local RULES = {
-	draft = [[
-You are helping the user write the email Draft open in their editor.
-- Read and change the Draft's body only through the postal tools `read_draft` and `write_draft`; no other tool reaches the Draft. Its headers are not yours to see or change.
-- Keep the quote, the `>` lines of the Message the Draft answers, as it is.
-- Never send the Draft: sending is the user's.
-- The Thread resource, when there is one, is the whole correspondence, oldest first.
-- Each prompt carries the body as it stands, the user's own edits included, then what the user asks.]],
-	message = [[
-You are helping the user read the email Message open in their editor: find things in it, explain and analyse it.
-- The Message resource is the whole Message, its headers then its body as text, each link's URL listed at the end; the postal tool `read_message` gives it again. No other tool reaches it.
-- It is read-only: you cannot change it, reply to it or send anything. Answer in the chat.]],
-}
 
 local chats = {}
 
@@ -80,23 +67,11 @@ function Chat:prompt(instruction)
 	local blocks = {}
 	if first then
 		self.prompted = true
-		table.insert(blocks, { type = "text", text = RULES[self.kind] })
-		if self.kind == "message" then
-			table.insert(blocks, self:resource("postal-message://" .. self.path, self:text()))
-		end
-
-		if self.thread then
-			table.insert(blocks, self:resource("postal-thread://" .. self.path, self.thread))
-			self.pane:dim("context", "Context: the Thread the Draft answers")
-		end
+		table.insert(blocks, { type = "text", text = self.kind.rules })
+		vim.list_extend(blocks, self.kind.context(self))
 	end
 
-	if self.kind == "draft" then
-		self.sent = body.get(self.mail)
-		self.proposed = nil
-		table.insert(blocks, self:resource("postal-draft://" .. self.path, self.sent))
-	end
-
+	vim.list_extend(blocks, self.kind.turn(self))
 	table.insert(blocks, { type = "text", text = instruction })
 	self.busy = true
 	self.pane:begin_turn(self.name)
@@ -163,12 +138,12 @@ end
 
 function Chat:permit(params, respond)
 	local call = vim.tbl_extend("force", self.calls[params.toolCall.toolCallId] or {}, params.toolCall)
-	local allowed = tools.asked(self.kind, call)
+	local allowed = tools.asked(self.kind.tools, call)
 	-- Never `allow_always`: the agent would stop asking for that tool.
 	local wanted = allowed and { "allow_once" } or { "reject_once", "reject_always" }
-	for _, kind in ipairs(wanted) do
+	for _, option_kind in ipairs(wanted) do
 		for _, option in ipairs(params.options or {}) do
-			if option.kind == kind then
+			if option.kind == option_kind then
 				if not allowed then
 					self.pane:dim("denied", "Denied: " .. tostring(call.title))
 				end
@@ -188,11 +163,6 @@ function Chat:request(method, params, respond)
 	else
 		respond(nil, { code = acp.NOT_FOUND, message = method .. " is not offered" })
 	end
-end
-
---- The whole buffer, headers included.
-function Chat:text()
-	return table.concat(vim.api.nvim_buf_get_lines(self.mail, 0, -1, false), "\n") .. "\n"
 end
 
 --- The body the agent sees: its last write this turn, whatever the review
@@ -280,7 +250,7 @@ function Chat:begin(cwd)
 		local server = {
 			name = "postal",
 			command = vim.v.progpath,
-			args = { "--clean", "--headless", "-l", MCP, vim.v.servername, tostring(self.mail), self.kind },
+			args = { "--clean", "--headless", "-l", MCP, vim.v.servername, tostring(self.mail) },
 			env = {},
 		}
 
@@ -299,7 +269,7 @@ end
 
 --- Starts agent `name` on mail buffer `mail`, its pane reused when given.
 local function start(mail, name, shown)
-	local kind = vim.b[mail].postal_message and "message" or "draft"
+	local kind = kinds[vim.b[mail].postal_kind]
 	local self = setmetatable({ mail = mail, kind = kind, name = name, calls = {}, queue = {} }, Chat)
 	self.path = vim.api.nvim_buf_get_name(mail)
 	-- The pane outlives an agent that ends, so its keys reach whichever
@@ -358,13 +328,7 @@ local function start(mail, name, shown)
 	end
 
 	self.conn = conn
-	if kind == "draft" then
-		self:fetch_thread()
-	else
-		-- A Message is read alone, without its Thread.
-		self.thread = false
-	end
-
+	kind.prepare(self)
 	self:begin(cwd)
 	return self
 end
@@ -402,6 +366,12 @@ function M.send(mail, text)
 	if not chat.ended then
 		chat:send(text)
 	end
+end
+
+--- The tools Postal's MCP server lists for mail buffer `mail`.
+function M.tools(mail)
+	local chat = chats[mail]
+	return tools.list(chat and chat.kind.tools or {})
 end
 
 --- Answers a call of Postal's MCP server for mail buffer `mail`.

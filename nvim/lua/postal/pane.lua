@@ -3,7 +3,6 @@
 -- under the `## Me` at its bottom.
 local help = require("postal.help")
 local icons = require("postal.icons")
-local review = require("postal.review")
 
 local M = {}
 
@@ -11,23 +10,11 @@ local NS = vim.api.nvim_create_namespace("postal-pane")
 local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 local RULE = { { string.rep("─", 200), "PostalRule" } }
 local ME = "Me"
-local INTRO = {
-	draft = [[
-Ask the agent to write or rework this Draft. It reads the Thread the Draft
-answers and the body, your edits included; its changes land in the Draft for
-you to review, hunk by hunk. It never touches the headers and never sends.
-Try: "answer that Friday works for me, and ask for the agenda".]],
-	message = [[
-Ask the agent about this Message: to find something in it, sum it up or
-explain it. It reads the Message, headers and body, and changes nothing.
-Try: "what does it ask me to do, and by when?".]],
-}
-
 local Pane = {}
 Pane.__index = Pane
 
---- A pane for the `kind` mail in buffer `mail`, shown at once; `actions`
---- are `send(text)`, `stop()` and `close()`.
+--- A pane for the mail in buffer `mail`, of `kind` from `postal.kinds`,
+--- shown at once; `actions` are `send(text)`, `stop()` and `close()`.
 function M.new(mail, kind, actions)
 	local self = setmetatable({ mail = mail, kind = kind, actions = actions }, Pane)
 	local function submit()
@@ -47,8 +34,8 @@ function M.new(mail, kind, actions)
 			desc = "list the keys",
 			run = function()
 				local groups = { { "Chat", self.keys } }
-				if kind == "draft" then
-					table.insert(groups, { "Review, in the Draft", review.keys })
+				if kind.review then
+					table.insert(groups, { "Review, in the Draft", kind.review })
 				end
 
 				help.open(vim.api.nvim_get_current_win(), groups)
@@ -81,7 +68,7 @@ function Pane:buffer()
 		vim.keymap.set(key.modes, key.lhs, key.run, { buffer = self.buf, desc = key.desc })
 	end
 
-	self:notice(INTRO[self.kind])
+	self:notice(self.kind.intro)
 	return self.buf
 end
 

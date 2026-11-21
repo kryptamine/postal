@@ -1,5 +1,5 @@
--- A Draft's body in its buffer: every line after the blank one that ends
--- the headers, as text ending in a newline.
+-- A mail's text in its buffer, as text ending in a newline: the body is
+-- every line after the blank one that ends the headers.
 local M = {}
 
 -- The 0-based row the body starts at, and whether the headers end in a
@@ -13,6 +13,11 @@ local function start(buf)
 	end
 
 	return #lines, false
+end
+
+--- Every line, the headers' too.
+function M.whole(buf)
+	return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n") .. "\n"
 end
 
 function M.get(buf)

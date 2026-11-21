@@ -74,7 +74,7 @@ function M.setup(opts)
 		group = group,
 		pattern = DRAFTS,
 		callback = function(event)
-			vim.b[event.buf].postal_draft = true
+			vim.b[event.buf].postal_kind = "draft"
 			vim.bo[event.buf].omnifunc = "v:lua.require'postal'.omnifunc"
 			recipients.ask(event.buf)
 			if not blink() then
@@ -89,7 +89,7 @@ function M.setup(opts)
 		group = group,
 		pattern = MESSAGES,
 		callback = function(event)
-			vim.b[event.buf].postal_message = true
+			vim.b[event.buf].postal_kind = "message"
 			vim.bo[event.buf].readonly = true
 			vim.bo[event.buf].modifiable = false
 			agent_command(event.buf, "Ask an ACP agent about this Message")

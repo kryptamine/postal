@@ -86,7 +86,7 @@ end
 -- Back to the window that shows a Draft, where `:PostalAgent` is.
 local function home()
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		if vim.b[vim.api.nvim_win_get_buf(win)].postal_draft then
+		if vim.b[vim.api.nvim_win_get_buf(win)].postal_kind == "draft" then
 			vim.api.nvim_set_current_win(win)
 			return
 		end

@@ -1,9 +1,11 @@
 -- The tools Postal's MCP server offers an agent over one mail (ADR 0020),
--- by the chat's kind: what MCP lists, which permission requests they answer
--- to, and their runs.
+-- a set for each kind of mail: what MCP lists, which permission requests
+-- they answer to, and their runs.
+local body = require("postal.body")
+
 local M = {}
 
-local DRAFT = {
+M.draft = {
 	read_draft = {
 		description = "The body of the email Draft as it stands, without its headers.",
 		inputSchema = { type = "object" },
@@ -29,39 +31,37 @@ local DRAFT = {
 	},
 }
 
-local MESSAGE = {
+M.message = {
 	read_message = {
 		description = "The email Message the user reads: its headers, then its body as text.",
 		inputSchema = { type = "object" },
 		run = function(chat)
-			return chat:text()
+			return body.whole(chat.mail)
 		end,
 	},
 }
 
-local TOOLS = { draft = DRAFT, message = MESSAGE }
-
---- Each tool of a `kind` chat as MCP's `tools/list` gives it, by name.
-function M.list(kind)
+--- Each tool of `set` as MCP's `tools/list` gives it, by name.
+function M.list(set)
 	local list = {}
-	for name, tool in vim.spairs(TOOLS[kind]) do
+	for name, tool in vim.spairs(set) do
 		table.insert(list, { name = name, description = tool.description, inputSchema = tool.inputSchema })
 	end
 
 	return list
 end
 
---- Whether permission request `call` is for a tool of a `kind` chat, known by
---- its exact name: Claude's `_meta`, else the title an older adapter sets.
-function M.asked(kind, call)
+--- Whether permission request `call` is for a tool of `set`, known by its
+--- exact name: Claude's `_meta`, else the title an older adapter sets to it.
+function M.asked(set, call)
 	local meta = call._meta and call._meta.claudeCode
 	local name = meta and meta.toolName or call.title or ""
-	return TOOLS[kind][(name:gsub("^mcp__postal__", ""))] ~= nil
+	return set[(name:gsub("^mcp__postal__", ""))] ~= nil
 end
 
---- Runs tool `name` for `chat`, as MCP's `tools/call` answers it.
+--- Runs tool `name` of `chat`'s kind, as MCP's `tools/call` answers it.
 function M.run(chat, name, args)
-	local tool = TOOLS[chat.kind][name]
+	local tool = chat.kind.tools[name]
 	local text, failure
 	if tool then
 		text, failure = tool.run(chat, args)

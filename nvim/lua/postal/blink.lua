@@ -8,7 +8,7 @@ function Source.new()
 end
 
 function Source:enabled()
-	return vim.b.postal_draft == true
+	return vim.b.postal_kind == "draft"
 end
 
 function Source:get_completions(context, callback)
