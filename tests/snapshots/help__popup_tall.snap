@@ -13,18 +13,19 @@ size: 80x37  cursor: hidden
 │          │ ^d / ^u    PgDn / PgUp  scroll the Preview half a page │          │
 │          │ Enter      l            read the Message full screen   │          │
 │          │ |                       open the Message in $PAGER     │          │
+│          │ E                       open the Message in $EDITOR    │          │
 │          │ U                       mark the Message Unread        │          │
 │          │ Backspace               delete: move to Trash          │          │
 │          │ u                       undo a delete or discard       │          │
 │          │ c                       compose a new Message          │          │
-│          │ r                       reply to the sender            │          │
-└──────────│ R                       reply to all                   │──────────┘
-┌ Inbox · 1│                                                        │──────────┐
-│ From    B│ Links                                                  │024 09:00 │
-│ To       │ o                       label the links in the Preview │          │
-│ Subject N│                                                        │          │
-├──────────│ View                                                   │──────────┤
-│ Newer bod│ v                       rendered / text view of HTML   │          │
+└──────────│ r                       reply to the sender            │──────────┘
+┌ Inbox · 1│ R                       reply to all                   │──────────┐
+│ From    B│                                                        │024 09:00 │
+│ To       │ Links                                                  │          │
+│ Subject N│ o                       label the links in the Preview │          │
+├──────────│                                                        │──────────┤
+│ Newer bod│ View                                                   │          │
+│          │ v                       rendered / text view of HTML   │          │
 │          │ z                       show / hide the Quote          │          │
 │          │                                                        │          │
 │          │ App                                                    │          │
@@ -36,7 +37,6 @@ size: 80x37  cursor: hidden
 │          │ /                       search, or edit the Query      │          │
 │          │ ^j / ^k    ↓ / ↑        move, while typing the Query   │          │
 │          │ Enter                   keep the Query                 │          │
-│          │ Esc                     end the Search                 │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

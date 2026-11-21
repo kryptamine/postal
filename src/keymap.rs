@@ -16,6 +16,9 @@ pub enum Action {
     Fold,
     /// The selected Message in `$PAGER`; in Reading, the one at the cursor.
     Page,
+    /// The selected Message read-only in `$EDITOR`; in Reading, the one at
+    /// the cursor.
+    OpenInEditor,
     /// Mark Unread: the selected Thread's newest Message, or in Reading the
     /// one at the cursor.
     MarkUnread,
@@ -167,7 +170,7 @@ const ANY: &[Mode] = &[
 
 /// The keymap as the hint line and the `?` popup show it, in their order.
 /// `action` below reads the same keys; change the two together.
-const BINDINGS: [Binding; 46] = [
+const BINDINGS: [Binding; 47] = [
     Binding {
         group: "Navigate",
         modes: LIST,
@@ -301,6 +304,15 @@ const BINDINGS: [Binding; 46] = [
         keys: "|",
         aliases: "",
         description: "open the Message in $PAGER",
+        hint: None,
+    },
+    Binding {
+        group: "Message",
+        modes: BOTH,
+        signed_out: false,
+        keys: "E",
+        aliases: "",
+        description: "open the Message in $EDITOR",
         hint: None,
     },
     Binding {
@@ -755,6 +767,7 @@ const fn on_message(code: KeyCode) -> Option<Action> {
         KeyCode::Char('U') => Some(Action::MarkUnread),
         KeyCode::Backspace => Some(Action::Delete),
         KeyCode::Char('u') => Some(Action::Undo),
+        KeyCode::Char('E') => Some(Action::OpenInEditor),
         KeyCode::Char('c') => Some(Action::Compose),
         KeyCode::Char('r') => Some(Action::Reply { all: false }),
         KeyCode::Char('R') => Some(Action::Reply { all: true }),

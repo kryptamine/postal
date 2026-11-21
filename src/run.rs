@@ -17,6 +17,7 @@ use crate::{
     config::IconChoice,
     draft_pane::DraftPane,
     draft_preview::DraftPreview,
+    editor,
     folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
@@ -31,6 +32,7 @@ use crate::{
     local_drafts::LocalDrafts,
     local_drafts_pane::LocalDraftsPane,
     message::Message,
+    message_file::MessageFile,
     message_header,
     message_list::{self, MessageList},
     mode::Mode,
@@ -60,6 +62,7 @@ use crate::{
     toast::Toast,
     undo::Undo,
     update::Update,
+    xdg,
 };
 
 #[derive(Debug)]
@@ -214,6 +217,7 @@ pub async fn run(
                     step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, caches, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
                     Step::Page => screen.toast = open(terminal, &mut events, theme, caches, (&view, screen.reading.as_ref()))?,
+                    Step::OpenInEditor => screen.toast = open_in_editor(terminal, &mut events, caches, (&view, screen.reading.as_ref()))?,
                     step @ (Step::Compose | Step::Edit | Step::Send) => {
                         let from = accounts.noted(composing_from(&view));
                         draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
@@ -564,6 +568,7 @@ enum Step {
     Undo,
     Browse(Arc<str>),
     Page,
+    OpenInEditor,
     LocalDrafts,
     Compose,
     /// Reply, or Reply All when true.
@@ -647,6 +652,7 @@ fn act(
             Step::Stay
         }
         Some(Action::Page) => Step::Page,
+        Some(Action::OpenInEditor) => Step::OpenInEditor,
         Some(Action::SignIn) => screen.signed_out().map_or(Step::Stay, Step::SignIn),
         Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
@@ -1306,18 +1312,10 @@ fn open(
     caches: &[Cache],
     (view, reading): (&InboxView, Option<&Reading>),
 ) -> Result<Option<Toast>, Error> {
-    let message = reading.map_or_else(
-        || view.selected_message(),
-        |reading| view.stack().find(|m| m.body_key == reading.cursor),
-    );
-
-    let Some(message) = message else {
-        return Ok(None);
-    };
-
-    let found = caches[message.account].body(message.body_key);
-    let Some(body) = found.map_err(Error::Cache)? else {
-        return Ok(Some(Toast::new("not downloaded")));
+    let (message, body) = match shown_body(caches, (view, reading))? {
+        Shown::Body(message, body) => (message, body),
+        Shown::Nothing => return Ok(None),
+        Shown::Missing => return Ok(Some(Toast::new("not downloaded"))),
     };
 
     let width = terminal.size().map_err(Error::Terminal)?.width;
@@ -1336,6 +1334,59 @@ fn open(
 
     let text = pager_text::ansi(message, &preview, theme);
     outside(terminal, events, || pager::page(&text))?;
+    Ok(None)
+}
+
+enum Shown<'a> {
+    Body(&'a Message, Vec<u8>),
+    Nothing,
+    /// The body is not in the Cache.
+    Missing,
+}
+
+/// The selected Message, in Reading the one at the cursor, with its body.
+fn shown_body<'a>(
+    caches: &[Cache],
+    (view, reading): (&'a InboxView, Option<&Reading>),
+) -> Result<Shown<'a>, Error> {
+    let message = reading.map_or_else(
+        || view.selected_message(),
+        |reading| view.stack().find(|m| m.body_key == reading.cursor),
+    );
+
+    let Some(message) = message else {
+        return Ok(Shown::Nothing);
+    };
+
+    let found = caches[message.account].body(message.body_key);
+    Ok(found
+        .map_err(Error::Cache)?
+        .map_or(Shown::Missing, |body| Shown::Body(message, body)))
+}
+
+/// Opens the selected Message read-only in the editor, as `open` does in
+/// the pager.
+fn open_in_editor(
+    terminal: &mut Terminal<TerminalBackend>,
+    events: &mut Input,
+    caches: &[Cache],
+    (view, reading): (&InboxView, Option<&Reading>),
+) -> Result<Option<Toast>, Error> {
+    let (message, body) = match shown_body(caches, (view, reading))? {
+        Shown::Body(message, body) => (message, body),
+        Shown::Nothing => return Ok(None),
+        Shown::Missing => return Ok(Some(Toast::new("not downloaded"))),
+    };
+
+    let written = xdg::cache_dir()
+        .map_err(io::Error::other)
+        .and_then(|dir| MessageFile::write(&dir.join("messages"), message, &body));
+    let file = match written {
+        Ok(file) => file,
+        Err(error) => return Ok(Some(Toast::error(error.to_string()))),
+    };
+
+    outside(terminal, events, || editor::edit(file.path()))?;
     Ok(None)
 }
 

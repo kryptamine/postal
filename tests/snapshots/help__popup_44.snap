@@ -13,11 +13,11 @@ size: 44x18  cursor: hidden
 │ ^d / ^u    PgDn / PgUp  scroll the Previ │
 │ Enter      l            read the Message │
 │ |                       open the Message │
+│ E                       open the Message │
 │ U                       mark the Message │
 │ Backspace               delete: move to  │
 │ u                       undo a delete or │
 │ c                       compose a new Me │
-│ r                       reply to the sen │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help

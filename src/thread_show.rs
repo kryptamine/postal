@@ -10,6 +10,7 @@ use crate::{
     cli::ThreadShow,
     command_output,
     config::Config,
+    html_preview::Links,
     message_header::DATE,
     notes::Notes,
     xdg,
@@ -85,7 +86,7 @@ fn body(kept: &ThreadMessage) -> Option<String> {
     let raw = kept.raw.as_deref()?;
     let text = MessageParser::default()
         .parse(raw)
-        .map(|message| body_text::plain(&message, WIDTH))
+        .map(|message| body_text::plain(&message, WIDTH, Links::Inline))
         .unwrap_or_default();
     Some(text.trim_end().to_owned())
 }

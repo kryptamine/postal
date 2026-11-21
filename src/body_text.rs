@@ -2,9 +2,9 @@ use mail_parser::{Message, PartType};
 
 use crate::html_preview::{self, Links};
 
-/// The `text/plain` part of `message`, else its HTML one as the Text View
-/// shows it, laid out in `width` columns.
-pub fn plain(message: &Message<'_>, width: usize) -> String {
+/// The `text/plain` part of `message`, else its HTML one as text laid out
+/// in `width` columns, its links as `links` says.
+pub fn plain(message: &Message<'_>, width: usize, links: Links) -> String {
     if let Some(PartType::Text(text)) = message.text_part(0).map(|p| &p.body) {
         return text.to_string();
     }
@@ -13,7 +13,7 @@ pub fn plain(message: &Message<'_>, width: usize) -> String {
         return String::new();
     };
 
-    html_preview::render(html, width, Links::Inline).map_or_else(
+    html_preview::render(html, width, links).map_or_else(
         |_| String::new(),
         |lines| {
             let each: Vec<&str> = lines.iter().map(|line| line.text.trim_end()).collect();

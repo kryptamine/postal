@@ -1,7 +1,9 @@
 use lettre::message::Mailbox;
 use mail_parser::{Address, MessageParser};
 
-use crate::{answering::Answering, body_text, message::Message, message_header::DATE};
+use crate::{
+    answering::Answering, body_text, html_preview::Links, message::Message, message_header::DATE,
+};
 
 /// Columns HTML is laid out in before it is quoted, so that with `> ` a
 /// line stays within 78.
@@ -60,7 +62,7 @@ pub fn reply(raw: &[u8], original: &Message, account: &str, all: bool) -> (Strin
         "On {}, {} wrote:\n{}",
         original.received.format(DATE),
         original.sender,
-        quote(&body_text::plain(&message, QUOTE_WIDTH))
+        quote(&body_text::plain(&message, QUOTE_WIDTH, Links::Inline))
     );
     let subject = subject(message.subject().unwrap_or(&original.subject));
     (draft(&to, &cc, &subject, &said), answering(id, references))

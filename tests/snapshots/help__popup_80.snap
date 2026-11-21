@@ -13,17 +13,17 @@ size: 80x24  cursor: hidden
 │          │ ^d / ^u    PgDn / PgUp  scroll the Preview half a page │          │
 │          │ Enter      l            read the Message full screen   │          │
 └──────────│ |                       open the Message in $PAGER     │──────────┘
-┌ Inbox · 1│ U                       mark the Message Unread        │──────────┐
-│ From    B│ Backspace               delete: move to Trash          │024 09:00 │
-│ To       │ u                       undo a delete or discard       │          │
-│ Subject N│ c                       compose a new Message          │          │
-├──────────│ r                       reply to the sender            │──────────┤
-│ Newer bod│ R                       reply to all                   │          │
+┌ Inbox · 1│ E                       open the Message in $EDITOR    │──────────┐
+│ From    B│ U                       mark the Message Unread        │024 09:00 │
+│ To       │ Backspace               delete: move to Trash          │          │
+│ Subject N│ u                       undo a delete or discard       │          │
+├──────────│ c                       compose a new Message          │──────────┤
+│ Newer bod│ r                       reply to the sender            │          │
+│          │ R                       reply to all                   │          │
 │          │                                                        │          │
 │          │ Links                                                  │          │
 │          │ o                       label the links in the Preview │          │
 │          │                                                        │          │
-│          │ View                                                   │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

@@ -71,6 +71,7 @@ mod mail_look;
 mod marks;
 mod matched;
 mod message;
+mod message_file;
 mod message_flags;
 mod message_header;
 mod message_list;

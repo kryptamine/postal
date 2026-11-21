@@ -1,0 +1,14 @@
+---
+source: tests/editor_view.rs
+expression: text
+---
+From: Ada Lovelace <someone@example.com>
+To: Charles Babbage <charles@example.com>, Mary Somerville <mary@example.com>
+Date: Mon, 18 Nov 2024 09:00
+Subject: Weekly notes
+
+Read the notes[1].
+
+See you soon.
+
+[1] https://example.com/notes

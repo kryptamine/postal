@@ -15,15 +15,15 @@ size: 80x24  cursor: hidden
 │ Line 05  │ q / Esc    h / ←        back to the list               │          │
 │ Line 06  │                                                        │          │
 │ Line 07  │ Message                                                │          │
-│ Line 08  │ U                       mark the Message Unread        │          │
-│ Line 09  │ Backspace               delete: move to Trash          │          │
-│ Line 10  │ u                       undo a delete or discard       │          │
-│ Line 11  │ c                       compose a new Message          │          │
-│ Line 12  │ r                       reply to the sender            │          │
-│ Line 13  │ R                       reply to all                   │          │
-│ Line 14  │                                                        │          │
-│ Line 15  │ Links                                                  │          │
-│ Line 16  │ o                       label the links in the Preview │          │
+│ Line 08  │ E                       open the Message in $EDITOR    │          │
+│ Line 09  │ U                       mark the Message Unread        │          │
+│ Line 10  │ Backspace               delete: move to Trash          │          │
+│ Line 11  │ u                       undo a delete or discard       │          │
+│ Line 12  │ c                       compose a new Message          │          │
+│ Line 13  │ r                       reply to the sender            │          │
+│ Line 14  │ R                       reply to all                   │          │
+│ Line 15  │                                                        │          │
+│ Line 16  │ Links                                                  │          │
 │ Line 17  │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help
