@@ -59,6 +59,12 @@ function Pane:buffer()
 	panes[self.buf] = self
 	self.speaker, self.open = nil, nil
 	vim.bo[self.buf].filetype = "markdown"
+	local glyphs = vim.tbl_map(function(kind)
+		return (icons.get(kind))
+	end, { "ok", "denied", "context" })
+
+	-- What a wrapped line hangs under: a list's marker, a quote's, a glyph.
+	vim.bo[self.buf].formatlistpat = [[^\s*\([-*+>]\|\d\+[.)]\|]] .. table.concat(glyphs, [[\|]]) .. [[\)\s\+]]
 	-- Highlights and conceals markdown even where no config starts treesitter.
 	pcall(vim.treesitter.start, self.buf, "markdown")
 	local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(self.mail), ":t")
@@ -117,6 +123,7 @@ function Pane:show(focus)
 		vim.wo[win].wrap = true
 		vim.wo[win].linebreak = true
 		vim.wo[win].breakindent = true
+		vim.wo[win].breakindentopt = "list:-1"
 		vim.wo[win].number = false
 		vim.wo[win].relativenumber = false
 		vim.wo[win].foldenable = false
