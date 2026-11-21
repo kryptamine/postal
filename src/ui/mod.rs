@@ -19,7 +19,6 @@ pub mod folder_show;
 pub mod handle;
 pub mod help_popup;
 pub mod hint_line;
-pub mod icons;
 pub mod inbox_view;
 pub mod input;
 pub mod keymap;

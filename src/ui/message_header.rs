@@ -1,13 +1,7 @@
-use std::fmt::Write;
-
-use chrono::{DateTime, Datelike, FixedOffset, Timelike};
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use unicode_width::UnicodeWidthStr;
 
-use crate::{
-    domain::message::Message, render::stack_str::StackStr, ui::date_group::month_of,
-    ui::theme::Theme, ui::truncate,
-};
+use crate::{domain::message::Message, render::header_date, ui::theme::Theme, ui::truncate};
 
 /// The labels, padded so the values line up.
 const LABELS: [&str; 3] = ["From    ", "To      ", "Subject "];
@@ -28,25 +22,6 @@ pub fn fields<'a>(theme: &Theme, message: &'a Message) -> [(&'static str, &'a st
     ]
 }
 
-/// How a header shows the date, `Mon, 18 Nov 2024 09:00`. Written by
-/// hand on the stack: chrono's `format` allocates, and a frame draws this.
-pub fn date(received: &DateTime<FixedOffset>) -> StackStr<40> {
-    let mut date = StackStr::new();
-    let month = month_of(received.date_naive()).name();
-    write!(
-        date,
-        "{}, {} {} {} {:02}:{:02}",
-        received.weekday(),
-        received.day(),
-        month.get(..3).unwrap_or(month),
-        received.year(),
-        received.hour(),
-        received.minute()
-    )
-    .ok();
-    date
-}
-
 /// Draws header row `field` of `message` in `row`, the date at the right
 /// of the first. A row too narrow for both leaves the date out.
 pub fn draw(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field: usize) {
@@ -56,7 +31,7 @@ pub fn draw(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field
 
     let mut row = row;
     if field == 0 {
-        let date = date(&message.received);
+        let date = header_date::date(&message.received);
         let width = u16::try_from(date.as_str().width()).unwrap_or(u16::MAX);
         if row.width >= LABEL_WIDTH + DATE_GAP + 2 * width {
             let x = row.right() - width;

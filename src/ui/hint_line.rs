@@ -10,7 +10,9 @@ use tokio::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    mail::outage::Outage,
     mail::status::Status,
+    render::icons::Icons,
     render::stack_str::StackStr,
     ui::keymap::{self, HELP_HINT, Hint},
     ui::mode::Mode,
@@ -84,7 +86,7 @@ impl HintLine<'_> {
         let status = self.status.text(self.now);
         let mut text = StackStr::new();
         // Every text fits, so the writes cannot fail; an address too long is left out.
-        if let Some(icon) = self.theme.icons.status(self.status) {
+        if let Some(icon) = status_icon(self.theme.icons, self.status) {
             write!(text, "{icon} ").ok();
         }
 
@@ -172,4 +174,26 @@ fn row(area: Rect) -> Rect {
 
 fn width(hint: &Hint) -> usize {
     hint.keys.width() + 1 + hint.description.width()
+}
+
+/// Before the Status's text; `None` in the plain look and while live.
+const fn status_icon(icons: Icons, status: Status) -> Option<&'static str> {
+    if matches!(icons, Icons::Plain) {
+        return None;
+    }
+
+    match status {
+        Status::Live | Status::Fetching => None,
+        Status::Syncing { .. } => Some("\u{f04e6}"),
+        Status::Connecting => Some("\u{f0318}"),
+        Status::Retrying {
+            outage: Outage::Offline,
+            ..
+        } => Some("\u{f0319}"),
+        Status::Retrying {
+            outage: Outage::Busy,
+            ..
+        } => Some("\u{f051f}"),
+        Status::SignedOut => Some("\u{f033e}"),
+    }
 }

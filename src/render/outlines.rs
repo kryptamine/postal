@@ -1,8 +1,8 @@
 use crate::{
     render::cell_grid::{self, CellGrid},
+    render::icons::Icons,
     render::region::{self, Region},
     render::rgb::Rgb,
-    ui::icons::Icons,
 };
 
 /// What becomes of the fill under a cell.

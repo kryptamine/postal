@@ -9,8 +9,8 @@ use crate::{
     account::xdg,
     domain::message::Message,
     render::body_text::{self, WIDTH},
+    render::header_date,
     render::html_preview::Links,
-    ui::message_header,
 };
 
 /// A Message as a read-only file for the editor in
@@ -32,7 +32,7 @@ impl MessageFile {
             "From: {}\nTo: {}\nDate: {}\nSubject: {}\n\n{}\n",
             message.from,
             message.to,
-            message_header::date(&message.received).as_str(),
+            header_date::date(&message.received).as_str(),
             message.subject,
             body.trim_end()
         );

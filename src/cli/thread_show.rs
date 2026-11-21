@@ -12,8 +12,8 @@ use crate::{
     compose::notes::Notes,
     domain::answering::Answering,
     render::body_text::{self, WIDTH},
+    render::header_date,
     render::html_preview::Links,
-    ui::message_header,
 };
 
 /// What the text answer says for a body not in the Cache.
@@ -113,7 +113,7 @@ fn text(thread: &[ThreadMessage]) -> String {
                 "From: {}\nRecipients: {}\nDate: {}\n\n{}\n",
                 kept.from,
                 kept.to,
-                message_header::date(&kept.received).as_str(),
+                header_date::date(&kept.received).as_str(),
                 body(kept).as_deref().unwrap_or(MISSING)
             )
         })

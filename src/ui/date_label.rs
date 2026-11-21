@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use chrono::{DateTime, Datelike, FixedOffset, Timelike};
 
-use crate::{render::stack_str::StackStr, ui::date_group::month_of};
+use crate::{render::header_date::month_of, render::stack_str::StackStr};
 
 /// The widest form, `2024-11-17`.
 const WIDTH: usize = 10;

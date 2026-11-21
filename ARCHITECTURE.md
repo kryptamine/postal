@@ -16,13 +16,14 @@ Lowest first:
 - `account/`: `config.toml`, the Providers, OAuth, secrets and the keychain, the
   XDG directories, unlinking an Account.
 - `render/`: an HTML part as Preview lines (html2text) or as the rendered View
-  (litehtml in its layout process, the cell grid), Quotes, wrapping.
+  (litehtml in its layout process, the cell grid), Quotes, wrapping, the
+  glyphs the font has, how a date reads.
 - `compose/`: Drafts and their notes, Replies, the Outbox on disk, the editor,
   the Account a Message goes out from.
 - `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
   reconnecting, the sign-in check, and what the connections tell the screen
   (`Update`, `Status`, `Steering`).
-- `ui/`: the TUI: the event loop, panes, popups, the Theme and Icons, the
+- `ui/`: the TUI: the event loop, panes, popups, the Theme, the
   keymap, the Onboarding and Settings, the log file.
 - `cli/`: the commands beside the TUI: the arguments, `correspondent list`,
   `thread show`.
@@ -60,14 +61,3 @@ Where a module could sit in two layers, its imports decided:
 - `ui` never speaks IMAP: it imports neither `mail::imap` nor `mail::smtp`,
   and asks the connections through `Steering` and the fetch requests.
 - Nothing outside `ui` draws: ratatui and crossterm are imported in `ui` alone.
-
-## Known imports against the direction
-
-Not one-line fixes, so left as they are:
-
-- `render::mail_look` and `render::outlines` take `Icons` from `ui::icons`.
-  `Icons` also knows `Status` and `Shown`; the glyph choice would split off
-  into `render`.
-- `compose::reply_draft` and `cli::thread_show` call `ui::message_header::date`.
-  The date's format, with `ui::date_group::month_of`, would move beside the
-  Message.

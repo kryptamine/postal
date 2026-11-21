@@ -1,8 +1,8 @@
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::{
-    render::mail_colours::MailColours, render::mail_look::MailLook, render::marks::Marks,
-    render::paint::Paint, render::rgb::Rgb, ui::icons::Icons,
+    render::icons::Icons, render::mail_colours::MailColours, render::mail_look::MailLook,
+    render::marks::Marks, render::paint::Paint, render::rgb::Rgb,
 };
 
 /// The terminal's own palette: named ANSI colours and modifiers, no explicit

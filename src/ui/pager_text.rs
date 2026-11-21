@@ -3,8 +3,8 @@ use std::io::{self, Write};
 use ratatui::style::Style;
 
 use crate::{
-    account::browser, domain::message::Message, render::preview::Preview, ui::ansi,
-    ui::message_header, ui::theme::Theme,
+    account::browser, domain::message::Message, render::header_date, render::preview::Preview,
+    ui::ansi, ui::message_header, ui::theme::Theme,
 };
 
 /// `preview` of `message` as the bytes piped to the pager: the header
@@ -23,7 +23,7 @@ fn write(out: &mut Vec<u8>, message: &Message, preview: &Preview, theme: &Theme)
     out.write_all(b"  ")?;
     ansi::styled(
         out,
-        message_header::date(&message.received).as_str(),
+        header_date::date(&message.received).as_str(),
         theme.muted,
     )?;
     for row in rest {

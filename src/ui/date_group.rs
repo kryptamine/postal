@@ -1,8 +1,8 @@
 use std::fmt::Write;
 
-use chrono::{DateTime, Datelike, Days, FixedOffset, Month, NaiveDate};
+use chrono::{DateTime, Datelike, Days, FixedOffset, Month};
 
-use crate::render::stack_str::StackStr;
+use crate::{render::header_date::month_of, render::stack_str::StackStr};
 
 /// Where a Thread sits in the Message List's run of dated headers.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -52,14 +52,6 @@ impl DateGroup {
 
         label
     }
-}
-
-/// chrono numbers a date's month, always 1 to 12, rather than naming it.
-pub fn month_of(date: NaiveDate) -> Month {
-    u8::try_from(date.month())
-        .ok()
-        .and_then(|m| Month::try_from(m).ok())
-        .unwrap_or(Month::January)
 }
 
 // Unit-tested directly: the groups hinge on "now", which a pty test

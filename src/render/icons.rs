@@ -1,7 +1,4 @@
-use crate::{
-    account::config::IconChoice, domain::folder::Role, domain::shown::Shown, mail::outage::Outage,
-    mail::status::Status,
-};
+use crate::{account::config::IconChoice, domain::folder::Role, domain::shown::Shown};
 
 /// Nerd Font glyphs (v3 code points), or the plain look that any font draws.
 #[derive(Clone, Copy)]
@@ -78,28 +75,6 @@ impl Icons {
             (Self::Nerd, false) => DRAFT,
             (Self::Plain, true) => "Outbox",
             (Self::Plain, false) => "Draft",
-        }
-    }
-
-    /// Before the Status's text; `None` in the plain look and while live.
-    pub const fn status(self, status: Status) -> Option<&'static str> {
-        if matches!(self, Self::Plain) {
-            return None;
-        }
-
-        match status {
-            Status::Live | Status::Fetching => None,
-            Status::Syncing { .. } => Some("\u{f04e6}"),
-            Status::Connecting => Some("\u{f0318}"),
-            Status::Retrying {
-                outage: Outage::Offline,
-                ..
-            } => Some("\u{f0319}"),
-            Status::Retrying {
-                outage: Outage::Busy,
-                ..
-            } => Some("\u{f051f}"),
-            Status::SignedOut => Some("\u{f033e}"),
         }
     }
 }
