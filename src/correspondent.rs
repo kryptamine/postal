@@ -18,6 +18,8 @@ pub struct Correspondent {
     pub name: Option<String>,
     /// The address of the Account that knows it best.
     pub account: String,
+    /// Whether an Account wrote to it.
+    pub written: bool,
     /// Each word of its names and of its address, lowercased.
     words: Vec<String>,
 }
@@ -110,11 +112,13 @@ pub fn ranked(
         })
         .collect();
 
+    // By address among equals, so the order never changes between runs.
     ranked.sort_by(
-        |((a_first, a_written, a), _), ((b_first, b_written, b), _)| {
+        |((a_first, a_written, a), x), ((b_first, b_written, b), y)| {
             (b_first, b_written)
                 .cmp(&(a_first, a_written))
                 .then(b.total_cmp(a))
+                .then_with(|| x.address.cmp(&y.address))
         },
     );
 
@@ -144,6 +148,7 @@ fn correspondent(address: String, tally: Tally, first: &str) -> Correspondent {
         address,
         name,
         account,
+        written: tally.written,
         words,
     }
 }

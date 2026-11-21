@@ -15,10 +15,16 @@ pub struct Person {
 }
 
 impl Person {
+    /// A name that only repeats the address is none.
     pub fn new(address: &str, name: Option<String>, written: bool) -> Self {
+        let name = name.filter(|name| {
+            let name = name.trim().trim_matches(['"', '\'', '<', '>']);
+            !name.is_empty() && !name.eq_ignore_ascii_case(address)
+        });
+
         Self {
             address: address.to_lowercase(),
-            name: name.filter(|name| !name.trim().is_empty()),
+            name,
             written,
         }
     }

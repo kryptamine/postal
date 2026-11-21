@@ -6,7 +6,12 @@ use super::schema::VERSION;
 pub enum Error {
     Io(io::Error),
     Sqlite(rusqlite::Error),
-    NewerSchema { found: i64, dir: PathBuf },
+    NewerSchema {
+        found: i64,
+        dir: PathBuf,
+    },
+    /// Read-only, there is no Cache of this schema to read.
+    NotReady,
 }
 
 impl fmt::Display for Error {
@@ -20,6 +25,7 @@ impl fmt::Display for Error {
                  Upgrade Postal or delete {}.",
                 dir.display()
             ),
+            Self::NotReady => f.write_str("Cache not ready: run `postal` once"),
         }
     }
 }

@@ -56,6 +56,10 @@ impl Cache {
     pub fn open(dir: &Path, accounts: &[&str]) -> Result<Vec<Self>, Error> {
         let (connection, rebuilt) = schema::open(dir)?;
         moves::forget_settled(&connection)?;
+        Ok(Self::handles(connection, rebuilt, accounts))
+    }
+
+    fn handles(connection: Connection, rebuilt: bool, accounts: &[&str]) -> Vec<Self> {
         let shared = Rc::new(Shared {
             connection: RefCell::new(connection),
             rebuilt,
@@ -63,7 +67,7 @@ impl Cache {
             unreported_failure: Cell::new(false),
         });
 
-        Ok(accounts
+        accounts
             .iter()
             .enumerate()
             .map(|(account, email)| Self {
@@ -71,7 +75,13 @@ impl Cache {
                 account,
                 email: email.to_lowercase().into(),
             })
-            .collect())
+            .collect()
+    }
+
+    /// As `open`, for reading alone: see `schema::open_read_only`.
+    pub fn open_read_only(dir: &Path, accounts: &[&str]) -> Result<Vec<Self>, Error> {
+        let connection = schema::open_read_only(dir)?;
+        Ok(Self::handles(connection, false, accounts))
     }
 
     /// Whether opening replaced a corrupt or outdated Cache.

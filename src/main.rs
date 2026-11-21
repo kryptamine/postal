@@ -22,6 +22,7 @@ mod composing;
 mod config;
 mod correspondence;
 mod correspondent;
+mod correspondent_list;
 mod credential;
 mod date_group;
 mod date_label;
@@ -208,7 +209,19 @@ fn main() -> ExitCode {
         }
     };
 
-    let code = logged(&log, command);
+    let code = match command {
+        Command::Run => logged(&log, try_main),
+        Command::Login => logged(&log, login),
+        // A command beside the TUI leaves its log alone.
+        Command::CorrespondentList(list) => match correspondent_list::run(&list) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("postal: {error}");
+                ExitCode::FAILURE
+            }
+        },
+    };
+
     logging::flush();
     code
 }
@@ -223,8 +236,11 @@ fn start() -> Result<Option<(PathBuf, Command)>, Box<dyn std::error::Error>> {
         return Ok(None);
     }
 
-    logging::init(&log, args.verbosity)?;
-    panic_hook::install(log.clone());
+    if !matches!(args.command, Command::CorrespondentList(_)) {
+        logging::init(&log, args.verbosity)?;
+        panic_hook::install(log.clone());
+    }
+
     Ok(Some((log, args.command)))
 }
 
@@ -232,13 +248,9 @@ fn start() -> Result<Option<(PathBuf, Command)>, Box<dyn std::error::Error>> {
     clippy::print_stderr,
     reason = "the terminal is restored, so stderr reaches the user"
 )]
-fn logged(log: &Path, command: Command) -> ExitCode {
+fn logged(log: &Path, command: fn() -> Result<(), Box<dyn Error>>) -> ExitCode {
     tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
-    let result = match command {
-        Command::Run => try_main(),
-        Command::Login => login(),
-    };
-
+    let result = command();
     match result {
         Ok(()) => {
             tracing::info!("exiting");

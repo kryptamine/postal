@@ -1,6 +1,6 @@
 use std::{fs, io, path::Path};
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 
 use super::Error;
 
@@ -187,6 +187,23 @@ pub fn open(dir: &Path) -> Result<(Connection, bool), Error> {
     connection.execute_batch(TABLES)?;
     connection.pragma_update(None, "user_version", VERSION)?;
     Ok((connection, rebuilt))
+}
+
+/// The Cache in `dir` for reading alone, as a TUI may have it open: never
+/// created, rebuilt or written; `NotReady` unless it has this schema.
+pub fn open_read_only(dir: &Path) -> Result<Connection, Error> {
+    let path = dir.join(FILE);
+    if !path.exists() {
+        return Err(Error::NotReady);
+    }
+
+    let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if version != VERSION {
+        return Err(Error::NotReady);
+    }
+
+    Ok(connection)
 }
 
 /// Deletes the Cache in `dir`, if there is one.
