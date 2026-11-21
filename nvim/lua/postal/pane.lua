@@ -110,7 +110,10 @@ function Pane:show(focus)
 	local win = vim.fn.bufwinid(buf)
 	if win == -1 then
 		local beside = vim.fn.bufwinid(self.mail)
-		win = vim.api.nvim_open_win(buf, false, { split = "right", win = beside ~= -1 and beside or 0 })
+		-- A third of the screen, at least 60 columns, but never over half.
+		local width = math.min(math.max(60, math.floor(vim.o.columns / 3)), math.floor(vim.o.columns / 2))
+		win = vim.api.nvim_open_win(buf, false, { split = "right", win = beside ~= -1 and beside or 0, width = width })
+		vim.wo[win].winfixwidth = true
 		vim.wo[win].wrap = true
 		vim.wo[win].linebreak = true
 		vim.wo[win].breakindent = true
