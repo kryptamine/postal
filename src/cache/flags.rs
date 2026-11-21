@@ -4,7 +4,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
 use crate::{
-    body_key::BodyKey, flag::Flag, flag_change::FlagChange, message_ref::MessageRef, uid::Uid,
+    domain::body_key::BodyKey, domain::flag::Flag, domain::flag_change::FlagChange,
+    domain::message_ref::MessageRef, domain::uid::Uid,
 };
 
 /// A Folder's flag changes for the server.

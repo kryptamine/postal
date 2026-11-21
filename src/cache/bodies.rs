@@ -1,7 +1,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
-use crate::{body_key::BodyKey, uid::Uid};
+use crate::{domain::body_key::BodyKey, domain::uid::Uid};
 
 /// The raw bodies kept, in bytes; past it the least recently used go first.
 const BODY_BYTES: i64 = 200 * 1024 * 1024;

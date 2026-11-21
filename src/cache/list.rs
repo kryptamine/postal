@@ -4,7 +4,10 @@ use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{OptionalExtension, Row, params};
 
 use super::{Cache, Error, threads::THREAD_ROW};
-use crate::{folder::Role, inbox::Inbox, message::Message, thread_id::ThreadId};
+use crate::{
+    domain::folder::Role, domain::inbox::Inbox, domain::message::Message,
+    domain::thread_id::ThreadId,
+};
 
 /// The columns `Cache::message` reads, in its order, of a `message` row.
 const MESSAGE_ROW: &str = "uid, body_key, received, received_offset, unread, sender, subject,

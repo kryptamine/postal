@@ -1,7 +1,10 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
-use crate::{correspondence::Correspondence, folder::Role, new_message::NewMessage, uid::Uid};
+use crate::{
+    domain::correspondence::Correspondence, domain::folder::Role, domain::new_message::NewMessage,
+    domain::uid::Uid,
+};
 
 /// How far the pass over the Folder with the Sent role has read.
 pub struct SentPass {

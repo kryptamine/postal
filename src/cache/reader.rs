@@ -4,7 +4,10 @@ use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Error, schema};
-use crate::{answering::Answering, body_key::BodyKey, folder::Role, message_ref::MessageRef};
+use crate::{
+    domain::answering::Answering, domain::body_key::BodyKey, domain::folder::Role,
+    domain::message_ref::MessageRef,
+};
 
 /// The Cache for reading alone, beside a TUI that may be writing it: it
 /// can neither rebuild nor write, and reads every Account's rows at once.

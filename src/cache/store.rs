@@ -11,7 +11,7 @@ use rusqlite::{
 };
 
 use super::{Error, moves, schema};
-use crate::per_account::{AccountId, PerAccount};
+use crate::domain::per_account::{AccountId, PerAccount};
 
 /// One Account's rows of the Cache, which every Account shares; each row
 /// names its Account by address.

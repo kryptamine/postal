@@ -1,236 +1,62 @@
-mod accounts;
-mod all_inboxes;
-mod alloc_count;
-mod ansi;
-mod answering;
-mod apply;
-mod atomic_file;
-mod attribution;
-mod awaited_reply;
-mod backfill;
-mod backoff;
-mod body;
-mod body_fetch;
-mod body_key;
-mod body_text;
-mod border;
-mod browser;
+mod account;
 mod cache;
-mod cell_grid;
-mod centred;
 mod cli;
-mod clipboard;
-mod command_output;
-mod composing;
-mod config;
-mod config_file;
-mod correspondence;
-mod correspondent;
-mod correspondent_list;
-mod credential;
-mod date_group;
-mod date_label;
-mod deleting;
-mod draft;
-mod draft_file;
-mod draft_notes;
-mod draft_pane;
-mod draft_preview;
-mod drafting;
-mod draw;
-mod dwell;
-mod editor;
-mod flag;
-mod flag_change;
-mod flag_changes;
-mod folder;
-mod folder_list;
-mod folder_picker;
-mod folder_show;
-mod footer;
-mod frame_glyphs;
-mod frame_padding;
-mod handle;
-mod header;
-mod help_popup;
-mod hint_line;
-mod html_preview;
-mod html_text;
-mod icons;
-mod idle;
-mod imap;
-mod inbox;
-mod inbox_view;
-mod input;
-mod keychain;
-mod keymap;
-mod layout;
-mod link_hints;
-mod link_labels;
-mod listing;
-mod litehtml;
-mod local_draft;
-mod local_drafts;
-mod local_drafts_pane;
-mod local_list;
-mod logging;
-mod login;
-mod looks;
-mod mail_colours;
-mod mail_look;
-mod marking;
-mod marks;
-mod matched;
-mod message;
-mod message_file;
-mod message_flags;
-mod message_header;
-mod message_list;
-mod message_ref;
-mod mode;
-mod modified_utf7;
-mod move_changes;
-mod new_message;
-mod notes;
-mod oauth;
-mod older_pages;
-mod onboarding;
-mod open_outside;
-mod outage;
-mod outbox;
-mod outbox_flush;
-mod outgoing;
-mod outlines;
-mod over;
-mod pager;
-mod pager_text;
-mod paint;
-mod palette;
-mod panic_hook;
-mod partial_config;
-mod per_account;
-mod picker_popup;
-mod preview;
-mod preview_lines;
-mod preview_pane;
-mod preview_render;
-mod previews;
-mod provider;
-mod quoted_html;
-mod quoted_text;
-mod reading;
-mod reconnect;
-mod region;
-mod render_process;
-mod rendered_previews;
-mod rendered_view;
-mod reply_draft;
-mod reply_fetch;
-mod rgb;
-mod role_folder;
-mod routes;
-mod run;
-mod screen;
-mod search;
-mod secret;
-mod secret_store;
-mod senders;
-mod sent_pass;
-mod sequence_numbers;
-mod settings;
-mod settings_popup;
-mod showing;
-mod shown;
-mod sign_in;
-mod smtp;
-mod snippet;
-mod snippets;
-mod spare_work;
-mod stack;
-mod stack_str;
-mod status;
-mod steering;
-mod step;
-mod styled_line;
-mod sync;
-mod sync_state;
-mod tell;
-mod terminal_backend;
-mod terminal_background;
-mod terminal_slot;
-mod text_part;
-mod theme;
-mod thread;
-mod thread_fetch;
-mod thread_id;
-mod thread_pane;
-mod thread_show;
-mod toast;
-mod transfer_encoding;
-mod truncate;
-mod tty;
+mod compose;
+mod domain;
+mod mail;
+mod render;
 mod ui;
-mod uid;
-mod undo;
-mod unique_id;
-mod unlink;
-mod update;
-mod view;
-mod wake;
-mod world;
-mod wrap;
-mod xdg;
 
 use std::{error::Error, path::Path, process::ExitCode};
 
 use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
-use steering::{Ask, Steering};
 
 use crate::{
-    accounts::Accounts,
-    body_fetch::Request,
+    account::config::{Config, IconChoice},
+    account::oauth::Tokens,
+    account::partial_config::PartialConfig,
+    account::provider::Provider,
+    account::sign_in::SignIn,
     cache::Cache,
-    cli::{Command, Correspondent, Thread},
-    config::{Config, IconChoice},
-    icons::Icons,
-    imap::ImapSession,
-    oauth::Tokens,
-    older_pages::OlderPages,
-    onboarding::{Outcome, Start},
-    outbox::Outbox,
-    outbox_flush::Sender,
-    outgoing::Outgoing,
-    partial_config::PartialConfig,
-    per_account::PerAccount,
-    previews::Previews,
-    provider::Provider,
-    reply_fetch::ReplyFetch,
-    rgb::Rgb,
-    routes::Routes,
-    run::{Background, Exit},
-    sign_in::SignIn,
-    status::Status,
-    tell::Tell,
-    terminal_slot::TerminalSlot,
-    theme::Theme,
-    update::Update,
+    cli::args::{Command, Correspondent, Thread},
+    compose::accounts::Accounts,
+    compose::outbox::Outbox,
+    compose::outgoing::Outgoing,
+    domain::per_account::PerAccount,
+    mail::body_fetch::Request,
+    mail::imap::ImapSession,
+    mail::outbox_flush::Sender,
+    mail::reply_fetch::ReplyFetch,
+    mail::routes::Routes,
+    mail::status::Status,
+    mail::steering::{Ask, Steering},
+    mail::tell::Tell,
+    mail::update::Update,
+    render::rgb::Rgb,
+    ui::icons::Icons,
+    ui::older_pages::OlderPages,
+    ui::onboarding::{Outcome, Start},
+    ui::previews::Previews,
+    ui::run::{Background, Exit},
+    ui::terminal_slot::TerminalSlot,
+    ui::theme::Theme,
 };
 
 fn main() -> ExitCode {
-    if let Some(code) = render_process::serve() {
+    if let Some(code) = render::render_process::serve() {
         return code;
     }
 
-    let log = xdg::state_dir().map(|dir| logging::path(&dir));
-    let args = cli::parse(log.as_deref().ok());
+    let log = account::xdg::state_dir().map(|dir| ui::logging::path(&dir));
+    let args = cli::args::parse(log.as_deref().ok());
     match args.command {
         // A command beside the TUI leaves its log alone.
         Some(Command::Correspondent {
             verb: Correspondent::List(list),
-        }) => answered(correspondent_list::run(&list)),
+        }) => answered(cli::correspondent_list::run(&list)),
         Some(Command::Thread {
             verb: Thread::Show(show),
-        }) => answered(thread_show::run(&show)),
+        }) => answered(cli::thread_show::run(&show)),
         tui => {
             let run = if matches!(tui, Some(Command::Login)) {
                 login
@@ -242,7 +68,7 @@ fn main() -> ExitCode {
                 Err(error) => answered(Err(error.into())),
             };
 
-            logging::flush();
+            ui::logging::flush();
             code
         }
     }
@@ -265,12 +91,12 @@ fn answered(result: Result<(), Box<dyn Error>>) -> ExitCode {
     reason = "the terminal is restored, so stderr reaches the user"
 )]
 fn logged(log: &Path, verbose: u8, run: fn() -> Result<(), Box<dyn Error>>) -> ExitCode {
-    if let Err(error) = logging::init(log, verbose.into()) {
+    if let Err(error) = ui::logging::init(log, verbose.into()) {
         eprintln!("postal: {error}");
         return ExitCode::FAILURE;
     }
 
-    panic_hook::install(log.to_owned());
+    ui::panic_hook::install(log.to_owned());
     tracing::info!("postal {} starting", env!("CARGO_PKG_VERSION"));
     let result = run();
     match result {
@@ -292,7 +118,7 @@ fn logged(log: &Path, verbose: u8, run: fn() -> Result<(), Box<dyn Error>>) -> E
     reason = "the terminal is restored, so stdout reaches the user"
 )]
 fn login() -> Result<(), Box<dyn Error>> {
-    let dir = xdg::config_dir()?;
+    let dir = account::xdg::config_dir()?;
     let email = on_screen(async |slot| onboard(slot, &dir, Start::Choose).await)?;
     println!("Signed in as {email}.");
     Ok(())
@@ -301,7 +127,7 @@ fn login() -> Result<(), Box<dyn Error>> {
 /// The TUI, left for the Onboarding on `L` or from Settings, and opened
 /// again after it; after Settings, with the Accounts the config names now.
 fn try_main() -> Result<(), Box<dyn Error>> {
-    let dir = xdg::config_dir()?;
+    let dir = account::xdg::config_dir()?;
     on_screen(async |slot| {
         let (mut configs, mut sign_ins) = opened(slot, &dir).await?;
         let mut failure = None;
@@ -319,13 +145,14 @@ fn try_main() -> Result<(), Box<dyn Error>> {
                 Exit::AddAccount => {
                     let (terminal, background) = slot.take()?;
                     let theme = onboarding_theme(&dir, background)?;
-                    let outcome = onboarding::run(terminal, &theme, &dir, Start::Choose).await?;
+                    let outcome =
+                        ui::onboarding::run(terminal, &theme, &dir, Start::Choose).await?;
                     if let Outcome::Quit(Some(_)) = outcome {
                         failure = Some("sign-in failed");
                     }
                 }
                 Exit::Unlink(email) => {
-                    if let Err(error) = unlink::unlink(&dir, &email) {
+                    if let Err(error) = account::unlink::unlink(&dir, &email) {
                         tracing::error!("unlinking {email}: {error}");
                         failure = Some("unlink failed");
                     }
@@ -359,7 +186,7 @@ async fn sign_in_again(
 ) -> Result<Option<&'static str>, Box<dyn Error>> {
     let (terminal, background) = slot.take()?;
     let theme = onboarding_theme(dir, background)?;
-    let failed = match onboarding::run(terminal, &theme, dir, Start::again(config)).await? {
+    let failed = match ui::onboarding::run(terminal, &theme, dir, Start::again(config)).await? {
         Outcome::SignedIn(_) => {
             *sign_in = read_sign_in(config, dir)?;
             sign_in.is_none()
@@ -399,9 +226,9 @@ async fn onboard(
 ) -> Result<String, Box<dyn Error>> {
     let (terminal, background) = slot.take()?;
     let theme = onboarding_theme(dir, background)?;
-    match onboarding::run(terminal, &theme, dir, start).await? {
+    match ui::onboarding::run(terminal, &theme, dir, start).await? {
         Outcome::SignedIn(email) => Ok(email),
-        Outcome::Quit(error) => Err(error.unwrap_or_else(|| login::Error::Cancelled.into())),
+        Outcome::Quit(error) => Err(error.unwrap_or_else(|| mail::login::Error::Cancelled.into())),
     }
 }
 
@@ -430,7 +257,7 @@ async fn signed_in(
 
             let (terminal, background) = slot.take()?;
             let theme = onboarding_theme(dir, background)?;
-            match onboarding::run(terminal, &theme, dir, Start::again(&config)).await? {
+            match ui::onboarding::run(terminal, &theme, dir, Start::again(&config)).await? {
                 Outcome::SignedIn(_) => {}
                 Outcome::Quit(error) => {
                     tracing::info!("running without {}", config.email);
@@ -442,7 +269,7 @@ async fn signed_in(
     }
 
     if accounts.is_empty() {
-        return Err(left.unwrap_or_else(|| login::Error::Cancelled.into()));
+        return Err(left.unwrap_or_else(|| mail::login::Error::Cancelled.into()));
     }
 
     Ok(accounts)
@@ -477,9 +304,9 @@ async fn session(
     failure: Option<&'static str>,
 ) -> Result<Exit, Box<dyn Error>> {
     let emails = configs.map(|config| config.email.as_str());
-    let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
+    let caches = Cache::open(&account::xdg::cache_dir()?, &emails)?;
     // Without one, Compose says so when it is used.
-    let outbox = Outbox::new(xdg::data_dir().ok());
+    let outbox = Outbox::new(account::xdg::data_dir().ok());
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (mut asks, mut requests, mut works) = (Vec::new(), Vec::new(), Vec::new());
     for (account, config) in configs.iter() {
@@ -532,7 +359,7 @@ async fn session(
         config_dir: dir,
     };
 
-    Ok(run::run(terminal, &mut theme, &caches, &mut previews, background).await?)
+    Ok(ui::run::run(terminal, &mut theme, &caches, &mut previews, background).await?)
 }
 
 /// The Status an Account starts in.
@@ -551,7 +378,7 @@ async fn served(
     requested: UnboundedReceiver<Request>,
     sender: Sender<'_>,
     send: impl Fn(Update),
-) -> Result<(), sync::Error> {
+) -> Result<(), mail::sync::Error> {
     let config = sender.outgoing.config;
     let report = |status| send(Update::Status(status));
     let synced = sync(cache, Steering::new(asked), sender, &send, report);
@@ -573,20 +400,20 @@ async fn bodies(
     cache: &Cache,
     mut requests: UnboundedReceiver<Request>,
     send: impl Fn(Update),
-) -> Result<(), sync::Error> {
+) -> Result<(), mail::sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
         let mut session = ImapSession::open(config, sign_in).await?;
         // Every run starts in the Inbox: its first Preview waits on no EXAMINE.
-        sync::examine(&mut session, folder::INBOX).await?;
+        mail::sync::examine(&mut session, domain::folder::INBOX).await?;
         // Asked for before an outage: the Preview asks again once told Live.
         while requests.try_recv().is_ok() {}
         report(Status::Live);
-        let examined = Some(folder::INBOX.into());
-        body_fetch::serve(&mut session, cache, &mut requests, examined, &send).await
+        let examined = Some(domain::folder::INBOX.into());
+        mail::body_fetch::serve(&mut session, cache, &mut requests, examined, &send).await
     };
 
     // The status slot follows the sync connection alone, but for a refused Account.
-    reconnect::retry(attempt, |status| match status {
+    mail::reconnect::retry(attempt, |status| match status {
         Status::Live => send(Update::BodyLink(true)),
         Status::Retrying { .. } => send(Update::BodyLink(false)),
         Status::SignedOut => send(Update::Status(status)),
@@ -605,12 +432,12 @@ async fn sync(
     sender: Sender<'_>,
     send: &impl Fn(Update),
     report: impl Fn(Status),
-) -> Result<(), sync::Error> {
+) -> Result<(), mail::sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
         let session = ImapSession::open(sender.outgoing.config, sender.sign_in).await?;
         let tell = Tell { send, report };
-        idle::listen(session, cache, &mut steering, sender, tell).await
+        mail::idle::listen(session, cache, &mut steering, sender, tell).await
     };
 
-    reconnect::retry(attempt, report).await
+    mail::reconnect::retry(attempt, report).await
 }

@@ -1,5 +1,6 @@
 use crate::{
-    message_flags::MessageFlags, new_message::NewMessage, sync_state::SyncState, uid::Uid,
+    domain::message_flags::MessageFlags, domain::new_message::NewMessage,
+    domain::sync_state::SyncState, domain::uid::Uid,
 };
 
 /// What one resync learnt, written to the Cache in one transaction.

@@ -1,7 +1,7 @@
 use rusqlite::{Connection, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
-use crate::folder::{Folder, Role};
+use crate::domain::folder::{Folder, Role};
 
 impl Cache {
     /// Every Folder listed or shown so far, in the Folder Picker's order.

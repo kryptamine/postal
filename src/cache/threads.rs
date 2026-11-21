@@ -2,7 +2,8 @@ use rusqlite::params;
 
 use super::{Cache, Error, bodies, correspondence};
 use crate::{
-    body_key::BodyKey, correspondence::Correspondence, message::Message, thread_id::ThreadId,
+    domain::body_key::BodyKey, domain::correspondence::Correspondence, domain::message::Message,
+    domain::thread_id::ThreadId,
 };
 
 /// The columns `Cache::message` reads, in its order, of a `thread_message`

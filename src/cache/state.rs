@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Changes, Error, correspondence, folder_key::FolderKey, moves};
-use crate::{flag::Flag, new_message::NewMessage, sync_state::SyncState, uid::Uid};
+use crate::{
+    domain::flag::Flag, domain::new_message::NewMessage, domain::sync_state::SyncState,
+    domain::uid::Uid,
+};
 
 impl Cache {
     /// `None` before the first resync of `folder`.

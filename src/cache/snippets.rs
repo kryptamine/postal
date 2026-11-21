@@ -1,7 +1,9 @@
 use rusqlite::{Row, params};
 
 use super::{Cache, Error};
-use crate::{text_part::TextPart, transfer_encoding::TransferEncoding, uid::Uid};
+use crate::{
+    domain::text_part::TextPart, domain::transfer_encoding::TransferEncoding, domain::uid::Uid,
+};
 
 impl Cache {
     /// Up to `limit` Messages of `folder` still without a Snippet, newest

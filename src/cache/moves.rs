@@ -3,7 +3,10 @@ use std::sync::Arc;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
-use crate::{body_key::BodyKey, message_ref::MessageRef, thread_id::ThreadId, uid::Uid};
+use crate::{
+    domain::body_key::BodyKey, domain::message_ref::MessageRef, domain::thread_id::ThreadId,
+    domain::uid::Uid,
+};
 
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
 const ROW: &str = "account, body_key, received, received_offset, unread, answered, sender,
