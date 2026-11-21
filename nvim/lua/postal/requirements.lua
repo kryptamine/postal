@@ -2,17 +2,18 @@
 -- is missing: shared by the chat and `:checkhealth postal`.
 local M = {}
 
---- The command that starts agent `name`, `{ cmd = { ... }, npx = "..." }`,
---- and a note when it runs through `npx`; nil and why when nothing can.
+--- How agent `name`, `{ cmd = { ... }, npx = "..." }`, starts: `{ cmd = ...,
+--- note = ... }`, the note set when it runs through npx; nil and why when
+--- nothing can start it.
 function M.agent(name, spec)
 	local program = spec.cmd[1]
 	if vim.fn.executable(program) == 1 then
-		return spec.cmd
+		return { cmd = spec.cmd }
 	end
 
 	if spec.npx and vim.fn.executable("npx") == 1 then
 		local note = ("`%s` is not on PATH, so npx fetches %s; the first start takes a while."):format(program, spec.npx)
-		return { "npx", "-y", spec.npx }, note
+		return { cmd = { "npx", "-y", spec.npx }, note = note }
 	end
 
 	if spec.npx then

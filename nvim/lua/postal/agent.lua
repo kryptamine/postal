@@ -298,16 +298,16 @@ local function start(draft, name, shown)
 	self:status()
 
 	chats[draft] = self
-	local cmd, note = requirements.agent(name, M.agents[name])
-	if not cmd then
-		self.pane:notice(note)
-		vim.notify("postal: " .. note, vim.log.levels.ERROR)
+	local how, missing = requirements.agent(name, M.agents[name])
+	if not how then
+		self.pane:notice(missing)
+		vim.notify("postal: " .. missing, vim.log.levels.ERROR)
 		self.ended = true
 		return self
 	end
 
-	if note then
-		self.pane:notice(note)
+	if how.note then
+		self.pane:notice(how.note)
 	end
 
 	self:fetch_thread()
@@ -315,7 +315,7 @@ local function start(draft, name, shown)
 	-- Draft's headers and the other Drafts included.
 	local cwd = vim.fn.tempname()
 	vim.fn.mkdir(cwd, "p")
-	local conn, failure = acp.start(cmd, cwd, {
+	local conn, failure = acp.start(how.cmd, cwd, {
 		request = function(method, params, respond)
 			self:request(method, params, respond)
 		end,

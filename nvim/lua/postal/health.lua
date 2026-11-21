@@ -19,11 +19,11 @@ function M.check()
 
 	vim.health.start("postal agents")
 	for name, spec in vim.spairs(agent.agents) do
-		local cmd, note = requirements.agent(name, spec)
-		if not cmd then
-			vim.health.error(note)
-		elseif note then
-			vim.health.warn(note)
+		local start, missing = requirements.agent(name, spec)
+		if not start then
+			vim.health.error(missing)
+		elseif start.note then
+			vim.health.warn(start.note)
 		else
 			vim.health.ok(name .. ": `" .. spec.cmd[1] .. "` found")
 		end
