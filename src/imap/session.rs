@@ -15,7 +15,7 @@ use super::{
 use crate::{
     config::Config,
     flag,
-    folder::{Folder, Role},
+    folder::{Folder, INBOX, Role},
     message_flags::MessageFlags,
     new_message::NewMessage,
     sign_in::SignIn,
@@ -347,6 +347,12 @@ impl MailServer for ImapSession {
             .filter(|name| !name.attributes().contains(&NameAttribute::NoSelect))
             .map(|name| Folder::new(0, name.name(), role(name.attributes())))
             .collect();
+        // A `LIST` cut short by a dropped connection ends as if complete,
+        // and every server lists INBOX (RFC 3501 5.1).
+        if !folders.iter().any(|f| f.name.eq_ignore_ascii_case(INBOX)) {
+            return Err(Error::Closed);
+        }
+
         named_roles::fill(&mut folders);
         tracing::info!("listed {} Folders", folders.len());
         Ok(folders)
