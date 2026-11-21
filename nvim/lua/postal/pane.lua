@@ -16,10 +16,10 @@ local KEYS = {
 local Pane = {}
 Pane.__index = Pane
 
---- A pane for the Draft in buffer `draft` and agent `name`, shown at once;
---- `actions` are `send(text)`, `stop()` and `close()`.
-function M.new(draft, name, actions)
-	local self = setmetatable({ draft = draft, name = name, actions = actions, winbar = " " .. name }, Pane)
+--- A pane for the Draft in buffer `draft`, shown at once; `actions` are
+--- `send(text)`, `stop()` and `close()`.
+function M.new(draft, actions)
+	local self = setmetatable({ draft = draft, actions = actions, winbar = "" }, Pane)
 	self:show()
 	return self
 end
@@ -34,7 +34,7 @@ function Pane:buffer()
 	end
 
 	self.buf = vim.api.nvim_create_buf(false, true)
-	self.speaker, self.last = nil, nil
+	self.speaker, self.open = nil, nil
 	vim.bo[self.buf].filetype = "markdown"
 	local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(self.draft), ":t")
 	vim.api.nvim_buf_set_name(self.buf, "postal-agent://" .. name .. "#" .. self.buf)
@@ -86,11 +86,9 @@ function Pane:show(focus)
 	end
 end
 
---- The winbar after the agent's name; empty leaves the name alone.
+--- The winbar's text; a narrow pane cuts its end.
 function Pane:status(text)
-	local line = " " .. self.name .. (text ~= "" and " · " .. text or "")
-	-- A narrow pane cuts the end, the keys, rather than the name.
-	self.winbar = line:gsub("%%", "%%%%") .. "%<"
+	self.winbar = " " .. text:gsub("%%", "%%%%") .. "%<"
 	local win = self.buf and vim.fn.bufwinid(self.buf) or -1
 	if win ~= -1 then
 		vim.wo[win].winbar = self.winbar
@@ -99,11 +97,22 @@ end
 
 --- The 0-based row of the input's header.
 function Pane:bottom()
-	return vim.api.nvim_buf_get_extmark_by_id(self:buffer(), NS, self.input, {})[1]
+	return vim.api.nvim_buf_get_extmark_by_id(self.buf, NS, self.input, {})[1]
 end
 
---- Scrolls each window on the pane to its end, but the one the user is in.
-function Pane:follow()
+--- The 0-based row of the open block's last line.
+function Pane:tail()
+	return vim.api.nvim_buf_get_extmark_by_id(self.buf, NS, self.open.mark, {})[1]
+end
+
+--- Runs `edit` on the buffer, then scrolls each window on the pane but the
+--- user's to its end; once the pane is closed, does nothing.
+function Pane:write(edit)
+	if self.closed then
+		return
+	end
+
+	edit(self:buffer())
 	for _, win in ipairs(vim.fn.win_findbuf(self.buf)) do
 		if win ~= vim.api.nvim_get_current_win() then
 			vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(self.buf), 0 })
@@ -111,128 +120,137 @@ function Pane:follow()
 	end
 end
 
---- Adds `lines` and a blank line above the input; returns their first row.
-function Pane:put(lines)
+--- Adds `lines` above the input, a blank line after them, and opens them as
+--- a block of `kind` that may grow in place, unless nil. Returns their row.
+function Pane:block(kind, lines)
 	local row = self:bottom()
 	vim.api.nvim_buf_set_lines(self.buf, row, row, false, vim.list_extend(vim.deepcopy(lines), { "" }))
-	self:follow()
+	self.open = kind and { kind = kind, mark = vim.api.nvim_buf_set_extmark(self.buf, NS, row + #lines - 1, 0, {}) }
 	return row
+end
+
+--- Moves the open block's end to `row`.
+function Pane:grow(row)
+	vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, { id = self.open.mark })
 end
 
 --- A `## who` header with the rule over it, unless it is the first line.
 function Pane:header(who)
-	local row = self:put({ "## " .. who })
+	local row = self:block(nil, { "## " .. who })
 	if row > 0 then
 		vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, { virt_lines = { RULE }, virt_lines_above = true })
 	end
 
-	self.speaker, self.last = who, nil
+	self.speaker = who
 	return row
 end
 
 --- The user's message, taken from the input.
 function Pane:submit()
 	local row = self:bottom()
-	local lines = vim.api.nvim_buf_get_lines(self.buf, row + 1, -1, false)
-	local text = vim.trim(table.concat(lines, "\n"))
+	local text = vim.trim(table.concat(vim.api.nvim_buf_get_lines(self.buf, row + 1, -1, false), "\n"))
 	if text == "" then
 		return
 	end
 
-	vim.api.nvim_buf_set_lines(self.buf, row + 1, -1, false, { "" })
-	self:header("Me")
-	self:put(vim.split(text, "\n", { plain = true }))
+	self:write(function(buf)
+		vim.api.nvim_buf_set_lines(buf, row + 1, -1, false, { "" })
+		self:header("Me")
+		self:block(nil, vim.split(text, "\n", { plain = true }))
+	end)
+
 	self.actions.send(text)
 end
 
---- Adds a chunk of the agent's message, under its header.
-function Pane:stream(text)
-	if self.closed then
-		return
-	end
+--- Adds a chunk of `who`'s message, under their header.
+function Pane:stream(who, text)
+	self:write(function(buf)
+		if self.speaker ~= who then
+			self:header(who)
+		end
 
-	if self.speaker ~= self.name then
-		self:header(self.name)
-	end
+		if not (self.open and self.open.kind == "text") then
+			self:block("text", { "" })
+		end
 
-	if self.last ~= "text" then
-		self:put({ "" })
-		self.last = "text"
-	end
-
-	local row = self:bottom() - 2
-	local pieces = vim.split(text, "\n", { plain = true })
-	pieces[1] = vim.api.nvim_buf_get_lines(self.buf, row, row + 1, false)[1] .. pieces[1]
-	vim.api.nvim_buf_set_lines(self.buf, row, row + 1, false, pieces)
-	self:follow()
+		local row = self:tail()
+		local pieces = vim.split(text, "\n", { plain = true })
+		pieces[1] = vim.api.nvim_buf_get_lines(buf, row, row + 1, false)[1] .. pieces[1]
+		vim.api.nvim_buf_set_lines(buf, row, row + 1, false, pieces)
+		self:grow(row + #pieces - 1)
+	end)
 end
 
 --- One dim line, `icon` before `text`: a tool call, a denial, a context;
 --- a run of them has no blank lines between.
 function Pane:dim(icon, text)
-	if self.closed then
-		return
-	end
+	self:write(function(buf)
+		local line = { icon .. " " .. text:gsub("\n", " ") }
+		local row
+		if self.open and self.open.kind == "dim" then
+			row = self:tail() + 1
+			vim.api.nvim_buf_set_lines(buf, row, row, false, line)
+			self:grow(row)
+		else
+			row = self:block("dim", line)
+		end
 
-	local line = { icon .. " " .. text:gsub("\n", " ") }
-	local row
-	if self.last == "dim" then
-		row = self:bottom() - 1
-		vim.api.nvim_buf_set_lines(self.buf, row, row, false, line)
-	else
-		row = self:put(line)
-	end
-
-	vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, { end_row = row + 1, hl_group = "Comment", hl_eol = true })
-	self.last = "dim"
-	self:follow()
+		vim.api.nvim_buf_set_extmark(buf, NS, row, 0, { end_row = row + 1, hl_group = "Comment", hl_eol = true })
+	end)
 end
 
 --- What the plugin itself says, as a quote.
 function Pane:notice(text)
+	self:write(function()
+		self:block(
+			nil,
+			vim.tbl_map(function(line)
+				return "> " .. line
+			end, vim.split(text, "\n", { plain = true }))
+		)
+	end)
+end
+
+--- Opens `who`'s turn: their header, spinning until `end_turn`.
+function Pane:begin_turn(who)
+	self:end_turn()
+	self:write(function(buf)
+		self.spin = vim.api.nvim_buf_set_extmark(buf, NS, self:header(who), 0, {})
+	end)
+
 	if self.closed then
 		return
 	end
 
-	self:put(vim.tbl_map(function(line)
-		return "> " .. line
-	end, vim.split(text, "\n", { plain = true })))
-	self.last = "notice"
-end
-
---- Spins on the agent's header while `on`; a turn's header comes first.
-function Pane:busy(on)
-	if self.timer then
-		self.timer:stop()
-		self.timer:close()
-		self.timer = nil
-		pcall(vim.api.nvim_buf_del_extmark, self.buf, NS, self.spin)
-	end
-
-	if not on or self.closed then
-		return
-	end
-
-	self.spin = vim.api.nvim_buf_set_extmark(self.buf, NS, self:header(self.name), 0, {})
 	local frame = 0
 	self.timer = vim.uv.new_timer()
 	self.timer:start(0, 80, function()
 		vim.schedule(function()
-			if not self.timer or not vim.api.nvim_buf_is_valid(self.buf) then
+			-- A pane whose buffer was wiped mid-turn has lost the header.
+			local row = self.timer and vim.api.nvim_buf_get_extmark_by_id(self:buffer(), NS, self.spin, {})[1]
+			if not row then
 				return
 			end
 
 			frame = frame % #SPINNER + 1
-			local row = vim.api.nvim_buf_get_extmark_by_id(self.buf, NS, self.spin, {})[1]
 			local spin = { { " " .. SPINNER[frame], "Comment" } }
 			vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, { id = self.spin, virt_text = spin })
 		end)
 	end)
 end
 
+function Pane:end_turn()
+	if self.timer then
+		self.timer:stop()
+		self.timer:close()
+		self.timer = nil
+		vim.api.nvim_buf_del_extmark(self:buffer(), NS, self.spin)
+	end
+end
+
 --- Closes the pane for good: what the agent says after is dropped.
 function Pane:close()
-	self:busy(false)
+	self:end_turn()
 	self.closed = true
 	if not (self.buf and vim.api.nvim_buf_is_valid(self.buf)) then
 		return

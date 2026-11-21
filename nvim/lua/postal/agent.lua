@@ -85,10 +85,10 @@ function Chat:prompt(instruction)
 	table.insert(blocks, self:resource("postal-draft://" .. self.path, self.sent))
 	table.insert(blocks, { type = "text", text = instruction })
 	self.busy = true
-	self.pane:busy(true)
+	self.pane:begin_turn(self.name)
 	self.conn:request("session/prompt", { sessionId = self.session, prompt = blocks }, function(failed, result)
 		self.busy = false
-		self.pane:busy(false)
+		self.pane:end_turn()
 		if failed and first then
 			-- The rules go with the next prompt instead.
 			self.prompted = false
@@ -140,7 +140,7 @@ end
 function Chat:update(update)
 	local kind = update.sessionUpdate
 	if kind == "agent_message_chunk" and update.content and update.content.type == "text" then
-		self.pane:stream(update.content.text)
+		self.pane:stream(self.name, update.content.text)
 	elseif kind == "tool_call" or kind == "tool_call_update" then
 		local call = self.calls[update.toolCallId] or {}
 		self.calls[update.toolCallId] = vim.tbl_extend("force", call, update)
@@ -199,7 +199,7 @@ function Chat:propose(text)
 	end)
 
 	if not self.review then
-		self.pane:status("")
+		self:status()
 		self.pane:dim("✓", "write_draft · the edit changes nothing")
 		return
 	end
@@ -208,9 +208,14 @@ function Chat:propose(text)
 	self:reviewed(self.review:summary())
 end
 
+--- The pane's winbar: the agent, and what is left to review.
+function Chat:status(summary)
+	self.pane:status(self.name .. (summary and " · " .. summary or ""))
+end
+
 --- Shows what is left to review; with nothing, sends what waits for it.
 function Chat:reviewed(summary)
-	self.pane:status(summary or "")
+	self:status(summary)
 	if not summary then
 		self.review = nil
 		self:next()
@@ -276,7 +281,7 @@ local function start(draft, name, shown)
 	local self = setmetatable({ draft = draft, name = name, calls = {}, queue = {} }, Chat)
 	self.path = vim.api.nvim_buf_get_name(draft)
 	self.pane = shown
-		or pane.new(draft, name, {
+		or pane.new(draft, {
 			send = function(text)
 				M.send(draft, text)
 			end,
@@ -290,8 +295,7 @@ local function start(draft, name, shown)
 			end,
 		})
 
-	self.pane.name = name
-	self.pane:status("")
+	self:status()
 
 	chats[draft] = self
 	local cmd, note = requirements.agent(name, M.agents[name])
@@ -324,7 +328,7 @@ local function start(draft, name, shown)
 			self.ended = true
 			self.busy = false
 			self.queue = {}
-			self.pane:busy(false)
+			self.pane:end_turn()
 			if not self.closing then
 				self.pane:notice(name .. " ended (" .. code .. "): " .. vim.trim(stderr))
 			end

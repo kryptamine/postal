@@ -99,12 +99,14 @@ local function turn(session, prompt)
 		end
 	end
 
-	-- Told `hang`, it says nothing until the turn is cancelled.
+	-- Told `hang`, it says a word and waits for the turn to be cancelled.
 	if prompt[#prompt].text == "hang" then
+		chunk(session, "Thinking")
 		repeat
 			local message = receive()
 		until message.method == "session/cancel"
 
+		chunk(session, " no more.")
 		return "cancelled"
 	end
 

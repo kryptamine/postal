@@ -287,17 +287,20 @@ is({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
 shows({})
 left("")
 
--- `q` in the pane stops a turn, and the pane says so
+-- `q` in the pane stops a turn, and the pane says so; a chunk after the
+-- user deleted the blank line over the input still ends the agent's text
 ask("hang")
 if not vim.wait(5000, function()
-	return #prompts() == 4
+	return said(pane_buf):find("Thinking", 1, true) ~= nil
 end) then
-	fail("hang was never sent")
+	fail("hang was never answered")
 end
 
+local input = #vim.api.nvim_buf_get_lines(pane_buf, 0, -1, false) - 2
+vim.api.nvim_buf_set_lines(pane_buf, input - 1, input, false, {})
 vim.cmd.normal("q")
 if not vim.wait(5000, function()
-	return said(pane_buf):find("> Stopped.", 1, true) ~= nil
+	return said(pane_buf):find("Thinking no more.\n> Stopped.", 1, true) ~= nil
 end) then
 	fail("the turn was not stopped: " .. vim.inspect(said(pane_buf)))
 end
