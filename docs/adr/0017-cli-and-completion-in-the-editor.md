@@ -30,7 +30,9 @@ correspondence. The Draft's notes name the answered Message and its Thread;
 the Thread is every Message the Cache holds with that `X-GM-THRID` in any
 Folder but Trash and Spam, or among those All Mail held (ADR 0009). As the
 command never writes the Cache, opening a Reply in the TUI fetches every
-body of its Thread first; a body still missing is marked, not skipped.
+body of its Thread first; a body still missing is marked, not skipped. A
+Draft that answers nothing, a new mail, has an empty Thread: the command
+prints nothing and succeeds.
 
 ## Considered options
 

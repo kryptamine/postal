@@ -258,8 +258,9 @@ fn without_gmail_a_message_is_a_thread_of_its_own() {
     assert_eq!(bodies, [Some("Notes".to_owned())]);
 }
 
+// A new mail is no error: the editor asks for every Draft's Thread.
 #[test]
-fn a_draft_answering_nothing_is_refused() {
+fn a_draft_answering_nothing_has_an_empty_thread() {
     let (imap, smtp) = (FakeImap::start(Vec::new()), FakeSmtp::start());
     let home = home(&imap, &smtp);
     let mut t = postal(&home);
@@ -272,11 +273,9 @@ fn a_draft_answering_nothing_is_refused() {
     let draft = drafts.join("1.eml");
     fs::write(&draft, "To: \nSubject: \n\n").unwrap();
     let output = show(&home, &["--draft", draft.to_str().unwrap()]);
-    assert!(!output.status.success());
-    assert_eq!(
-        String::from_utf8(output.stderr).unwrap(),
-        "postal: the Draft answers no Message\n"
-    );
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "");
+    assert_eq!(String::from_utf8(output.stderr).unwrap(), "");
 }
 
 #[test]

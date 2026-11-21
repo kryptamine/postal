@@ -4,6 +4,7 @@ use mail_parser::MessageParser;
 use serde::Serialize;
 
 use crate::{
+    answering::Answering,
     body_text,
     cache::{Reader, ThreadMessage},
     cli::ThreadShow,
@@ -16,8 +17,6 @@ use crate::{
 
 /// Columns an HTML body is laid out in: the line RFC 5322 recommends.
 const WIDTH: usize = 78;
-
-const ANSWERS_NOTHING: &str = "the Draft answers no Message";
 
 /// What the text answer says for a body not in the Cache.
 const MISSING: &str = "[body not in the Cache]";
@@ -35,22 +34,14 @@ struct Row<'a> {
 }
 
 /// `postal thread show`: every Message of the Thread a Reply's Draft
-/// answers, oldest first, with its body as plain text.
+/// answers, oldest first, with its body as plain text; none for a Draft that
+/// answers nothing.
 pub fn run(show: &ThreadShow) -> Result<(), Box<dyn Error>> {
     let notes = Notes::read(&show.draft)?.unwrap_or_default();
-    let answering = notes.answering.ok_or(ANSWERS_NOTHING)?;
-    let account = match notes.account {
-        Some(account) => account,
-        None => first_account()?,
+    let thread = match notes.answering {
+        Some(answering) => answered(notes.account, &answering)?,
+        None => Vec::new(),
     };
-
-    let reader = Reader::open(&xdg::cache_dir()?)?;
-    let thread = reader
-        .thread(&account.to_lowercase(), &answering)?
-        .ok_or(ANSWERS_NOTHING)?;
-    if thread.is_empty() {
-        return Err("the Message the Draft answers is not in the Cache".into());
-    }
 
     let text = if show.json {
         json(&thread)?
@@ -59,6 +50,27 @@ pub fn run(show: &ThreadShow) -> Result<(), Box<dyn Error>> {
     };
 
     Ok(command_output::print(&text)?)
+}
+
+/// The Thread `answering` names, in `account` or the first one.
+fn answered(
+    account: Option<String>,
+    answering: &Answering,
+) -> Result<Vec<ThreadMessage>, Box<dyn Error>> {
+    let account = match account {
+        Some(account) => account,
+        None => first_account()?,
+    };
+
+    let reader = Reader::open(&xdg::cache_dir()?)?;
+    let thread = reader
+        .thread(&account.to_lowercase(), answering)?
+        .ok_or("the Draft answers no Message the Cache knows")?;
+    if thread.is_empty() {
+        return Err("the Message the Draft answers is not in the Cache".into());
+    }
+
+    Ok(thread)
 }
 
 /// The Account a Draft whose notes name none goes out from.

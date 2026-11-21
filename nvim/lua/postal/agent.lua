@@ -34,11 +34,12 @@ local Chat = {}
 Chat.__index = Chat
 
 --- Asks `postal thread show` for the Thread the Draft answers; until it
---- answers, `self.thread` is nil, then the text or false.
+--- answers, `self.thread` is nil, then the text, or false for none.
 function Chat:fetch_thread()
 	local function done(result)
 		if result.code == 0 then
-			self.thread = result.stdout
+			-- A new mail answers nothing, and its Thread is empty.
+			self.thread = result.stdout ~= "" and result.stdout
 		else
 			self.thread = false
 			self.pane:notice("No Thread for the agent: " .. requirements.thread(recipients.cmd, result.stderr))

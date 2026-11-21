@@ -173,7 +173,12 @@ if not first[1].text:find("write_draft", 1, true) or not first[1].text:find("Nev
 	fail("the first prompt lacks the Draft's rules: " .. vim.inspect(first[1]))
 end
 
--- With the real binary the Draft answers no Message, so there is no Thread
+-- With the real binary the Draft answers no Message, so there is no Thread,
+-- and nothing in the pane says so
+if os.getenv("POSTAL_BIN") and pane:find("No Thread", 1, true) then
+	fail("a new mail's empty Thread was reported: " .. vim.inspect(pane))
+end
+
 local want_types = os.getenv("POSTAL_BIN") and { "text", "resource", "text" }
 	or { "text", "resource", "resource", "text" }
 
