@@ -23,6 +23,10 @@ agent editing twice builds on its own text. An instruction given while a
 review is open waits for it to end, so each prompt carries a body the
 user has settled.
 
+The placed hunks are their own undo step. An undo past it ends the
+review, the body left as the undo made it, since the hunks' marks would
+no longer sit on the lines they placed.
+
 ## Considered options
 
 - **The agent's lines as virtual lines, the buffer untouched until an

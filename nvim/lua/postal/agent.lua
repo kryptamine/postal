@@ -194,8 +194,8 @@ function Chat:propose(text)
 		self.review:settle(false, true)
 	end
 
-	self.review = review.new(self.mail, self.sent, text, function(summary)
-		self:reviewed(summary)
+	self.review = review.new(self.mail, self.sent, text, function(summary, undone)
+		self:reviewed(summary, undone)
 	end)
 
 	if not self.review then
@@ -209,8 +209,12 @@ function Chat:propose(text)
 end
 
 --- Shows what is left to review; with nothing, sends what waits for it.
-function Chat:reviewed(summary)
+function Chat:reviewed(summary, undone)
 	self.pane:status(summary)
+	if undone then
+		self.pane:notice("The agent's edit was undone, and its review ended.")
+	end
+
 	if not summary then
 		self.review = nil
 		self:next()

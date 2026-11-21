@@ -313,6 +313,27 @@ is({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
 shows({})
 left("")
 
+-- An undo past the agent's edit ends its review, keeping the user's typing
+-- before it, so no later decision writes over the wrong rows
+vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "undo bob" })
+ask("again")
+turn({ "", "UNDO BOB", "", "> SHALL WE MEET?", "" })
+left("1 hunk left")
+home()
+vim.cmd.undo()
+if not vim.wait(5000, function()
+	return said(pane_buf):find("The agent's edit was undone", 1, true) ~= nil
+end) then
+	fail("the undo left the review open: " .. vim.inspect(said(pane_buf)))
+end
+
+is({ "", "undo bob", "", "> SHALL WE MEET?", "" })
+shows({})
+left("")
+if vim.fn.maparg("<leader>a", "n", false, true).buffer == 1 then
+	fail("the review's keys outlived the undo")
+end
+
 -- `q` in the pane stops a turn, and the pane says so; a chunk after the
 -- user deleted the blank line over the input still ends the agent's text
 ask("hang")

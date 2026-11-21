@@ -33,7 +33,8 @@ Review.__index = Review
 
 --- Reviews the agent's `proposed` body for Draft buffer `draft` against
 --- `sent`, the body its turn was sent with; nil when there is nothing to
---- review. `changed(summary)` runs on each decision, `summary` nil at the end.
+--- review. `changed(summary, undone)` runs on each decision, `summary` nil
+--- at the end, `undone` when an undo took the agent's edit back.
 function M.new(draft, sent, proposed, changed)
 	local found = hunks.between(sent, body.get(draft), proposed)
 	if #found == 0 then
@@ -43,6 +44,7 @@ function M.new(draft, sent, proposed, changed)
 	local self = setmetatable({ draft = draft, changed = changed, hunks = found }, Review)
 	self:place()
 	self:map()
+	self:watch()
 	return self
 end
 
@@ -51,6 +53,9 @@ end
 function Review:place()
 	local buf, first = self.draft, nil
 	vim.api.nvim_buf_call(buf, function()
+		-- A fresh undo step, so that an undo of the agent's edit leaves the
+		-- user's own typing before it.
+		vim.o.undolevels = vim.o.undolevels
 		local row, added = body.row(buf)
 		first = row
 		local joined = added
@@ -64,6 +69,10 @@ function Review:place()
 				joined = true
 				vim.api.nvim_buf_set_lines(buf, first + hunk.at, first + hunk.at + #hunk.old, false, hunk.new)
 			end
+		end
+
+		if joined then
+			self.placed = vim.fn.undotree().seq_cur
 		end
 	end)
 
@@ -152,6 +161,34 @@ function Review:range(hunk)
 	return row, details.end_row and details.end_row - row or 0
 end
 
+-- Ends the review once an undo goes past the placed hunks: their marks
+-- would collapse, and a decision would write over the wrong rows.
+function Review:watch()
+	if not self.placed then
+		return
+	end
+
+	vim.api.nvim_buf_attach(self.draft, false, {
+		on_lines = function()
+			if self.over then
+				return true
+			end
+
+			vim.schedule(function()
+				local seq = vim.api.nvim_buf_call(self.draft, function()
+					return vim.fn.undotree().seq_cur
+				end)
+
+				if not self.over and seq < self.placed then
+					vim.api.nvim_buf_clear_namespace(self.draft, NS, 0, -1)
+					self.hunks = {}
+					self:report(true)
+				end
+			end)
+		end,
+	})
+end
+
 function Review:map()
 	for _, key in ipairs(M.keys) do
 		vim.keymap.set("n", key.lhs, function()
@@ -204,6 +241,7 @@ function Review:settle(accept, quiet)
 	end
 
 	if quiet then
+		self.over = true
 		self:unmap()
 	else
 		self:report()
@@ -225,14 +263,15 @@ function Review:summary()
 	return text
 end
 
-function Review:report()
+function Review:report(undone)
 	if #self.hunks > 0 then
 		self.changed(self:summary())
 		return
 	end
 
+	self.over = true
 	self:unmap()
-	self.changed(nil)
+	self.changed(nil, undone)
 end
 
 return M
