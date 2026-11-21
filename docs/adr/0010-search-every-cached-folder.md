@@ -22,6 +22,14 @@ own Account's connection. Ending the
 Search always stays in the shown Folder: on the match when that Folder holds
 its Thread, else back where `/` was pressed.
 
+A Query is matched against a Message's sender, subject and Snippet. A Message
+the Account sent has the same sender as every other, so its recipients' names
+and addresses, `To` then `Cc`, are matched too: what was sent to someone is
+found by their name. Mail from others is not found by its recipients, which
+are mostly the Account itself. The card does not show recipients, and its
+highlight needs the whole Query on the card: a Query matched partly or wholly
+in the recipients highlights nothing.
+
 Only the Cache is searched: a Folder never opened, or the pages of one never
 backfilled, are not found. Every keypress stays in process (ADR 0007); the
 Cache is read whole at `/` and again with each change while a Search is on.

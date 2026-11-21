@@ -443,3 +443,43 @@ fn ending_a_search_on_a_match_elsewhere_stays_in_the_shown_folder() {
     assert_eq!(selected_subject(&screen).as_deref(), Some("Lunch"));
     quit(t);
 }
+
+#[test]
+fn a_query_finds_a_sent_message_by_its_recipients_and_no_other() {
+    let mut inbox = messages();
+    inbox.push(
+        message("Me", "Contract", "2024-02-01T09:00:00Z", "Signed copy")
+            .sent_by_me()
+            // Петр Новак, as an encoded word.
+            .to(
+                "=?UTF-8?B?0J/QtdGC0YAg0J3QvtCy0LDQug==?=",
+                "p.novak@example.org",
+            )
+            .cc("Olga Smirnova", "olga@example.org"),
+    );
+    // A recipient of mail someone else sent is no way to find it.
+    inbox.push(
+        message("Erin", "Agenda", "2024-02-02T09:00:00Z", "For Monday")
+            .to("Petr Novak", "p.novak@example.org"),
+    );
+    let server = FakeImap::start(inbox);
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home);
+
+    t.send(Key::Char('/')).unwrap();
+    for query in ["петр", "p.novak", "smirnova"] {
+        t.send_str(query).unwrap();
+        let screen = t
+            .snapshot_after(|s| !list(s).contains("Holiday") && hint_line(s).contains(query))
+            .unwrap();
+        assert_eq!(selected_subject(&screen).as_deref(), Some("Contract"));
+        assert!(!list(&screen).contains("Agenda"), "{screen}");
+        for _ in query.chars() {
+            t.send(Key::Backspace).unwrap();
+        }
+
+        t.wait_until(|s| list(s).contains("Holiday")).unwrap();
+    }
+
+    quit(t);
+}

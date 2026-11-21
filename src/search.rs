@@ -25,7 +25,7 @@ pub struct Search {
     listing: Listing,
     pattern: Pattern,
     matcher: Matcher,
-    /// Each Message's sender, subject and Snippet, one per Message.
+    /// What each Message is matched by, one per Message.
     haystacks: Vec<Utf32String>,
     /// The Thread each Message is in, by index.
     thread_of: Vec<usize>,
@@ -147,10 +147,7 @@ impl Search {
         let Listing {
             messages, threads, ..
         } = &self.listing;
-        self.haystacks = messages
-            .iter()
-            .map(|m| Utf32String::from(format!("{}\n{}\n{}", m.sender, m.subject, m.snippet)))
-            .collect();
+        self.haystacks = messages.iter().map(haystack).collect();
         self.thread_of = vec![0; messages.len()];
         for (index, thread) in threads.iter().enumerate() {
             for &message in &thread.messages {
@@ -237,6 +234,17 @@ fn score(pattern: &Pattern, haystacks: &[Utf32String], candidates: &[usize]) -> 
             })
             .collect()
     })
+}
+
+/// What a Query is matched against. Only a sent Message has its recipients
+/// in it: mail from others is found by who sent it.
+fn haystack(message: &Message) -> Utf32String {
+    let mut fields = vec![&*message.sender, &*message.subject, &*message.snippet];
+    if message.from_me {
+        fields.push(&message.to);
+    }
+
+    Utf32String::from(fields.join("\n"))
 }
 
 /// A card's fields joined by a newline, the separator `Matched` counts
