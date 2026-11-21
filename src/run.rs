@@ -34,6 +34,7 @@ use crate::{
     message::Message,
     message_header,
     message_list::{self, MessageList},
+    message_ref::MessageRef,
     mode::Mode,
     older_pages::OlderPages,
     open_outside::{self, Outside},
@@ -61,6 +62,7 @@ use crate::{
     thread_id::ThreadId,
     thread_pane::ThreadPane,
     toast::Toast,
+    uid::Uid,
     undo::Undo,
     update::Update,
 };
@@ -522,7 +524,7 @@ fn apply(
 fn paged(
     view: &mut InboxView,
     caches: &[Cache],
-    (account, folder, nothing_below): (usize, Arc<str>, Option<u32>),
+    (account, folder, nothing_below): (usize, Arc<str>, Option<Uid>),
 ) -> Result<(), Error> {
     if let Some(known) = view.nothing_below.get_mut(account) {
         *known = nothing_below.map(|uid| (folder, uid));
@@ -787,7 +789,7 @@ fn mark_read(
     let unread: Vec<_> = view
         .stack()
         .filter(|m| m.unread)
-        .filter_map(|m| Some((Arc::clone(m.folder.as_ref()?), m.uid)))
+        .filter_map(Message::on_server)
         .collect();
     let Some(account) = view.stack().next().map(|m| m.account) else {
         return Ok(());
@@ -818,7 +820,11 @@ fn mark_unread(
         return Ok(());
     };
 
-    let (account, marked) = (message.account, [(Arc::clone(folder), message.uid)]);
+    let marked = [MessageRef {
+        folder: Arc::clone(folder),
+        uid: message.uid,
+    }];
+    let account = message.account;
     if let Some(key) = view.selected_key() {
         screen.dwell.spare(key);
     }
@@ -836,7 +842,7 @@ fn mark(
     (view, screen): (&mut InboxView, &mut Screen),
     caches: &[Cache],
     asks: &Routes<Ask>,
-    (account, messages, unread): (usize, &[(Arc<str>, u32)], bool),
+    (account, messages, unread): (usize, &[MessageRef], bool),
 ) -> Result<bool, Error> {
     if !caches[account].mark(messages, unread)? {
         return Ok(false);
@@ -867,7 +873,7 @@ fn delete(
     let messages: Vec<_> = view
         .stack()
         .filter(|m| cursor.is_none_or(|cursor| m.body_key == cursor))
-        .filter_map(|m| Some((Arc::clone(m.folder.as_ref()?), m.uid)))
+        .filter_map(Message::on_server)
         .collect();
     if messages.is_empty() {
         if cursor.is_some() {

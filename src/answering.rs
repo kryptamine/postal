@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use serde::{Deserialize, Serialize};
 
-use crate::thread_id::ThreadId;
+use crate::{message_ref::MessageRef, thread_id::ThreadId};
 
 /// What a Reply's Draft carries beside its file: the headers that put it in
 /// the Thread, and the Message it answers.
@@ -13,7 +11,7 @@ pub struct Answering {
     pub references: Option<String>,
     /// Where `\Answered` goes once the Reply is sent; `None` for a Message
     /// found only with its Thread.
-    pub original: Option<(Arc<str>, u32)>,
+    pub original: Option<MessageRef>,
     /// The answered Message's Gmail Thread, which `original` cannot name
     /// for a Message found only with its Thread.
     #[serde(default)]

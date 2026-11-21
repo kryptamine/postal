@@ -3,8 +3,7 @@ use std::sync::Arc;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
-
-use crate::{body_key::BodyKey, thread_id::ThreadId};
+use crate::{body_key::BodyKey, message_ref::MessageRef, thread_id::ThreadId, uid::Uid};
 
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
 const ROW: &str = "account, body_key, received, received_offset, unread, answered, sender,
@@ -15,7 +14,7 @@ const ROW: &str = "account, body_key, received, received_offset, unread, answere
 pub struct PendingMove {
     pub id: i64,
     pub from: Arc<str>,
-    pub uid: u32,
+    pub uid: Uid,
     pub to: Destination,
 }
 
@@ -31,7 +30,7 @@ impl Cache {
     /// Takes each `(folder, uid)` out of the Message List, with Gmail's
     /// copies of it under other labels, and wants it in Trash. Returns the
     /// Delete for an Undo; `None` when no row was cached.
-    pub fn delete(&self, messages: &[(Arc<str>, u32)]) -> Result<Option<i64>, Error> {
+    pub fn delete(&self, messages: &[MessageRef]) -> Result<Option<i64>, Error> {
         let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
@@ -41,7 +40,7 @@ impl Cache {
                 |row| row.get(0),
             )?;
             let mut any = false;
-            for (folder, uid) in messages {
+            for MessageRef { folder, uid } in messages {
                 any |= delete(&transaction, batch, (account, folder, *uid))?;
             }
 
@@ -62,7 +61,7 @@ impl Cache {
                 "DELETE FROM moved WHERE batch = ?1 AND at_trash AND at_uid IS NULL",
                 [batch],
             )?;
-            let trashed: Vec<(String, u32)> = transaction
+            let trashed: Vec<(String, Uid)> = transaction
                 .prepare_cached(
                     "SELECT trash, at_uid FROM moved WHERE batch = ?1 AND want_trash AND at_trash",
                 )?
@@ -129,7 +128,7 @@ impl Cache {
         &self,
         pending: &PendingMove,
         to: &str,
-        uid: Option<u32>,
+        uid: Option<Uid>,
     ) -> Result<bool, Error> {
         let in_trash = pending.to == Destination::Trash;
         self.write(|connection| {
@@ -212,7 +211,7 @@ pub(super) fn forget_settled(connection: &Connection) -> rusqlite::Result<()> {
 fn delete(
     connection: &Connection,
     batch: i64,
-    (account, folder, uid): (&str, &str, u32),
+    (account, folder, uid): (&str, &str, Uid),
 ) -> rusqlite::Result<bool> {
     let key: Option<(BodyKey, Option<ThreadId>)> = connection
         .prepare_cached(
@@ -275,7 +274,7 @@ fn wanted_back(connection: &Connection, id: i64) -> rusqlite::Result<bool> {
 
 /// Forgets `id` for good, with the row an Undo showed for it.
 fn lose(connection: &Connection, id: i64) -> rusqlite::Result<()> {
-    let shown: Option<(String, String, u32)> = connection
+    let shown: Option<(String, String, Uid)> = connection
         .prepare_cached("SELECT account, mailbox, uid FROM moved WHERE id = ?1 AND NOT want_trash")?
         .query_row([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .optional()?;
@@ -308,7 +307,7 @@ fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
 /// Drops one row from the Message List, with its share of the Unread count.
 fn drop_row(
     connection: &Connection,
-    (account, folder, uid): (&str, &str, u32),
+    (account, folder, uid): (&str, &str, Uid),
 ) -> rusqlite::Result<()> {
     connection
         .prepare_cached(

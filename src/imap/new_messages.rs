@@ -13,6 +13,7 @@ use crate::{
     message_flags::MessageFlags,
     new_message::NewMessage,
     thread_id::ThreadId,
+    uid::Uid,
 };
 
 /// Messages between two progress reports, each a redraw.
@@ -91,7 +92,7 @@ fn message(
 
     let envelope = envelope(attributes);
     let row = Message {
-        uid,
+        uid: Uid::new(uid),
         body_key: BodyKey::new(gmail_id, uid_validity, uid),
         received,
         unread: flags.unread,

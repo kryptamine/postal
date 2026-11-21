@@ -15,6 +15,7 @@ use crate::{
     search::Search,
     shown::Shown,
     thread::{Key, Thread},
+    uid::Uid,
     view::View,
 };
 
@@ -27,7 +28,7 @@ pub struct InboxView {
     pub accounts: Vec<Arc<str>>,
     /// Each Account's Folder and its oldest cached UID, when the server had
     /// nothing older there.
-    pub nothing_below: Vec<Option<(Arc<str>, u32)>>,
+    pub nothing_below: Vec<Option<(Arc<str>, Uid)>>,
     /// The Account whose cache edge ends the rows, a Backfill of which
     /// shows more: the shown Folder's; in All Inboxes, as ADR 0014 picks;
     /// `None` once the server has nothing older.

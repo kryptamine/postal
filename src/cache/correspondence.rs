@@ -1,13 +1,13 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
-use crate::{correspondence::Correspondence, folder::Role, new_message::NewMessage};
+use crate::{correspondence::Correspondence, folder::Role, new_message::NewMessage, uid::Uid};
 
 /// How far the pass over the Folder with the Sent role has read.
 pub struct SentPass {
     pub folder: String,
     pub uid_validity: u32,
-    pub last_uid: u32,
+    pub last_uid: Uid,
 }
 
 impl Cache {
@@ -42,7 +42,7 @@ impl Cache {
     pub fn write_sent_pass(
         &self,
         pass: &SentPass,
-        read: &[(u32, Correspondence)],
+        read: &[(Uid, Correspondence)],
     ) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;

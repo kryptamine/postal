@@ -9,7 +9,7 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, connect::Transport, login, moved_uids, named_roles, new_messages, pushed::Pushed,
+    Error, Moved, connect::Transport, login, moved_uids, named_roles, new_messages, pushed::Pushed,
     tagged, traced::Traced, whole_bodies, wire_trace,
 };
 use crate::{
@@ -23,6 +23,7 @@ use crate::{
     snippet,
     sync_state::SyncState,
     thread_id::ThreadId,
+    uid::Uid,
 };
 
 /// The raw `From` header rides along, for a `From` the server cannot parse.
@@ -57,11 +58,11 @@ pub trait MailServer {
     async fn select(&mut self, folder: &str) -> Result<Examined, Error>;
 
     /// Adds `flag` to `uids` of the selected Folder, or removes it.
-    async fn store(&mut self, uids: &[u32], flag: flag::Flag, added: bool) -> Result<(), Error>;
+    async fn store(&mut self, uids: &[Uid], flag: flag::Flag, added: bool) -> Result<(), Error>;
 
     /// Moves `uids` of the selected Folder to the Folder named `to`, and
-    /// returns each `(uid, uid there)` the server named.
-    async fn move_to(&mut self, uids: &[u32], to: &str) -> Result<Vec<(u32, u32)>, Error>;
+    /// returns each move the server named.
+    async fn move_to(&mut self, uids: &[Uid], to: &str) -> Result<Vec<Moved>, Error>;
 
     /// Saves `message` to the Folder named `folder`, flagged `\Seen`.
     async fn append(&mut self, folder: &str, message: &[u8]) -> Result<(), Error>;
@@ -94,38 +95,38 @@ pub trait MailServer {
     ) -> Result<Vec<NewMessage>, Error>;
 
     /// The Messages whose UID is at least `first`.
-    async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error>;
+    async fn since_uid(&mut self, first: Uid) -> Result<Vec<NewMessage>, Error>;
 
     /// As `newest`, with nothing but each Message's UID and addresses read.
     async fn newest_envelopes(
         &mut self,
         exists: u32,
         count: u32,
-    ) -> Result<Vec<(u32, Correspondence)>, Error>;
+    ) -> Result<Vec<(Uid, Correspondence)>, Error>;
 
     /// As `since_uid`, with nothing but each Message's UID and addresses read.
-    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<(u32, Correspondence)>, Error>;
+    async fn envelopes_since(&mut self, first: Uid) -> Result<Vec<(Uid, Correspondence)>, Error>;
 
     /// The Messages with these UIDs; a UID gone is left out.
-    async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error>;
+    async fn by_uid(&mut self, uids: &[Uid]) -> Result<Vec<NewMessage>, Error>;
 
     /// The UIDs of the examined Folder's Messages in Gmail's Thread `id`.
-    async fn thread(&mut self, id: ThreadId) -> Result<Vec<u32>, Error>;
+    async fn thread(&mut self, id: ThreadId) -> Result<Vec<Uid>, Error>;
 
     /// `None` when no Message has this UID any more.
-    async fn sequence_number(&mut self, uid: u32) -> Result<Option<u32>, Error>;
+    async fn sequence_number(&mut self, uid: Uid) -> Result<Option<u32>, Error>;
 
     /// The UIDs in `first..=last` still in the Folder.
-    async fn uids(&mut self, first: u32, last: u32) -> Result<HashSet<u32>, Error>;
+    async fn uids(&mut self, first: Uid, last: Uid) -> Result<HashSet<Uid>, Error>;
 
     /// The flags per UID in `first..=last`; with `changed_since`, only for the
     /// Messages whose flags changed after that CONDSTORE mod-sequence.
     async fn flags(
         &mut self,
-        first: u32,
-        last: u32,
+        first: Uid,
+        last: Uid,
         changed_since: Option<u64>,
-    ) -> Result<Vec<(u32, MessageFlags)>, Error>;
+    ) -> Result<Vec<(Uid, MessageFlags)>, Error>;
 
     /// Unread Messages in the whole examined Folder.
     async fn unread_count(&mut self) -> Result<usize, Error>;
@@ -134,13 +135,13 @@ pub trait MailServer {
     /// `uids`, as sent; a UID the server did not answer for is left out.
     async fn text_parts(
         &mut self,
-        uids: &[u32],
+        uids: &[Uid],
         section: &str,
-    ) -> Result<Vec<(u32, Vec<u8>)>, Error>;
+    ) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
 
     /// Each of `uids` whole, as `BODY[]`; a UID the server did not answer
     /// for is left out.
-    async fn bodies(&mut self, uids: &[u32]) -> Result<Vec<(u32, Vec<u8>)>, Error>;
+    async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
 
     /// What the server announced during earlier commands, in order.
     fn pushed(&mut self) -> Vec<Pushed>;
@@ -260,7 +261,7 @@ impl ImapSession {
             exists: mailbox.exists,
             state: SyncState {
                 uid_validity: self.uid_validity,
-                uid_next: mailbox.uid_next,
+                uid_next: mailbox.uid_next.map(Uid::new),
                 highest_modseq: mailbox.highest_modseq,
             },
         }
@@ -285,7 +286,7 @@ impl MailServer for ImapSession {
         Ok(self.opened(&mailbox))
     }
 
-    async fn store(&mut self, uids: &[u32], flag: flag::Flag, added: bool) -> Result<(), Error> {
+    async fn store(&mut self, uids: &[Uid], flag: flag::Flag, added: bool) -> Result<(), Error> {
         // SILENT: the server need not echo the flags just set.
         let sign = if added { '+' } else { '-' };
         let query = format!("{sign}FLAGS.SILENT ({})", flag.name());
@@ -300,7 +301,7 @@ impl MailServer for ImapSession {
         Ok(())
     }
 
-    async fn move_to(&mut self, uids: &[u32], to: &str) -> Result<Vec<(u32, u32)>, Error> {
+    async fn move_to(&mut self, uids: &[Uid], to: &str) -> Result<Vec<Moved>, Error> {
         let (set, to) = (uid_set(uids), quoted(to));
         // What came before stays ahead of what comes during the move.
         let earlier = self.pushed();
@@ -403,7 +404,7 @@ impl MailServer for ImapSession {
         Ok(messages)
     }
 
-    async fn since_uid(&mut self, first: u32) -> Result<Vec<NewMessage>, Error> {
+    async fn since_uid(&mut self, first: Uid) -> Result<Vec<NewMessage>, Error> {
         let command = format!("UID FETCH {first}:* {}", self.items);
         let mut messages = self.rows(command, |_| {}).await?;
         // `first:*` always matches the last Message, even below `first`.
@@ -416,55 +417,58 @@ impl MailServer for ImapSession {
         &mut self,
         exists: u32,
         count: u32,
-    ) -> Result<Vec<(u32, Correspondence)>, Error> {
+    ) -> Result<Vec<(Uid, Correspondence)>, Error> {
         let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
         let command = format!("FETCH {first}:* {ENVELOPE_ITEMS}");
-        Ok(addressed(self.rows(command, |_| {}).await?, 0))
+        Ok(addressed(self.rows(command, |_| {}).await?, Uid::new(0)))
     }
 
-    async fn envelopes_since(&mut self, first: u32) -> Result<Vec<(u32, Correspondence)>, Error> {
+    async fn envelopes_since(&mut self, first: Uid) -> Result<Vec<(Uid, Correspondence)>, Error> {
         let command = format!("UID FETCH {first}:* {ENVELOPE_ITEMS}");
         // `first:*` always matches the last Message, even below `first`.
         Ok(addressed(self.rows(command, |_| {}).await?, first))
     }
 
-    async fn by_uid(&mut self, uids: &[u32]) -> Result<Vec<NewMessage>, Error> {
+    async fn by_uid(&mut self, uids: &[Uid]) -> Result<Vec<NewMessage>, Error> {
         let command = format!("UID FETCH {} {}", uid_set(uids), self.items);
         let messages = self.rows(command, |_| {}).await?;
         tracing::info!("fetched {} Messages by UID", messages.len());
         Ok(messages)
     }
 
-    async fn thread(&mut self, id: ThreadId) -> Result<Vec<u32>, Error> {
+    async fn thread(&mut self, id: ThreadId) -> Result<Vec<Uid>, Error> {
         let found = self.session.uid_search(format!("X-GM-THRID {id}")).await?;
-        let mut uids: Vec<_> = found.into_iter().collect();
+        let mut uids: Vec<_> = found.into_iter().map(Uid::new).collect();
         uids.sort_unstable();
         Ok(uids)
     }
 
-    async fn sequence_number(&mut self, uid: u32) -> Result<Option<u32>, Error> {
+    async fn sequence_number(&mut self, uid: Uid) -> Result<Option<u32>, Error> {
         let fetches = self.uid_fetch(uid.to_string(), "UID").await?;
         Ok(fetches
             .iter()
-            .find(|f| f.uid == Some(uid))
+            .find(|f| f.uid == Some(uid.get()))
             .map(|f| f.message))
     }
 
-    async fn uids(&mut self, first: u32, last: u32) -> Result<HashSet<u32>, Error> {
+    async fn uids(&mut self, first: Uid, last: Uid) -> Result<HashSet<Uid>, Error> {
         // `RETURN (ALL)` is out of reach, as for the Unread count:
         // see docs/adr/0004-unread-count-by-uid-search.md.
         Ok(self
             .session
             .uid_search(format!("UID {first}:{last}"))
-            .await?)
+            .await?
+            .into_iter()
+            .map(Uid::new)
+            .collect())
     }
 
     async fn flags(
         &mut self,
-        first: u32,
-        last: u32,
+        first: Uid,
+        last: Uid,
         changed_since: Option<u64>,
-    ) -> Result<Vec<(u32, MessageFlags)>, Error> {
+    ) -> Result<Vec<(Uid, MessageFlags)>, Error> {
         let items = changed_since.map_or_else(
             || "(UID FLAGS)".to_owned(),
             |modseq| format!("(UID FLAGS) (CHANGEDSINCE {modseq})"),
@@ -472,7 +476,7 @@ impl MailServer for ImapSession {
         let fetches = self.uid_fetch(format!("{first}:{last}"), &items).await?;
         let flags: Vec<_> = fetches
             .iter()
-            .filter_map(|f| Some((f.uid?, flags(f))))
+            .filter_map(|f| Some((Uid::new(f.uid?), flags(f))))
             .collect();
         tracing::info!("fetched flags of {} Messages", flags.len());
         Ok(flags)
@@ -486,9 +490,9 @@ impl MailServer for ImapSession {
 
     async fn text_parts(
         &mut self,
-        uids: &[u32],
+        uids: &[Uid],
         section: &str,
-    ) -> Result<Vec<(u32, Vec<u8>)>, Error> {
+    ) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
         let path = SectionPath::Part(
             section.split('.').filter_map(|n| n.parse().ok()).collect(),
             None,
@@ -498,11 +502,11 @@ impl MailServer for ImapSession {
         let fetches = self.uid_fetch(uid_set(uids), &items).await?;
         Ok(fetches
             .iter()
-            .filter_map(|f| Some((f.uid?, f.section(&path)?.to_vec())))
+            .filter_map(|f| Some((Uid::new(f.uid?), f.section(&path)?.to_vec())))
             .collect())
     }
 
-    async fn bodies(&mut self, uids: &[u32]) -> Result<Vec<(u32, Vec<u8>)>, Error> {
+    async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
         whole_bodies::fetch(&mut self.session, &uid_set(uids)).await
     }
 
@@ -611,9 +615,9 @@ fn quoted(name: &str) -> String {
     format!("\"{}\"", name.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn uid_set(uids: &[u32]) -> String {
+fn uid_set(uids: &[Uid]) -> String {
     uids.iter()
-        .map(u32::to_string)
+        .map(Uid::to_string)
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -626,7 +630,7 @@ fn flags(fetch: &Fetch) -> MessageFlags {
 }
 
 /// The UID and addresses of each of `rows` from `first` on.
-fn addressed(rows: Vec<NewMessage>, first: u32) -> Vec<(u32, Correspondence)> {
+fn addressed(rows: Vec<NewMessage>, first: Uid) -> Vec<(Uid, Correspondence)> {
     rows.into_iter()
         .filter(|m| m.row.uid >= first)
         .map(|m| (m.row.uid, m.correspondence))

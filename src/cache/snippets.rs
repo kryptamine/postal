@@ -1,7 +1,7 @@
 use rusqlite::{Row, params};
 
 use super::{Cache, Error};
-use crate::{text_part::TextPart, transfer_encoding::TransferEncoding};
+use crate::{text_part::TextPart, transfer_encoding::TransferEncoding, uid::Uid};
 
 impl Cache {
     /// Up to `limit` Messages of `folder` still without a Snippet, newest
@@ -11,8 +11,8 @@ impl Cache {
         &self,
         folder: &str,
         limit: usize,
-        below: Option<u32>,
-    ) -> Result<Vec<(u32, TextPart)>, Error> {
+        below: Option<Uid>,
+    ) -> Result<Vec<(Uid, TextPart)>, Error> {
         let limit = i64::try_from(limit).unwrap_or(i64::MAX);
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
@@ -33,7 +33,7 @@ impl Cache {
 
     /// Writes one batch of Snippets in one transaction; a UID no longer
     /// cached is ignored.
-    pub fn write_snippets(&self, folder: &str, snippets: &[(u32, String)]) -> Result<(), Error> {
+    pub fn write_snippets(&self, folder: &str, snippets: &[(Uid, String)]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let mut update = transaction.prepare_cached(

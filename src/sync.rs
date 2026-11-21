@@ -4,6 +4,7 @@ use crate::{
     outage::Outage,
     status::Status,
     sync_state::SyncState,
+    uid::Uid,
 };
 
 /// The first run, and a run after a UIDVALIDITY change, fetches this many of
@@ -125,14 +126,14 @@ async fn update(
     server: &mut impl MailServer,
     examined: &Examined,
     known: SyncState,
-    cached: &[u32],
+    cached: &[Uid],
     unread: usize,
 ) -> Result<Changes, Error> {
     let (first, last) = (cached[0], cached[cached.len() - 1]);
     let new = if examined.state.uid_next.is_some() && examined.state.uid_next == known.uid_next {
         Vec::new()
     } else {
-        server.since_uid(last + 1).await?
+        server.since_uid(last.next()).await?
     };
 
     let older = u32::try_from(new.len()).map_or(0, |new| examined.exists.saturating_sub(new));
@@ -159,8 +160,8 @@ async fn update(
 async fn expunged(
     server: &mut impl MailServer,
     older: u32,
-    cached: &[u32],
-) -> Result<Vec<u32>, Error> {
+    cached: &[Uid],
+) -> Result<Vec<Uid>, Error> {
     let (first, last) = (cached[0], cached[cached.len() - 1]);
     // No UID is ever assigned inside the cached range, so when the server
     // holds as many Messages from `first` on as the Cache does, none is gone.

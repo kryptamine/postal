@@ -6,6 +6,7 @@ use crate::{
     imap::MailServer,
     role_folder,
     sync::{self, Error},
+    uid::Uid,
     update::Update,
 };
 
@@ -39,8 +40,8 @@ pub async fn read(
         .filter(|pass| *pass.folder == *folder && pass.uid_validity == uid_validity)
         .map(|pass| pass.last_uid);
     let mut read = match (last, examined.state.uid_next) {
-        (Some(last), Some(next)) if next <= last + 1 => Vec::new(),
-        (Some(last), _) => server.envelopes_since(last + 1).await?,
+        (Some(last), Some(next)) if next <= last.next() => Vec::new(),
+        (Some(last), _) => server.envelopes_since(last.next()).await?,
         (None, _) if examined.exists == 0 => Vec::new(),
         (None, _) => server.newest_envelopes(examined.exists, WINDOW).await?,
     };
@@ -56,7 +57,7 @@ pub async fn read(
     let pass = SentPass {
         folder: folder.to_string(),
         uid_validity,
-        last_uid: last_uid.unwrap_or(0),
+        last_uid: last_uid.unwrap_or(Uid::new(0)),
     };
 
     cache.write_sent_pass(&pass, &read)?;

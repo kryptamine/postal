@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Changes, Error, correspondence, moves};
-use crate::{flag::Flag, new_message::NewMessage, sync_state::SyncState};
+use crate::{flag::Flag, new_message::NewMessage, sync_state::SyncState, uid::Uid};
 
 impl Cache {
     /// `None` before the first resync of `folder`.
@@ -26,7 +26,7 @@ impl Cache {
 
     /// Every UID of `folder` the server holds as the Cache knows it,
     /// ascending: a queued Delete's too, an Undo's old one not.
-    pub fn uids(&self, folder: &str) -> Result<Vec<u32>, Error> {
+    pub fn uids(&self, folder: &str) -> Result<Vec<Uid>, Error> {
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
             "SELECT uid FROM message WHERE account = ?2 AND mailbox = ?1
@@ -58,7 +58,7 @@ impl Cache {
         Ok(self.uids(folder)?.len() >= exists)
     }
 
-    pub fn oldest_uid(&self, folder: &str) -> Result<Option<u32>, Error> {
+    pub fn oldest_uid(&self, folder: &str) -> Result<Option<Uid>, Error> {
         let oldest = self
             .connection()
             .prepare_cached("SELECT min(uid) FROM message WHERE account = ?2 AND mailbox = ?1")?

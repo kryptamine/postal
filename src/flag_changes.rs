@@ -5,6 +5,7 @@ use crate::{
     flag::Flag,
     imap::MailServer,
     sync::{self, Error},
+    uid::Uid,
 };
 
 /// Stores every flag change the Cache holds for the server, selecting each
@@ -32,7 +33,7 @@ pub async fn send(
 
         for flag in [Flag::Seen, Flag::Answered] {
             for added in [true, false] {
-                let uids: Vec<u32> = changes
+                let uids: Vec<Uid> = changes
                     .iter()
                     .filter(|c| c.flag == flag && c.added == added)
                     .map(|c| c.uid)

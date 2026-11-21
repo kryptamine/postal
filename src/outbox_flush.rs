@@ -9,6 +9,7 @@ use crate::{
     draft::Draft,
     folder::Role,
     imap::MailServer,
+    message_ref::MessageRef,
     notes::Notes,
     outbox::{Outbox, Queued},
     outgoing::Outgoing,
@@ -194,7 +195,7 @@ fn accept(
     }
 
     let original = notes.answering.and_then(|answering| answering.original);
-    if let Some((folder, uid)) = original {
+    if let Some(MessageRef { folder, uid }) = original {
         cache.answer(&folder, uid)?;
     }
 

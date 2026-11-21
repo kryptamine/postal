@@ -75,7 +75,7 @@ impl ReplyFetch {
         let before = awaited.missing.len();
         awaited
             .missing
-            .retain(|(f, uid)| f != folder || !uids.contains(uid));
+            .retain(|m| m.folder != *folder || !uids.contains(&m.uid));
         (awaited.missing.is_empty() && before > 0).then_some(Ok(()))
     }
 }

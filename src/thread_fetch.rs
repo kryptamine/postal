@@ -8,6 +8,7 @@ use crate::{
     snippets,
     sync::{self, Error},
     thread_id::ThreadId,
+    uid::Uid,
     update::Update,
 };
 
@@ -59,7 +60,7 @@ async fn fetched(
         }
     }
 
-    let keys: HashMap<u32, BodyKey> = found.iter().map(|m| (m.row.uid, m.row.body_key)).collect();
+    let keys: HashMap<Uid, BodyKey> = found.iter().map(|m| (m.row.uid, m.row.body_key)).collect();
     let bodies: Vec<_> = bodies(server, &missing)
         .await?
         .into_iter()
@@ -113,7 +114,7 @@ async fn all_mail(
 
 /// The bodies of `uids`; when the server refuses the batch, each is asked
 /// again alone, so one refused body does not take the rest with it.
-async fn bodies(server: &mut impl MailServer, uids: &[u32]) -> Result<Vec<(u32, Vec<u8>)>, Error> {
+async fn bodies(server: &mut impl MailServer, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
     if uids.is_empty() {
         return Ok(Vec::new());
     }

@@ -1,3 +1,5 @@
+use crate::uid::Uid;
+
 /// The ordered UID list: which cached Message a sequence number from the
 /// IDLE connection names. The Cache holds the newest Messages without gaps,
 /// so a sequence number past the older ones indexes straight into it.
@@ -5,13 +7,13 @@ pub struct SequenceNumbers {
     /// Messages on the server older than every cached one.
     older: u32,
     /// The cached UIDs, ascending.
-    uids: Vec<u32>,
+    uids: Vec<Uid>,
 }
 
 impl SequenceNumbers {
     /// `exists` is the count `SELECT` saw, before any Message at or past
     /// `uid_next` arrived; `None` counts every cached UID as seen by it.
-    pub fn new(exists: u32, uid_next: Option<u32>, uids: Vec<u32>) -> Self {
+    pub fn new(exists: u32, uid_next: Option<Uid>, uids: Vec<Uid>) -> Self {
         let examined = uids
             .iter()
             .filter(|&&uid| uid_next.is_none_or(|next| uid < next))
@@ -23,7 +25,7 @@ impl SequenceNumbers {
         }
     }
 
-    pub fn uid(&self, sequence: u32) -> Option<u32> {
+    pub fn uid(&self, sequence: u32) -> Option<Uid> {
         let index = sequence.checked_sub(self.older + 1)?;
         self.uids.get(usize::try_from(index).ok()?).copied()
     }
@@ -35,7 +37,7 @@ impl SequenceNumbers {
 
     /// Takes the expunged Message out, renumbering the ones after it;
     /// returns its UID, or `None` when it was older than the Cache.
-    pub fn expunge(&mut self, sequence: u32) -> Option<u32> {
+    pub fn expunge(&mut self, sequence: u32) -> Option<Uid> {
         if sequence <= self.older {
             self.older = self.older.saturating_sub(1);
             return None;
@@ -50,17 +52,17 @@ impl SequenceNumbers {
         self.older + u32::try_from(self.uids.len()).unwrap_or(u32::MAX)
     }
 
-    pub fn oldest(&self) -> Option<u32> {
+    pub fn oldest(&self) -> Option<Uid> {
         self.uids.first().copied()
     }
 
     /// The lowest UID a new Message can have.
-    pub fn next_uid(&self) -> u32 {
-        self.uids.last().map_or(1, |last| last + 1)
+    pub fn next_uid(&self) -> Uid {
+        self.uids.last().map_or(Uid::new(1), |last| last.next())
     }
 
     /// Appends new Messages' UIDs, each above every cached one.
-    pub fn extend(&mut self, uids: impl IntoIterator<Item = u32>) {
+    pub fn extend(&mut self, uids: impl IntoIterator<Item = Uid>) {
         self.uids.extend(uids);
     }
 }

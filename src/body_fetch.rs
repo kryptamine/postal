@@ -6,8 +6,10 @@ use crate::{
     backfill,
     cache::Cache,
     imap::MailServer,
+    message_ref::MessageRef,
     spare_work::SpareWork,
     sync::{self, Error},
+    uid::Uid,
     update::Update,
 };
 
@@ -18,7 +20,7 @@ pub enum Request {
     Backfill(Arc<str>),
     /// The bodies of these UIDs, each in its Folder, which a Reply waits
     /// on: served first, and never passed over for a later request.
-    Reply(Vec<(Arc<str>, u32)>),
+    Reply(Vec<MessageRef>),
 }
 
 /// The requests received and not yet served.
@@ -26,7 +28,7 @@ pub enum Request {
 struct Pending {
     bodies: Option<BodyRequest>,
     older: Option<Arc<str>>,
-    reply: Option<Vec<(Arc<str>, u32)>>,
+    reply: Option<Vec<MessageRef>>,
 }
 
 impl Pending {
@@ -54,20 +56,20 @@ impl Pending {
 /// comes alone, so it does not wait on its neighbours.
 pub struct BodyRequest {
     pub folder: Arc<str>,
-    pub selected: Option<u32>,
-    pub neighbours: Vec<u32>,
+    pub selected: Option<Uid>,
+    pub neighbours: Vec<Uid>,
 }
 
 /// How one fetch of bodies ended.
 pub enum Fetched {
     /// These UIDs' bodies are now in the Cache.
-    Stored(Vec<u32>),
+    Stored(Vec<Uid>),
     /// The server answered `NO` for these UIDs, with this reason.
-    Refused { uids: Vec<u32>, reason: String },
+    Refused { uids: Vec<Uid>, reason: String },
 }
 
 impl Fetched {
-    fn uids(&self) -> &[u32] {
+    fn uids(&self) -> &[Uid] {
         match self {
             Self::Stored(uids) | Self::Refused { uids, .. } => uids,
         }
@@ -170,11 +172,11 @@ async fn fetch_reply(
     server: &mut impl MailServer,
     cache: &Cache,
     examined: &mut Option<Arc<str>>,
-    bodies: Vec<(Arc<str>, u32)>,
+    bodies: Vec<MessageRef>,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
-    let mut folders: Vec<(Arc<str>, Vec<u32>)> = Vec::new();
-    for (folder, uid) in bodies {
+    let mut folders: Vec<(Arc<str>, Vec<Uid>)> = Vec::new();
+    for MessageRef { folder, uid } in bodies {
         match folders.iter_mut().find(|(f, _)| *f == folder) {
             Some((_, uids)) => uids.push(uid),
             None => folders.push((folder, vec![uid])),
@@ -215,9 +217,9 @@ async fn fetch_each(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &Arc<str>,
-    uids: Vec<u32>,
+    uids: Vec<Uid>,
     send: &impl Fn(Update),
-) -> Result<Vec<u32>, Error> {
+) -> Result<Vec<Uid>, Error> {
     let mut answered = Vec::new();
     match fetch(server, cache, folder, uids).await? {
         Fetched::Refused { uids, .. } if uids.len() > 1 => {
@@ -265,7 +267,7 @@ async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &str,
-    uids: Vec<u32>,
+    uids: Vec<Uid>,
 ) -> Result<Fetched, Error> {
     let bodies = match server.bodies(&uids).await {
         Ok(bodies) => bodies,

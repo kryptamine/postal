@@ -4,8 +4,10 @@ use crate::{
     cache::{Cache, Destination, PendingMove},
     folder::Role,
     imap::MailServer,
+    imap::Moved,
     role_folder,
     sync::{self, Error},
+    uid::Uid,
     update::Update,
 };
 
@@ -61,7 +63,7 @@ pub async fn send(
             }
         }
 
-        let uids: Vec<u32> = group.iter().map(|m| m.uid).collect();
+        let uids: Vec<Uid> = group.iter().map(|m| m.uid).collect();
         let moved = match server.move_to(&uids, &to).await {
             Err(error) if error.refusal().is_some() => {
                 tracing::warn!("moving out of {} was refused: {error}", first.from);
@@ -82,18 +84,13 @@ pub async fn send(
 
 /// Writes where the server put `group`, into `to` under the UIDs `moved`
 /// names; false when an Undo's Message is out of reach.
-fn record(
-    cache: &Cache,
-    group: &[PendingMove],
-    to: &str,
-    moved: &[(u32, u32)],
-) -> Result<bool, Error> {
+fn record(cache: &Cache, group: &[PendingMove], to: &str, moved: &[Moved]) -> Result<bool, Error> {
     // A server with UIDPLUS names each Message it moved.
     let there = |uid| {
         moved
             .iter()
-            .find(|&&(from, _)| from == uid)
-            .map(|&(_, to)| to)
+            .find(|moved| moved.from == uid)
+            .map(|moved| moved.to)
     };
     let mut reached = true;
     for m in group {

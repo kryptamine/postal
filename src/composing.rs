@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use ratatui::Terminal;
 
@@ -88,14 +85,14 @@ pub fn reply<'a>(
     let cache = &caches[message.account];
     let raw = cache.body(message.body_key)?;
     // The answered Message may be the List's selection, outside the stack.
-    let answered = (message.folder.clone(), message.uid, message.body_key);
-    let each = thread.map(|m| (m.folder.clone(), m.uid, m.body_key));
-    for (folder, uid, key) in each.chain([answered]) {
-        if let Some(folder) = folder
+    let answered = (message.on_server(), message.body_key);
+    let each = thread.map(|m| (m.on_server(), m.body_key));
+    for (on_server, key) in each.chain([answered]) {
+        if let Some(on_server) = on_server
             && !cache.has_body(key)?
-            && !awaited.missing.contains(&(Arc::clone(&folder), uid))
+            && !awaited.missing.contains(&on_server)
         {
-            awaited.missing.push((folder, uid));
+            awaited.missing.push(on_server);
         }
     }
 

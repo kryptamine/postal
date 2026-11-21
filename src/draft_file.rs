@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{answering::Answering, atomic_file, notes::Notes, unique_id::unique_id, xdg};
+use crate::{answering::Answering, atomic_file, notes::Notes, uid::Uid, unique_id::unique_id, xdg};
 
 /// What `$EDITOR` opens on Compose: the headers to fill in, then the body.
 const TEMPLATE: &str = "To: \nCc: \nSubject: \n\n";
@@ -92,7 +92,7 @@ pub fn note(path: &Path, (account, answering): DraftNotes<'_>) -> io::Result<()>
 pub fn answering(
     drafts: &Path,
     account: &str,
-    (folder, uid): (&str, u32),
+    (folder, uid): (&str, Uid),
 ) -> io::Result<Option<PathBuf>> {
     for path in listed(drafts)? {
         let notes = Notes::read(&path).unwrap_or_else(|error| {
@@ -108,7 +108,7 @@ pub fn answering(
             .as_deref()
             .is_none_or(|a| a.eq_ignore_ascii_case(account));
         let original = notes.answering.and_then(|answering| answering.original);
-        if theirs && original.is_some_and(|(f, u)| *f == *folder && u == uid) {
+        if theirs && original.is_some_and(|o| *o.folder == *folder && o.uid == uid) {
             return Ok(Some(path));
         }
     }

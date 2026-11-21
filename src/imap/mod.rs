@@ -4,6 +4,7 @@
 mod connect;
 mod error;
 mod login;
+mod moved;
 mod moved_uids;
 mod named_roles;
 mod new_messages;
@@ -17,5 +18,6 @@ mod wire_trace;
 mod xoauth2;
 
 pub use error::Error;
+pub use moved::Moved;
 pub use pushed::Pushed;
 pub use session::{Examined, ImapSession, MailServer};

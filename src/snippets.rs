@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{cache::Cache, imap::MailServer, snippet, sync::Error, text_part::TextPart};
+use crate::{cache::Cache, imap::MailServer, snippet, sync::Error, text_part::TextPart, uid::Uid};
 
 /// Messages per batch: each batch is one Cache write and one redraw.
 const BATCH: usize = 50;
@@ -12,7 +12,7 @@ pub async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &str,
-    below: Option<u32>,
+    below: Option<Uid>,
     written: impl Fn(),
 ) -> Result<(), Error> {
     while batch(server, cache, folder, below, &written).await? {}
@@ -24,7 +24,7 @@ pub async fn batch(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &str,
-    below: Option<u32>,
+    below: Option<Uid>,
     written: impl Fn(),
 ) -> Result<bool, Error> {
     let pending = cache.pending_snippets(folder, BATCH, below)?;
@@ -43,10 +43,10 @@ pub async fn batch(
 /// server sends none.
 pub async fn cut(
     server: &mut impl MailServer,
-    pending: &[(u32, TextPart)],
-) -> Result<Vec<(u32, String)>, Error> {
+    pending: &[(Uid, TextPart)],
+) -> Result<Vec<(Uid, String)>, Error> {
     // One FETCH asks for one section, so the batch splits by section.
-    let mut by_section: BTreeMap<&str, Vec<u32>> = BTreeMap::new();
+    let mut by_section: BTreeMap<&str, Vec<Uid>> = BTreeMap::new();
     for (uid, part) in pending {
         by_section.entry(&part.section).or_default().push(*uid);
     }

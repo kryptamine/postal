@@ -3,7 +3,7 @@ use async_imap::{
     types::UnsolicitedResponse,
 };
 
-use crate::message_flags::MessageFlags;
+use crate::{message_flags::MessageFlags, uid::Uid};
 
 /// A change the server announced on its own, by sequence number.
 pub enum Pushed {
@@ -13,7 +13,7 @@ pub enum Pushed {
     Flags {
         sequence: u32,
         /// Sent only by some servers.
-        uid: Option<u32>,
+        uid: Option<Uid>,
         flags: MessageFlags,
     },
     /// The library's queue filled up and may have dropped announcements:
@@ -34,7 +34,7 @@ impl Pushed {
                 })?;
 
                 let uid = attributes.iter().find_map(|a| match a {
-                    AttributeValue::Uid(uid) => Some(*uid),
+                    AttributeValue::Uid(uid) => Some(Uid::new(*uid)),
                     _ => None,
                 });
 

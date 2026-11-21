@@ -4,6 +4,7 @@ use crate::{
     cache::Cache,
     imap::MailServer,
     sync::{self, Error},
+    uid::Uid,
 };
 
 /// Messages per page of older ones.
@@ -18,7 +19,7 @@ pub enum Backfill {
     /// reach now.
     Paged {
         folder: Arc<str>,
-        nothing_below: Option<u32>,
+        nothing_below: Option<Uid>,
     },
 }
 
@@ -31,7 +32,7 @@ pub async fn page(
     folder: &Arc<str>,
     report: impl Fn(Backfill),
     written: impl Fn(),
-) -> Result<Option<u32>, Error> {
+) -> Result<Option<Uid>, Error> {
     let paged = |nothing_below| Backfill::Paged {
         folder: Arc::clone(folder),
         nothing_below,

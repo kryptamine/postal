@@ -19,6 +19,7 @@ use crate::{
     preview_render::{self, Job},
     rendered_previews::{PreviewKey, RenderedPreviews},
     routes::Routes,
+    uid::Uid,
     update::Update,
 };
 
@@ -46,13 +47,13 @@ pub struct Previews {
     rendering: HashSet<PreviewKey>,
     /// UIDs of the latest request not yet answered: the server serves only
     /// that one. One it does not answer for stays here.
-    fetching: HashSet<u32>,
+    fetching: HashSet<Uid>,
     /// The selection of the latest request.
-    asked: Option<u32>,
+    asked: Option<Uid>,
     /// UIDs found without a body while the link is down.
-    offline: HashSet<u32>,
+    offline: HashSet<Uid>,
     /// The placeholder of each body the server refused, until a reconnect.
-    refused: HashMap<u32, String>,
+    refused: HashMap<Uid, String>,
     /// Each Account's, by its place in this run.
     links: Vec<Link>,
     look: MailLook,
@@ -252,7 +253,7 @@ impl Previews {
     }
 
     /// Whether the body of `uid` cannot come for now.
-    fn unavailable(&self, uid: u32) -> bool {
+    fn unavailable(&self, uid: Uid) -> bool {
         self.offline.contains(&uid) || self.refused.contains_key(&uid)
     }
 

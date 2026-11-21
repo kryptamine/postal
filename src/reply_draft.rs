@@ -16,7 +16,7 @@ pub fn reply(raw: &[u8], original: &Message, account: &str, all: bool) -> (Strin
     let answering = |in_reply_to, references| Answering {
         in_reply_to,
         references,
-        original: original.folder.clone().map(|folder| (folder, original.uid)),
+        original: original.on_server(),
         thread: original.thread,
     };
 

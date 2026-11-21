@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    body_fetch::open, cache::Cache, imap::MailServer, sent_pass, snippets, sync::Error,
+    body_fetch::open, cache::Cache, imap::MailServer, sent_pass, snippets, sync::Error, uid::Uid,
     update::Update,
 };
 
@@ -13,7 +13,7 @@ const QUIET: Duration = Duration::from_secs(1);
 /// time, so a request that comes meanwhile goes next.
 pub struct SpareWork {
     /// Rows of this Folder below this UID still wait for their Snippets.
-    snippets_below: Option<(Arc<str>, u32)>,
+    snippets_below: Option<(Arc<str>, Uid)>,
     /// The pass over Sent, once per connection.
     sent_due: bool,
 }
@@ -39,7 +39,7 @@ impl SpareWork {
     }
 
     /// A Backfill of `folder` left its rows below `below` without Snippets.
-    pub fn backfilled(&mut self, folder: Arc<str>, below: Option<u32>) {
+    pub fn backfilled(&mut self, folder: Arc<str>, below: Option<Uid>) {
         // The higher bound keeps an earlier page's uncut rows in.
         self.snippets_below = match (self.snippets_below.take(), below) {
             (Some((same, earlier)), Some(below)) if same == folder => {

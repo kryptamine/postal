@@ -3,7 +3,9 @@ use std::sync::Arc;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
-use crate::{body_key::BodyKey, flag::Flag, flag_change::FlagChange};
+use crate::{
+    body_key::BodyKey, flag::Flag, flag_change::FlagChange, message_ref::MessageRef, uid::Uid,
+};
 
 /// A Folder's flag changes for the server.
 pub type FolderFlags = (Arc<str>, Vec<FlagChange>);
@@ -12,11 +14,11 @@ impl Cache {
     /// Sets Unread on each `(folder, uid)` and on Gmail's copies of it in
     /// other Folders, adjusting their Unread counts, and queues the change
     /// for the server. Returns whether any row changed.
-    pub fn mark(&self, messages: &[(Arc<str>, u32)], unread: bool) -> Result<bool, Error> {
+    pub fn mark(&self, messages: &[MessageRef], unread: bool) -> Result<bool, Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let mut changed = false;
-            for (folder, uid) in messages {
+            for MessageRef { folder, uid } in messages {
                 changed |= mark(&transaction, (self.email(), folder, *uid), unread)?;
             }
 
@@ -27,7 +29,7 @@ impl Cache {
 
     /// Sets `\Answered` on `uid` of `folder` and on Gmail's copies of it,
     /// and queues it for the server.
-    pub fn answer(&self, folder: &str, uid: u32) -> Result<(), Error> {
+    pub fn answer(&self, folder: &str, uid: Uid) -> Result<(), Error> {
         let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
@@ -115,7 +117,7 @@ impl Cache {
 /// One Message of `Cache::mark`; false when it is not cached or already so.
 fn mark(
     connection: &Connection,
-    (account, folder, uid): (&str, &str, u32),
+    (account, folder, uid): (&str, &str, Uid),
     unread: bool,
 ) -> rusqlite::Result<bool> {
     let key: Option<BodyKey> = connection
@@ -167,7 +169,7 @@ fn mark(
 /// server holds it by after an Undo.
 fn queue(
     connection: &Connection,
-    (account, folder, uid): (&str, &str, u32),
+    (account, folder, uid): (&str, &str, Uid),
     flag: Flag,
     added: bool,
 ) -> rusqlite::Result<()> {

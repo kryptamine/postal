@@ -4,7 +4,7 @@ use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Error, schema};
-use crate::{answering::Answering, body_key::BodyKey, folder::Role};
+use crate::{answering::Answering, body_key::BodyKey, folder::Role, message_ref::MessageRef};
 
 /// The Cache for reading alone, beside a TUI that may be writing it: it
 /// can neither rebuild nor write, and reads every Account's rows at once.
@@ -88,7 +88,7 @@ impl Reader {
                     .query_map(args, thread_message)?
                     .collect::<Result<_, _>>()?
             }
-            (None, Some((folder, uid))) => {
+            (None, Some(MessageRef { folder, uid })) => {
                 let mut statement = self.connection.prepare(&format!(
                     "SELECT body_key, {THREAD_ROW}
                      FROM message WHERE account = ?1 AND mailbox = ?2 AND uid = ?3"
