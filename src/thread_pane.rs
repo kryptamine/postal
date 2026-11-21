@@ -88,7 +88,7 @@ impl ThreadPane<'_> {
             return self.folded(buf, row, placed);
         };
 
-        let Some(index) = offset.checked_sub(placed.header) else {
+        let Some(index) = offset.checked_sub(message_header::ROWS) else {
             return message_header::draw(self.theme, buf, row, placed.message, offset);
         };
 
@@ -105,9 +105,9 @@ impl ThreadPane<'_> {
     /// Draws the last `rows` rows of the header of `placed` over the top of
     /// `text`, the last of them a rule across `pane` as in the Preview.
     fn pin(&self, buf: &mut Buffer, (pane, text): (Rect, Rect), placed: &Placed<'_>, rows: usize) {
-        let first = placed.header - rows;
-        for (y, offset) in (text.y..text.bottom()).zip(first..placed.header) {
-            if offset + 1 == placed.header {
+        let first = message_header::ROWS - rows;
+        for (y, offset) in (text.y..text.bottom()).zip(first..message_header::ROWS) {
+            if offset + 1 == message_header::ROWS {
                 // A rule only patches its style: a body's background would show.
                 Clear.render(Rect::new(pane.x, y, pane.width, 1), buf);
                 border::rule(buf, pane, y, self.theme.border);

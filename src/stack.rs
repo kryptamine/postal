@@ -1,7 +1,8 @@
 use std::ops::Range;
 
 use crate::{
-    body::Body, inbox_view::InboxView, message::Message, previews::Previews, reading::Reading,
+    body::Body, inbox_view::InboxView, message::Message, message_header::ROWS as HEADER,
+    previews::Previews, reading::Reading,
 };
 
 /// Rows between two Messages of the stack.
@@ -16,8 +17,6 @@ pub struct Placed<'a> {
     pub body: Option<Body<'a>>,
     pub top: usize,
     pub height: usize,
-    /// The header rows above an unfolded body.
-    pub header: usize,
 }
 
 impl Placed<'_> {
@@ -39,16 +38,12 @@ impl Placed<'_> {
         }
 
         let left = self.bottom() - window.start;
-        if left < self.header {
-            left
-        } else {
-            self.header
-        }
+        if left < HEADER { left } else { HEADER }
     }
 
     /// The lines of its rendered body that `rows` of the stack show.
     pub fn body_lines(&self, rows: &Range<usize>) -> Range<usize> {
-        let start = self.top + self.header;
+        let start = self.top + HEADER;
         let lines = |row: usize| row.clamp(start, self.bottom().max(start)) - start;
         lines(rows.start)..lines(rows.end)
     }
@@ -63,16 +58,15 @@ pub fn placed<'a>(
     width: u16,
 ) -> impl Iterator<Item = Placed<'a>> {
     let mut top = 0;
-    let header = crate::message_header::ROWS;
     view.stack().enumerate().map(move |(index, message)| {
         let body = reading
             .unfolded(message.body_key)
             .then(|| previews.body(view, message, width));
         let height = match &body {
             None => 1,
-            Some(Body::Rendered(preview)) => header + preview.body.len(),
+            Some(Body::Rendered(preview)) => HEADER + preview.body.len(),
             // One row for the placeholder.
-            Some(Body::Loading | Body::Unavailable(_)) => header + 1,
+            Some(Body::Loading | Body::Unavailable(_)) => HEADER + 1,
         };
 
         let placed = Placed {
@@ -81,7 +75,6 @@ pub fn placed<'a>(
             body,
             top,
             height,
-            header,
         };
 
         top += height + GAP;
