@@ -58,10 +58,6 @@ impl Tokens {
     }
 
     /// The access token, refreshed first once it nears its expiry.
-    #[expect(
-        clippy::future_not_send,
-        reason = "Postal runs on a current-thread runtime"
-    )]
     pub async fn access(&self) -> Result<Rc<Credential>, Error> {
         {
             let access = self.access.borrow();

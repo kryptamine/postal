@@ -52,10 +52,6 @@ impl SpareWork {
 
     /// One batch of Snippets, else the pass over Sent; `examined` follows
     /// the Folder each leaves examined.
-    #[expect(
-        clippy::future_not_send,
-        reason = "Postal runs on a current-thread runtime"
-    )]
     pub async fn step(
         &mut self,
         server: &mut impl MailServer,

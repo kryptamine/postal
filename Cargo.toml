@@ -78,6 +78,8 @@ clone_on_ref_ptr = "deny"
 unreachable = "deny"
 print_stdout = "deny"
 print_stderr = "deny"
+# Postal runs on a current-thread runtime, so no future needs to be Send.
+future_not_send = "allow"
 
 [build-dependencies]
 cc = { version = "1.11.2", features = ["parallel"] }

@@ -25,10 +25,6 @@ pub enum Backfill {
 /// Fetches the page of Messages of `folder` just older than every cached one (phase 1).
 /// Returns the UID below which phase 2 has Snippets to cut, when it wrote
 /// any rows. `report` follows phase 1; `written` follows the Cache write.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn page(
     server: &mut impl MailServer,
     cache: &Cache,

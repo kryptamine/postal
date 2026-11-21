@@ -3,10 +3,6 @@ use crate::{cache::Cache, imap::MailServer, sync::Error, update::Update};
 /// Lists the Folders into the Cache, then counts the Unread of each but
 /// `shown` by `STATUS`, telling `send` after every write so the counts show
 /// as they come. Returns whether `shown` is still listed.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn refresh(
     server: &mut impl MailServer,
     cache: &Cache,

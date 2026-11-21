@@ -320,10 +320,6 @@ fn try_main() -> Result<(), Box<dyn Error>> {
 }
 
 /// The Accounts the config names, each with its sign-in.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn opened(
     slot: &mut TerminalSlot,
     dir: &Path,
@@ -333,10 +329,6 @@ async fn opened(
 }
 
 /// The Onboarding for `config` alone; what failed, if it did.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn sign_in_again(
     slot: &mut TerminalSlot,
     dir: &Path,
@@ -378,10 +370,6 @@ fn onboarding_theme(dir: &Path, background: Rgb) -> Result<Theme, Box<dyn Error>
 
 /// The Onboarding from `start`; leaving it is an error, the last failure
 /// or a cancel.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn onboard(
     slot: &mut TerminalSlot,
     dir: &Path,
@@ -398,10 +386,6 @@ async fn onboard(
 /// The Accounts the TUI opens with; with none yet, the Onboarding runs
 /// first. A lost secret shows it for that Account alone, and leaving it
 /// runs without the Account, unless none is left.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn signed_in(
     slot: &mut TerminalSlot,
     dir: &Path,
@@ -463,10 +447,6 @@ fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn E
 
 /// The TUI until it exits, each Account of `configs` signed out without
 /// its sign-in; `failure` toasts what failed before it.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn session(
     (slot, dir): (&mut TerminalSlot, &Path),
     (configs, sign_ins): (&[Config], &[Option<SignIn>]),
@@ -547,10 +527,6 @@ const fn starting(sign_in: Option<&SignIn>) -> Status {
 
 /// One Account's connections until the screen stops asking; signed out,
 /// it ends and leaves the others running.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn served(
     config: &Config,
     cache: &Cache,
@@ -577,10 +553,6 @@ async fn served(
 
 /// The second connection, kept open for the bodies the Preview asks for:
 /// opening one per fetch would add TLS and login to the first Preview.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn bodies(
     config: &Config,
     sign_in: &SignIn,
@@ -609,10 +581,6 @@ async fn bodies(
     .await
 }
 
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 /// Resyncs, IDLEs and sends the Outbox on one connection, as the sequence
 /// numbers IDLE sends count in its `EXAMINE`, on the Folder `steering`
 /// follows. `send` follows every Cache write, `report` the connection.

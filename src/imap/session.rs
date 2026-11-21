@@ -179,10 +179,6 @@ struct Listed {
 }
 
 impl ImapSession {
-    #[expect(
-        clippy::future_not_send,
-        reason = "Postal runs on a current-thread runtime"
-    )]
     pub async fn open(config: &Config, sign_in: &SignIn) -> Result<Self, Error> {
         tracing::info!("connecting to {}:{}", config.imap.host, config.imap.port);
         let mut transport = super::connect::connect(&config.imap).await?;
@@ -222,10 +218,6 @@ impl ImapSession {
     }
 
     /// `command`, a `FETCH` of `self.items`, read by hand.
-    #[expect(
-        clippy::future_not_send,
-        reason = "Postal runs on a current-thread runtime"
-    )]
     async fn rows(
         &mut self,
         command: String,
@@ -379,10 +371,6 @@ impl MailServer for ImapSession {
             .map_or(0, |n| usize::try_from(n).unwrap_or(usize::MAX)))
     }
 
-    #[expect(
-        clippy::future_not_send,
-        reason = "Postal runs on a current-thread runtime"
-    )]
     async fn newest(
         &mut self,
         exists: u32,
@@ -396,10 +384,6 @@ impl MailServer for ImapSession {
         Ok(messages)
     }
 
-    #[expect(
-        clippy::future_not_send,
-        reason = "Postal runs on a current-thread runtime"
-    )]
     async fn older(
         &mut self,
         before: u32,

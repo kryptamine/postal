@@ -4,10 +4,6 @@ use crate::{cache::Cache, folder::Role, imap::MailServer, sync::Error, update::U
 
 /// The Folder with `role`, listing the Folders first when the Cache knows
 /// none.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn find(
     server: &mut impl MailServer,
     cache: &Cache,

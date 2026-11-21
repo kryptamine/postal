@@ -67,10 +67,6 @@ impl Consent {
     }
 
     /// Trades `code` for tokens and signs in to the IMAP server with them.
-    #[expect(
-        clippy::future_not_send,
-        reason = "Postal runs on a current-thread runtime"
-    )]
     pub async fn grant(self, code: &Credential) -> Result<Granted, Box<dyn std::error::Error>> {
         let token_url = self.partial.oauth.token_url.clone();
         let grant = token_endpoint::exchange(

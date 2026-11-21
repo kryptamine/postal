@@ -61,10 +61,6 @@ fn writes(partial: &PartialConfig, email: &str, provider: Provider) -> Writes {
     }
 }
 
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
     let verified = async {
         let mut session = ImapSession::open(config, sign_in).await?;

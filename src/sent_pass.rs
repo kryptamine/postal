@@ -16,10 +16,6 @@ const WINDOW: u32 = 1000;
 /// Learns Correspondents from the envelopes of the Folder with the Sent
 /// role newer than the last pass read. Returns the Folder it examined;
 /// `None` when none has the role or the server refused it.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn read(
     server: &mut impl MailServer,
     cache: &Cache,

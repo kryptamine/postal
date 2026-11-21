@@ -111,10 +111,6 @@ pub struct Background<'a, W, U> {
 /// redrawn after each. The first frame reads only the rows it shows from the
 /// Cache, before any network; the rest follows right after it.
 #[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
-#[expect(
     clippy::too_many_lines,
     reason = "one select over every source of change, whose state its arms share"
 )]

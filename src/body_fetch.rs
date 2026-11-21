@@ -78,10 +78,6 @@ impl Fetched {
 /// a Reply's body, bodies, then a page of older Messages, each in its own
 /// Folder, and `SpareWork` while none waits. Only a failure other than a
 /// refusal ends the serving.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn serve(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -170,10 +166,6 @@ async fn next(requests: &mut UnboundedReceiver<Request>, patience: Option<Durati
 
 /// Fetches the bodies a Reply waits on, a Folder at a time; those the
 /// server no longer has, or whose Folder is gone, are refused.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn fetch_reply(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -219,10 +211,6 @@ async fn fetch_reply(
 /// Fetches `uids` and says how it went. A `NO` names no UID: they are asked
 /// again one by one, so a single refused body does not take its batch with it.
 /// Returns the UIDs the server answered for, stored or refused.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn fetch_each(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -273,10 +261,6 @@ pub async fn open(
     }
 }
 
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,

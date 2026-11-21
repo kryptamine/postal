@@ -57,10 +57,6 @@ fn gone(error: imap::Error) -> Error {
 /// Brings the Cache up to the server's `folder` and writes the result in one
 /// transaction, so the Message List never shows a half-applied resync. Returns
 /// what its `SELECT` saw; `report` follows the first fetch, then says `Live`.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn resync(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -96,10 +92,6 @@ pub async fn resync(
     Ok(examined)
 }
 
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn refetch(
     server: &mut impl MailServer,
     (folder, examined): (&str, &Examined),

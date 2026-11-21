@@ -37,10 +37,6 @@ impl Error {
 
 /// Hands `message` to the `[smtp]` server for `envelope`, signed in as the
 /// Account: by `XOAUTH2`, or by its password and full address.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn send(
     config: &Config,
     sign_in: &SignIn,

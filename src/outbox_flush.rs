@@ -44,10 +44,6 @@ impl Sender<'_> {
 /// Sends each Message in the Outbox over SMTP, then saves its copy to Sent,
 /// which Gmail does itself; true when SMTP accepted any. Only an IMAP
 /// failure is returned: SMTP's failures leave a Message or give it back.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn flush(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -98,10 +94,6 @@ enum Submitted {
 }
 
 /// Hands one Message to SMTP and files it by the answer.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn submit(
     cache: &Cache,
     sender: Sender<'_>,
@@ -212,10 +204,6 @@ fn accept(
 
 /// Saves the copy of a Message SMTP accepted to the Folder with the Sent
 /// role, then drops it from the Outbox. A refused copy is dropped too.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn copy(
     server: &mut impl MailServer,
     cache: &Cache,

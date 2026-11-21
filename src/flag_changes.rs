@@ -10,10 +10,6 @@ use crate::{
 /// Stores every flag change the Cache holds for the server, selecting each
 /// Folder it is in. Takes the Folder selected now and returns the one left
 /// selected. A refused change is dropped and only logged.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn send(
     server: &mut impl MailServer,
     cache: &Cache,

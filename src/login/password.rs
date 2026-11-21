@@ -7,10 +7,6 @@ use crate::{
 
 /// Signs in to `provider`'s IMAP server as `email` with an app-specific
 /// `password`; nothing is written before it accepts them.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn check_password(
     dir: &Path,
     provider: Provider,

@@ -25,10 +25,6 @@ const PERIOD: Duration = Duration::from_secs(10 * 60);
 /// Resyncs the Folder `steering` follows, then keeps its Cache live from the
 /// server's announcements and sends the Outbox until the screen stops
 /// asking; IDLE gives way to each ask (ADR 0008).
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn listen<S: MailServer>(
     mut server: S,
     cache: &Cache,
@@ -117,10 +113,6 @@ pub async fn listen<S: MailServer>(
 /// Sends the flag changes and the moves the Cache queues, flags first, as
 /// a move would leave them behind. Takes the Folder selected and returns it;
 /// `None` once another was.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn send_changes(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -134,10 +126,6 @@ async fn send_changes(
 /// Sends the Outbox and returns what the server pushed meanwhile. After a
 /// Message SMTP accepted, asks for its `\Answered` and for a resync of the
 /// shown Folder, which shows it in Sent.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn send_outbox(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -154,10 +142,6 @@ async fn send_outbox(
 
 /// Writes what `pushed` changed in `folder` to the Cache, with the Snippets
 /// of new rows.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn take_in(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -186,10 +170,6 @@ async fn take_in(
 
 /// Resyncs the Folder `steering` follows, dropping what the server
 /// announced of the one selected before; back to the Inbox when it is gone.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn shown(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -238,10 +218,6 @@ fn resync_for(
 
 /// Resyncs `folder` and cuts its Snippets; numbers the cached UIDs as the
 /// resync's `SELECT` did.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn resynced(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -262,10 +238,6 @@ async fn resynced(
 
 /// The rows of `folder` that `pushed` changes, plus the Unread count;
 /// `None` before the first resync has written the Folder.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn changes(
     server: &mut impl MailServer,
     cache: &Cache,

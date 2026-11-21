@@ -12,10 +12,6 @@ use crate::{
 /// Caches the Messages of Gmail's Thread `id` as All Mail holds them, with
 /// their bodies and Snippets, leaving All Mail examined. A refusal is only
 /// logged. See docs/adr/0009-threads-from-gmail-thread-id.md.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -35,10 +31,6 @@ pub async fn fetch(
     }
 }
 
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn fetched(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -95,10 +87,6 @@ async fn fetched(
 
 /// The name of the Folder that holds every Message but those in Trash and
 /// Spam, listing the Folders first when the Cache knows none.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn all_mail(
     server: &mut impl MailServer,
     cache: &Cache,

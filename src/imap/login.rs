@@ -6,10 +6,6 @@ use crate::{config::Config, sign_in::SignIn};
 /// Signs in as the Account: by `XOAUTH2`, or by `LOGIN` with the name part of
 /// the address, then the whole address once that is refused, as iCloud wants
 /// the one for its own domains and the other for a custom domain.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn sign_in(
     client: Client<Box<dyn Transport>>,
     config: &Config,

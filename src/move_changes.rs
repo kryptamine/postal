@@ -12,10 +12,6 @@ use crate::{
 /// Makes every move the Cache queues for the server, selecting the Folder
 /// each starts from. Takes the Folder selected now and returns it, or `None`
 /// once another was selected: what that one announced is not the shown one's.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn send(
     server: &mut impl MailServer,
     cache: &Cache,

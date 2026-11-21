@@ -8,10 +8,6 @@ const BATCH: usize = 50;
 /// The second fetch phase: cuts a Snippet, empty when the server sends none,
 /// for every Message of the examined `folder` still without one, newest first;
 /// with `below`, only lower UIDs. `written` follows each batch.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -24,10 +20,6 @@ pub async fn fetch(
 }
 
 /// One batch of what `fetch` cuts; `false` when none was left to cut.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn batch(
     server: &mut impl MailServer,
     cache: &Cache,

@@ -257,10 +257,6 @@ impl Screen<'_> {
 
 /// Runs on `terminal` until the user signs in or leaves; a failure is shown
 /// and may be tried again.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
     theme: &Theme,
@@ -318,10 +314,6 @@ pub async fn run(
 
 /// One sign-in at Google in the browser, offering the Account `hint`;
 /// `back` when `Esc` returns to the Provider list.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn browser(
     screen: &mut Screen<'_>,
     dir: &Path,
@@ -343,10 +335,6 @@ async fn browser(
 
 /// One sign-in at iCloud by an app-specific password, as `address`, which
 /// is asked for from the Provider list alone: otherwise it is the Account's.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn password(
     screen: &mut Screen<'_>,
     dir: &Path,
@@ -381,10 +369,6 @@ async fn password(
 
 /// Waits for `granting` to sign in to the IMAP server, asks before it
 /// replaces another Account, then writes it.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 async fn settle<F>(
     screen: &mut Screen<'_>,
     dir: &Path,

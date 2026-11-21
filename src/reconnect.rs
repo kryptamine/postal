@@ -8,10 +8,6 @@ use crate::{backoff::Backoff, status::Status, sync::Error, wake};
 /// backoff first, until it fails for good, reporting `SignedOut` for a
 /// refused Account. `attempt` reports `Live` once through, which restarts
 /// the backoff; a wake from sleep retries at once.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn retry(
     mut attempt: impl AsyncFnMut(&dyn Fn(Status)) -> Result<(), Error>,
     report: impl Fn(Status),

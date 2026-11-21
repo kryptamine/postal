@@ -23,10 +23,6 @@ const INTERNAL_DATE: &str = "%d-%b-%Y %H:%M:%S %z";
 /// The rows a `FETCH` of the list items answers; `progress` gets how many
 /// have come so far, now and then. What else the server announces on the
 /// way goes to `pushed`, in order.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
 pub async fn fetch(
     session: &mut Session<Box<dyn Transport>>,
     command: String,
