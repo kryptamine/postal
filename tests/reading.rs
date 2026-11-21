@@ -314,7 +314,10 @@ fn a_scrolled_message_keeps_its_header_on_top() {
     let mut t = postal(&home);
     t.wait_until(listed).unwrap();
     t.send(Key::Enter).unwrap();
-    t.wait_until(reading).unwrap();
+    // Until the body renders at Reading's width, laying it out clamps the
+    // scroll to its placeholder, and the first `j`s are lost.
+    t.wait_until(|s| reading(s) && s.contains("Line 01"))
+        .unwrap();
 
     for _ in 0..10 {
         t.send(Key::Char('j')).unwrap();
