@@ -130,6 +130,57 @@ fn mine() -> FakeMessage {
 }
 
 #[test]
+fn a_reply_fetches_every_body_of_its_thread_and_shows_them_oldest_first() {
+    // Only the Thread's newest body is in the Preview; the oldest is asked
+    // for by the Reply alone.
+    let imap = FakeImap::start(vec![
+        from_ada("Weekly notes", "2024-11-17T09:00:00Z", "First notes"),
+        from_ada("Re: Weekly notes", "2024-11-18T09:00:00Z", "Second notes"),
+        mine(),
+    ]);
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let draft = reply(&home, &[("My answer", Key::Char('r'))]);
+
+    let ada = "Ada Lovelace <ada@example.com>".to_owned();
+    let me = format!("Me <{EMAIL}>");
+    assert_eq!(
+        shown(&home, &draft),
+        [
+            (
+                ada.clone(),
+                me.clone(),
+                "2024-11-17T09:00:00+00:00".to_owned(),
+                Some("First notes".to_owned())
+            ),
+            (
+                ada.clone(),
+                me.clone(),
+                "2024-11-18T09:00:00+00:00".to_owned(),
+                Some("Second notes".to_owned())
+            ),
+            (
+                me,
+                ada,
+                "2024-11-19T09:00:00+00:00".to_owned(),
+                Some("My answer".to_owned())
+            ),
+        ]
+    );
+
+    let text =
+        String::from_utf8(show(&home, &["--draft", draft.to_str().unwrap()]).stdout).unwrap();
+    assert!(
+        text.starts_with(&format!(
+            "From: Ada Lovelace <ada@example.com>\nRecipients: Me <{EMAIL}>\n\
+             Date: Sun, 17 Nov 2024 09:00\n\nFirst notes\n\n\
+             From: Ada Lovelace <ada@example.com>\n"
+        )),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_body_missing_from_the_cache_is_marked_not_skipped() {
     let imap = FakeImap::start(vec![
         from_ada("Weekly notes", "2024-11-18T09:00:00Z", "Notes"),
@@ -225,5 +276,28 @@ fn a_draft_answering_nothing_is_refused() {
     assert_eq!(
         String::from_utf8(output.stderr).unwrap(),
         "postal: the Draft answers no Message\n"
+    );
+}
+
+#[test]
+fn a_thread_body_the_server_refuses_holds_no_reply_back() {
+    let imap = FakeImap::start(vec![
+        from_ada("Weekly notes", "2024-11-17T09:00:00Z", "First notes"),
+        from_ada("Re: Weekly notes", "2024-11-18T09:00:00Z", "Second notes"),
+        mine(),
+    ]);
+    imap.refuse_body(FIRST_UID);
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let draft = reply(&home, &[("My answer", Key::Char('r'))]);
+
+    let bodies: Vec<_> = shown(&home, &draft).into_iter().map(|row| row.3).collect();
+    assert_eq!(
+        bodies,
+        [
+            None,
+            Some("Second notes".to_owned()),
+            Some("My answer".to_owned())
+        ]
     );
 }

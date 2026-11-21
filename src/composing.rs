@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use ratatui::Terminal;
 
@@ -66,14 +69,15 @@ fn drop_untouched(screen: &mut Screen, path: &Path) {
     screen.toast = Some(Toast::new("Empty Draft dropped"));
 }
 
-/// Reply, or Reply All, at once on a body in the Cache; else once the
-/// fetch connection brings it.
-pub fn reply(
+/// Reply, or Reply All, once every body of the `thread` it answers in is
+/// in the Cache, which the fetch connection may first bring; while it is
+/// not live, at once on the answered body alone.
+pub fn reply<'a>(
     terminal: &mut Terminal<TerminalBackend>,
     events: &mut Input,
     screen: &mut Screen,
     (caches, fetch): (&[Cache], &ReplyFetch),
-    (awaited, accounts): (AwaitedReply, Accounts),
+    (mut awaited, thread, accounts): (AwaitedReply, impl Iterator<Item = &'a Message>, Accounts),
 ) -> Result<(), Error> {
     screen.replying = None;
     let message = &awaited.message;
@@ -81,23 +85,40 @@ pub fn reply(
         return edit(terminal, events, screen, (path, (None, None)));
     }
 
-    if let Some(raw) = caches[message.account]
-        .body(message.body_key)
-        .map_err(Error::Cache)?
-    {
-        return answer(terminal, events, screen, (&raw, &awaited, accounts));
+    let cache = &caches[message.account];
+    let raw = cache.body(message.body_key).map_err(Error::Cache)?;
+    // The answered Message may be the List's selection, outside the stack.
+    let answered = (message.folder.clone(), message.uid, message.body_key);
+    let each = thread.map(|m| (m.folder.clone(), m.uid, m.body_key));
+    for (folder, uid, key) in each.chain([answered]) {
+        if let Some(folder) = folder
+            && !cache.has_body(key).map_err(Error::Cache)?
+            && !awaited.missing.contains(&(Arc::clone(&folder), uid))
+        {
+            awaited.missing.push((folder, uid));
+        }
     }
 
-    if message.folder.is_none() {
-        screen.toast = Some(Toast::new("not downloaded"));
-    } else if screen.statuses.get(message.account) == Some(&Status::SignedOut) {
-        screen.toast = Some(Toast::new("not downloaded · signed out"));
-    } else {
-        fetch.ask(&awaited);
-        screen.replying = Some(awaited);
+    let status = screen.statuses.get(message.account);
+    let signed_out = status == Some(&Status::SignedOut);
+    match raw {
+        Some(raw) if awaited.missing.is_empty() || status != Some(&Status::Live) => {
+            answer(terminal, events, screen, (&raw, &awaited, accounts))
+        }
+        None if message.folder.is_none() => {
+            screen.toast = Some(Toast::new("not downloaded"));
+            Ok(())
+        }
+        None if signed_out => {
+            screen.toast = Some(Toast::new("not downloaded · signed out"));
+            Ok(())
+        }
+        _ => {
+            fetch.ask(&awaited);
+            screen.replying = Some(awaited);
+            Ok(())
+        }
     }
-
-    Ok(())
 }
 
 /// The Draft already answering `message`, which a Reply takes up again.
@@ -124,16 +145,15 @@ pub fn fetched(
         return Ok(());
     };
 
+    // The answered body may be cached though the rest of its Thread failed.
+    if let Err(reason) = result {
+        tracing::warn!("fetching the bodies to reply to failed: {reason}");
+    }
+
     let message = &awaited.message;
-    let body = match result {
-        Ok(()) => caches[message.account]
-            .body(message.body_key)
-            .map_err(Error::Cache)?,
-        Err(reason) => {
-            tracing::warn!("fetching the body to reply to failed: {reason}");
-            None
-        }
-    };
+    let body = caches[message.account]
+        .body(message.body_key)
+        .map_err(Error::Cache)?;
 
     let Some(raw) = body else {
         screen.toast = Some(Toast::error("could not fetch the Message"));

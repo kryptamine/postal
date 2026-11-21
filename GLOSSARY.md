@@ -125,7 +125,7 @@ An address an Account has mail from or has written to, with the name it goes by,
 _Avoid_: contact, address book, recipient
 
 **Reply**:
-Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft.
+Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft. While connected, its Draft opens once every body of its Thread the Message List knows is in the Cache, those missing fetched first, so `postal thread show` reads the whole correspondence.
 _Avoid_: respond, answer
 
 **Draft**:

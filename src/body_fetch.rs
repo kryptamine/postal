@@ -16,9 +16,9 @@ pub enum Request {
     Bodies(BodyRequest),
     /// The page of Messages of this Folder older than every cached one.
     Backfill(Arc<str>),
-    /// The body of this UID in this Folder, which a Reply waits on: served
-    /// first, and never passed over for a later request.
-    Reply(Arc<str>, u32),
+    /// The bodies of these UIDs, each in its Folder, which a Reply waits
+    /// on: served first, and never passed over for a later request.
+    Reply(Vec<(Arc<str>, u32)>),
 }
 
 /// The requests received and not yet served.
@@ -26,7 +26,7 @@ pub enum Request {
 struct Pending {
     bodies: Option<BodyRequest>,
     older: Option<Arc<str>>,
-    reply: Option<(Arc<str>, u32)>,
+    reply: Option<Vec<(Arc<str>, u32)>>,
 }
 
 impl Pending {
@@ -38,7 +38,7 @@ impl Pending {
         match request {
             Request::Bodies(bodies) => self.bodies = Some(bodies),
             Request::Backfill(folder) => self.older = Some(folder),
-            Request::Reply(folder, uid) => self.reply = Some((folder, uid)),
+            Request::Reply(bodies) => self.reply = Some(bodies),
         }
     }
 
@@ -64,6 +64,14 @@ pub enum Fetched {
     Stored(Vec<u32>),
     /// The server answered `NO` for these UIDs, with this reason.
     Refused { uids: Vec<u32>, reason: String },
+}
+
+impl Fetched {
+    fn uids(&self) -> &[u32] {
+        match self {
+            Self::Stored(uids) | Self::Refused { uids, .. } => uids,
+        }
+    }
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each went:
@@ -95,7 +103,7 @@ pub async fn serve(
 
         pending.receive(requests);
         if let Some(reply) = pending.reply.take() {
-            fetch_reply(server, cache, (&mut examined, reply), &send).await?;
+            fetch_reply(server, cache, &mut examined, reply, &send).await?;
         }
 
         while let Some(request) = pending.bodies.take() {
@@ -160,7 +168,8 @@ async fn next(requests: &mut UnboundedReceiver<Request>, patience: Option<Durati
     }
 }
 
-/// Fetches the body a Reply waits on; one whose Folder is gone is refused.
+/// Fetches the bodies a Reply waits on, a Folder at a time; those the
+/// server no longer has, or whose Folder is gone, are refused.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -168,24 +177,48 @@ async fn next(requests: &mut UnboundedReceiver<Request>, patience: Option<Durati
 async fn fetch_reply(
     server: &mut impl MailServer,
     cache: &Cache,
-    (examined, (folder, uid)): (&mut Option<Arc<str>>, (Arc<str>, u32)),
+    examined: &mut Option<Arc<str>>,
+    bodies: Vec<(Arc<str>, u32)>,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
-    if open(server, examined, &folder).await? {
-        return fetch_each(server, cache, &folder, vec![uid], send).await;
+    let mut folders: Vec<(Arc<str>, Vec<u32>)> = Vec::new();
+    for (folder, uid) in bodies {
+        match folders.iter_mut().find(|(f, _)| *f == folder) {
+            Some((_, uids)) => uids.push(uid),
+            None => folders.push((folder, vec![uid])),
+        }
     }
 
-    let gone = Fetched::Refused {
-        uids: vec![uid],
-        reason: "its Folder is gone".to_owned(),
-    };
+    for (folder, uids) in folders {
+        let (uids, reason) = if open(server, examined, &folder).await? {
+            let answered = fetch_each(server, cache, &folder, uids.clone(), send).await?;
+            let unanswered = uids.into_iter().filter(|u| !answered.contains(u));
+            (
+                unanswered.collect::<Vec<_>>(),
+                "the server no longer has it",
+            )
+        } else {
+            (uids, "its Folder is gone")
+        };
 
-    send(Update::Bodies(folder, gone));
+        if uids.is_empty() {
+            continue;
+        }
+
+        let gone = Fetched::Refused {
+            uids,
+            reason: reason.to_owned(),
+        };
+
+        send(Update::Bodies(folder, gone));
+    }
+
     Ok(())
 }
 
 /// Fetches `uids` and says how it went. A `NO` names no UID: they are asked
 /// again one by one, so a single refused body does not take its batch with it.
+/// Returns the UIDs the server answered for, stored or refused.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -196,18 +229,23 @@ async fn fetch_each(
     folder: &Arc<str>,
     uids: Vec<u32>,
     send: &impl Fn(Update),
-) -> Result<(), Error> {
+) -> Result<Vec<u32>, Error> {
+    let mut answered = Vec::new();
     match fetch(server, cache, folder, uids).await? {
         Fetched::Refused { uids, .. } if uids.len() > 1 => {
             for uid in uids {
                 let fetched = fetch(server, cache, folder, vec![uid]).await?;
+                answered.extend_from_slice(fetched.uids());
                 send(Update::Bodies(Arc::clone(folder), fetched));
             }
         }
-        done => send(Update::Bodies(Arc::clone(folder), done)),
+        done => {
+            answered.extend_from_slice(done.uids());
+            send(Update::Bodies(Arc::clone(folder), done));
+        }
     }
 
-    Ok(())
+    Ok(answered)
 }
 
 /// Examines `folder` unless it is `examined` already; false when the

@@ -198,7 +198,7 @@ pub async fn run(
                     continue;
                 };
 
-                let arrived = replies.notice((account, &update), screen.replying.as_ref());
+                let arrived = replies.notice((account, &update), screen.replying.as_mut());
                 apply(older.notice((account, update)), &mut view, &mut screen, (caches, outbox), previews)?;
                 if let Some(result) = arrived {
                     composing::fetched(result, terminal, &mut events, &mut screen, (caches, accounts))?;
@@ -220,8 +220,8 @@ pub async fn run(
                     }
                     Step::Reply(all) => {
                         if let Some(message) = answered(&view, &screen) {
-                            let awaited = AwaitedReply { message, all };
-                            composing::reply(terminal, &mut events, &mut screen, (caches, &replies), (awaited, accounts))?;
+                            let awaited = AwaitedReply { message, all, missing: Vec::new() };
+                            composing::reply(terminal, &mut events, &mut screen, (caches, &replies), (awaited, view.stack(), accounts))?;
                         }
                     }
                     Step::LocalDrafts => open_local(&mut screen, outbox),
