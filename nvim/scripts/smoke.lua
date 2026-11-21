@@ -160,9 +160,14 @@ for _, said in ipairs(wants) do
 	end
 end
 
+-- The pane's `winbar` or `statusline` as it is drawn.
+local function bar(option)
+	local win = vim.fn.bufwinid(pane_buf)
+	return vim.api.nvim_eval_statusline(vim.wo[win][option], { winid = win, use_winbar = option == "winbar" }).str
+end
+
 -- The pane names its agent and the mail it is about
-local pane_win = vim.fn.bufwinid(pane_buf)
-local status = vim.api.nvim_eval_statusline(vim.wo[pane_win].statusline, { winid = pane_win }).str
+local status = bar("statusline")
 if not status:find("stub · Re: Hi", 1, true) then
 	fail("the pane's statusline is " .. vim.inspect(status))
 end
@@ -229,13 +234,8 @@ local function shows(want)
 	end
 end
 
-local function left_text()
-	local win = vim.fn.bufwinid(pane_buf)
-	return vim.api.nvim_eval_statusline(vim.wo[win].winbar, { winid = win, use_winbar = true }).str
-end
-
 local function left(want)
-	local winbar = left_text()
+	local winbar = bar("winbar")
 	if want == "" and winbar:find("hunk") or not winbar:find(want, 1, true) then
 		fail("the pane says " .. vim.inspect(winbar) .. ", not " .. vim.inspect(want))
 	end
@@ -260,8 +260,8 @@ left("? keys")
 -- A narrow pane drops whole keys, never the count or the key list
 vim.api.nvim_win_set_width(vim.fn.bufwinid(pane_buf), 46)
 left("2 hunks left  \\a accept ")
-if left_text():find("reject", 1, true) or not vim.endswith(left_text(), "? keys ") then
-	fail("the narrow winbar is " .. vim.inspect(left_text()))
+if bar("winbar"):find("reject", 1, true) or not vim.endswith(bar("winbar"), "? keys ") then
+	fail("the narrow winbar is " .. vim.inspect(bar("winbar")))
 end
 
 vim.cmd.wincmd("=")
