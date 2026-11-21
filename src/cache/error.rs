@@ -1,45 +1,20 @@
-use std::{fmt, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
 use super::schema::VERSION;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Io(io::Error),
-    Sqlite(rusqlite::Error),
-    NewerSchema {
-        found: i64,
-        dir: PathBuf,
-    },
+    #[error("cache: {0}")]
+    Io(#[from] io::Error),
+    #[error("cache: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    #[error(
+        "Cache was written by a newer Postal (schema {found} > {VERSION}). \
+         Upgrade Postal or delete {}.",
+        .dir.display()
+    )]
+    NewerSchema { found: i64, dir: PathBuf },
     /// Read-only, there is no Cache of this schema to read.
+    #[error("Cache not ready: run `postal` once")]
     NotReady,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(source) => write!(f, "cache: {source}"),
-            Self::Sqlite(source) => write!(f, "cache: {source}"),
-            Self::NewerSchema { found, dir } => write!(
-                f,
-                "Cache was written by a newer Postal (schema {found} > {VERSION}). \
-                 Upgrade Postal or delete {}.",
-                dir.display()
-            ),
-            Self::NotReady => f.write_str("Cache not ready: run `postal` once"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<io::Error> for Error {
-    fn from(source: io::Error) -> Self {
-        Self::Io(source)
-    }
-}
-
-impl From<rusqlite::Error> for Error {
-    fn from(source: rusqlite::Error) -> Self {
-        Self::Sqlite(source)
-    }
 }

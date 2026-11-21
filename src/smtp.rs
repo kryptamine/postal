@@ -1,5 +1,3 @@
-use std::fmt;
-
 use lettre::{
     AsyncSmtpTransport, AsyncTransport, Tokio1Executor,
     address::Envelope,
@@ -12,24 +10,15 @@ use lettre::{
 
 use crate::{config::Config, oauth, sign_in::SignIn};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// The OAuth access token could not be refreshed.
+    #[error(transparent)]
     Token(oauth::Error),
     /// The connection failed, or the server refused: its answer, as it said it.
+    #[error("SMTP: {0}")]
     Smtp(smtp::Error),
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Token(source) => source.fmt(f),
-            Self::Smtp(source) => write!(f, "SMTP: {source}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 impl Error {
     /// A `5xx` reply: sending the same Message again fails the same way.

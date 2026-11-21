@@ -1,20 +1,10 @@
-use std::{
-    fmt,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("neither {variable} nor HOME is set")]
 pub struct NoHome {
     variable: &'static str,
 }
-
-impl fmt::Display for NoHome {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "neither {} nor HOME is set", self.variable)
-    }
-}
-
-impl std::error::Error for NoHome {}
 
 /// `$XDG_CONFIG_HOME/postal`, falling back to `~/.config/postal` on macOS too.
 pub fn config_dir() -> Result<PathBuf, NoHome> {

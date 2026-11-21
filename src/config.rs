@@ -1,5 +1,5 @@
 use std::{
-    fmt, io,
+    io,
     path::{Path, PathBuf},
 };
 
@@ -103,12 +103,11 @@ impl IconChoice {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Read {
-        path: PathBuf,
-        source: io::Error,
-    },
+    #[error("{}: {source}", .path.display())]
+    Read { path: PathBuf, source: io::Error },
+    #[error("{}:{line}:{column}: {message}", .path.display())]
     Invalid {
         path: PathBuf,
         line: usize,
@@ -116,22 +115,6 @@ pub enum Error {
         message: String,
     },
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Read { path, source } => write!(f, "{}: {source}", path.display()),
-            Self::Invalid {
-                path,
-                line,
-                column,
-                message,
-            } => write!(f, "{}:{line}:{column}: {message}", path.display()),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 impl Config {
     /// Every Account the file names; none while it is missing.

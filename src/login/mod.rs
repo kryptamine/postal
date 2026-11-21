@@ -2,7 +2,7 @@ mod consent;
 mod granted;
 mod password;
 
-use std::{fmt, io, time::Duration};
+use std::{io, time::Duration};
 
 pub use self::{consent::Consent, granted::Granted, password::check_password};
 use crate::{
@@ -17,54 +17,29 @@ use crate::{
 /// For connect, sign-in and `EXAMINE` together.
 const VERIFY_TIMEOUT: Duration = Duration::from_secs(30);
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("login cancelled")]
     Cancelled,
+    #[error("the IMAP server did not answer within {}s", VERIFY_TIMEOUT.as_secs())]
     Timeout,
+    #[error(transparent)]
     Imap(imap::Error),
     /// Google's consent page sent back this `error` code.
+    #[error("Google refused the sign-in: {0}")]
     Denied(String),
     /// The browser did not come back in time.
+    #[error("the browser did not come back within {}s", .0.as_secs())]
     NoRedirect(Duration),
+    #[error("the sign-in listener on 127.0.0.1 failed: {0}")]
     Loopback(io::Error),
     /// The user unticked the Gmail permission on the consent screen.
+    #[error("Google did not grant access to Gmail; leave the Gmail permission ticked")]
     NoMailScope,
     /// The IMAP server refused the address or the password.
+    #[error("{} refused the address or the app-specific password", .0.service())]
     PasswordRefused(Provider),
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Cancelled => f.write_str("login cancelled"),
-            Self::Timeout => write!(
-                f,
-                "the IMAP server did not answer within {}s",
-                VERIFY_TIMEOUT.as_secs()
-            ),
-            Self::Imap(source) => source.fmt(f),
-            Self::Denied(code) => write!(f, "Google refused the sign-in: {code}"),
-            Self::NoRedirect(waited) => write!(
-                f,
-                "the browser did not come back within {}s",
-                waited.as_secs()
-            ),
-            Self::Loopback(source) => {
-                write!(f, "the sign-in listener on 127.0.0.1 failed: {source}")
-            }
-            Self::NoMailScope => f.write_str(
-                "Google did not grant access to Gmail; leave the Gmail permission ticked",
-            ),
-            Self::PasswordRefused(provider) => write!(
-                f,
-                "{} refused the address or the app-specific password",
-                provider.service()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// What a login writes besides the secret.
 enum Writes {

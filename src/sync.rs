@@ -1,5 +1,3 @@
-use std::fmt;
-
 use crate::{
     cache::{self, Cache, Changes},
     imap::{self, Examined, MailServer},
@@ -12,21 +10,15 @@ use crate::{
 /// the newest Messages.
 const WINDOW: u32 = 500;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Imap(imap::Error),
-    Cache(cache::Error),
+    #[error(transparent)]
+    Imap(#[from] imap::Error),
+    #[error(transparent)]
+    Cache(#[from] cache::Error),
     /// `EXAMINE` or `SELECT` was refused: the server no longer has the Folder.
+    #[error(transparent)]
     Gone(imap::Error),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Imap(source) | Self::Gone(source) => source.fmt(f),
-            Self::Cache(source) => source.fmt(f),
-        }
-    }
 }
 
 impl Error {
@@ -40,20 +32,6 @@ impl Error {
 
     pub fn signed_out(&self) -> bool {
         matches!(self, Self::Imap(source) if source.signed_out())
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<imap::Error> for Error {
-    fn from(source: imap::Error) -> Self {
-        Self::Imap(source)
-    }
-}
-
-impl From<cache::Error> for Error {
-    fn from(source: cache::Error) -> Self {
-        Self::Cache(source)
     }
 }
 

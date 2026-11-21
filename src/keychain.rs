@@ -1,35 +1,22 @@
-use std::{
-    fmt,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use crate::credential::Credential;
 
 const SERVICE: &str = "postal";
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error(
+        "keychain unavailable or locked: {source}\n\
+         To keep the secret in a file instead, set `store = \"file\"` \
+         under `[secrets]` in {}",
+        .config.display()
+    )]
     Unavailable {
         source: keyring::Error,
         config: PathBuf,
     },
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unavailable { source, config } => write!(
-                f,
-                "keychain unavailable or locked: {source}\n\
-                 To keep the secret in a file instead, set `store = \"file\"` \
-                 under `[secrets]` in {}",
-                config.display()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// Reads the credential of `account` from the OS keychain, `None` without an
 /// entry. It never falls back to the file store; `config` is named in the

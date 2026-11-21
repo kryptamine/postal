@@ -2432,6 +2432,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "termlens",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-rustls",
  "toml",

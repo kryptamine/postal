@@ -1,4 +1,4 @@
-use std::{fmt, io};
+use std::io;
 
 use crate::{oauth, outage::Outage};
 
@@ -7,17 +7,19 @@ use crate::{oauth, outage::Outage};
 /// the response text.
 const BUSY: [&str; 3] = ["[throttled]", "[unavailable]", "bandwidth"];
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Connect {
-        address: String,
-        source: io::Error,
-    },
+    #[error("cannot connect to {address}: {source}")]
+    Connect { address: String, source: io::Error },
+    #[error("the IMAP server closed the connection")]
     Closed,
     /// The server said `BYE`, with this text.
+    #[error("the IMAP server said BYE: {0}")]
     Bye(String),
-    Imap(async_imap::error::Error),
+    #[error("IMAP: {0}")]
+    Imap(#[from] async_imap::error::Error),
     /// No access token to sign in with.
+    #[error(transparent)]
     Token(oauth::Error),
 }
 
@@ -70,25 +72,5 @@ impl Error {
             .split_once("info: Some(\"")
             .and_then(|(_, rest)| rest.strip_suffix("\")"));
         Some(info.unwrap_or(text))
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Connect { address, source } => write!(f, "cannot connect to {address}: {source}"),
-            Self::Closed => f.write_str("the IMAP server closed the connection"),
-            Self::Bye(text) => write!(f, "the IMAP server said BYE: {text}"),
-            Self::Imap(source) => write!(f, "IMAP: {source}"),
-            Self::Token(source) => source.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<async_imap::error::Error> for Error {
-    fn from(source: async_imap::error::Error) -> Self {
-        Self::Imap(source)
     }
 }

@@ -60,24 +60,15 @@ use crate::{
     update::Update,
 };
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("terminal: {0}")]
     Terminal(io::Error),
+    #[error(transparent)]
     Cache(cache::Error),
+    #[error(transparent)]
     Sync(sync::Error),
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Terminal(source) => write!(f, "terminal: {source}"),
-            Self::Cache(source) => source.fmt(f),
-            Self::Sync(source) => source.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// How the TUI ended.
 pub enum Exit {

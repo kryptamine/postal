@@ -3,7 +3,7 @@
 mod capped_file;
 
 use std::{
-    fmt, fs, io,
+    fs, io,
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -18,22 +18,13 @@ const CAP: u64 = 10 * 1024 * 1024;
 /// Flushing drops the guard, which waits for the writer thread to drain.
 static GUARD: Mutex<Option<WorkerGuard>> = Mutex::new(None);
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{}: {source}", .path.display())]
     Open { path: PathBuf, source: io::Error },
+    #[error("POSTAL_LOG: {0}")]
     Filter(String),
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Open { path, source } => write!(f, "{}: {source}", path.display()),
-            Self::Filter(message) => write!(f, "POSTAL_LOG: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 pub fn path(state_dir: &Path) -> PathBuf {
     state_dir.join("postal.log")

@@ -1,34 +1,23 @@
 use std::{
-    fmt, io,
+    io,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
 use crate::{atomic_file, credential::Credential};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{}: {source}", .path.display())]
     Read { path: PathBuf, source: io::Error },
+    #[error("{}: {source}", .path.display())]
     Write { path: PathBuf, source: io::Error },
+    #[error(
+        "{}: mode is {mode:o}, other users must not read it; run `chmod 600` on it",
+        .path.display()
+    )]
     Exposed { path: PathBuf, mode: u32 },
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Read { path, source } | Self::Write { path, source } => {
-                write!(f, "{}: {source}", path.display())
-            }
-            Self::Exposed { path, mode } => write!(
-                f,
-                "{}: mode is {mode:o}, other users must not read it; run `chmod 600` on it",
-                path.display()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// Reads the credential from the file secret store, which must be `0600`;
 /// `None` while there is no file.
