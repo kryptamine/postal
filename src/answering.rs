@@ -12,4 +12,8 @@ pub struct Answering {
     /// Where `\Answered` goes once the Reply is sent; `None` for a Message
     /// found only with its Thread.
     pub original: Option<(Arc<str>, u32)>,
+    /// The answered Message's Gmail Thread, which `original` cannot name
+    /// for a Message found only with its Thread.
+    #[serde(default)]
+    pub thread: Option<u64>,
 }

@@ -1,9 +1,10 @@
-use std::path::Path;
+use std::{collections::HashSet, path::Path};
 
-use chrono::{DateTime, Utc};
-use rusqlite::Connection;
+use chrono::{DateTime, FixedOffset, Offset, Utc};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Error, schema};
+use crate::{answering::Answering, folder::Role};
 
 /// The Cache for reading alone, beside a TUI that may be writing it: it
 /// can neither rebuild nor write, and reads every Account's rows at once.
@@ -19,6 +20,16 @@ pub struct Seen {
     pub name: Option<String>,
     pub written: bool,
     pub at: DateTime<Utc>,
+}
+
+/// One Message of a Thread as the Cache holds it.
+pub struct Kept {
+    /// As `Message::from` and `Message::to` hold them.
+    pub from: String,
+    pub to: String,
+    pub received: DateTime<FixedOffset>,
+    /// `None` when its body is not cached.
+    pub raw: Option<Vec<u8>>,
 }
 
 impl Reader {
@@ -47,4 +58,73 @@ impl Reader {
             .collect::<Result<_, _>>()?;
         Ok(seen)
     }
+
+    /// The Messages of the Thread `answering` names in the Account
+    /// `account`, oldest first, each once, none from Trash or Spam; `None` when it
+    /// names neither a Thread nor a Message.
+    pub fn thread(&self, account: &str, answering: &Answering) -> Result<Option<Vec<Kept>>, Error> {
+        let rows: Vec<(i64, Kept)> = match (answering.thread, &answering.original) {
+            (Some(thread), _) => {
+                let mut statement = self.connection.prepare(
+                    "SELECT body_key, received, received_offset, from_line, to_line
+                     FROM message WHERE account = ?1 AND thread = ?2
+                       AND mailbox NOT IN (SELECT name FROM mailbox
+                                           WHERE account = ?1 AND role IN (?3, ?4))
+                     UNION ALL
+                     SELECT key, received, received_offset, from_line, to_line
+                     FROM thread_message WHERE account = ?1 AND thread = ?2
+                     ORDER BY 2, 1",
+                )?;
+                let args = params![
+                    account,
+                    thread.cast_signed(),
+                    Role::Trash.label(),
+                    Role::Spam.label()
+                ];
+                statement.query_map(args, row)?.collect::<Result<_, _>>()?
+            }
+            (None, Some((folder, uid))) => {
+                let mut statement = self.connection.prepare(
+                    "SELECT body_key, received, received_offset, from_line, to_line
+                     FROM message WHERE account = ?1 AND mailbox = ?2 AND uid = ?3",
+                )?;
+                statement
+                    .query_map(params![account, &**folder, uid], row)?
+                    .collect::<Result<_, _>>()?
+            }
+            (None, None) => return Ok(None),
+        };
+
+        let mut body = self
+            .connection
+            .prepare("SELECT raw FROM body WHERE account = ?1 AND key = ?2")?;
+        let mut keys = HashSet::new();
+        let mut kept = Vec::new();
+        for (key, mut message) in rows {
+            if keys.insert(key) {
+                message.raw = body
+                    .query_row(params![account, key], |row| row.get(0))
+                    .optional()?;
+                kept.push(message);
+            }
+        }
+
+        Ok(Some(kept))
+    }
+}
+
+/// A row of body key, arrival and its offset, `From` and recipients, its
+/// body yet unread.
+fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(i64, Kept)> {
+    let offset = FixedOffset::east_opt(row.get(2)?).unwrap_or_else(|| Utc.fix());
+    let received = DateTime::from_timestamp(row.get(1)?, 0)
+        .unwrap_or_default()
+        .with_timezone(&offset);
+    let kept = Kept {
+        from: row.get(3)?,
+        to: row.get(4)?,
+        received,
+        raw: None,
+    };
+    Ok((row.get(0)?, kept))
 }

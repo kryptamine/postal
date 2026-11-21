@@ -1,12 +1,7 @@
 use lettre::message::Mailbox;
 use mail_parser::{Address, MessageParser};
 
-use crate::{
-    answering::Answering,
-    body_text,
-    message::Message,
-    message_header::DATE,
-};
+use crate::{answering::Answering, body_text, message::Message, message_header::DATE};
 
 /// Columns HTML is laid out in before it is quoted, so that with `> ` a
 /// line stays within 78.
@@ -20,6 +15,7 @@ pub fn reply(raw: &[u8], original: &Message, account: &str, all: bool) -> (Strin
         in_reply_to,
         references,
         original: original.folder.clone().map(|folder| (folder, original.uid)),
+        thread: original.thread,
     };
 
     let Some(message) = MessageParser::default().parse(raw) else {

@@ -15,6 +15,6 @@ pub use correspondence::SentPass;
 pub use error::Error;
 pub use forget::forget;
 pub use moves::{Destination, PendingMove};
-pub use reader::{Reader, Seen};
+pub use reader::{Kept, Reader, Seen};
 pub use schema::delete;
 pub use store::Cache;

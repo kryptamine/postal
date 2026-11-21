@@ -23,6 +23,15 @@ the one `--account` names. The plugin asks for the list once per Draft and
 lets the completion engine filter it as the user types, keeping Postal's
 rank as each item's score.
 
+`postal thread show --draft <path>` prints every Message of the Thread a
+Reply's Draft answers, oldest first, with its sender, recipients, date and
+body as plain text, so an agent writing the Reply reads the whole
+correspondence. The Draft's notes name the answered Message and its Thread;
+the Thread is every Message the Cache holds with that `X-GM-THRID` in any
+Folder but Trash and Spam, or among those All Mail held (ADR 0009). As the
+command never writes the Cache, opening a Reply in the TUI fetches every
+body of its Thread first; a body still missing is marked, not skipped.
+
 ## Considered options
 
 - **Expansion after the editor (ADR 0016).** Works with any editor and no

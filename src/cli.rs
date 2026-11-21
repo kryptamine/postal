@@ -24,12 +24,33 @@ pub enum Command {
         #[command(subcommand)]
         verb: Correspondent,
     },
+    /// The Messages of one conversation
+    Thread {
+        #[command(subcommand)]
+        verb: Thread,
+    },
 }
 
 #[derive(Subcommand)]
 pub enum Correspondent {
     /// Every one the Cache knows, best first
     List(CorrespondentList),
+}
+
+#[derive(Subcommand)]
+pub enum Thread {
+    /// Every Message of one Thread the Cache holds, oldest first
+    Show(ThreadShow),
+}
+
+#[derive(clap::Args)]
+pub struct ThreadShow {
+    /// The Thread of the Message this Reply's Draft answers
+    #[arg(long, value_name = "PATH")]
+    pub draft: PathBuf,
+    /// Print a JSON array, whose fields only grow
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(clap::Args)]

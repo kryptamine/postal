@@ -142,6 +142,7 @@ mod theme;
 mod thread;
 mod thread_fetch;
 mod thread_pane;
+mod thread_show;
 mod toast;
 mod transfer_encoding;
 mod truncate;
@@ -163,7 +164,7 @@ use crate::{
     accounts::Accounts,
     body_fetch::Request,
     cache::Cache,
-    cli::{Command, Correspondent},
+    cli::{Command, Correspondent, Thread},
     config::{Config, IconChoice},
     icons::Icons,
     imap::ImapSession,
@@ -199,6 +200,9 @@ fn main() -> ExitCode {
         Some(Command::Correspondent {
             verb: Correspondent::List(list),
         }) => answered(correspondent_list::run(&list)),
+        Some(Command::Thread {
+            verb: Thread::Show(show),
+        }) => answered(thread_show::run(&show)),
         tui => {
             let run = if matches!(tui, Some(Command::Login)) {
                 login
