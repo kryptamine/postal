@@ -9,7 +9,6 @@ use crate::{
     listing::Listing,
     matched::Matched,
     message::Message,
-    preview_pane::LABELS,
     rendered_previews::PreviewKey,
     search::Search,
     thread::{Key, Thread},
@@ -210,19 +209,6 @@ impl InboxView {
         if !self.quoted.remove(&(account, body)) {
             self.quoted.insert((account, body));
         }
-    }
-
-    /// The address of `account`, which a header shows only with several.
-    pub fn account_label(&self, account: usize) -> Option<&str> {
-        let several = self.accounts.len() > 1;
-        self.accounts.get(account).filter(|_| several).map(|a| &**a)
-    }
-
-    /// The header rows of a Preview, with the row under them: a rule in
-    /// the Preview, blank in a stack.
-    pub fn header_rows(&self) -> usize {
-        let account = usize::from(self.accounts.len() > 1);
-        LABELS.len() - 1 + account + 1
     }
 
     pub fn now(&self) -> DateTime<FixedOffset> {

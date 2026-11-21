@@ -90,16 +90,13 @@ impl ThreadPane<'_> {
 
         // From the row, not the Preview, so the header stays put while the
         // body loads.
-        let account = self.view.account_label(message.account);
         let values = [
             (message.from.as_str(), self.theme.sender),
             (message.to.as_str(), self.theme.sender),
             (message.subject.as_str(), self.theme.subject),
-            (account.unwrap_or_default(), self.theme.sender),
         ];
 
-        let fields = placed.header - 1;
-        if let Some(&value) = values.get(offset).filter(|_| offset < fields) {
+        if let Some(&value) = values.get(offset) {
             let mut row = row;
             if offset == 0 {
                 let mut date = StackStr::<40>::new();

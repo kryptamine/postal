@@ -278,17 +278,13 @@ fn all_inboxes_ends_at_the_latest_cache_edge_until_a_backfill_lowers_it() {
 }
 
 #[test]
-fn a_folder_of_the_second_account_names_it_in_the_preview_and_marks_read_there() {
+fn a_folder_of_the_second_account_marks_read_there() {
     let two = two();
     let mut t = postal(&two);
     second_inbox(&mut t);
-    t.wait_until(|s| s.contains("Body of Bravo notes") && s.contains(&format!("Account {OTHER}")))
-        .unwrap();
-
-    // Reading names it on each unfolded Message.
+    t.wait_until(|s| s.contains("Body of Bravo notes")).unwrap();
     t.send(Key::Enter).unwrap();
-    t.wait_until(|s| !s.contains("enter read") && s.contains(&format!("Account {OTHER}")))
-        .unwrap();
+    t.wait_until(|s| !s.contains("enter read")).unwrap();
     wait_for(|| two.second.seen("INBOX", two.bravo));
     assert!(
         !two.first.commands().iter().any(|c| c.contains("STORE")),

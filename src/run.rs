@@ -1243,7 +1243,7 @@ fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text:
         }
 
         let preview = previews.get(view, text.width)?;
-        let lines = preview_pane::body_lines(view.preview_scroll, text, view.header_rows());
+        let lines = preview_pane::body_lines(view.preview_scroll, text, preview_pane::HEADER_ROWS);
         LinkHints::find([(0, &preview.body[..], lines)])
     });
 

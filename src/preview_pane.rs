@@ -14,9 +14,11 @@ use crate::{
     preview::Preview, shown::Shown, stack_str::StackStr, theme::Theme, truncate,
 };
 
-/// The header labels, padded so the values line up; `Account` only with
-/// several Accounts.
-pub const LABELS: [&str; 4] = ["From    ", "To      ", "Subject ", "Account "];
+/// The header labels, padded so the values line up.
+pub const LABELS: [&str; 3] = ["From    ", "To      ", "Subject "];
+/// The header rows of a Preview, with the row under them: a rule in the
+/// Preview, blank in a stack.
+pub const HEADER_ROWS: usize = LABELS.len() + 1;
 const LABEL_WIDTH: u16 = 8;
 /// Columns between the `From` value and the date at the row's right.
 const DATE_GAP: u16 = 2;
@@ -90,14 +92,9 @@ impl StatefulWidget for PreviewPane<'_> {
             Shown::Unavailable { header, why } => (header, Some(why)),
         };
 
-        let header_rows = view.header_rows();
-        let account = view
-            .selected_message()
-            .and_then(|m| view.account_label(m.account));
-        self.header(buf, text, header_rows - 1, (preview, account));
-
-        let body = body_area(text, header_rows);
-        if usize::from(text.height) >= header_rows {
+        self.header(buf, text, preview);
+        let body = body_area(text, HEADER_ROWS);
+        if usize::from(text.height) >= HEADER_ROWS {
             border::rule(buf, area, body.y - 1, self.theme.border);
         }
 
@@ -122,23 +119,16 @@ impl StatefulWidget for PreviewPane<'_> {
 }
 
 impl PreviewPane<'_> {
-    /// The first `fields` header rows of `preview` at the top of `text`.
-    fn header(
-        &self,
-        buf: &mut Buffer,
-        text: Rect,
-        fields: usize,
-        (preview, account): (&Preview, Option<&str>),
-    ) {
+    /// The header rows of `preview` at the top of `text`.
+    fn header(&self, buf: &mut Buffer, text: Rect, preview: &Preview) {
         let values = [
             (&*preview.from, self.theme.sender),
             (&*preview.to, self.theme.sender),
             (&*preview.subject, self.theme.subject),
-            (account.unwrap_or_default(), self.theme.sender),
         ];
 
         let rows = text.y..text.bottom();
-        for (y, (label, &(value, style))) in rows.zip(LABELS.iter().zip(&values).take(fields)) {
+        for (y, (label, &(value, style))) in rows.zip(LABELS.iter().zip(&values)) {
             let mut row = Rect::new(text.x, y, text.width, 1);
             if y == text.y {
                 row = date(self.theme, buf, row, &preview.date);
