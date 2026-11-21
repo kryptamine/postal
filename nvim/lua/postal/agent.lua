@@ -1,6 +1,6 @@
 -- A chat with an ACP agent about one Draft buffer: its pane, its session,
--- and the one write the agent is allowed, to the Draft's body, reviewed
--- hunk by hunk (ADR 0018, 0019).
+-- and the one write the agent is allowed, to the Draft's body through
+-- Postal's MCP server, reviewed hunk by hunk (ADR 0018, 0019, 0020).
 local acp = require("postal.acp")
 local body = require("postal.body")
 local pane = require("postal.pane")
@@ -18,8 +18,8 @@ M.agents = {
 M.default = "claude"
 
 local RULES = [[
-You are helping the user write the email Draft open in their editor, the file %s.
-- Edit the Draft's body only. Reading that file gives the body alone; writing it replaces the body. The headers are not yours to see or change.
+You are helping the user write the email Draft open in their editor.
+- Read and change the Draft's body only through the postal tools `read_draft` and `write_draft`; no other tool reaches the Draft. Its headers are not yours to see or change.
 - Keep the quote, the `>` lines of the Message the Draft answers, as it is.
 - Never send the Draft: sending is the user's.
 - The Thread resource, when there is one, is the whole correspondence, oldest first.
@@ -27,17 +27,15 @@ You are helping the user write the email Draft open in their editor, the file %s
 
 local chats = {}
 
-local function same(a, b)
-	if not a or not b then
-		return false
-	end
+-- The tools of Postal's MCP server, as Claude names them and as the server does.
+local TOOLS = {
+	mcp__postal__read_draft = true,
+	mcp__postal__write_draft = true,
+	read_draft = true,
+	write_draft = true,
+}
 
-	local function real(path)
-		return vim.uv.fs_realpath(path) or vim.fs.normalize(path)
-	end
-
-	return real(a) == real(b)
-end
+local MCP = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h") .. "/mcp.lua"
 
 local Chat = {}
 Chat.__index = Chat
@@ -83,7 +81,7 @@ function Chat:prompt(instruction)
 	local blocks = {}
 	if first then
 		self.prompted = true
-		table.insert(blocks, { type = "text", text = RULES:format(self.path) })
+		table.insert(blocks, { type = "text", text = RULES })
 		if self.thread then
 			table.insert(blocks, self:resource("postal-thread://" .. self.path, self.thread))
 		end
@@ -91,7 +89,7 @@ function Chat:prompt(instruction)
 
 	self.sent = body.get(self.draft)
 	self.proposed = nil
-	table.insert(blocks, self:resource(vim.uri_from_fname(self.path), self.sent))
+	table.insert(blocks, self:resource("postal-draft://" .. self.path, self.sent))
 	table.insert(blocks, { type = "text", text = instruction })
 	self.busy = true
 	self.conn:request("session/prompt", { sessionId = self.session, prompt = blocks }, function(failed, result)
@@ -142,24 +140,16 @@ function Chat:update(update)
 	end
 end
 
---- Whether a tool call only edits the Draft.
-function Chat:edits_draft(call)
-	if call.kind ~= "edit" or not call.locations or #call.locations == 0 then
-		return false
-	end
-
-	for _, location in ipairs(call.locations) do
-		if not same(location.path, self.path) then
-			return false
-		end
-	end
-
-	return true
+--- Whether a tool call is one of Postal's MCP server, known by its exact
+--- name: a title alone could be a shell command that merely says it.
+local function postal_tool(call)
+	local meta = call._meta and call._meta.claudeCode
+	return TOOLS[meta and meta.toolName or call.title] == true
 end
 
 function Chat:permit(params, respond)
 	local call = vim.tbl_extend("force", self.calls[params.toolCall.toolCallId] or {}, params.toolCall)
-	local allowed = self:edits_draft(call)
+	local allowed = postal_tool(call)
 	-- Never `allow_always`: the agent would stop asking for that tool.
 	local wanted = allowed and { "allow_once" } or { "reject_once", "reject_always" }
 	for _, kind in ipairs(wanted) do
@@ -179,23 +169,24 @@ function Chat:permit(params, respond)
 end
 
 function Chat:request(method, params, respond)
-	local file = method == "fs/read_text_file" or method == "fs/write_text_file"
-	if file and not same(params.path, self.path) then
-		respond(nil, { code = acp.INVALID_PARAMS, message = "only the Draft " .. self.path .. " is open to the agent" })
-	elseif method == "session/request_permission" then
+	if method == "session/request_permission" then
 		self:permit(params, respond)
-	elseif method == "fs/read_text_file" then
-		-- The agent's last write this turn, whatever the review made of it.
-		local lines = vim.split(self.proposed or body.get(self.draft), "\n", { plain = true })
-		local first = params.line or 1
-		local last = params.limit and first + params.limit - 1 or #lines
-		respond({ content = table.concat(vim.list_slice(lines, first, last), "\n") })
-	elseif method == "fs/write_text_file" then
-		self:propose(params.content)
-		respond(vim.empty_dict())
 	else
 		respond(nil, { code = acp.NOT_FOUND, message = method .. " is not offered" })
 	end
+end
+
+--- Runs tool `name` of Postal's MCP server; `{ text = ..., failed = ... }`.
+function Chat:tool(name, args)
+	if name == "read_draft" then
+		-- The agent's last write this turn, whatever the review made of it.
+		return { text = self.proposed or body.get(self.draft) }
+	elseif name == "write_draft" and type(args.body) == "string" then
+		self:propose(args.body)
+		return { text = "The new body is in the Draft for the user's review." }
+	end
+
+	return { text = "no tool " .. tostring(name) .. " with those arguments", failed = true }
 end
 
 --- Opens a review of the agent's body `text` against the one its turn was
@@ -257,7 +248,7 @@ function Chat:fail_to_start(failed)
 end
 
 function Chat:begin(cwd)
-	local capabilities = { fs = { readTextFile = true, writeTextFile = true }, terminal = false }
+	local capabilities = { fs = { readTextFile = false, writeTextFile = false }, terminal = false }
 	self.conn:request("initialize", { protocolVersion = 1, clientCapabilities = capabilities }, function(failed, agent)
 		if failed then
 			self:fail_to_start(failed)
@@ -267,7 +258,14 @@ function Chat:begin(cwd)
 		self.auth_methods = agent.authMethods
 		local prompts = agent.agentCapabilities and agent.agentCapabilities.promptCapabilities
 		self.embedded = prompts and prompts.embeddedContext == true
-		self.conn:request("session/new", { cwd = cwd, mcpServers = {} }, function(refusal, session)
+		local server = {
+			name = "postal",
+			command = vim.v.progpath,
+			args = { "--clean", "--headless", "-l", MCP, vim.v.servername, tostring(self.draft) },
+			env = {},
+		}
+
+		self.conn:request("session/new", { cwd = cwd, mcpServers = { server } }, function(refusal, session)
 			if refusal and refusal.code == acp.AUTH_REQUIRED then
 				self:sign_in()
 			elseif refusal then
@@ -364,6 +362,16 @@ function M.ask(draft, name)
 			chat:send(instruction)
 		end
 	end)
+end
+
+--- Answers a call of Postal's MCP server for Draft buffer `draft`.
+function M.serve(draft, name, args)
+	local chat = chats[draft]
+	if not chat or chat.ended then
+		return { text = "the chat about this Draft has ended", failed = true }
+	end
+
+	return chat:tool(name, args)
 end
 
 --- Ends Draft buffer `draft`'s chat and closes its pane.

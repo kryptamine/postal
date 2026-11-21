@@ -109,10 +109,10 @@ local function answers()
 	end, sent())
 end
 
--- Each turn the stub asks twice and reads and writes thrice
+-- Each turn the stub asks four times
 local function turn(want)
 	if not vim.wait(10000, function()
-		return vim.deep_equal(body(), want) and #answers() == 5 * #prompts()
+		return vim.deep_equal(body(), want) and #answers() == 4 * #prompts()
 	end) then
 		fail("the body is " .. vim.inspect(body()) .. ", not " .. vim.inspect(want))
 	end
@@ -131,7 +131,8 @@ end
 
 local pane_buf = right_pane()
 local pane = table.concat(vim.api.nvim_buf_get_lines(pane_buf, 0, -1, false), "\n")
-for _, said in ipairs({ "You: make it formal", "stub: Rewriting the body.\nDone soon.", "Denied: Run ls" }) do
+local denied = { "Denied: Run ls", "Denied: Read " }
+for _, said in ipairs({ "You: make it formal", "stub: Rewriting the body.\nDone soon.", unpack(denied) }) do
 	if not pane:find(said, 1, true) then
 		fail("the pane lacks " .. vim.inspect(said) .. " in " .. vim.inspect(pane))
 	end
@@ -146,7 +147,7 @@ local types = vim.tbl_map(function(block)
 	return block.type
 end, first)
 
-if not first[1].text:find(reply, 1, true) or not first[1].text:find("Never send") then
+if not first[1].text:find("write_draft", 1, true) or not first[1].text:find("Never send") then
 	fail("the first prompt lacks the Draft's rules: " .. vim.inspect(first[1]))
 end
 
@@ -167,11 +168,11 @@ if first[#first - 1].resource.text ~= "hi bob\n\n> Shall we meet?\n" or first[#f
 end
 
 local outcomes = vim.tbl_map(function(message)
-	return message.result and message.result.outcome and message.result.outcome.optionId or message.error ~= nil
+	return message.result.outcome.optionId
 end, answers())
 
--- run denied, the Draft's edit allowed, a write elsewhere refused, the read and the write answered
-if not vim.deep_equal(outcomes, { "no", "yes", true, false, false }) then
+-- a command and the Draft's file denied, Postal's MCP tools allowed
+if not vim.deep_equal(outcomes, { "no", "no", "yes", "yes" }) then
 	fail("the agent was answered " .. vim.inspect(outcomes))
 end
 

@@ -1,7 +1,7 @@
 -- An ACP agent for `make smoke`, run by `nvim -l`: each turn streams a
--- message, asks to run a command and to edit the Draft, writes elsewhere
--- and then upper-cases the body it was sent, a line `drop me` dropped.
--- `locked` wants a sign-in.
+-- message, asks to run a command, to read the Draft's file and to write
+-- through the client's MCP server, which upper-cases the body it was sent,
+-- a line `drop me` dropped. `locked` wants a sign-in.
 local log = arg[1]
 local locked = log == "locked"
 
@@ -50,6 +50,41 @@ local function chunk(session, text)
 	update(session, { sessionUpdate = "agent_message_chunk", content = { type = "text", text = text } })
 end
 
+-- The client's MCP server, started with the session.
+local mcp = { next_id = 0, answers = {}, pending = "" }
+
+function mcp.start(server)
+	local cmd = vim.list_extend({ server.command }, server.args)
+	mcp.job = vim.system(cmd, {
+		stdin = true,
+		stderr = function(_, data)
+			mcp.err = (mcp.err or "") .. (data or "")
+		end,
+		stdout = function(_, data)
+			mcp.pending = mcp.pending .. (data or "")
+			for line in mcp.pending:gmatch("([^\n]*)\n") do
+				local message = vim.json.decode(line, { luanil = { object = true, array = true } })
+				mcp.answers[message.id] = message
+			end
+
+			mcp.pending = mcp.pending:match("([^\n]*)$")
+		end,
+	})
+end
+
+function mcp.call(method, params)
+	mcp.next_id = mcp.next_id + 1
+	local id = mcp.next_id
+	mcp.job:write(vim.json.encode({ jsonrpc = "2.0", id = id, method = method, params = params }) .. "\n")
+	assert(
+		vim.wait(5000, function()
+			return mcp.answers[id] ~= nil
+		end, 5),
+		"the MCP server never answered " .. method .. ": " .. tostring(mcp.err)
+	)
+	return mcp.answers[id].result
+end
+
 local OPTIONS = {
 	{ optionId = "yes", name = "Allow", kind = "allow_once" },
 	{ optionId = "no", name = "Reject", kind = "reject_once" },
@@ -58,8 +93,8 @@ local OPTIONS = {
 local function turn(session, prompt)
 	local path, sent
 	for _, block in ipairs(prompt) do
-		if block.type == "resource" and block.resource.uri:match("^file://") then
-			path = vim.uri_to_fname(block.resource.uri)
+		if block.type == "resource" and block.resource.uri:match("^postal%-draft://") then
+			path = block.resource.uri:gsub("^postal%-draft://", "")
 			sent = block.resource.text
 		end
 	end
@@ -72,16 +107,21 @@ local function turn(session, prompt)
 	call("session/request_permission", { sessionId = session, toolCall = { toolCallId = "run" }, options = OPTIONS })
 	update(session, {
 		sessionUpdate = "tool_call",
-		toolCallId = "edit",
-		title = "Edit the Draft",
-		kind = "edit",
+		toolCallId = "read",
+		title = "Read " .. path,
+		kind = "read",
 		locations = { { path = path } },
 	})
 
-	call("session/request_permission", { sessionId = session, toolCall = { toolCallId = "edit" }, options = OPTIONS })
-
-	call("fs/write_text_file", { sessionId = session, path = "/tmp/elsewhere.txt", content = "x" })
-	call("fs/read_text_file", { sessionId = session, path = path })
+	call("session/request_permission", { sessionId = session, toolCall = { toolCallId = "read" }, options = OPTIONS })
+	update(session, { sessionUpdate = "tool_call", toolCallId = "write", title = "write_draft", kind = "other" })
+	local claude = { claudeCode = { toolName = "mcp__postal__write_draft" } }
+	local write = { toolCallId = "write", title = "postal - write_draft (MCP)", _meta = claude }
+	call("session/request_permission", { sessionId = session, toolCall = write, options = OPTIONS })
+	-- An older claude-agent-acp names the tool in the title alone.
+	local older = { toolCallId = "read_draft", title = "mcp__postal__read_draft", kind = "other" }
+	call("session/request_permission", { sessionId = session, toolCall = older, options = OPTIONS })
+	local read = mcp.call("tools/call", { name = "read_draft", arguments = vim.empty_dict() })
 	-- Told `slowly`, it writes once the smoke check has edited the Draft.
 	if prompt[#prompt].text == "slowly" then
 		while not vim.uv.fs_stat(log .. ".go") do
@@ -93,7 +133,14 @@ local function turn(session, prompt)
 		return line ~= "drop me"
 	end, vim.split(sent, "\n", { plain = true }))
 
-	call("fs/write_text_file", { sessionId = session, path = path, content = table.concat(lines, "\n"):upper() })
+	-- A read that gives other than the body sent shows in the Draft; told
+	-- `slowly`, the user's edit may have come first.
+	local text = table.concat(lines, "\n"):upper()
+	if read.content[1].text ~= sent and prompt[#prompt].text ~= "slowly" then
+		text = "read " .. read.content[1].text
+	end
+
+	mcp.call("tools/call", { name = "write_draft", arguments = { body = text } })
 end
 
 record({ pid = vim.uv.os_getpid() })
@@ -112,6 +159,13 @@ while true do
 	elseif message.method == "session/new" and locked then
 		send({ id = message.id, error = { code = -32000, message = "Authentication required" } })
 	elseif message.method == "session/new" then
+		mcp.start(message.params.mcpServers[1])
+		mcp.call("initialize", { protocolVersion = "2025-06-18", capabilities = vim.empty_dict() })
+		local tools = vim.tbl_map(function(tool)
+			return tool.name
+		end, mcp.call("tools/list", vim.empty_dict()).tools)
+
+		assert(vim.deep_equal(tools, { "read_draft", "write_draft" }), vim.inspect(tools))
 		send({ id = message.id, result = { sessionId = "stub" } })
 	elseif message.method == "session/prompt" then
 		turn(message.params.sessionId, message.params.prompt)

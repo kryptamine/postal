@@ -33,9 +33,11 @@ The list is what Postal has synced: run `postal` once before.
 speaks [ACP](https://agentclientprotocol.com), and asks what to change;
 `<CR>` in the pane asks again. The agent reads the Thread the Draft
 answers, from `postal thread show`, and the body as it stands each turn,
-your own edits included. It cannot see or change the headers, run
-commands, or send. The Draft's text goes to whichever provider the agent
-talks to, and only once you ask.
+your own edits included. It reaches the body only through the
+`read_draft` and `write_draft` tools of an MCP server the plugin hands it,
+so the agent must take MCP servers from its client. It cannot see or
+change the headers, run commands, or send. The Draft's text goes to
+whichever provider the agent talks to, and only once you ask.
 
 The agent's edit lands in the buffer, never on disk, for review hunk by
 hunk: its lines highlighted, the ones they replace shown over them.

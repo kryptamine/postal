@@ -5,9 +5,6 @@ local M = {}
 --- JSON-RPC's code for a method the client does not offer.
 M.NOT_FOUND = -32601
 
---- JSON-RPC's code for a request the client will not serve.
-M.INVALID_PARAMS = -32602
-
 --- ACP's code for an agent that needs its user to sign in first.
 M.AUTH_REQUIRED = -32000
 
