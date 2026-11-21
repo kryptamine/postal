@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 
 use chrono::{DateTime, Utc};
 use lettre::message::Mailbox;
@@ -11,8 +11,7 @@ const HALF_LIFE_DAYS: f64 = 90.0;
 /// Local parts, `.`, `-` and `_` left out, of addresses no one reads.
 const NO_REPLY: [&str; 3] = ["noreply", "donotreply", "mailerdaemon"];
 
-/// A Correspondent as a Draft's recipients are expanded to.
-#[derive(Clone)]
+/// A Correspondent as the CLI lists them.
 pub struct Correspondent {
     pub address: String,
     pub name: Option<String>,
@@ -29,6 +28,23 @@ impl Correspondent {
             |_bad| self.address.clone(),
             |address| Mailbox::new(self.name.clone(), address).to_string(),
         )
+    }
+}
+
+/// Where a Correspondent stands: the first Account's first, then those
+/// written to, then by score; by address among equals, so the order never
+/// changes between runs.
+struct Rank {
+    of_first: bool,
+    written: bool,
+    score: f64,
+}
+
+impl Rank {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (other.of_first, other.written)
+            .cmp(&(self.of_first, self.written))
+            .then(other.score.total_cmp(&self.score))
     }
 }
 
@@ -82,44 +98,40 @@ pub fn ranked(
             let own = accounts.iter().any(|a| a.eq_ignore_ascii_case(address));
             !own && (tally.written || !no_reply(address))
         })
-        .map(|(address, tally)| {
-            let of_first = tally.scores.contains_key(&first);
-            let rank = (of_first, tally.written, tally.score);
-            (rank, correspondent(address, tally, &first))
-        })
+        .map(|(address, tally)| correspondent(address, tally, &first))
         .collect();
 
-    // By address among equals, so the order never changes between runs.
-    ranked.sort_by(
-        |((a_first, a_written, a), x), ((b_first, b_written, b), y)| {
-            (b_first, b_written)
-                .cmp(&(a_first, a_written))
-                .then(b.total_cmp(a))
-                .then_with(|| x.address.cmp(&y.address))
-        },
-    );
-
+    ranked.sort_by(|(a, x), (b, y)| a.cmp(b).then_with(|| x.address.cmp(&y.address)));
     ranked.into_iter().map(|(_, c)| c).collect()
 }
 
-fn correspondent(address: String, tally: Tally, first: &str) -> Correspondent {
-    let account = if tally.scores.contains_key(first) {
+fn correspondent(address: String, tally: Tally, first: &str) -> (Rank, Correspondent) {
+    let of_first = tally.scores.contains_key(first);
+    let account = if of_first {
         first.to_owned()
     } else {
         let best = tally.scores.iter().max_by(|(_, a), (_, b)| a.total_cmp(b));
         best.map(|(account, _)| account.clone()).unwrap_or_default()
     };
 
+    let rank = Rank {
+        of_first,
+        written: tally.written,
+        score: tally.score,
+    };
+
     let name = tally
         .named_written
         .or(tally.named_seen)
         .map(|(_, name)| name);
-    Correspondent {
+    let correspondent = Correspondent {
         address,
         name,
         account,
         written: tally.written,
-    }
+    };
+
+    (rank, correspondent)
 }
 
 fn no_reply(address: &str) -> bool {
