@@ -151,7 +151,7 @@ local wants = {
 	"> Ask the agent to write or rework this Draft.",
 	"## Me\n\nmake it formal\n",
 	"## stub\n\nRewriting the body.\nDone soon.\n",
-	"✗ Denied: Run ls\n✗ Denied: Read ",
+	"✗ Denied: Run ls\n✗ Denied: Read …/drafts/2.eml\n",
 	"✓ write_draft · the edit is in the Draft for review",
 }
 
