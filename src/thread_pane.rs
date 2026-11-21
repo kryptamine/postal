@@ -13,8 +13,7 @@ use crate::{
     date_label::DateLabel,
     inbox_view::InboxView,
     link_hints::LinkHints,
-    preview_pane::{self, LABELS},
-    preview_render,
+    message_header, preview_pane,
     previews::Previews,
     reading::Reading,
     stack::{self, Placed},
@@ -85,32 +84,12 @@ impl StatefulWidget for ThreadPane<'_> {
 impl ThreadPane<'_> {
     /// Row `offset` of the Message `placed`, from its top.
     fn row(&self, buf: &mut Buffer, row: Rect, placed: &Placed<'_>, offset: usize) {
-        let message = placed.message;
         let Some(body) = &placed.body else {
             return self.folded(buf, row, placed);
         };
 
-        // From the row, not the Preview, so the header stays put while the
-        // body loads.
-        let values = [
-            (message.from.as_str(), self.theme.sender),
-            (message.to.as_str(), self.theme.sender),
-            (message.subject.as_str(), self.theme.subject),
-        ];
-
-        if let Some(&value) = values.get(offset) {
-            let mut row = row;
-            if offset == 0 {
-                let mut date = StackStr::<40>::new();
-                write!(date, "{}", message.received.format(preview_render::DATE)).ok();
-                row = preview_pane::date(self.theme, buf, row, date.as_str());
-            }
-
-            return preview_pane::header(self.theme, buf, row, LABELS[offset], value);
-        }
-
         let Some(index) = offset.checked_sub(placed.header) else {
-            return;
+            return message_header::draw(self.theme, buf, row, placed.message, offset);
         };
 
         match body {

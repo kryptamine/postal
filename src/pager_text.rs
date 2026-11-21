@@ -1,34 +1,34 @@
 use std::io::{self, Write};
 
-use crate::{ansi, browser, preview::Preview, preview_pane::LABELS, theme::Theme};
+use ratatui::style::Style;
 
-/// `preview` as the bytes piped to the pager: the header block, a blank
-/// line, then the body, in the Theme's ANSI styles, each link an OSC 8
+use crate::{ansi, browser, message::Message, message_header, preview::Preview, theme::Theme};
+
+/// `preview` of `message` as the bytes piped to the pager: the header
+/// block, a blank line, then the body, in the Theme's ANSI styles, each link an OSC 8
 /// hyperlink a terminal can open on click.
-pub fn ansi(preview: &Preview, theme: &Theme) -> Vec<u8> {
+pub fn ansi(message: &Message, preview: &Preview, theme: &Theme) -> Vec<u8> {
     let mut out = Vec::new();
     // Writing to a `Vec` cannot fail.
-    write(&mut out, preview, theme).ok();
+    write(&mut out, (message, preview), theme).ok();
     out
 }
 
-fn write(out: &mut Vec<u8>, preview: &Preview, theme: &Theme) -> io::Result<()> {
-    let header = [
-        (&preview.from, theme.sender),
-        (&preview.to, theme.sender),
-        (&preview.subject, theme.subject),
-    ];
-
-    for (at, (label, (value, style))) in LABELS.into_iter().zip(header).enumerate() {
-        ansi::styled(out, label, theme.field)?;
-        ansi::styled(out, value, style)?;
-        if at == 0 {
-            out.write_all(b"  ")?;
-            ansi::styled(out, &preview.date, theme.muted)?;
-        }
-
+fn write(
+    out: &mut Vec<u8>,
+    (message, preview): (&Message, &Preview),
+    theme: &Theme,
+) -> io::Result<()> {
+    let [from, rest @ ..] = message_header::fields(theme, message);
+    field(out, from, theme)?;
+    out.write_all(b"  ")?;
+    ansi::styled(out, message_header::date(message).as_str(), theme.muted)?;
+    for row in rest {
         out.write_all(b"\n")?;
+        field(out, row, theme)?;
     }
+
+    out.write_all(b"\n")?;
 
     out.write_all(b"\n")?;
     for line in &preview.body {
@@ -44,4 +44,13 @@ fn write(out: &mut Vec<u8>, preview: &Preview, theme: &Theme) -> io::Result<()> 
     }
 
     Ok(())
+}
+
+fn field(
+    out: &mut Vec<u8>,
+    (label, value, style): (&str, &str, Style),
+    theme: &Theme,
+) -> io::Result<()> {
+    ansi::styled(out, label, theme.field)?;
+    ansi::styled(out, value, style)
 }

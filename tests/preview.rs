@@ -239,8 +239,11 @@ fn a_preview_not_yet_fetched_shows_a_placeholder_and_never_blocks() {
     t.wait_until(|s| s.contains("Loading…") && s.contains(" 1/6 "))
         .unwrap();
     t.send(Key::Char('j')).unwrap();
-    t.wait_until(|s| s.contains("Loading…") && s.contains(" 2/6 "))
-        .unwrap();
+    // The header comes from the row, so it shows before the body.
+    t.wait_until(|s| {
+        s.contains("Loading…") && s.contains(" 2/6 ") && s.contains("Subject Subject 5")
+    })
+    .unwrap();
 
     server.release();
     t.wait_until(|s| previewed(s, 5)).unwrap();

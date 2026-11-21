@@ -1,27 +1,15 @@
 use std::{fmt::Write, ops::Range};
 
-use unicode_width::UnicodeWidthStr;
-
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Style,
     widgets::{Block, StatefulWidget, Widget},
 };
 
 use crate::{
-    border, centred::centred, inbox_view::InboxView, layout::PADDING, link_hints::LinkHints,
-    preview::Preview, shown::Shown, stack_str::StackStr, theme::Theme, truncate,
+    body::Body, border, centred::centred, inbox_view::InboxView, layout::PADDING,
+    link_hints::LinkHints, message_header, preview::Preview, stack_str::StackStr, theme::Theme,
 };
-
-/// The header labels, padded so the values line up.
-pub const LABELS: [&str; 3] = ["From    ", "To      ", "Subject "];
-/// The header rows of a Preview, with the row under them: a rule in the
-/// Preview, blank in a stack.
-pub const HEADER_ROWS: usize = LABELS.len() + 1;
-const LABEL_WIDTH: u16 = 8;
-/// Columns between the `From` value and the date at the row's right.
-const DATE_GAP: u16 = 2;
 
 /// Where a Preview's text goes in `pane`: inside the border, padded each
 /// side and not on top.
@@ -56,7 +44,7 @@ pub fn body_lines(scroll: usize, text: Rect, header: usize) -> Range<usize> {
 /// on, or a placeholder in its place. In hint mode, `hints` labels its links.
 pub struct PreviewPane<'a> {
     pub theme: &'a Theme,
-    pub preview: Shown<'a>,
+    pub body: Body<'a>,
     pub hints: Option<&'a LinkHints>,
 }
 
@@ -85,22 +73,25 @@ impl StatefulWidget for PreviewPane<'_> {
         }
 
         let text = text_area(area);
-        // An unavailable body leaves the header with no body lines under it.
-        let (preview, placeholder) = match self.preview {
-            Shown::Rendered(preview) => (preview, None),
-            Shown::Loading => return centred("Loading…", text, buf),
-            Shown::Unavailable { header, why } => (header, Some(why)),
-        };
+        // From the row, so the header shows while the body loads.
+        if let Some(message) = view.selected_message() {
+            let rows = (text.y..text.bottom()).zip(0..message_header::ROWS - 1);
+            for (y, field) in rows {
+                let row = Rect::new(text.x, y, text.width, 1);
+                message_header::draw(self.theme, buf, row, message, field);
+            }
+        }
 
-        self.header(buf, text, preview);
-        let body = body_area(text, HEADER_ROWS);
-        if usize::from(text.height) >= HEADER_ROWS {
+        let body = body_area(text, message_header::ROWS);
+        if usize::from(text.height) >= message_header::ROWS {
             border::rule(buf, area, body.y - 1, self.theme.border);
         }
 
-        if let Some(placeholder) = placeholder {
-            return centred(placeholder, body, buf);
-        }
+        let preview = match self.body {
+            Body::Rendered(preview) => preview,
+            Body::Loading => return centred("Loading…", body, buf),
+            Body::Unavailable(why) => return centred(why, body, buf),
+        };
 
         let last_top = preview.body.len().saturating_sub(usize::from(body.height));
         view.preview_scroll = view.preview_scroll.min(last_top);
@@ -115,62 +106,6 @@ impl StatefulWidget for PreviewPane<'_> {
                 (preview, index),
             );
         }
-    }
-}
-
-impl PreviewPane<'_> {
-    /// The header rows of `preview` at the top of `text`.
-    fn header(&self, buf: &mut Buffer, text: Rect, preview: &Preview) {
-        let values = [
-            (&*preview.from, self.theme.sender),
-            (&*preview.to, self.theme.sender),
-            (&*preview.subject, self.theme.subject),
-        ];
-
-        let rows = text.y..text.bottom();
-        for (y, (label, &(value, style))) in rows.zip(LABELS.iter().zip(&values)) {
-            let mut row = Rect::new(text.x, y, text.width, 1);
-            if y == text.y {
-                row = date(self.theme, buf, row, &preview.date);
-            }
-
-            header(self.theme, buf, row, label, (value, style));
-        }
-    }
-}
-
-/// One header row: `label`, then `value` cut to fit.
-pub fn header(
-    theme: &Theme,
-    buf: &mut Buffer,
-    row: Rect,
-    label: &str,
-    (value, style): (&str, Style),
-) {
-    let room = usize::from(row.width);
-    buf.set_stringn(row.x, row.y, label, room, theme.field);
-    let value_area = Rect {
-        x: row.x + LABEL_WIDTH.min(row.width),
-        width: row.width.saturating_sub(LABEL_WIDTH),
-        ..row
-    };
-
-    truncate::draw(buf, value_area, value, style);
-}
-
-/// Draws `date` muted at the right of the `From` header `row`, and returns
-/// what is left of it. A row too narrow for both leaves the date out.
-pub fn date(theme: &Theme, buf: &mut Buffer, row: Rect, date: &str) -> Rect {
-    let width = u16::try_from(date.width()).unwrap_or(u16::MAX);
-    if row.width < LABEL_WIDTH + DATE_GAP + 2 * width {
-        return row;
-    }
-
-    let x = row.right() - width;
-    buf.set_string(x, row.y, date, theme.muted);
-    Rect {
-        width: x - row.x - DATE_GAP,
-        ..row
     }
 }
 

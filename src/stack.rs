@@ -63,7 +63,7 @@ pub fn placed<'a>(
     width: u16,
 ) -> impl Iterator<Item = Placed<'a>> {
     let mut top = 0;
-    let header = crate::preview_pane::HEADER_ROWS;
+    let header = crate::message_header::ROWS;
     view.stack().enumerate().map(move |(index, message)| {
         let body = reading
             .unfolded(message.body_key)

@@ -5,7 +5,7 @@ use crate::{
     answering::Answering,
     html_preview::{self, Links},
     message::Message,
-    preview_render::DATE,
+    message_header::DATE,
 };
 
 /// Columns HTML is laid out in before it is quoted, so that with `> ` a

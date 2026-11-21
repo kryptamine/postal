@@ -31,6 +31,7 @@ use crate::{
     local_drafts::LocalDrafts,
     local_drafts_pane::LocalDraftsPane,
     message::Message,
+    message_header,
     message_list::{self, MessageList},
     mode::Mode,
     older_pages::OlderPages,
@@ -354,13 +355,9 @@ fn draw(
 
                 frame.render_stateful_widget(widget, pane, reading);
             } else if let Some(pane) = panes.preview {
-                let preview = previews.shown(view, preview_pane::text_area(pane).width);
+                let body = previews.selected(view, preview_pane::text_area(pane).width);
                 let hints = screen.hints.as_ref();
-                let widget = PreviewPane {
-                    theme,
-                    preview,
-                    hints,
-                };
+                let widget = PreviewPane { theme, body, hints };
 
                 frame.render_stateful_widget(widget, pane, view);
             }
@@ -1243,7 +1240,7 @@ fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text:
         }
 
         let preview = previews.get(view, text.width)?;
-        let lines = preview_pane::body_lines(view.preview_scroll, text, preview_pane::HEADER_ROWS);
+        let lines = preview_pane::body_lines(view.preview_scroll, text, message_header::ROWS);
         LinkHints::find([(0, &preview.body[..], lines)])
     });
 
@@ -1324,7 +1321,7 @@ fn open(
     };
 
     let width = terminal.size().map_err(Error::Terminal)?.width;
-    let preview = preview_render::paged(Job {
+    let preview = preview_render::paged(&Job {
         key: PreviewKey {
             account: message.account,
             body: message.body_key,
@@ -1334,11 +1331,10 @@ fn open(
             quoted: true,
         },
         body,
-        header: preview_render::header(message),
         look: theme.mail_look(),
     });
 
-    let text = pager_text::ansi(&preview, theme);
+    let text = pager_text::ansi(message, &preview, theme);
     outside(terminal, events, || pager::page(&text))?;
     Ok(None)
 }

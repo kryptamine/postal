@@ -4,7 +4,6 @@ use crate::{
     html_preview::{self, Links},
     mail_look::MailLook,
     marks::Marks,
-    message::Message,
     preview::Preview,
     quoted_html, quoted_text,
     rendered_previews::PreviewKey,
@@ -13,9 +12,6 @@ use crate::{
     view::View,
     wrap::wrap,
 };
-
-/// How a Preview header shows the date.
-pub const DATE: &str = "%a, %-d %b %Y %H:%M";
 
 /// The line that stands for a Quote left out; it names the key of
 /// `Action::SwitchQuoted`.
@@ -26,41 +22,23 @@ pub struct Job {
     pub key: PreviewKey,
     /// `BODY[]`: the header and every part, still MIME-encoded.
     pub body: Vec<u8>,
-    /// `header` of the Message; rendering adds the body.
-    pub header: Preview,
     pub look: MailLook,
 }
 
 /// The Preview of `job` at the width in its key.
-pub fn render(job: Job) -> Preview {
+pub fn render(job: &Job) -> Preview {
     rendered(job, Links::Inline)
 }
 
 /// `job` as the `$PAGER` shows it: the Preview, with link footnotes in the
 /// text View.
-pub fn paged(job: Job) -> Preview {
+pub fn paged(job: &Job) -> Preview {
     rendered(job, Links::Footnotes)
 }
 
-fn rendered(job: Job, links: Links) -> Preview {
-    let (body, laid_out) = body(&job, links);
-    Preview {
-        body,
-        laid_out,
-        ..job.header
-    }
-}
-
-/// A Preview of the header alone, for a Message whose body is not here.
-pub fn header(message: &Message) -> Preview {
-    Preview {
-        from: message.from.clone(),
-        to: message.to.clone(),
-        subject: message.subject.clone(),
-        date: message.received.format(DATE).to_string(),
-        body: Vec::new(),
-        laid_out: false,
-    }
+fn rendered(job: &Job, links: Links) -> Preview {
+    let (body, laid_out) = body(job, links);
+    Preview { body, laid_out }
 }
 
 /// The HTML part when there is one, laid out in the rendered View; else

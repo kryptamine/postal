@@ -18,7 +18,6 @@ use crate::{
     preview_render::{self, Job},
     rendered_previews::{PreviewKey, RenderedPreviews},
     routes::Routes,
-    shown::Shown,
     update::Update,
 };
 
@@ -53,8 +52,6 @@ pub struct Previews {
     offline: HashSet<u32>,
     /// The placeholder of each body the server refused, until a reconnect.
     refused: HashMap<u32, String>,
-    /// The header of the selected Message, while its body is unavailable.
-    header: Option<(u32, Preview)>,
     /// Each Account's, by its place in this run.
     links: Vec<Link>,
     look: MailLook,
@@ -73,7 +70,7 @@ impl Previews {
         thread::spawn(move || {
             for job in queue {
                 let key = job.key;
-                let preview = preview_render::render(job);
+                let preview = preview_render::render(&job);
                 if updates
                     .unbounded_send((key.account, Update::Rendered(key, preview)))
                     .is_err()
@@ -92,7 +89,6 @@ impl Previews {
             asked: None,
             offline: HashSet::new(),
             refused: HashMap::new(),
-            header: None,
             links: vec![Link::Starting; accounts],
             look,
             requests,
@@ -130,21 +126,10 @@ impl Previews {
         }
     }
 
-    pub fn shown(&self, view: &InboxView, width: u16) -> Shown<'_> {
-        let Some(message) = view.selected_message() else {
-            return Shown::Loading;
-        };
-
-        let why = match self.body(view, message, width) {
-            Body::Rendered(preview) => return Shown::Rendered(preview),
-            Body::Loading => return Shown::Loading,
-            Body::Unavailable(why) => why,
-        };
-
-        match &self.header {
-            Some((uid, header)) if *uid == message.uid => Shown::Unavailable { header, why },
-            _ => Shown::Loading,
-        }
+    /// Where the selected Message's Preview stands; `Loading` with none.
+    pub fn selected(&self, view: &InboxView, width: u16) -> Body<'_> {
+        view.selected_message()
+            .map_or(Body::Loading, |message| self.body(view, message, width))
     }
 
     /// Readies the Previews of the selection and its neighbours at `width`.
@@ -163,10 +148,6 @@ impl Previews {
             .selected_message()
             .and_then(|m| Some((m.account, m.folder.as_ref()?)));
         self.ready(caches, (view, folder), wanted, width)?;
-        if let Some(message) = view.selected_message() {
-            self.ready_header(message);
-        }
-
         Ok(())
     }
 
@@ -228,7 +209,7 @@ impl Previews {
             };
 
             match body {
-                Some(body) => self.render(key, body, message),
+                Some(body) => self.render(key, body),
                 // It came with the Thread, or comes once its Folder is asked.
                 None if !here => {}
                 None if live == Some(Link::Live) => {
@@ -258,7 +239,6 @@ impl Previews {
         self.asked = None;
         self.offline.clear();
         self.refused.clear();
-        self.header = None;
     }
 
     /// Whether `message`'s UID is one of `folder`'s.
@@ -290,31 +270,16 @@ impl Previews {
         self.requests.send(self.account, Request::Bodies(request));
     }
 
-    fn render(&mut self, key: PreviewKey, body: Vec<u8>, message: &Message) {
+    fn render(&mut self, key: PreviewKey, body: Vec<u8>) {
         self.rendering.insert(key);
         let job = Job {
             key,
             body,
-            header: preview_render::header(message),
             look: self.look,
         };
 
         // The send fails only once the render thread is gone.
         self.jobs.send(job).ok();
-    }
-
-    /// Keeps the header of `selected` from its row while its body cannot come.
-    fn ready_header(&mut self, selected: &Message) {
-        let unavailable =
-            self.offline.contains(&selected.uid) || self.refused.contains_key(&selected.uid);
-        let ready = self
-            .header
-            .as_ref()
-            .is_some_and(|(uid, _)| *uid == selected.uid);
-        if unavailable && !ready {
-            let header = preview_render::header(selected);
-            self.header = Some((selected.uid, header));
-        }
     }
 
     /// Bodies fetched in `folder`; those of a Folder no longer shown are
