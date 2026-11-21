@@ -4,9 +4,9 @@ expression: screen.with_styles()
 ---
 size: 120x12  cursor: hidden
 ┌─ 2024 ─────────────────────────────────┐┌ Inbox · 1/1 ───────────────────────────────────────────────────────────────┐
-│   Sender                    2024-11-18 ││ From    Sender                                                             │
-│   Subject                              ││ Subject Subject                                                            │
-│   Red bold italic link code            ││ Date    Mon, 18 Nov 2024 09:00                                             │
+│   Sender                    2024-11-18 ││ From    Sender <someone@example.com>                Mon, 18 Nov 2024 09:00 │
+│   Subject                              ││ To                                                                         │
+│   Red bold italic link code            ││ Subject Subject                                                            │
 │                                        │├────────────────────────────────────────────────────────────────────────────┤
 │                                        ││ Red bold italic link code                                                  │
 │                                        ││                                                                            │
@@ -18,9 +18,9 @@ size: 120x12  cursor: hidden
 
 styles:
 0: 0-1 dim; 2-7 bold; 8-42 dim; 43-55 bold; 56-119 dim
-1: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
-2: 0 dim; 1-40 reverse; 41-42 dim; 52-58 bold; 119 dim
-3: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
+1: 0 dim; 1-40 reverse; 41-42 dim; 96-117 dim; 119 dim
+2: 0 dim; 1-40 reverse; 41-42 dim; 119 dim
+3: 0 dim; 1-40 reverse; 41-42 dim; 52-58 bold; 119 dim
 4: 0 dim; 41-119 dim
 5: 0 dim; 41-42 dim; 48-51 bold; 53-58 italic; 60-63 underline; 119 dim
 6: 0 dim; 41-42 dim; 119 dim

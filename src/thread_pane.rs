@@ -28,8 +28,6 @@ use crate::{
 const GAP: u16 = 2;
 /// The bar left of every row of the Message at the cursor.
 const CURSOR: &str = "▎";
-/// The header row of `LABELS` that holds the date.
-const DATE_ROW: usize = 2;
 
 /// Reading: the selected Thread's stack inside a border titled with the
 /// cursor's place in it. In hint mode, `hints` labels the links.
@@ -92,21 +90,23 @@ impl ThreadPane<'_> {
 
         // From the row, not the Preview, so the header stays put while the
         // body loads.
-        let mut date = StackStr::<40>::new();
-        if offset == DATE_ROW {
-            write!(date, "{}", message.received.format(preview_render::DATE)).ok();
-        }
-
         let account = self.view.account_label(message.account);
         let values = [
-            (message.sender.as_str(), self.theme.sender),
+            (message.from.as_str(), self.theme.sender),
+            (message.to.as_str(), self.theme.sender),
             (message.subject.as_str(), self.theme.subject),
-            (date.as_str(), self.theme.date),
             (account.unwrap_or_default(), self.theme.sender),
         ];
 
         let fields = placed.header - 1;
         if let Some(&value) = values.get(offset).filter(|_| offset < fields) {
+            let mut row = row;
+            if offset == 0 {
+                let mut date = StackStr::<40>::new();
+                write!(date, "{}", message.received.format(preview_render::DATE)).ok();
+                row = preview_pane::date(self.theme, buf, row, date.as_str());
+            }
+
             return preview_pane::header(self.theme, buf, row, LABELS[offset], value);
         }
 

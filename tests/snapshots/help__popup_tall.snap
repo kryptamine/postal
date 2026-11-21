@@ -20,9 +20,9 @@ size: 80x37  cursor: hidden
 │          │ r                       reply to the sender            │          │
 └──────────│ R                       reply to all                   │──────────┘
 ┌ Inbox · 1│                                                        │──────────┐
-│ From    B│ Links                                                  │          │
-│ Subject N│ o                       label the links in the Preview │          │
-│ Date    M│                                                        │          │
+│ From    B│ Links                                                  │024 09:00 │
+│ To       │ o                       label the links in the Preview │          │
+│ Subject N│                                                        │          │
 ├──────────│ View                                                   │──────────┤
 │ Newer bod│ v                       rendered / text view of HTML   │          │
 │          │ z                       show / hide the Quote          │          │

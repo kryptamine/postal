@@ -295,9 +295,7 @@ impl Previews {
         let job = Job {
             key,
             body,
-            sender: message.sender.clone(),
-            subject: message.subject.clone(),
-            received: message.received,
+            header: preview_render::header(message),
             look: self.look,
         };
 
@@ -314,11 +312,7 @@ impl Previews {
             .as_ref()
             .is_some_and(|(uid, _)| *uid == selected.uid);
         if unavailable && !ready {
-            let header = preview_render::header(
-                selected.sender.clone(),
-                selected.subject.clone(),
-                selected.received,
-            );
+            let header = preview_render::header(selected);
             self.header = Some((selected.uid, header));
         }
     }

@@ -113,7 +113,7 @@ impl Cache {
         let limit = limit.map_or(-1, |n| i64::try_from(n).unwrap_or(i64::MAX));
         let mut statement = connection.prepare_cached(
             "SELECT uid, body_key, received, received_offset, unread, sender, subject,
-                    coalesce(snippet, ''), thread, from_me, answered
+                    coalesce(snippet, ''), thread, from_me, answered, from_line, to_line
              FROM message WHERE account = ?3 AND mailbox = ?1
              ORDER BY received DESC, uid DESC LIMIT ?2",
         )?;
@@ -129,7 +129,7 @@ impl Cache {
         // Only those whose body is cached: that body comes with the Thread alone.
         let mut statement = connection.prepare_cached(
             "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
-                    t.snippet, t.thread, t.from_me, t.answered
+                    t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line
              FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
              WHERE t.account = ?2
                AND t.thread IN (SELECT thread FROM message WHERE account = ?2 AND mailbox = ?1)
@@ -156,7 +156,7 @@ impl Cache {
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
             "SELECT uid, body_key, received, received_offset, unread, sender, subject,
-                    coalesce(snippet, ''), thread, from_me, answered
+                    coalesce(snippet, ''), thread, from_me, answered, from_line, to_line
              FROM message WHERE account = ?2 AND mailbox = ?1",
         )?;
         let (mut messages, mut keys) = (Vec::new(), HashSet::new());
@@ -179,7 +179,7 @@ impl Cache {
         let threads: HashSet<u64> = messages.iter().filter_map(|m| m.thread).collect();
         let mut statement = connection.prepare_cached(
             "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
-                    t.snippet, t.thread, t.from_me, t.answered
+                    t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line
              FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
              WHERE t.account = ?1
              ORDER BY t.received, t.key",
@@ -222,8 +222,8 @@ impl Cache {
             let mut insert = transaction.prepare_cached(
                 "INSERT OR REPLACE INTO thread_message
                  (key, thread, received, received_offset, unread, sender, subject, from_me,
-                  snippet, answered, account)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                  snippet, answered, account, from_line, to_line)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             )?;
             for m in messages {
                 insert.execute(params![
@@ -238,6 +238,8 @@ impl Cache {
                     m.snippet,
                     m.answered,
                     self.email(),
+                    m.from,
+                    m.to,
                 ])?;
             }
 
@@ -641,6 +643,8 @@ impl Cache {
             thread: row.get::<_, Option<i64>>(8)?.map(i64::cast_unsigned),
             from_me: row.get(9)?,
             answered: row.get(10)?,
+            from: row.get(11)?,
+            to: row.get(12)?,
             folder: None,
             account: self.account,
         })
@@ -846,8 +850,9 @@ fn insert(
         "INSERT OR REPLACE INTO message
          (uid, body_key, received, received_offset, unread, sender, subject, snippet,
           text_section, text_encoding, text_charset, text_html, mailbox, thread, from_me,
-          answered, account)
-         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
+          answered, account, from_line, to_line)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                ?18, ?19
          WHERE NOT EXISTS (SELECT 1 FROM deleted WHERE account = ?17 AND mailbox = ?13
                              AND uid = ?1)",
     )?;
@@ -871,6 +876,8 @@ fn insert(
             m.from_me,
             m.answered,
             account,
+            m.from,
+            m.to,
         ])?;
     }
 

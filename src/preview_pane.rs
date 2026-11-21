@@ -1,5 +1,7 @@
 use std::{fmt::Write, ops::Range};
 
+use unicode_width::UnicodeWidthStr;
+
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -14,8 +16,10 @@ use crate::{
 
 /// The header labels, padded so the values line up; `Account` only with
 /// several Accounts.
-pub const LABELS: [&str; 4] = ["From    ", "Subject ", "Date    ", "Account "];
+pub const LABELS: [&str; 4] = ["From    ", "To      ", "Subject ", "Account "];
 const LABEL_WIDTH: u16 = 8;
+/// Columns between the `From` value and the date at the row's right.
+const DATE_GAP: u16 = 2;
 
 /// Where a Preview's text goes in `pane`: inside the border, padded each
 /// side and not on top.
@@ -90,19 +94,7 @@ impl StatefulWidget for PreviewPane<'_> {
         let account = view
             .selected_message()
             .and_then(|m| view.account_label(m.account));
-        let values = [
-            (&*preview.from, self.theme.sender),
-            (&*preview.subject, self.theme.subject),
-            (&*preview.date, self.theme.date),
-            (account.unwrap_or_default(), self.theme.sender),
-        ];
-
-        let rows = text.y..text.bottom();
-        let fields = LABELS.iter().zip(&values).take(header_rows - 1);
-        for (y, (label, &(value, style))) in rows.zip(fields) {
-            let row = Rect::new(text.x, y, text.width, 1);
-            header(self.theme, buf, row, label, (value, style));
-        }
+        self.header(buf, text, header_rows - 1, (preview, account));
 
         let body = body_area(text, header_rows);
         if usize::from(text.height) >= header_rows {
@@ -129,6 +121,34 @@ impl StatefulWidget for PreviewPane<'_> {
     }
 }
 
+impl PreviewPane<'_> {
+    /// The first `fields` header rows of `preview` at the top of `text`.
+    fn header(
+        &self,
+        buf: &mut Buffer,
+        text: Rect,
+        fields: usize,
+        (preview, account): (&Preview, Option<&str>),
+    ) {
+        let values = [
+            (&*preview.from, self.theme.sender),
+            (&*preview.to, self.theme.sender),
+            (&*preview.subject, self.theme.subject),
+            (account.unwrap_or_default(), self.theme.sender),
+        ];
+
+        let rows = text.y..text.bottom();
+        for (y, (label, &(value, style))) in rows.zip(LABELS.iter().zip(&values).take(fields)) {
+            let mut row = Rect::new(text.x, y, text.width, 1);
+            if y == text.y {
+                row = date(self.theme, buf, row, &preview.date);
+            }
+
+            header(self.theme, buf, row, label, (value, style));
+        }
+    }
+}
+
 /// One header row: `label`, then `value` cut to fit.
 pub fn header(
     theme: &Theme,
@@ -146,6 +166,22 @@ pub fn header(
     };
 
     truncate::draw(buf, value_area, value, style);
+}
+
+/// Draws `date` muted at the right of the `From` header `row`, and returns
+/// what is left of it. A row too narrow for both leaves the date out.
+pub fn date(theme: &Theme, buf: &mut Buffer, row: Rect, date: &str) -> Rect {
+    let width = u16::try_from(date.width()).unwrap_or(u16::MAX);
+    if row.width < LABEL_WIDTH + DATE_GAP + 2 * width {
+        return row;
+    }
+
+    let x = row.right() - width;
+    buf.set_string(x, row.y, date, theme.muted);
+    Rect {
+        width: x - row.x - DATE_GAP,
+        ..row
+    }
 }
 
 /// Body line `index` of `preview`, with the labels `hints` give body `part`.

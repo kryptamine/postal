@@ -81,7 +81,9 @@ fn kinds() -> Vec<FakeMessage> {
             16,
             FakeBody::text("html", "7bit", "<p>Only markup here</p>"),
         ),
-        message("Ada Lovelace", "Weekly notes", 17, notes),
+        message("Ada Lovelace", "Weekly notes", 17, notes)
+            .to("Charles Babbage", "charles@example.com")
+            .cc("Mary Somerville", "mary@example.com"),
     ]
 }
 
@@ -90,7 +92,8 @@ fn notes_shown(screen: &Screen) -> bool {
 }
 
 // The layout from the main screen prototype: side by side from 84 columns,
-// stacked below; the quote prefix survives wrapping.
+// stacked below; the quote prefix survives wrapping. The header names who
+// wrote to whom, `To` then `Cc`, with the date at the right.
 #[test]
 fn shows_the_preview_beside_or_below_the_list() {
     let server = FakeImap::start(kinds());
@@ -363,9 +366,12 @@ fn a_body_missing_while_offline_says_so_and_comes_after_the_reconnect() {
     let screen = t
         .snapshot_after(|s| s.contains("Not downloaded yet · offline"))
         .unwrap();
-    assert!(screen.contains("From    Sender"), "{screen}");
+    assert!(
+        screen.contains("From    Sender <someone@example.com>"),
+        "{screen}"
+    );
     assert!(screen.contains("Subject Subject 1"), "{screen}");
-    assert!(screen.contains("Date    Fri, 1 Nov 2024 09:00"), "{screen}");
+    assert!(screen.contains("Fri, 1 Nov 2024 09:00"), "{screen}");
 
     t.send(Key::Char('|')).unwrap();
     t.wait_until(|s| hint_line(s).contains("not downloaded"))

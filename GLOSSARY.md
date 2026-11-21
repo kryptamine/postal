@@ -65,7 +65,7 @@ Taking back the latest Delete or Draft discard not yet taken back, with `u`, as 
 _Avoid_: restore, revert
 
 **Preview**:
-The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View, without its Quote. With more than one Account, its header names the Account the Message reached, as does each unfolded Message in Reading.
+The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View, without its Quote. Its header names the sender and every `To` and `Cc` address with their names, the date at the right, and the subject. With more than one Account, it also names the Account the Message reached, as does each unfolded Message in Reading.
 _Avoid_: reader, viewer, body pane
 
 **Quote**:

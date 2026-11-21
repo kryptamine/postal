@@ -5,7 +5,7 @@ use rusqlite::{Connection, OpenFlags};
 use super::Error;
 
 /// Bumped with every change to `TABLES`; an older Cache has no migration and is rebuilt.
-pub const VERSION: i64 = 15;
+pub const VERSION: i64 = 16;
 
 const FILE: &str = "cache.sqlite3";
 
@@ -36,6 +36,8 @@ CREATE TABLE message (
     unread INTEGER NOT NULL,
     answered INTEGER NOT NULL,
     sender TEXT NOT NULL,
+    from_line TEXT NOT NULL,
+    to_line TEXT NOT NULL,
     subject TEXT NOT NULL,
     -- Gmail's `X-GM-THRID`; NULL on another server.
     thread INTEGER,
@@ -62,6 +64,8 @@ CREATE TABLE thread_message (
     unread INTEGER NOT NULL,
     answered INTEGER NOT NULL,
     sender TEXT NOT NULL,
+    from_line TEXT NOT NULL,
+    to_line TEXT NOT NULL,
     subject TEXT NOT NULL,
     from_me INTEGER NOT NULL,
     snippet TEXT NOT NULL,
@@ -112,6 +116,8 @@ CREATE TABLE moved (
     unread INTEGER NOT NULL,
     answered INTEGER NOT NULL,
     sender TEXT NOT NULL,
+    from_line TEXT NOT NULL,
+    to_line TEXT NOT NULL,
     subject TEXT NOT NULL,
     thread INTEGER,
     from_me INTEGER NOT NULL,

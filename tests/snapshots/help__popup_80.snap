@@ -14,9 +14,9 @@ size: 80x24  cursor: hidden
 │          │ Enter      l            read the Message full screen   │          │
 └──────────│ |                       open the Message in $PAGER     │──────────┘
 ┌ Inbox · 1│ U                       mark the Message Unread        │──────────┐
-│ From    B│ Backspace               delete: move to Trash          │          │
-│ Subject N│ u                       undo a delete or discard       │          │
-│ Date    M│ c                       compose a new Message          │          │
+│ From    B│ Backspace               delete: move to Trash          │024 09:00 │
+│ To       │ u                       undo a delete or discard       │          │
+│ Subject N│ c                       compose a new Message          │          │
 ├──────────│ r                       reply to the sender            │──────────┤
 │ Newer bod│ R                       reply to all                   │          │
 │          │                                                        │          │

@@ -1332,9 +1332,7 @@ fn open(
             quoted: true,
         },
         body,
-        sender: message.sender.clone(),
-        subject: message.subject.clone(),
-        received: message.received,
+        header: preview_render::header(message),
         look: theme.mail_look(),
     });
 

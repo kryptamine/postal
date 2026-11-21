@@ -13,6 +13,10 @@ pub struct Message {
     pub unread: bool,
     pub answered: bool,
     pub sender: String,
+    /// The first `From` address as a header shows it, `Name <address>`.
+    pub from: String,
+    /// `To`, then `Cc`, as `from` is shown, joined by commas.
+    pub to: String,
     pub subject: String,
     /// Empty until the second fetch phase reaches the Message, and for good
     /// when it has no text part.

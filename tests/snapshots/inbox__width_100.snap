@@ -4,9 +4,9 @@ expression: screen
 ---
 size: 100x32  cursor: hidden
 ┌─ 2024 ──────────────────────────┐┌ Inbox · 1/4 ──────────────────────────────────────────────────┐
-│ ● Александр          2024-11-17 ││ From    Александр                                             │
-│   Café menu for the week ahead  ││ Subject Café menu for the week ahead                          │
-│                                 ││ Date    Sun, 17 Nov 2024 14:05                                │
+│ ● Александр          2024-11-17 ││ From    Александр <someone@example.c…  Sun, 17 Nov 2024 14:05 │
+│   Café menu for the week ahead  ││ To                                                            │
+│                                 ││ Subject Café menu for the week ahead                          │
 │   山田太郎           2024-11-16 │├───────────────────────────────────────────────────────────────┤
 │   東京オフィス移転のお知らせ：… ││                                                               │
 │                                 ││                                                               │

@@ -15,13 +15,18 @@ pub fn ansi(preview: &Preview, theme: &Theme) -> Vec<u8> {
 fn write(out: &mut Vec<u8>, preview: &Preview, theme: &Theme) -> io::Result<()> {
     let header = [
         (&preview.from, theme.sender),
+        (&preview.to, theme.sender),
         (&preview.subject, theme.subject),
-        (&preview.date, theme.date),
     ];
 
-    for (label, (value, style)) in LABELS.into_iter().zip(header) {
+    for (at, (label, (value, style))) in LABELS.into_iter().zip(header).enumerate() {
         ansi::styled(out, label, theme.field)?;
         ansi::styled(out, value, style)?;
+        if at == 0 {
+            out.write_all(b"  ")?;
+            ansi::styled(out, &preview.date, theme.muted)?;
+        }
+
         out.write_all(b"\n")?;
     }
 

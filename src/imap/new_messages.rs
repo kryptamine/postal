@@ -102,6 +102,8 @@ fn message(
         sender: envelope
             .and_then(sender)
             .unwrap_or_else(|| raw_from(attributes)),
+        from: from_line(envelope, attributes),
+        to: envelope.map_or_else(String::new, |e| shown(e.to.iter().chain(&e.cc).flatten())),
         subject: subject(envelope),
         snippet: String::new(),
         thread,
@@ -205,6 +207,38 @@ fn sender(envelope: &Envelope<'_>) -> Option<String> {
         String::from_utf8_lossy(mailbox),
         String::from_utf8_lossy(host)
     ))
+}
+
+/// The first `From` address as `one` shows it, else the header as sent.
+fn from_line(envelope: Option<&Envelope<'_>>, attributes: &[AttributeValue<'_>]) -> String {
+    envelope
+        .and_then(|e| e.from.as_ref()?.first())
+        .and_then(one)
+        .unwrap_or_else(|| raw_from(attributes))
+}
+
+/// Each of `addresses` as `one` shows it, joined by commas.
+fn shown<'a>(addresses: impl Iterator<Item = &'a Address<'a>>) -> String {
+    addresses.filter_map(one).collect::<Vec<_>>().join(", ")
+}
+
+/// `Name <address>`, or the address alone; `None` for a group's start or
+/// end, which has no host.
+fn one(address: &Address<'_>) -> Option<String> {
+    let mailbox = address.mailbox.as_deref().filter(|m| !m.is_empty())?;
+    let host = address.host.as_deref().filter(|h| !h.is_empty())?;
+    let email = format!(
+        "{}@{}",
+        String::from_utf8_lossy(mailbox),
+        String::from_utf8_lossy(host)
+    );
+    let name = address.name.as_deref().map(header::decode);
+    Some(
+        match name.filter(|n| !n.trim().is_empty() && !n.eq_ignore_ascii_case(&email)) {
+            Some(name) => format!("{name} <{email}>"),
+            None => email,
+        },
+    )
 }
 
 /// The `From` header's value as sent, decoded to one line.

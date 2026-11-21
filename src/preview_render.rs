@@ -1,10 +1,10 @@
-use chrono::{DateTime, FixedOffset};
 use mail_parser::{HeaderValue, MessageParser, PartType};
 
 use crate::{
     html_preview::{self, Links},
     mail_look::MailLook,
     marks::Marks,
+    message::Message,
     preview::Preview,
     quoted_html, quoted_text,
     rendered_previews::PreviewKey,
@@ -26,9 +26,8 @@ pub struct Job {
     pub key: PreviewKey,
     /// `BODY[]`: the header and every part, still MIME-encoded.
     pub body: Vec<u8>,
-    pub sender: String,
-    pub subject: String,
-    pub received: DateTime<FixedOffset>,
+    /// `header` of the Message; rendering adds the body.
+    pub header: Preview,
     pub look: MailLook,
 }
 
@@ -48,16 +47,17 @@ fn rendered(job: Job, links: Links) -> Preview {
     Preview {
         body,
         laid_out,
-        ..header(job.sender, job.subject, job.received)
+        ..job.header
     }
 }
 
 /// A Preview of the header alone, for a Message whose body is not here.
-pub fn header(sender: String, subject: String, received: DateTime<FixedOffset>) -> Preview {
+pub fn header(message: &Message) -> Preview {
     Preview {
-        from: sender,
-        subject,
-        date: received.format(DATE).to_string(),
+        from: message.from.clone(),
+        to: message.to.clone(),
+        subject: message.subject.clone(),
+        date: message.received.format(DATE).to_string(),
         body: Vec::new(),
         laid_out: false,
     }

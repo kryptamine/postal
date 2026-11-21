@@ -4,9 +4,9 @@ expression: screen
 ---
 size: 80x24  cursor: hidden
 ┌ 1/1 ─────┌ Help ──────────────────────────────────────────────────┐──────────┐
-│ From    B│                                                        │          │
-│ Subject N│ Read                                                   │          │
-│ Date    M│ j / k      ↓ / ↑        scroll a line                  │          │
+│ From    B│                                                        │024 09:00 │
+│ To       │ Read                                                   │          │
+│ Subject N│ j / k      ↓ / ↑        scroll a line                  │          │
 │          │ g / G      Home / End   top / bottom of the Thread     │          │
 │ Line 01  │ ^d / ^u    PgDn / PgUp  scroll half a page             │          │
 │ Line 02  │ n / p                   next / previous Message        │          │

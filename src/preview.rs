@@ -4,6 +4,7 @@ use crate::styled_line::StyledLine;
 /// the body already wrapped, so drawing it only copies lines.
 pub struct Preview {
     pub from: String,
+    pub to: String,
     pub subject: String,
     pub date: String,
     pub body: Vec<StyledLine>,
@@ -15,6 +16,7 @@ impl Preview {
     /// The heap bytes it holds, near enough for a byte-bounded cache.
     pub fn bytes(&self) -> usize {
         self.from.len()
+            + self.to.len()
             + self.subject.len()
             + self.date.len()
             + self.body.iter().map(StyledLine::bytes).sum::<usize>()

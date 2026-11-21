@@ -1,10 +1,10 @@
 ---
 source: tests/pager.rs
-expression: "paged(HTML, &[Key::Char('|')], true)"
+expression: "paged(HTML, &TEXT_VIEW, true)"
 ---
-From    Ada Lovelace
+From    Ada Lovelace <someone@example.com>  ␛[2mMon, 18 Nov 2024 09:00␛[0m
+To      
 Subject ␛[1mWeekly notes␛[0m
-Date    Mon, 18 Nov 2024 09:00
 
 Read ␛]8;;https://example.com/notes␛\␛[4mthe notes␛[0m␛]8;;␛\[1] and ␛]8;;https://example.com/agenda␛\␛[1m␛[4mthe agenda␛[0m␛]8;;␛\[2].
 

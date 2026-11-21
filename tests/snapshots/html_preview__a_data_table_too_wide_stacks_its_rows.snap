@@ -26,9 +26,9 @@ size: 60x50  cursor: hidden
 │                                                          │
 └──────────────────────────────────────────────────────────┘
 ┌ Inbox · 1/1 ─────────────────────────────────────────────┐
-│ From    Sender                                           │
+│ From    Sender <someone@example…  Mon, 18 Nov 2024 09:00 │
+│ To                                                       │
 │ Subject Subject                                          │
-│ Date    Mon, 18 Nov 2024 09:00                           │
 ├──────────────────────────────────────────────────────────┤
 │ Thanks for your order #4821.                             │
 │                                                          │
@@ -78,9 +78,9 @@ styles:
 20: 0 dim; 59 dim
 21: 0-59 dim
 22: 0 dim; 1-13 fg=4 bold; 14-59 dim
-23: 0 dim; 2-9 fg=4; 10-15 fg=5; 59 dim
-24: 0 dim; 2-9 fg=4; 10-16 bold; 59 dim
-25: 0 dim; 2-9 fg=4; 10-31 fg=6; 59 dim
+23: 0 dim; 2-9 fg=4; 10-33 fg=5; 36-57 dim; 59 dim
+24: 0 dim; 2-9 fg=4; 59 dim
+25: 0 dim; 2-9 fg=4; 10-16 bold; 59 dim
 26: 0-59 dim
 27: 0 dim; 59 dim
 28: 0 dim; 59 dim
