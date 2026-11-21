@@ -37,6 +37,7 @@ use crate::{
     older_pages::OlderPages,
     open_outside::{self, Outside},
     outbox::Outbox,
+    over::Layer,
     picker_popup::PickerPopup,
     preview_pane::{self, PreviewPane},
     previews::Previews,
@@ -47,6 +48,7 @@ use crate::{
     search::Search,
     settings::{self, Settings},
     settings_popup::SettingsPopup,
+    showing::Showing,
     stack,
     status::Status,
     steering::Ask,
@@ -149,7 +151,7 @@ pub async fn run(
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
     loop {
-        let text = panes(terminal, screen.mode)?
+        let text = panes(terminal, screen.showing.mode())?
             .preview
             .map(preview_pane::text_area);
         want(previews, caches, (&view, &screen), text.filter(|_| whole))?;
@@ -196,13 +198,13 @@ pub async fn run(
             event = events.next() => {
                 frame_start = alloc_count::count();
                 // A Draft opened, closed, discarded or brought back changes the list.
-                let drafts_before = (screen.draft.is_some(), screen.undo.len());
+                let drafts_before = (screen.over.draft.is_some(), screen.undo.len());
                 match handle(event, &mut view, &mut screen, half_page(text))? {
                     Step::Stay => {}
                     Step::Links => label_links(&mut screen, previews, &view, text),
                     step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, caches, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
-                    Step::Open(to) => screen.toast = open_outside::open(to, (terminal, &mut events), theme, caches, (&view, screen.reading.as_ref()))?,
+                    Step::Open(to) => screen.toast = open_outside::open(to, (terminal, &mut events), theme, caches, (&view, screen.showing.reading()))?,
                     step @ (Step::Compose | Step::Edit | Step::Send) => {
                         let from = accounts.noted(composing_from(&view));
                         draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
@@ -216,7 +218,7 @@ pub async fn run(
                     Step::LocalDrafts => open_local(&mut screen, outbox),
                     Step::SignIn(account) => return Ok(Exit::SignIn(account)),
                     Step::Settings => match Settings::open(config_dir) {
-                        Ok(settings) => screen.settings = Some(settings),
+                        Ok(settings) => screen.over.settings = Some(settings),
                         Err(error) => screen.toast = Some(Toast::error(error.to_string())),
                     },
                     Step::Icons(choice) => {
@@ -229,7 +231,7 @@ pub async fn run(
                     Step::Quit => return Ok(Exit::Quit),
                 }
 
-                if drafts_before != (screen.draft.is_some(), screen.undo.len()) {
+                if drafts_before != (screen.over.draft.is_some(), screen.undo.len()) {
                     relist_local(&mut screen, outbox);
                 }
             }
@@ -295,7 +297,7 @@ fn want(
         return Ok(());
     };
 
-    match &screen.reading {
+    match screen.showing.reading() {
         Some(reading) => {
             let stack = (|key| reading.unfolded(key), reading.cursor);
             previews.want_stack(caches, view, stack, text.width)
@@ -328,13 +330,13 @@ fn draw(
 ) -> Result<(), Error> {
     terminal
         .draw(|frame| {
-            let panes = layout::split(frame.area(), screen.mode);
+            let panes = layout::split(frame.area(), screen.showing.mode());
             if let Some(list) = panes.list {
                 frame.render_stateful_widget(MessageList { theme }, list, view);
             }
 
-            if let (Some(pane), Some(reading)) = (panes.preview, screen.reading.as_mut()) {
-                let hints = screen.hints.as_ref();
+            if let (Some(pane), Some(reading)) = (panes.preview, screen.showing.reading_mut()) {
+                let hints = screen.over.hints.as_ref();
                 let widget = ThreadPane {
                     theme,
                     view,
@@ -345,7 +347,7 @@ fn draw(
                 frame.render_stateful_widget(widget, pane, reading);
             } else if let Some(pane) = panes.preview {
                 let body = previews.selected(view, preview_pane::text_area(pane).width);
-                let hints = screen.hints.as_ref();
+                let hints = screen.over.hints.as_ref();
                 let widget = PreviewPane { theme, body, hints };
 
                 frame.render_stateful_widget(widget, pane, view);
@@ -378,51 +380,54 @@ fn draw(
     Ok(())
 }
 
-/// What shows over the panes in `body`: the Folder Picker, Local Drafts, a
-/// Draft's preview, Settings, then the `?` popup over any.
+/// What shows over the panes in `body`, the layer taking the keys on top,
+/// then the `?` popup over any.
 fn popups(frame: &mut Frame, (theme, accounts): (&Theme, Accounts), body: Rect, screen: &Screen) {
-    if let Some(picker) = &screen.picker {
-        let popup = PickerPopup { theme, picker };
-        frame.set_cursor_position(popup.cursor(body));
-        frame.render_widget(popup, body);
-    }
+    for layer in screen.over.layers().rev() {
+        match layer {
+            Layer::Picker(picker) => {
+                let popup = PickerPopup { theme, picker };
+                frame.set_cursor_position(popup.cursor(body));
+                frame.render_widget(popup, body);
+            }
+            Layer::LocalDrafts(local) => {
+                let pane = LocalDraftsPane {
+                    theme,
+                    local,
+                    accounts,
+                };
 
-    if let Some(local) = &screen.local {
-        let pane = LocalDraftsPane {
-            theme,
-            local,
-            accounts,
-        };
+                frame.render_widget(pane, body);
+            }
+            Layer::Draft(preview) => {
+                // The `From` a Send adds.
+                let outgoing = accounts.outgoing(accounts.place(preview.account.as_deref()));
+                let from = outgoing.map(|outgoing| {
+                    let email = || outgoing.config.email.clone();
+                    outgoing
+                        .from()
+                        .map_or_else(|_bad| email(), |from| from.to_string())
+                });
 
-        frame.render_widget(pane, body);
-    }
+                let pane = DraftPane {
+                    theme,
+                    preview,
+                    from: from.as_deref().unwrap_or_default(),
+                };
 
-    if let Some(preview) = &screen.draft {
-        // The `From` a Send adds.
-        let outgoing = accounts.outgoing(accounts.place(preview.account.as_deref()));
-        let from = outgoing.map(|outgoing| {
-            let email = || outgoing.config.email.clone();
-            outgoing
-                .from()
-                .map_or_else(|_bad| email(), |from| from.to_string())
-        });
+                frame.render_widget(pane, body);
+            }
+            Layer::Settings(settings) => {
+                let popup = SettingsPopup { theme, settings };
+                if let Some(cursor) = popup.cursor(body) {
+                    frame.set_cursor_position(cursor);
+                }
 
-        let pane = DraftPane {
-            theme,
-            preview,
-            from: from.as_deref().unwrap_or_default(),
-        };
-
-        frame.render_widget(pane, body);
-    }
-
-    if let Some(settings) = &screen.settings {
-        let popup = SettingsPopup { theme, settings };
-        if let Some(cursor) = popup.cursor(body) {
-            frame.set_cursor_position(cursor);
+                frame.render_widget(popup, body);
+            }
+            // The panes draw their own labels.
+            Layer::Hints => {}
         }
-
-        frame.render_widget(popup, body);
     }
 
     if screen.help {
@@ -446,21 +451,21 @@ fn apply(
     match update {
         Update::Inbox => {
             let (thread, selected) = (view.selected_key(), view.selected_body());
-            let stack: Vec<i64> = match screen.reading {
-                Some(_) => view.stack().map(|m| m.body_key).collect(),
-                None => Vec::new(),
+            let stack: Vec<i64> = match screen.showing {
+                Showing::Reading(_) => view.stack().map(|m| m.body_key).collect(),
+                Showing::List | Showing::Query => Vec::new(),
             };
 
             show(view, caches, None)?;
             // The labels belong to the Messages they were laid out on, and
             // Reading to the Thread it was opened on; a Query being typed stays.
-            if screen.reading.is_none() {
+            if screen.showing.reading().is_none() {
                 if view.selected_body() != selected {
-                    screen.hints = None;
+                    screen.over.hints = None;
                 }
             } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
-                screen.hints = None;
-                if let Some(reading) = &mut screen.reading {
+                screen.over.hints = None;
+                if let Some(reading) = screen.showing.reading_mut() {
                     reading.hold = true;
                 }
             }
@@ -585,33 +590,41 @@ fn handle(
             Ok(Step::Stay)
         }
         Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
-        Some(Ok(Event::Key(key))) if screen.settings.is_some() => Ok(on_settings(key, screen)),
-        Some(Ok(Event::Key(key))) if screen.draft.is_some() => Ok(on_draft(key, screen)),
-        Some(Ok(Event::Key(key))) if screen.local.is_some() => Ok(on_local(key, screen)),
-        Some(Ok(Event::Key(key))) if screen.picker.is_some() => Ok(pick(key, screen)),
-        Some(Ok(Event::Key(key))) if screen.hints.is_some() => {
-            let typed = screen.hints.as_mut().map_or(Typed::Cancel, |h| h.key(key));
-            if !matches!(typed, Typed::Partial) {
-                screen.hints = None;
-            }
-
-            Ok(match typed {
-                Typed::Open(url) => Step::Browse(url),
-                Typed::Partial | Typed::Cancel => Step::Stay,
-            })
-        }
-        Some(Ok(Event::Key(key))) => Ok(act(
-            keymap::action(key, screen.mode),
-            view,
-            screen,
-            half_page,
-        )),
+        Some(Ok(Event::Key(key))) => Ok(match screen.over.top() {
+            Some(Layer::Settings(_)) => on_settings(key, screen),
+            Some(Layer::Draft(_)) => on_draft(key, screen),
+            Some(Layer::LocalDrafts(_)) => on_local(key, screen),
+            Some(Layer::Picker(_)) => pick(key, screen),
+            Some(Layer::Hints) => on_hints(key, screen),
+            None => act(
+                keymap::action(key, screen.showing.mode()),
+                view,
+                screen,
+                half_page,
+            ),
+        }),
         // The labels sit where the old width laid the links out.
         Some(Ok(Event::Resize(..))) => {
-            screen.hints = None;
+            screen.over.hints = None;
             Ok(Step::Stay)
         }
         Some(Ok(_)) => Ok(Step::Stay),
+    }
+}
+
+fn on_hints(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
+    let typed = screen
+        .over
+        .hints
+        .as_mut()
+        .map_or(Typed::Cancel, |h| h.key(key));
+    if !matches!(typed, Typed::Partial) {
+        screen.over.hints = None;
+    }
+
+    match typed {
+        Typed::Open(url) => Step::Browse(url),
+        Typed::Partial | Typed::Cancel => Step::Stay,
     }
 }
 
@@ -667,7 +680,7 @@ fn act(
             Step::Stay
         }
         Some(Action::Scroll(scroll)) => {
-            match &mut screen.reading {
+            match screen.showing.reading_mut() {
                 Some(reading) => reading.scroll(scroll, half_page),
                 None => view.scroll(scroll, half_page),
             }
@@ -684,11 +697,11 @@ fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
     if matches!(action, Action::SwitchView) {
         view.html = view.html.other();
         view.preview_scroll = 0;
-        if let Some(reading) = &mut screen.reading {
+        if let Some(reading) = screen.showing.reading_mut() {
             reading.reveal = true;
         }
     } else {
-        let cursor = screen.reading.as_ref().map(|reading| reading.cursor);
+        let cursor = screen.showing.reading().map(|reading| reading.cursor);
         let message = cursor.map_or_else(
             || view.selected_message(),
             |cursor| view.stack().find(|m| m.body_key == cursor),
@@ -700,19 +713,18 @@ fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
     }
 
     // The labels sit where the links were before the switch.
-    screen.hints = None;
+    screen.over.hints = None;
 }
 
 /// Opens the selected Thread in Reading, or moves through it there.
 fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
-    match (action, &mut screen.reading) {
+    match (action, screen.showing.reading_mut()) {
         (Action::Read, _) => {
             let Some(reading) = Reading::open(view.stack()) else {
                 return Step::Stay;
             };
 
-            screen.mode = Mode::Reading;
-            screen.reading = Some(reading);
+            screen.showing = Showing::Reading(reading);
             // Gmail keeps Trash and Spam out of All Mail, and their Threads
             // apart; a Search never shows theirs.
             let apart =
@@ -735,7 +747,7 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
 /// What a Reply answers: the newest Message of the selected Thread not from
 /// the Account, else its newest; in Reading, the one at the cursor.
 fn answered(view: &InboxView, screen: &Screen) -> Option<Message> {
-    let message = screen.reading.as_ref().map_or_else(
+    let message = screen.showing.reading().map_or_else(
         || {
             view.stack()
                 .filter(|m| !m.from_me)
@@ -756,10 +768,10 @@ fn dwelling(
     previews: &Previews,
     text: Option<Rect>,
 ) -> Option<(Key, i64)> {
-    let listed = matches!(screen.mode, Mode::List | Mode::Query)
-        && screen.picker.is_none()
-        && screen.local.is_none()
-        && screen.draft.is_none();
+    let listed = matches!(screen.showing.mode(), Mode::List | Mode::Query)
+        && screen.over.picker.is_none()
+        && screen.over.local.is_none()
+        && screen.over.draft.is_none();
     let text = text.filter(|_| listed && !screen.help && view.selected_unread())?;
     previews.get(view, text.width)?;
     Some((view.selected_key()?, view.selected_body()?))
@@ -792,7 +804,7 @@ fn mark_unread(
     caches: &[Cache],
     asks: &Routes<Ask>,
 ) -> Result<(), Error> {
-    let message = screen.reading.as_ref().map_or_else(
+    let message = screen.showing.reading().map_or_else(
         || view.selected_message(),
         |reading| view.stack().find(|m| m.body_key == reading.cursor),
     );
@@ -854,7 +866,7 @@ fn delete(
         return Ok(());
     }
 
-    let cursor = screen.reading.as_ref().map(|reading| reading.cursor);
+    let cursor = screen.showing.reading().map(|reading| reading.cursor);
     let messages: Vec<_> = view
         .stack()
         .filter(|m| cursor.is_none_or(|cursor| m.body_key == cursor))
@@ -880,7 +892,7 @@ fn delete(
 
     screen.undo.push(Undo::Delete(account, batch, thread));
     show(view, caches, None)?;
-    screen.hints = None;
+    screen.over.hints = None;
     screen.follow(view, thread);
 
     relist(screen, view, caches)?;
@@ -916,7 +928,7 @@ fn undo(
     };
 
     show(view, caches, None)?;
-    screen.hints = None;
+    screen.over.hints = None;
     if let Some(key) = thread {
         screen.follow(view, thread);
         view.select(key);
@@ -941,14 +953,14 @@ fn undo(
 
 /// Acts on one key in a Draft's preview, or an Outbox Message's.
 fn on_settings(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
-    let Some(settings) = &mut screen.settings else {
+    let Some(settings) = &mut screen.over.settings else {
         return Step::Stay;
     };
 
     match settings.key(key) {
         settings::Step::Stay => Step::Stay,
         settings::Step::Close { reload } => {
-            screen.settings = None;
+            screen.over.settings = None;
             if reload { Step::Reload } else { Step::Stay }
         }
         settings::Step::Help => {
@@ -963,9 +975,14 @@ fn on_settings(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 }
 
 fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
-    if screen.draft.as_ref().is_some_and(|preview| preview.queued) {
+    if screen
+        .over
+        .draft
+        .as_ref()
+        .is_some_and(|preview| preview.queued)
+    {
         match keymap::queued(key) {
-            Some(QueuedKey::Close) => screen.draft = None,
+            Some(QueuedKey::Close) => screen.over.draft = None,
             Some(QueuedKey::Help) => screen.help = true,
             Some(QueuedKey::Quit) => return Step::Quit,
             None => {}
@@ -995,7 +1012,7 @@ fn on_draft(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 }
 
 fn on_local(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
-    let Some(local) = screen.local.as_mut() else {
+    let Some(local) = screen.over.local.as_mut() else {
         return Step::Stay;
     };
 
@@ -1015,7 +1032,7 @@ fn on_local(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
             };
 
             match read {
-                Ok(preview) => screen.draft = Some(preview),
+                Ok(preview) => screen.over.draft = Some(preview),
                 Err(error) => {
                     tracing::error!("reading the Draft failed: {error}");
                     screen.toast = Some(Toast::error("could not read the Draft"));
@@ -1029,7 +1046,7 @@ fn on_local(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
             }
         }
         Some(LocalKey::Undo) => return Step::Undo,
-        Some(LocalKey::Close) => screen.local = None,
+        Some(LocalKey::Close) => screen.over.local = None,
         Some(LocalKey::Help) => screen.help = true,
         Some(LocalKey::Quit) => return Step::Quit,
         None => {}
@@ -1040,7 +1057,7 @@ fn on_local(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
 
 fn open_local(screen: &mut Screen, outbox: &Outbox) {
     match LocalDrafts::open(outbox) {
-        Ok(local) => screen.local = Some(local),
+        Ok(local) => screen.over.local = Some(local),
         Err(error) => {
             tracing::error!("listing Local Drafts failed: {error}");
             screen.toast = Some(Toast::error("could not list Local Drafts"));
@@ -1049,7 +1066,7 @@ fn open_local(screen: &mut Screen, outbox: &Outbox) {
 }
 
 fn relist_local(screen: &mut Screen, outbox: &Outbox) {
-    if let Some(Err(error)) = screen.local.as_mut().map(|local| local.reload(outbox)) {
+    if let Some(Err(error)) = screen.over.local.as_mut().map(|local| local.reload(outbox)) {
         tracing::error!("listing Local Drafts failed: {error}");
     }
 }
@@ -1065,7 +1082,7 @@ fn draft(
     match step {
         Step::Compose => composing::compose(terminal, events, screen, from)?,
         Step::Edit => {
-            if let Some(preview) = screen.draft.take() {
+            if let Some(preview) = screen.over.draft.take() {
                 let notes = (preview.account, preview.answering);
                 composing::edit(terminal, events, screen, (preview.path, notes))?;
             }
@@ -1079,7 +1096,7 @@ fn draft(
 
 /// Acts on one key in the Folder Picker, which takes them all.
 fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
-    let Some(picker) = screen.picker.as_mut() else {
+    let Some(picker) = screen.over.picker.as_mut() else {
         return Step::Stay;
     };
 
@@ -1091,7 +1108,7 @@ fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
         Some(Pick::Choose) => {
             let chosen = picker.chosen().cloned();
             if let Some(folder) = chosen {
-                screen.picker = None;
+                screen.over.picker = None;
                 if folder.role == Some(Role::LocalDrafts) {
                     return Step::LocalDrafts;
                 }
@@ -1099,7 +1116,7 @@ fn pick(key: crossterm::event::KeyEvent, screen: &mut Screen) -> Step {
                 return Step::Show(folder);
             }
         }
-        Some(Pick::Close) => screen.picker = None,
+        Some(Pick::Close) => screen.over.picker = None,
         Some(Pick::Quit) => return Step::Quit,
         None => {}
     }
@@ -1120,7 +1137,7 @@ fn switch(
     }
 
     screen.list();
-    screen.hints = None;
+    screen.over.hints = None;
     view.switch(folder);
     show(view, caches, None)?;
     Ok(true)
@@ -1140,7 +1157,7 @@ fn steer(
     match step {
         Step::Folders => {
             let folders = folders(caches)?;
-            screen.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
+            screen.over.picker = Some(FolderPicker::new(folders, &view.folder, &view.accounts));
             for account in 0..caches.len() {
                 asks.send(account, Ask::ListFolders);
             }
@@ -1182,7 +1199,7 @@ fn folders(caches: &[Cache]) -> Result<Vec<Folder>, Error> {
 
 /// Lists the Folders anew in an open Folder Picker.
 fn relist(screen: &mut Screen, view: &InboxView, caches: &[Cache]) -> Result<(), Error> {
-    if let Some(picker) = &mut screen.picker {
+    if let Some(picker) = &mut screen.over.picker {
         picker.reload(folders(caches)?, &view.folder);
     }
 
@@ -1214,7 +1231,7 @@ fn start_search(view: &mut InboxView, screen: &mut Screen, caches: &[Cache]) -> 
         .start_search(|| everywhere(caches, &shown))
         .map_err(Error::Cache)?
     {
-        screen.mode = Mode::Query;
+        screen.showing = Showing::Query;
     }
 
     Ok(())
@@ -1223,8 +1240,8 @@ fn start_search(view: &mut InboxView, screen: &mut Screen, caches: &[Cache]) -> 
 /// Enters hint mode on the links the Preview window shows, or says there
 /// are none. `text` is where the Preview's text goes, if it is shown.
 fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text: Option<Rect>) {
-    screen.hints = text.and_then(|text| {
-        if let Some(reading) = &screen.reading {
+    screen.over.hints = text.and_then(|text| {
+        if let Some(reading) = screen.showing.reading() {
             return stack_links(view, previews, reading, text);
         }
 
@@ -1233,7 +1250,7 @@ fn label_links(screen: &mut Screen, previews: &Previews, view: &InboxView, text:
         LinkHints::find([(0, &preview.body[..], lines)])
     });
 
-    if screen.hints.is_none() {
+    if screen.over.hints.is_none() {
         screen.toast = Some(Toast::new("no links"));
     }
 }

@@ -1,36 +1,35 @@
 use tokio::time::Instant;
 
 use crate::{
-    awaited_reply::AwaitedReply, cache::Cache, draft_preview::DraftPreview, dwell::Dwell,
-    folder_picker::FolderPicker, inbox_view::InboxView, link_hints::LinkHints,
-    local_drafts::LocalDrafts, mode::Mode, reading::Reading, settings::Settings, status::Status,
-    thread::Key, toast::Toast, undo::Undo,
+    awaited_reply::AwaitedReply,
+    cache::Cache,
+    dwell::Dwell,
+    inbox_view::InboxView,
+    mode::Mode,
+    over::{Layer, Over},
+    showing::Showing,
+    status::Status,
+    thread::Key,
+    toast::Toast,
+    undo::Undo,
 };
 
 /// What the main screen shows over and beside the panes.
 #[derive(Default)]
 pub struct Screen {
+    /// Over everything, `over` included, taking every key while open.
     pub help: bool,
-    pub picker: Option<FolderPicker>,
     pub toast: Option<Toast>,
     /// Each Account's sync connection's, by its place in this run.
     pub statuses: Vec<Status>,
     /// A page of older Messages under way on the fetch connection.
     pub backfill: Option<Status>,
-    pub hints: Option<LinkHints>,
-    pub mode: Mode,
-    /// While `mode` is `Reading`.
-    pub reading: Option<Reading>,
+    pub showing: Showing,
+    pub over: Over,
     pub dwell: Dwell,
     /// What an Undo may take back, the latest last.
     pub undo: Vec<Undo>,
-    /// Over the whole screen, taking every key, while open.
-    pub draft: Option<DraftPreview>,
-    /// Under `draft`, taking every key it leaves.
-    pub local: Option<LocalDrafts>,
     pub replying: Option<AwaitedReply>,
-    /// Over the whole screen, taking every key, while open.
-    pub settings: Option<Settings>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
 }
@@ -48,34 +47,30 @@ impl Screen {
     }
 
     pub fn list(&mut self) {
-        self.mode = Mode::List;
-        self.reading = None;
+        self.showing = Showing::List;
     }
 
     /// Back to the list once the selection left `thread`, the Thread Reading
     /// was opened on; true when it did.
     pub fn follow(&mut self, view: &InboxView, thread: Option<Key>) -> bool {
-        let left = self.reading.is_some() && view.selected_key() != thread;
+        let left = self.showing.reading().is_some() && view.selected_key() != thread;
         if left {
-            self.hints = None;
+            self.over.hints = None;
             self.list();
         }
 
         left
     }
 
-    /// What the keys act on: Settings or a Draft's preview takes them all
-    /// while open, then Local Drafts.
-    pub const fn keys(&self) -> Mode {
-        if self.settings.is_some() {
-            return Mode::Settings;
-        }
-
-        match (&self.draft, &self.local) {
-            (Some(preview), _) if preview.queued => Mode::Queued,
-            (Some(_), _) => Mode::Draft,
-            (None, Some(_)) => Mode::LocalDrafts,
-            (None, None) => self.mode,
+    /// What the keys act on, below the `?` popup: the top layer over the
+    /// panes, else the panes.
+    pub fn keys(&self) -> Mode {
+        match self.over.top() {
+            Some(Layer::Settings(_)) => Mode::Settings,
+            Some(Layer::Draft(preview)) if preview.queued => Mode::Queued,
+            Some(Layer::Draft(_)) => Mode::Draft,
+            Some(Layer::LocalDrafts(_)) => Mode::LocalDrafts,
+            Some(Layer::Picker(_) | Layer::Hints) | None => self.showing.mode(),
         }
     }
 

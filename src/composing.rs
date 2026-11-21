@@ -221,7 +221,7 @@ fn preview(
     screen: &mut Screen,
     (path, (account, answering)): (PathBuf, (Option<String>, Option<Answering>)),
 ) {
-    screen.draft = match DraftPreview::read(path, answering) {
+    screen.over.draft = match DraftPreview::read(path, answering) {
         Ok(mut preview) => {
             preview.account = account.or(preview.account);
             Some(preview)
@@ -237,13 +237,13 @@ fn preview(
 /// Send: the Draft shown moves to the Outbox, unless it does not parse,
 /// and its Account is asked to send it.
 pub fn send(screen: &mut Screen, (accounts, outbox): (Accounts, &Outbox), asks: &Routes<Ask>) {
-    let Some(mut preview) = screen.draft.take() else {
+    let Some(mut preview) = screen.over.draft.take() else {
         return;
     };
 
     let Ok(draft) = &preview.draft else {
         screen.toast = Some(Toast::error("the Draft does not parse"));
-        screen.draft = Some(preview);
+        screen.over.draft = Some(preview);
         return;
     };
 
@@ -273,7 +273,7 @@ pub fn send(screen: &mut Screen, (accounts, outbox): (Accounts, &Outbox), asks: 
 
     if let Err(error) = queued {
         preview.failure = Some(error);
-        screen.draft = Some(preview);
+        screen.over.draft = Some(preview);
         return;
     }
 
@@ -285,7 +285,7 @@ pub fn send(screen: &mut Screen, (accounts, outbox): (Accounts, &Outbox), asks: 
 
 /// Closes the shown Draft's preview, its file kept for Local Drafts.
 pub fn keep(screen: &mut Screen) {
-    if screen.draft.take().is_some() {
+    if screen.over.draft.take().is_some() {
         screen.toast = Some(Toast::new("Saved to Drafts"));
     }
 }
@@ -294,7 +294,7 @@ pub fn keep(screen: &mut Screen) {
 pub fn discard_file(screen: &mut Screen, path: PathBuf) {
     match DraftPreview::read(path, None) {
         Ok(preview) => {
-            screen.draft = Some(preview);
+            screen.over.draft = Some(preview);
             discard(screen);
         }
         Err(error) => {
@@ -306,14 +306,14 @@ pub fn discard_file(screen: &mut Screen, path: PathBuf) {
 
 /// Deletes the shown Draft's file, for an Undo to write back.
 pub fn discard(screen: &mut Screen) {
-    let Some(preview) = screen.draft.take() else {
+    let Some(preview) = screen.over.draft.take() else {
         return;
     };
 
     if let Err(error) = notes::remove_message(&preview.path) {
         tracing::error!("discarding the Draft failed: {error}");
         screen.toast = Some(Toast::error("could not discard the Draft"));
-        screen.draft = Some(preview);
+        screen.over.draft = Some(preview);
         return;
     }
 
@@ -339,5 +339,5 @@ pub fn restore(
         return;
     }
 
-    screen.draft = Some(DraftPreview::new(path, text, (account, answering)));
+    screen.over.draft = Some(DraftPreview::new(path, text, (account, answering)));
 }

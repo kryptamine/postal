@@ -1,4 +1,4 @@
-/// What the main screen shows, and so what the keys do there.
+/// What the keys do: the panes' `Showing`, or the layer open over them.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum Mode {
     /// The Message List, with the Preview beside or below it.
