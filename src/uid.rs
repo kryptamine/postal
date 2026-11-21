@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// A Message's IMAP UID, which names it in one Folder under one
 /// UIDVALIDITY.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Uid(u32);
 
@@ -21,6 +21,13 @@ impl Uid {
     /// The lowest UID a Message newer than this one can have.
     pub const fn next(self) -> Self {
         Self(self.0.saturating_add(1))
+    }
+}
+
+/// As the bare number, which logs have always shown.
+impl fmt::Debug for Uid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
