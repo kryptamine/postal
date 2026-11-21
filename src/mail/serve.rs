@@ -4,7 +4,7 @@ use crate::{
     account::config::Config,
     account::sign_in::SignIn,
     cache::Cache,
-    domain::folder::INBOX,
+    domain::folder_name::FolderName,
     mail::body_fetch::{self, Request},
     mail::idle,
     mail::imap::ImapSession,
@@ -51,11 +51,11 @@ async fn bodies(
     let attempt = async |report: &dyn Fn(Status)| {
         let mut session = ImapSession::open(config, sign_in).await?;
         // Every run starts in the Inbox: its first Preview waits on no EXAMINE.
-        sync::examine(&mut session, INBOX).await?;
+        sync::examine(&mut session, FolderName::inbox()).await?;
         // Asked for before an outage: the Preview asks again once told Live.
         while requests.try_recv().is_ok() {}
         report(Status::Live);
-        let examined = Some(INBOX.into());
+        let examined = Some(FolderName::inbox().clone());
         body_fetch::serve(&mut session, cache, &mut requests, examined, &send).await
     };
 

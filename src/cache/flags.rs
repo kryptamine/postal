@@ -1,15 +1,13 @@
-use std::sync::Arc;
-
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
 use crate::{
     domain::body_key::BodyKey, domain::flag::Flag, domain::flag_change::FlagChange,
-    domain::message_ref::MessageRef, domain::uid::Uid,
+    domain::folder_name::FolderName, domain::message_ref::MessageRef, domain::uid::Uid,
 };
 
 /// A Folder's flag changes for the server.
-pub type FolderFlags = (Arc<str>, Vec<FlagChange>);
+pub type FolderFlags = (FolderName, Vec<FlagChange>);
 
 impl Cache {
     /// Sets Unread on each `(folder, uid)` and on Gmail's copies of it in
@@ -30,7 +28,7 @@ impl Cache {
 
     /// Sets `\Answered` on `uid` of `folder` and on Gmail's copies of it,
     /// and queues it for the server.
-    pub fn answer(&self, folder: &str, uid: Uid) -> Result<(), Error> {
+    pub fn answer(&self, folder: &FolderName, uid: Uid) -> Result<(), Error> {
         let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
@@ -54,7 +52,7 @@ impl Cache {
                     .execute(params![key, account])?;
             }
 
-            queue(&transaction, FolderKey { account, folder }, uid, Flag::Answered, true)?;
+            queue(&transaction, FolderKey { account, folder: folder.as_str() }, uid, Flag::Answered, true)?;
             transaction.commit()
         })
     }
@@ -69,7 +67,7 @@ impl Cache {
         let mut pending: Vec<FolderFlags> = Vec::new();
         for row in statement.query_map([self.email()], |row| {
             Ok((
-                row.get::<_, String>(0)?,
+                row.get::<_, FolderName>(0)?,
                 row.get(1)?,
                 row.get::<_, String>(2)?,
                 row.get(3)?,
@@ -82,8 +80,8 @@ impl Cache {
 
             let change = FlagChange { uid, flag, added };
             match pending.last_mut() {
-                Some((last, changes)) if **last == *folder => changes.push(change),
-                _ => pending.push((folder.into(), vec![change])),
+                Some((last, changes)) if *last == folder => changes.push(change),
+                _ => pending.push((folder, vec![change])),
             }
         }
 
@@ -92,7 +90,7 @@ impl Cache {
 
     /// Drops `changes` of `folder` from the queue; one changed again since
     /// stays queued.
-    pub fn flags_sent(&self, folder: &str, changes: &[FlagChange]) -> Result<(), Error> {
+    pub fn flags_sent(&self, folder: &FolderName, changes: &[FlagChange]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let mut delete = transaction.prepare_cached(

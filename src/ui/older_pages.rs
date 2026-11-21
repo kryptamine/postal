@@ -51,7 +51,7 @@ impl OlderPages {
 
         self.asked = true;
         self.requests
-            .send(account, Request::Backfill(folder.into()));
+            .send(account, Request::Backfill(folder.clone()));
     }
 
     /// Follows the fetch connection, and passes `update` on. A request in

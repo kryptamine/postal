@@ -388,7 +388,7 @@ fn steering(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
             if switch(ui, caches, folder)? {
                 for account in caches.ids() {
                     if let Some(shown) = ui.view.folder.of(account) {
-                        asks.send(account, Ask::Show(shown.into()));
+                        asks.send(account, Ask::Show(shown.clone()));
                     }
                 }
             }

@@ -1,5 +1,6 @@
 use crate::{
     cache::{self, Cache, Changes},
+    domain::folder_name::FolderName,
     domain::sync_state::SyncState,
     domain::uid::Uid,
     mail::imap::{self, Examined, MailServer},
@@ -37,12 +38,12 @@ impl Error {
 }
 
 /// Examines `folder` and returns what it saw; `Gone` when refused.
-pub async fn examine(server: &mut impl MailServer, folder: &str) -> Result<Examined, Error> {
+pub async fn examine(server: &mut impl MailServer, folder: &FolderName) -> Result<Examined, Error> {
     server.examine(folder).await.map_err(gone)
 }
 
 /// As `examine`, opening `folder` for flag changes too.
-pub async fn select(server: &mut impl MailServer, folder: &str) -> Result<Examined, Error> {
+pub async fn select(server: &mut impl MailServer, folder: &FolderName) -> Result<Examined, Error> {
     server.select(folder).await.map_err(gone)
 }
 
@@ -61,7 +62,7 @@ fn gone(error: imap::Error) -> Error {
 pub async fn resync(
     server: &mut impl MailServer,
     cache: &Cache,
-    folder: &str,
+    folder: &FolderName,
     report: &dyn Fn(Status),
 ) -> Result<Examined, Error> {
     // Selected, not examined, so a Mark Read can be stored: ADR 0011.
@@ -95,7 +96,7 @@ pub async fn resync(
 
 async fn refetch(
     server: &mut impl MailServer,
-    folder: &str,
+    folder: &FolderName,
     examined: &Examined,
     unread: usize,
     report: &dyn Fn(Status),

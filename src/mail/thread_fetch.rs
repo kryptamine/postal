@@ -1,9 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use crate::{
     cache::Cache,
     domain::body_key::BodyKey,
     domain::folder::{Folder, Role},
+    domain::folder_name::FolderName,
     domain::thread_id::ThreadId,
     domain::uid::Uid,
     mail::imap::MailServer,
@@ -94,7 +95,7 @@ async fn all_mail(
     server: &mut impl MailServer,
     cache: &Cache,
     send: &impl Fn(Update),
-) -> Result<Option<Arc<str>>, Error> {
+) -> Result<Option<FolderName>, Error> {
     if let Some(name) = all(cache.folders()?) {
         return Ok(Some(name));
     }
@@ -105,7 +106,7 @@ async fn all_mail(
     Ok(all(listed))
 }
 
-fn all<A>(folders: Vec<Folder<A>>) -> Option<Arc<str>> {
+fn all<A>(folders: Vec<Folder<A>>) -> Option<FolderName> {
     folders
         .into_iter()
         .find(|f| f.role == Some(Role::All))

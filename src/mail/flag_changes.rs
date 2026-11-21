@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use crate::{
     cache::Cache,
     domain::flag::Flag,
+    domain::folder_name::FolderName,
     domain::uid::Uid,
     mail::imap::MailServer,
     mail::sync::{self, Error},
@@ -14,14 +13,14 @@ use crate::{
 pub async fn send(
     server: &mut impl MailServer,
     cache: &Cache,
-    mut selected: Option<Arc<str>>,
-) -> Result<Option<Arc<str>>, Error> {
+    mut selected: Option<FolderName>,
+) -> Result<Option<FolderName>, Error> {
     for (folder, changes) in cache.pending_flags()? {
-        if selected.as_deref() != Some(&*folder) {
+        if selected.as_ref() != Some(&folder) {
             // A failed SELECT leaves no Folder selected (RFC 3501 6.3.1).
             selected = None;
             match sync::select(server, &folder).await {
-                Ok(_) => selected = Some(Arc::clone(&folder)),
+                Ok(_) => selected = Some(folder.clone()),
                 Err(Error::Gone(error)) => {
                     tracing::warn!("{folder} is gone, its flag changes with it: {error}");
                     cache.flags_sent(&folder, &changes)?;

@@ -91,7 +91,7 @@ pub fn undo(ui: &mut Ui, world: World) -> Result<(), Error> {
     let shown = view
         .folder
         .of(account)
-        .is_some_and(|shown| folders.iter().any(|f| **f == *shown));
+        .is_some_and(|shown| folders.iter().any(|f| f == shown));
 
     let here = view.search.is_some() || shown;
     screen.toast = Some(if here {

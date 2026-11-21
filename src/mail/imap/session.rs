@@ -18,6 +18,7 @@ use crate::{
     domain::correspondence::Correspondence,
     domain::flag,
     domain::folder::{Folder, INBOX, Role},
+    domain::folder_name::FolderName,
     domain::message_flags::MessageFlags,
     domain::new_message::NewMessage,
     domain::sync_state::SyncState,
@@ -52,20 +53,20 @@ pub struct Examined {
 /// What Postal needs from a mail server, kept apart from the IMAP library.
 pub trait MailServer {
     /// Opens the Folder named `folder` read-only; later commands read it.
-    async fn examine(&mut self, folder: &str) -> Result<Examined, Error>;
+    async fn examine(&mut self, folder: &FolderName) -> Result<Examined, Error>;
 
     /// As `examine`, but `store` may change the Folder's flags.
-    async fn select(&mut self, folder: &str) -> Result<Examined, Error>;
+    async fn select(&mut self, folder: &FolderName) -> Result<Examined, Error>;
 
     /// Adds `flag` to `uids` of the selected Folder, or removes it.
     async fn store(&mut self, uids: &[Uid], flag: flag::Flag, added: bool) -> Result<(), Error>;
 
     /// Moves `uids` of the selected Folder to the Folder named `to`, and
     /// returns each move the server named.
-    async fn move_to(&mut self, uids: &[Uid], to: &str) -> Result<Vec<Moved>, Error>;
+    async fn move_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error>;
 
     /// Saves `message` to the Folder named `folder`, flagged `\Seen`.
-    async fn append(&mut self, folder: &str, message: &[u8]) -> Result<(), Error>;
+    async fn append(&mut self, folder: &FolderName, message: &[u8]) -> Result<(), Error>;
 
     /// Gmail, which keeps a copy of each Message sent over SMTP itself.
     fn gmail(&self) -> bool;
@@ -74,7 +75,7 @@ pub trait MailServer {
     async fn folders(&mut self) -> Result<Vec<Folder<()>>, Error>;
 
     /// Unread Messages in a Folder other than the examined one, by `STATUS`.
-    async fn unread_in(&mut self, folder: &str) -> Result<usize, Error>;
+    async fn unread_in(&mut self, folder: &FolderName) -> Result<usize, Error>;
 
     /// The newest `count` of the `exists` Messages, by sequence number;
     /// `progress` gets how many have come so far, now and then.
@@ -279,14 +280,14 @@ impl ImapSession {
 }
 
 impl MailServer for ImapSession {
-    async fn examine(&mut self, folder: &str) -> Result<Examined, Error> {
+    async fn examine(&mut self, folder: &FolderName) -> Result<Examined, Error> {
         // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
         // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
         let mailbox = self.session.examine(folder).await?;
         Ok(self.opened(&mailbox))
     }
 
-    async fn select(&mut self, folder: &str) -> Result<Examined, Error> {
+    async fn select(&mut self, folder: &FolderName) -> Result<Examined, Error> {
         let mailbox = self.session.select(folder).await?;
         Ok(self.opened(&mailbox))
     }
@@ -306,8 +307,8 @@ impl MailServer for ImapSession {
         Ok(())
     }
 
-    async fn move_to(&mut self, uids: &[Uid], to: &str) -> Result<Vec<Moved>, Error> {
-        let (set, to) = (uid_set(uids), quoted(to));
+    async fn move_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
+        let (set, to) = (uid_set(uids), quoted(to.as_str()));
         // What came before stays ahead of what comes during the move.
         let earlier = self.pushed();
         self.pending = earlier;
@@ -340,7 +341,7 @@ impl MailServer for ImapSession {
         Ok(moved)
     }
 
-    async fn append(&mut self, folder: &str, message: &[u8]) -> Result<(), Error> {
+    async fn append(&mut self, folder: &FolderName, message: &[u8]) -> Result<(), Error> {
         self.session
             .append(folder, Some("(\\Seen)"), None, message)
             .await?;
@@ -362,7 +363,10 @@ impl MailServer for ImapSession {
             .collect();
         // A `LIST` cut short by a dropped connection ends as if complete,
         // and every server lists INBOX (RFC 3501 5.1).
-        if !folders.iter().any(|f| f.name.eq_ignore_ascii_case(INBOX)) {
+        if !folders
+            .iter()
+            .any(|f| f.name.as_str().eq_ignore_ascii_case(INBOX))
+        {
             return Err(Error::Closed);
         }
 
@@ -371,7 +375,7 @@ impl MailServer for ImapSession {
         Ok(folders)
     }
 
-    async fn unread_in(&mut self, folder: &str) -> Result<usize, Error> {
+    async fn unread_in(&mut self, folder: &FolderName) -> Result<usize, Error> {
         let status = self.session.status(folder, "(UNSEEN)").await?;
         Ok(status
             .unseen

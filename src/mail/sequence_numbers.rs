@@ -1,5 +1,4 @@
-use std::sync::Arc;
-
+use crate::domain::folder_name::FolderName;
 use crate::domain::uid::Uid;
 
 /// The ordered UID list: which cached Message a sequence number from the
@@ -7,7 +6,7 @@ use crate::domain::uid::Uid;
 /// so a sequence number past the older ones indexes straight into it.
 pub struct SequenceNumbers {
     /// The Folder whose `SELECT` numbered them.
-    folder: Arc<str>,
+    folder: FolderName,
     /// Messages on the server older than every cached one.
     older: u32,
     /// The cached UIDs, ascending.
@@ -17,7 +16,7 @@ pub struct SequenceNumbers {
 impl SequenceNumbers {
     /// `exists` is the count `SELECT` saw, before any Message at or past
     /// `uid_next` arrived; `None` counts every cached UID as seen by it.
-    pub fn new(folder: Arc<str>, exists: u32, uid_next: Option<Uid>, uids: Vec<Uid>) -> Self {
+    pub fn new(folder: FolderName, exists: u32, uid_next: Option<Uid>, uids: Vec<Uid>) -> Self {
         let examined = uids
             .iter()
             .filter(|&&uid| uid_next.is_none_or(|next| uid < next))
@@ -30,7 +29,7 @@ impl SequenceNumbers {
         }
     }
 
-    pub fn folder(&self) -> &str {
+    pub const fn folder(&self) -> &FolderName {
         &self.folder
     }
 

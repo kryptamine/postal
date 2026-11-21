@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use crate::{
-    cache::Cache, domain::folder::Role, mail::imap::MailServer, mail::sync::Error,
-    mail::update::Update,
+    cache::Cache, domain::folder::Role, domain::folder_name::FolderName, mail::imap::MailServer,
+    mail::sync::Error, mail::update::Update,
 };
 
 /// The Folder with `role`, listing the Folders first when the Cache knows
@@ -12,8 +10,8 @@ pub async fn find(
     cache: &Cache,
     role: Role,
     send: &impl Fn(Update),
-) -> Result<Option<Arc<str>>, Error> {
-    let with_role = |cache: &Cache| -> Result<Option<Arc<str>>, Error> {
+) -> Result<Option<FolderName>, Error> {
+    let with_role = |cache: &Cache| -> Result<Option<FolderName>, Error> {
         let folders = cache.folders()?;
         Ok(folders
             .into_iter()

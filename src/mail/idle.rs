@@ -1,8 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crate::{
     cache::{Cache, Changes},
     domain::folder::INBOX,
+    domain::folder_name::FolderName,
     mail::flag_changes,
     mail::folder_list,
     mail::imap::{MailServer, Pushed},
@@ -43,14 +44,14 @@ pub async fn listen<S: MailServer>(
     send_changes(&mut server, cache, None, tell.send).await?;
     let mut sequence = shown(&mut server, cache, steering, tell).await?;
     // `None` while the Folder selected on the server is not known.
-    let mut selected = Some(Arc::clone(&steering.folder));
+    let mut selected = Some(steering.folder.clone());
     // What came during the resync and the Snippets goes first.
     let mut pushed = server.pushed();
     loop {
         // Ahead of a switch, while `selected` is still the Folder selected.
         if std::mem::take(&mut asked.changes) {
             selected = send_changes(&mut server, cache, selected.take(), tell.send).await?;
-            asked.switched |= selected.as_deref() != Some(&*steering.folder);
+            asked.switched |= selected.as_ref() != Some(&steering.folder);
             pushed.extend(server.pushed());
             continue;
         }
@@ -63,7 +64,7 @@ pub async fn listen<S: MailServer>(
         // The switch goes first, so `STATUS` never reaches the selected Folder.
         if std::mem::take(&mut asked.switched) {
             sequence = shown(&mut server, cache, steering, tell).await?;
-            selected = Some(Arc::clone(&steering.folder));
+            selected = Some(steering.folder.clone());
             pushed = server.pushed();
             continue;
         }
@@ -97,7 +98,7 @@ pub async fn listen<S: MailServer>(
             continue;
         }
 
-        let folder = Arc::clone(&steering.folder);
+        let folder = steering.folder.clone();
         if let Some(why) = resync_for(cache, &folder, &sequence, &pushed)? {
             tracing::info!("{why}: resyncing");
             sequence = resynced(&mut server, cache, &folder, tell).await?;
@@ -116,9 +117,9 @@ pub async fn listen<S: MailServer>(
 async fn send_changes(
     server: &mut impl MailServer,
     cache: &Cache,
-    selected: Option<Arc<str>>,
+    selected: Option<FolderName>,
     send: &impl Fn(Update),
-) -> Result<Option<Arc<str>>, Error> {
+) -> Result<Option<FolderName>, Error> {
     let selected = flag_changes::send(server, cache, selected).await?;
     move_changes::send(server, cache, selected, send).await
 }
@@ -179,13 +180,13 @@ async fn shown(
     tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<SequenceNumbers, Error> {
     server.pushed();
-    let folder = Arc::clone(&steering.folder);
+    let folder = steering.folder.clone();
     match resynced(server, cache, &folder, tell).await {
-        Err(Error::Gone(error)) if *folder != *INBOX => {
+        Err(Error::Gone(error)) if folder != *FolderName::inbox() => {
             tracing::warn!("{folder} is gone: {error}");
             cache.remove_folder(&folder)?;
             gone(steering, tell.send);
-            resynced(server, cache, INBOX, tell).await
+            resynced(server, cache, FolderName::inbox(), tell).await
         }
         result => result,
     }
@@ -200,7 +201,7 @@ fn gone(steering: &mut Steering, send: &impl Fn(Update)) {
 /// Why `pushed` cannot be read against `sequence`; `None` when it can.
 fn resync_for(
     cache: &Cache,
-    folder: &str,
+    folder: &FolderName,
     sequence: &SequenceNumbers,
     pushed: &[Pushed],
 ) -> Result<Option<&'static str>, Error> {
@@ -222,7 +223,7 @@ fn resync_for(
 async fn resynced(
     server: &mut impl MailServer,
     cache: &Cache,
-    folder: &str,
+    folder: &FolderName,
     tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<SequenceNumbers, Error> {
     let examined = sync::resync(server, cache, folder, tell.report).await?;
@@ -231,7 +232,7 @@ async fn resynced(
     snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
     let uids = cache.uids(folder)?;
     Ok(SequenceNumbers::new(
-        folder.into(),
+        folder.clone(),
         examined.exists,
         examined.state.uid_next,
         uids,

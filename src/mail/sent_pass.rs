@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use crate::{
     cache::{Cache, SentPass},
     domain::folder::Role,
+    domain::folder_name::FolderName,
     domain::uid::Uid,
     mail::imap::MailServer,
     mail::role_folder,
@@ -21,7 +20,7 @@ pub async fn read(
     server: &mut impl MailServer,
     cache: &Cache,
     send: &impl Fn(Update),
-) -> Result<Option<Arc<str>>, Error> {
+) -> Result<Option<FolderName>, Error> {
     let Some(folder) = role_folder::find(server, cache, Role::Sent, send).await? else {
         return Ok(None);
     };
@@ -37,7 +36,7 @@ pub async fn read(
     let uid_validity = examined.state.uid_validity;
     let last = cache
         .sent_pass()?
-        .filter(|pass| *pass.folder == *folder && pass.uid_validity == uid_validity)
+        .filter(|pass| pass.folder == *folder.as_str() && pass.uid_validity == uid_validity)
         .map(|pass| pass.last_uid);
     let mut read = match (last, examined.state.uid_next) {
         (Some(last), Some(next)) if next <= last.next() => Vec::new(),

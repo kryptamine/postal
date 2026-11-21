@@ -2,7 +2,8 @@ use rusqlite::{Row, params};
 
 use super::{Cache, Error};
 use crate::{
-    domain::text_part::TextPart, domain::transfer_encoding::TransferEncoding, domain::uid::Uid,
+    domain::folder_name::FolderName, domain::text_part::TextPart,
+    domain::transfer_encoding::TransferEncoding, domain::uid::Uid,
 };
 
 impl Cache {
@@ -11,7 +12,7 @@ impl Cache {
     /// `below` when given.
     pub fn pending_snippets(
         &self,
-        folder: &str,
+        folder: &FolderName,
         limit: usize,
         below: Option<Uid>,
     ) -> Result<Vec<(Uid, TextPart)>, Error> {
@@ -35,7 +36,11 @@ impl Cache {
 
     /// Writes one batch of Snippets in one transaction; a UID no longer
     /// cached is ignored.
-    pub fn write_snippets(&self, folder: &str, snippets: &[(Uid, String)]) -> Result<(), Error> {
+    pub fn write_snippets(
+        &self,
+        folder: &FolderName,
+        snippets: &[(Uid, String)],
+    ) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let mut update = transaction.prepare_cached(

@@ -1,7 +1,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
-use crate::{domain::body_key::BodyKey, domain::uid::Uid};
+use crate::{domain::body_key::BodyKey, domain::folder_name::FolderName, domain::uid::Uid};
 
 /// The raw bodies kept, in bytes; past it the least recently used go first.
 const BODY_BYTES: i64 = 200 * 1024 * 1024;
@@ -43,7 +43,11 @@ impl Cache {
     /// Stores each `(uid, raw)` under its Message's body key in one
     /// transaction, then evicts past `BODY_BYTES`. A UID no longer cached is
     /// ignored.
-    pub fn write_bodies(&self, folder: &str, bodies: &[(Uid, Vec<u8>)]) -> Result<(), Error> {
+    pub fn write_bodies(
+        &self,
+        folder: &FolderName,
+        bodies: &[(Uid, Vec<u8>)],
+    ) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let mut insert = transaction.prepare_cached(

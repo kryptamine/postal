@@ -97,7 +97,7 @@ impl Reader {
                      FROM message WHERE account = ?1 AND mailbox = ?2 AND uid = ?3"
                 ))?;
                 statement
-                    .query_map(params![account, &**folder, uid], thread_message)?
+                    .query_map(params![account, folder, uid], thread_message)?
                     .collect::<Result<_, _>>()?
             }
             (None, None) => return Ok(None),

@@ -1,9 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
 
 use crate::{
     cache::Cache,
+    domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::uid::Uid,
     mail::backfill,
@@ -17,7 +18,7 @@ use crate::{
 pub enum Request {
     Bodies(BodyRequest),
     /// The page of Messages of this Folder older than every cached one.
-    Backfill(Arc<str>),
+    Backfill(FolderName),
     /// The bodies of these UIDs, each in its Folder, which a Reply waits
     /// on: served first, and never passed over for a later request.
     Reply(Vec<MessageRef>),
@@ -27,7 +28,7 @@ pub enum Request {
 #[derive(Default)]
 struct Pending {
     bodies: Option<BodyRequest>,
-    older: Option<Arc<str>>,
+    older: Option<FolderName>,
     reply: Option<Vec<MessageRef>>,
 }
 
@@ -55,7 +56,7 @@ impl Pending {
 /// one before it, so it names every body still missing. The selected one
 /// comes alone, so it does not wait on its neighbours.
 pub struct BodyRequest {
-    pub folder: Arc<str>,
+    pub folder: FolderName,
     pub selected: Option<Uid>,
     pub neighbours: Vec<Uid>,
 }
@@ -84,7 +85,7 @@ pub async fn serve(
     server: &mut impl MailServer,
     cache: &Cache,
     requests: &mut UnboundedReceiver<Request>,
-    mut examined: Option<Arc<str>>,
+    mut examined: Option<FolderName>,
     send: impl Fn(Update),
 ) -> Result<(), Error> {
     let (mut pending, mut spare) = (Pending::default(), SpareWork::new());
@@ -172,11 +173,11 @@ async fn next(requests: &mut UnboundedReceiver<Request>, patience: Option<Durati
 async fn fetch_reply(
     server: &mut impl MailServer,
     cache: &Cache,
-    examined: &mut Option<Arc<str>>,
+    examined: &mut Option<FolderName>,
     bodies: Vec<MessageRef>,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
-    let mut folders: Vec<(Arc<str>, Vec<Uid>)> = Vec::new();
+    let mut folders: Vec<(FolderName, Vec<Uid>)> = Vec::new();
     for MessageRef { folder, uid } in bodies {
         match folders.iter_mut().find(|(f, _)| *f == folder) {
             Some((_, uids)) => uids.push(uid),
@@ -217,7 +218,7 @@ async fn fetch_reply(
 async fn fetch_each(
     server: &mut impl MailServer,
     cache: &Cache,
-    folder: &Arc<str>,
+    folder: &FolderName,
     uids: Vec<Uid>,
     send: &impl Fn(Update),
 ) -> Result<Vec<Uid>, Error> {
@@ -227,12 +228,12 @@ async fn fetch_each(
             for uid in uids {
                 let fetched = fetch(server, cache, folder, vec![uid]).await?;
                 answered.extend_from_slice(fetched.uids());
-                send(Update::Bodies(Arc::clone(folder), fetched));
+                send(Update::Bodies(folder.clone(), fetched));
             }
         }
         done => {
             answered.extend_from_slice(done.uids());
-            send(Update::Bodies(Arc::clone(folder), done));
+            send(Update::Bodies(folder.clone(), done));
         }
     }
 
@@ -243,8 +244,8 @@ async fn fetch_each(
 /// server no longer has it.
 pub async fn open(
     server: &mut impl MailServer,
-    examined: &mut Option<Arc<str>>,
-    folder: &Arc<str>,
+    examined: &mut Option<FolderName>,
+    folder: &FolderName,
 ) -> Result<bool, Error> {
     if examined.as_ref() == Some(folder) {
         return Ok(true);
@@ -253,7 +254,7 @@ pub async fn open(
     *examined = None;
     match sync::examine(server, folder).await {
         Ok(_) => {
-            *examined = Some(Arc::clone(folder));
+            *examined = Some(folder.clone());
             Ok(true)
         }
         Err(Error::Gone(error)) => {
@@ -267,7 +268,7 @@ pub async fn open(
 async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
-    folder: &str,
+    folder: &FolderName,
     uids: Vec<Uid>,
 ) -> Result<Fetched, Error> {
     let bodies = match server.bodies(&uids).await {

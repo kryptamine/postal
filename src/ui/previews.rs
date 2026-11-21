@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, mpsc},
+    sync::mpsc,
     thread,
 };
 
@@ -10,6 +10,7 @@ use crate::{
     account::config::Config,
     cache::{self, Cache},
     domain::folder,
+    domain::folder_name::FolderName,
     domain::message::Message,
     domain::per_account::{AccountId, PerAccount},
     domain::uid::Uid,
@@ -44,7 +45,7 @@ enum Link {
 /// of `account`, which is `None` until a Folder is asked of.
 pub struct Previews {
     account: Option<AccountId>,
-    folder: Arc<str>,
+    folder: FolderName,
     rendered: RenderedPreviews,
     rendering: HashSet<PreviewKey>,
     /// UIDs of the latest request not yet answered: the server serves only
@@ -181,7 +182,7 @@ impl Previews {
     fn ready<'m>(
         &mut self,
         caches: &PerAccount<Cache>,
-        folder: Option<(AccountId, &Arc<str>)>,
+        folder: Option<(AccountId, &FolderName)>,
         wanted: impl Iterator<Item = (&'m Message, bool)>,
         key: impl Fn(&Message) -> PreviewKey,
     ) -> Result<(), cache::Error> {
@@ -194,7 +195,7 @@ impl Previews {
         let live = self.account.map(|account| self.links[account]);
 
         let mut request = BodyRequest {
-            folder: Arc::clone(&self.folder),
+            folder: self.folder.clone(),
             selected: None,
             neighbours: Vec::new(),
         };
@@ -240,9 +241,9 @@ impl Previews {
 
     /// Forgets what it knew by UID: those were another Folder's. Rendered
     /// Previews are kept by body, shared across Folders.
-    fn switch(&mut self, account: AccountId, folder: &Arc<str>) {
+    fn switch(&mut self, account: AccountId, folder: &FolderName) {
         self.account = Some(account);
-        self.folder = Arc::clone(folder);
+        self.folder = folder.clone();
         self.fetching.clear();
         self.asked = None;
         self.offline.clear();
@@ -251,7 +252,7 @@ impl Previews {
 
     /// Whether `message`'s UID is one of `folder`'s.
     fn holds(&self, message: &Message) -> bool {
-        self.account == Some(message.account) && message.folder.as_deref() == Some(&*self.folder)
+        self.account == Some(message.account) && message.folder.as_ref() == Some(&self.folder)
     }
 
     /// Whether the body of `uid` cannot come for now.
@@ -294,8 +295,8 @@ impl Previews {
 
     /// Bodies fetched in `folder`; those of a Folder no longer shown are
     /// in the Cache, and no UID here waits on them.
-    pub fn fetched(&mut self, account: AccountId, folder: &str, fetched: Fetched) {
-        if self.account != Some(account) || *self.folder != *folder {
+    pub fn fetched(&mut self, account: AccountId, folder: &FolderName, fetched: Fetched) {
+        if self.account != Some(account) || self.folder != *folder {
             return;
         }
 
@@ -340,6 +341,6 @@ impl Previews {
 }
 
 /// The Folder the list shows, none in All Inboxes.
-fn shown(view: &InboxView) -> Option<(AccountId, &Arc<str>)> {
+fn shown(view: &InboxView) -> Option<(AccountId, &FolderName)> {
     view.folder.folder().map(|f| (f.account, &f.name))
 }

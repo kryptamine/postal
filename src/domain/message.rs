@@ -1,10 +1,8 @@
-use std::sync::Arc;
-
 use chrono::{DateTime, FixedOffset};
 
 use crate::{
-    domain::body_key::BodyKey, domain::message_ref::MessageRef, domain::per_account::AccountId,
-    domain::thread_id::ThreadId, domain::uid::Uid,
+    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::message_ref::MessageRef,
+    domain::per_account::AccountId, domain::thread_id::ThreadId, domain::uid::Uid,
 };
 
 /// One Message as the Message List knows it.
@@ -33,7 +31,7 @@ pub struct Message<A = AccountId> {
     pub from_me: bool,
     /// The Folder `uid` is of. `None` for a Message found only with its
     /// Thread, whose body comes with the Thread, and for one not yet cached.
-    pub folder: Option<Arc<str>>,
+    pub folder: Option<FolderName>,
     /// `()` for a Message read from the server, which knows no Account: only
     /// the Cache names one.
     pub account: A,
@@ -42,7 +40,7 @@ pub struct Message<A = AccountId> {
 impl<A> Message<A> {
     /// `None` for a Message found only with its Thread.
     pub fn on_server(&self) -> Option<MessageRef> {
-        let folder = Arc::clone(self.folder.as_ref()?);
+        let folder = self.folder.clone()?;
         Some(MessageRef {
             folder,
             uid: self.uid,

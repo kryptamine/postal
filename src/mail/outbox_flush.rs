@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use chrono::Utc;
 use mail_parser::MessageParser;
 
@@ -12,6 +10,7 @@ use crate::{
     compose::outgoing::Outgoing,
     domain::correspondence::{self, Correspondence, Person},
     domain::folder::Role,
+    domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     mail::imap::MailServer,
     mail::role_folder,
@@ -210,7 +209,7 @@ async fn copy(
     server: &mut impl MailServer,
     cache: &Cache,
     queued: &Queued,
-    sent_folder: &mut Option<Arc<str>>,
+    sent_folder: &mut Option<FolderName>,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     if !server.gmail() {
@@ -218,7 +217,7 @@ async fn copy(
             *sent_folder = role_folder::find(server, cache, Role::Sent, send).await?;
         }
 
-        match (sent_folder.as_deref(), std::fs::read(&queued.path)) {
+        match (sent_folder.as_ref(), std::fs::read(&queued.path)) {
             (Some(folder), Ok(message)) => match server.append(folder, &message).await {
                 Err(error) if error.refusal().is_some() => {
                     tracing::warn!("saving a copy to {folder} was refused: {error}");

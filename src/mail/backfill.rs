@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use crate::{
     cache::Cache,
+    domain::folder_name::FolderName,
     domain::uid::Uid,
     mail::imap::MailServer,
     mail::sync::{self, Error},
@@ -18,7 +17,7 @@ pub enum Backfill {
     /// cached UID when the server has nothing older, or nothing a page can
     /// reach now.
     Paged {
-        folder: Arc<str>,
+        folder: FolderName,
         nothing_below: Option<Uid>,
     },
 }
@@ -29,12 +28,12 @@ pub enum Backfill {
 pub async fn page(
     server: &mut impl MailServer,
     cache: &Cache,
-    folder: &Arc<str>,
+    folder: &FolderName,
     report: impl Fn(Backfill),
     written: impl Fn(),
 ) -> Result<Option<Uid>, Error> {
     let paged = |nothing_below| Backfill::Paged {
-        folder: Arc::clone(folder),
+        folder: folder.clone(),
         nothing_below,
     };
 

@@ -4,6 +4,7 @@ pub mod correspondence;
 pub mod flag;
 pub mod flag_change;
 pub mod folder;
+pub mod folder_name;
 pub mod html_text;
 pub mod inbox;
 pub mod listing;

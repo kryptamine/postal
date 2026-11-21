@@ -1,9 +1,8 @@
-use std::sync::Arc;
-
 use crate::{
     cache::Cache,
     domain::body_key::BodyKey,
     domain::folder::Folder,
+    domain::folder_name::FolderName,
     domain::per_account::{AccountId, PerAccount},
     domain::shown::Shown,
     domain::uid::Uid,
@@ -111,7 +110,7 @@ fn paged(
     view: &mut InboxView,
     caches: &PerAccount<Cache>,
     account: AccountId,
-    folder: Arc<str>,
+    folder: FolderName,
     nothing_below: Option<Uid>,
 ) -> Result<(), Error> {
     view.nothing_below[account] = nothing_below.map(|uid| (folder, uid));

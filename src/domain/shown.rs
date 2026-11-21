@@ -1,6 +1,8 @@
-use crate::domain::folder::{Folder, INBOX, Role};
-
-use crate::domain::per_account::AccountId;
+use crate::domain::{
+    folder::{Folder, Role},
+    folder_name::FolderName,
+    per_account::AccountId,
+};
 
 /// What the Message List shows and the Folder Picker lists: a server
 /// Folder, or one of the two Postal keeps of its own.
@@ -22,10 +24,10 @@ impl Shown {
 
     /// The server Folder of `account` this shows: each Account's Inbox in
     /// All Inboxes, else a Folder's own for its Account.
-    pub fn of(&self, account: AccountId) -> Option<&str> {
+    pub fn of(&self, account: AccountId) -> Option<&FolderName> {
         match self {
-            Self::AllInboxes { .. } => Some(INBOX),
-            Self::Folder(folder) => (account == folder.account).then_some(&*folder.name),
+            Self::AllInboxes { .. } => Some(FolderName::inbox()),
+            Self::Folder(folder) => (account == folder.account).then_some(&folder.name),
             Self::LocalDrafts => None,
         }
     }
@@ -42,9 +44,9 @@ impl Shown {
     }
 
     /// Whether this is the server Folder `name` of `account` itself.
-    pub fn is(&self, account: AccountId, name: &str) -> bool {
+    pub fn is(&self, account: AccountId, name: &FolderName) -> bool {
         self.folder()
-            .is_some_and(|folder| folder.account == account && *folder.name == *name)
+            .is_some_and(|folder| folder.account == account && folder.name == *name)
     }
 
     /// A Folder is known by Account and name; an Unread count never counts.

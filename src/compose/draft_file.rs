@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     account::atomic_file, account::xdg, compose::draft_notes::DraftNotes, compose::notes::Notes,
-    compose::unique_id::unique_id, domain::uid::Uid,
+    compose::unique_id::unique_id, domain::folder_name::FolderName, domain::uid::Uid,
 };
 
 /// What `$EDITOR` opens on Compose: the headers to fill in, then the body.
@@ -91,7 +91,7 @@ pub fn note(path: &Path, notes: &DraftNotes) -> io::Result<()> {
 pub fn answering(
     drafts: &Path,
     account: &str,
-    folder: &str,
+    folder: &FolderName,
     uid: Uid,
 ) -> io::Result<Option<PathBuf>> {
     for path in listed(drafts)? {
@@ -108,7 +108,7 @@ pub fn answering(
             .as_deref()
             .is_none_or(|a| a.eq_ignore_ascii_case(account));
         let original = notes.answering.and_then(|answering| answering.original);
-        if theirs && original.is_some_and(|o| *o.folder == *folder && o.uid == uid) {
+        if theirs && original.is_some_and(|o| o.folder == *folder && o.uid == uid) {
             return Ok(Some(path));
         }
     }

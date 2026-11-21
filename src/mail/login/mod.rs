@@ -10,7 +10,7 @@ use crate::{
     account::partial_config::PartialConfig,
     account::provider::Provider,
     account::sign_in::SignIn,
-    domain::folder,
+    domain::folder_name::FolderName,
     mail::imap::{self, ImapSession, MailServer},
 };
 
@@ -64,7 +64,7 @@ fn writes(partial: &PartialConfig, email: &str, provider: Provider) -> Writes {
 async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
     let verified = async {
         let mut session = ImapSession::open(config, sign_in).await?;
-        session.examine(folder::INBOX).await?;
+        session.examine(FolderName::inbox()).await?;
         Ok::<(), Error>(())
     };
 

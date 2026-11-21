@@ -1,4 +1,5 @@
 use super::Cache;
+use crate::domain::folder_name::FolderName;
 
 /// What a Folder's rows are stored under: the address of its Account and
 /// its name on the server.
@@ -10,10 +11,10 @@ pub struct FolderKey<'a> {
 
 impl Cache {
     /// What `folder`'s rows of this Account are stored under.
-    pub(super) fn key<'a>(&'a self, folder: &'a str) -> FolderKey<'a> {
+    pub(super) fn key<'a>(&'a self, folder: &'a FolderName) -> FolderKey<'a> {
         FolderKey {
             account: self.email(),
-            folder,
+            folder: folder.as_str(),
         }
     }
 }

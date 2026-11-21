@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
 use futures::{FutureExt, StreamExt, channel::mpsc::UnboundedReceiver, stream::Peekable};
 
-use crate::{domain::folder::INBOX, domain::thread_id::ThreadId};
+use crate::{domain::folder::INBOX, domain::folder_name::FolderName, domain::thread_id::ThreadId};
 
 /// What the screen asks of the sync connection.
 pub enum Ask {
     /// Resync and IDLE on this Folder from now on.
-    Show(Arc<str>),
+    Show(FolderName),
     /// `LIST` and `STATUS (UNSEEN)`, for the Folder Picker.
     ListFolders,
     /// The Messages of Gmail's Thread with this ID in other Folders.
@@ -45,7 +43,7 @@ impl Asked {
 /// The Folder the sync connection follows, and the screen's asks of it.
 /// It outlives each connection, so a reconnect resumes on the same Folder.
 pub struct Steering {
-    pub folder: Arc<str>,
+    pub folder: FolderName,
     asks: Peekable<UnboundedReceiver<Ask>>,
 }
 

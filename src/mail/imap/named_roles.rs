@@ -20,7 +20,7 @@ pub fn fill(folders: &mut [Folder<()>]) {
         let named = names.iter().find_map(|name| {
             folders
                 .iter()
-                .position(|f| f.role.is_none() && f.name.eq_ignore_ascii_case(name))
+                .position(|f| f.role.is_none() && f.name.as_str().eq_ignore_ascii_case(name))
         });
 
         if let Some(folder) = named.and_then(|at| folders.get_mut(at)) {

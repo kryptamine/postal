@@ -1,8 +1,9 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crate::{
-    cache::Cache, domain::uid::Uid, mail::body_fetch::open, mail::imap::MailServer,
-    mail::sent_pass, mail::snippets, mail::sync::Error, mail::update::Update,
+    cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::body_fetch::open,
+    mail::imap::MailServer, mail::sent_pass, mail::snippets, mail::sync::Error,
+    mail::update::Update,
 };
 
 /// How long the fetch connection goes without a request before its pass
@@ -13,7 +14,7 @@ const QUIET: Duration = Duration::from_secs(1);
 /// time, so a request that comes meanwhile goes next.
 pub struct SpareWork {
     /// Rows of this Folder below this UID still wait for their Snippets.
-    snippets_below: Option<(Arc<str>, Uid)>,
+    snippets_below: Option<(FolderName, Uid)>,
     /// The pass over Sent, once per connection.
     sent_due: bool,
 }
@@ -39,7 +40,7 @@ impl SpareWork {
     }
 
     /// A Backfill of `folder` left its rows below `below` without Snippets.
-    pub fn backfilled(&mut self, folder: Arc<str>, below: Option<Uid>) {
+    pub fn backfilled(&mut self, folder: FolderName, below: Option<Uid>) {
         // The higher bound keeps an earlier page's uncut rows in.
         self.snippets_below = match (self.snippets_below.take(), below) {
             (Some((same, earlier)), Some(below)) if same == folder => {
@@ -56,7 +57,7 @@ impl SpareWork {
         &mut self,
         server: &mut impl MailServer,
         cache: &Cache,
-        examined: &mut Option<Arc<str>>,
+        examined: &mut Option<FolderName>,
         send: &impl Fn(Update),
     ) -> Result<(), Error> {
         if let Some((folder, below)) = self.snippets_below.clone() {

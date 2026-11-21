@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::{
-    cache::Cache, domain::text_part::TextPart, domain::uid::Uid, mail::imap::MailServer,
-    mail::snippet, mail::sync::Error,
+    cache::Cache, domain::folder_name::FolderName, domain::text_part::TextPart, domain::uid::Uid,
+    mail::imap::MailServer, mail::snippet, mail::sync::Error,
 };
 
 /// Messages per batch: each batch is one Cache write and one redraw.
@@ -14,7 +14,7 @@ const BATCH: usize = 50;
 pub async fn fetch(
     server: &mut impl MailServer,
     cache: &Cache,
-    folder: &str,
+    folder: &FolderName,
     below: Option<Uid>,
     written: impl Fn(),
 ) -> Result<(), Error> {
@@ -26,7 +26,7 @@ pub async fn fetch(
 pub async fn batch(
     server: &mut impl MailServer,
     cache: &Cache,
-    folder: &str,
+    folder: &FolderName,
     below: Option<Uid>,
     written: impl Fn(),
 ) -> Result<bool, Error> {

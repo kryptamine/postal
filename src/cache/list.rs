@@ -1,12 +1,12 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{OptionalExtension, Row, params};
 
 use super::{Cache, Error, threads::THREAD_ROW};
 use crate::{
-    domain::folder::Role, domain::inbox::Inbox, domain::message::Message,
-    domain::thread_id::ThreadId,
+    domain::folder::Role, domain::folder_name::FolderName, domain::inbox::Inbox,
+    domain::message::Message, domain::thread_id::ThreadId,
 };
 
 /// The columns `Cache::message` reads, in its order, of a `message` row.
@@ -16,7 +16,7 @@ const MESSAGE_ROW: &str = "uid, body_key, received, received_offset, unread, sen
 impl Cache {
     /// The newest `limit` rows of `folder`, all of them when `None`; `None`
     /// before its first resync has written it.
-    pub fn inbox(&self, folder: &str, limit: Option<usize>) -> Result<Option<Inbox>, Error> {
+    pub fn inbox(&self, folder: &FolderName, limit: Option<usize>) -> Result<Option<Inbox>, Error> {
         let connection = self.connection();
         let synced = connection
             .prepare_cached(
@@ -36,11 +36,11 @@ impl Cache {
              FROM message WHERE account = ?3 AND mailbox = ?1
              ORDER BY received DESC, uid DESC LIMIT ?2"
         ))?;
-        let name: Arc<str> = folder.into();
+        let name = folder.clone();
         let messages = statement
             .query_map(params![folder, limit, self.email()], |row| {
                 Ok(Message {
-                    folder: Some(Arc::clone(&name)),
+                    folder: Some(name.clone()),
                     ..self.message(row)?
                 })
             })?
@@ -67,10 +67,10 @@ impl Cache {
     /// Every cached Folder's Messages but Trash's and Spam's, newest first,
     /// each once: the copy in `shown` wins, else the first in Folder order.
     /// Their Threads' Messages found elsewhere come as in `inbox`.
-    pub fn everywhere(&self, shown: Option<&str>) -> Result<Inbox, Error> {
+    pub fn everywhere(&self, shown: Option<&FolderName>) -> Result<Inbox, Error> {
         let mut folders = self.folders()?;
         folders.retain(|f| !matches!(f.role, Some(Role::Trash | Role::Spam)));
-        folders.sort_by_key(|f| Some(&*f.name) != shown);
+        folders.sort_by_key(|f| Some(&f.name) != shown);
         let connection = self.connection();
         let mut statement = connection.prepare_cached(&format!(
             "SELECT {MESSAGE_ROW}
@@ -78,14 +78,13 @@ impl Cache {
         ))?;
         let (mut messages, mut keys) = (Vec::new(), HashSet::new());
         for folder in &folders {
-            let rows = statement.query_map(params![&*folder.name, self.email()], |row| {
-                self.message(row)
-            })?;
+            let rows = statement
+                .query_map(params![&folder.name, self.email()], |row| self.message(row))?;
             for row in rows {
                 let row = row?;
                 if keys.insert(row.body_key) {
                     messages.push(Message {
-                        folder: Some(Arc::clone(&folder.name)),
+                        folder: Some(folder.name.clone()),
                         ..row
                     });
                 }

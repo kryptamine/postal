@@ -116,7 +116,7 @@ pub fn reply(
 
 /// The Draft already answering `message`, which a Reply takes up again.
 fn answered_by(message: &Message, accounts: Accounts) -> Option<PathBuf> {
-    let folder = message.folder.as_deref()?;
+    let folder = message.folder.as_ref()?;
     let email = accounts.email(message.account);
     let found =
         draft_file::dir().and_then(|dir| draft_file::answering(&dir, email, folder, message.uid));

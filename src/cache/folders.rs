@@ -2,6 +2,7 @@ use rusqlite::{Connection, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
 use crate::domain::folder::{Folder, Role};
+use crate::domain::folder_name::FolderName;
 
 impl Cache {
     /// Every Folder listed or shown so far, in the Folder Picker's order.
@@ -28,9 +29,9 @@ impl Cache {
     }
 
     /// The Folder named `name` as last listed; without a role when it never was.
-    pub fn folder(&self, name: &str) -> Result<Folder, Error> {
-        let listed = self.folders()?.into_iter().find(|f| *f.name == *name);
-        Ok(listed.unwrap_or_else(|| Folder::new(self.account(), name, None)))
+    pub fn folder(&self, name: &FolderName) -> Result<Folder, Error> {
+        let listed = self.folders()?.into_iter().find(|f| f.name == *name);
+        Ok(listed.unwrap_or_else(|| Folder::new(self.account(), name.as_str(), None)))
     }
 
     /// Writes what `LIST` answered: a Folder not in `listed` leaves the
@@ -38,7 +39,7 @@ impl Cache {
     pub fn list_folders(&self, listed: &[Folder<()>]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            let cached: Vec<String> = transaction
+            let cached: Vec<FolderName> = transaction
                 .prepare_cached("SELECT name FROM mailbox WHERE account = ?1")?
                 .query_map([self.email()], |row| row.get(0))?
                 .collect::<Result<_, _>>()?;
@@ -48,7 +49,7 @@ impl Cache {
             )?;
             for folder in listed {
                 upsert.execute(params![
-                    &*folder.name,
+                    &folder.name,
                     folder.role.map(Role::label),
                     self.email()
                 ])?;
@@ -56,7 +57,7 @@ impl Cache {
 
             for gone in cached
                 .iter()
-                .filter(|c| !listed.iter().any(|f| *f.name == **c))
+                .filter(|c| !listed.iter().any(|f| f.name == **c))
             {
                 forget(&transaction, self.key(gone))?;
             }
@@ -67,7 +68,7 @@ impl Cache {
     }
 
     /// The Unread count `STATUS` gave for `folder`; one no longer listed is ignored.
-    pub fn write_unread(&self, folder: &str, unread: usize) -> Result<(), Error> {
+    pub fn write_unread(&self, folder: &FolderName, unread: usize) -> Result<(), Error> {
         self.write(|connection| {
             connection
                 .prepare_cached("UPDATE mailbox SET unread = ?2 WHERE account = ?3 AND name = ?1")?
@@ -77,7 +78,7 @@ impl Cache {
     }
 
     /// Drops `folder` and its rows, as for a Folder the server no longer has.
-    pub fn remove_folder(&self, folder: &str) -> Result<(), Error> {
+    pub fn remove_folder(&self, folder: &FolderName) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             forget(&transaction, self.key(folder))?;

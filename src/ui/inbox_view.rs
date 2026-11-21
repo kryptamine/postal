@@ -6,6 +6,7 @@ use crate::{
     cache::{self, Cache},
     domain::body_key::BodyKey,
     domain::folder::Folder,
+    domain::folder_name::FolderName,
     domain::inbox::Inbox,
     domain::listing::Listing,
     domain::message::Message,
@@ -29,7 +30,7 @@ pub struct InboxView {
     pub accounts: PerAccount<Arc<str>>,
     /// Each Account's Folder and its oldest cached UID, when the server had
     /// nothing older there.
-    pub nothing_below: PerAccount<Option<(Arc<str>, Uid)>>,
+    pub nothing_below: PerAccount<Option<(FolderName, Uid)>>,
     /// The Account whose cache edge ends the rows, a Backfill of which
     /// shows more: the shown Folder's; in All Inboxes, as ADR 0014 picks;
     /// `None` once the server has nothing older.
@@ -195,7 +196,7 @@ impl InboxView {
         &self,
         cache: &Cache,
         account: AccountId,
-        folder: &str,
+        folder: &FolderName,
     ) -> Result<bool, cache::Error> {
         if cache.whole(folder)? {
             return Ok(true);
@@ -207,7 +208,7 @@ impl InboxView {
 
         Ok(self.nothing_below[account]
             .as_ref()
-            .is_some_and(|(at, uid)| **at == *folder && *uid == oldest))
+            .is_some_and(|(at, uid)| at == folder && *uid == oldest))
     }
 
     /// What tells the Preview of `message` at `width` from its others.

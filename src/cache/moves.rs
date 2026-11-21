@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
 use crate::{
-    domain::body_key::BodyKey, domain::message_ref::MessageRef, domain::thread_id::ThreadId,
-    domain::uid::Uid,
+    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::message_ref::MessageRef,
+    domain::thread_id::ThreadId, domain::uid::Uid,
 };
 
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
@@ -16,7 +14,7 @@ const ROW: &str = "account, body_key, received, received_offset, unread, answere
 /// One Message the server is to move, from the Folder to select.
 pub struct PendingMove {
     pub id: i64,
-    pub from: Arc<str>,
+    pub from: FolderName,
     pub uid: Uid,
     pub to: Destination,
 }
@@ -26,7 +24,7 @@ pub enum Destination {
     /// For a Delete: whichever Folder the server names Trash.
     Trash,
     /// For an Undo: the Folder the Message was deleted from.
-    Back(Arc<str>),
+    Back(FolderName),
 }
 
 impl Cache {
@@ -44,7 +42,15 @@ impl Cache {
             )?;
             let mut any = false;
             for MessageRef { folder, uid } in messages {
-                any |= delete(&transaction, batch, FolderKey { account, folder }, *uid)?;
+                any |= delete(
+                    &transaction,
+                    batch,
+                    FolderKey {
+                        account,
+                        folder: folder.as_str(),
+                    },
+                    *uid,
+                )?;
             }
 
             transaction.commit()?;
@@ -55,7 +61,7 @@ impl Cache {
     /// Puts the Messages of Delete `batch` back in their Folders. Returns
     /// the Folders they went back to; none when the server named no UID in
     /// Trash to move them back by.
-    pub fn undo(&self, batch: i64) -> Result<Vec<Arc<str>>, Error> {
+    pub fn undo(&self, batch: i64) -> Result<Vec<FolderName>, Error> {
         let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
@@ -81,15 +87,15 @@ impl Cache {
                 )?;
             }
 
-            let rows: Vec<(i64, String)> = transaction
+            let rows: Vec<(i64, FolderName)> = transaction
                 .prepare_cached("SELECT id, mailbox FROM moved WHERE batch = ?1 AND want_trash")?
                 .query_map([batch], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .collect::<Result<_, _>>()?;
-            let mut folders: Vec<Arc<str>> = Vec::new();
+            let mut folders: Vec<FolderName> = Vec::new();
             for (id, folder) in rows {
                 restore(&transaction, id)?;
-                if !folders.iter().any(|f| **f == *folder) {
-                    folders.push(folder.into());
+                if !folders.contains(&folder) {
+                    folders.push(folder);
                 }
             }
 
@@ -137,7 +143,7 @@ impl Cache {
     pub fn arrived(
         &self,
         pending: &PendingMove,
-        to: &str,
+        to: &FolderName,
         uid: Option<Uid>,
     ) -> Result<bool, Error> {
         let in_trash = pending.to == Destination::Trash;

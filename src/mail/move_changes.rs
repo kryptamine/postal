@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use crate::{
     cache::{Cache, Destination, PendingMove},
     domain::folder::Role,
+    domain::folder_name::FolderName,
     domain::uid::Uid,
     mail::imap::MailServer,
     mail::imap::Moved,
@@ -17,9 +16,9 @@ use crate::{
 pub async fn send(
     server: &mut impl MailServer,
     cache: &Cache,
-    mut selected: Option<Arc<str>>,
+    mut selected: Option<FolderName>,
     send: &impl Fn(Update),
-) -> Result<Option<Arc<str>>, Error> {
+) -> Result<Option<FolderName>, Error> {
     let pending = cache.pending_moves()?;
     if pending.is_empty() {
         return Ok(selected);
@@ -29,7 +28,7 @@ pub async fn send(
     for group in pending.chunk_by(|a, b| (&a.from, &a.to) == (&b.from, &b.to)) {
         let first = &group[0];
         let to = match &first.to {
-            Destination::Back(folder) => Some(Arc::clone(folder)),
+            Destination::Back(folder) => Some(folder.clone()),
             Destination::Trash => {
                 if trash.is_none() {
                     trash = role_folder::find(server, cache, Role::Trash, send).await?;
@@ -49,11 +48,11 @@ pub async fn send(
             continue;
         };
 
-        if selected.as_deref() != Some(&*first.from) {
+        if selected.as_ref() != Some(&first.from) {
             // A failed SELECT leaves no Folder selected (RFC 3501 6.3.1).
             (selected, reselected) = (None, true);
             match sync::select(server, &first.from).await {
-                Ok(_) => selected = Some(Arc::clone(&first.from)),
+                Ok(_) => selected = Some(first.from.clone()),
                 Err(Error::Gone(error)) => {
                     tracing::warn!("{} is gone, its moves with it: {error}", first.from);
                     refused(cache, group, send)?;
@@ -84,7 +83,12 @@ pub async fn send(
 
 /// Writes where the server put `group`, into `to` under the UIDs `moved`
 /// names; false when an Undo's Message is out of reach.
-fn record(cache: &Cache, group: &[PendingMove], to: &str, moved: &[Moved]) -> Result<bool, Error> {
+fn record(
+    cache: &Cache,
+    group: &[PendingMove],
+    to: &FolderName,
+    moved: &[Moved],
+) -> Result<bool, Error> {
     // A server with UIDPLUS names each Message it moved.
     let there = |uid| {
         moved

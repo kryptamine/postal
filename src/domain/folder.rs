@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, sync::Arc};
 
+use crate::domain::folder_name::FolderName;
 use crate::domain::per_account::AccountId;
 
 /// The Folder every run starts in, as IMAP names it in any case.
@@ -54,7 +55,7 @@ pub struct Folder<A = AccountId> {
     /// which knows no Account: only the Cache names one.
     pub account: A,
     /// As the server names it, in every command; nested labels in full.
-    pub name: Arc<str>,
+    pub name: FolderName,
     /// `name` decoded from modified UTF-7, for people to read.
     pub path: Arc<str>,
     pub role: Option<Role>,
@@ -72,10 +73,11 @@ impl<A> Folder<A> {
     /// The Inbox is known by its name alone (RFC 3501).
     pub fn new(account: A, name: &str, role: Option<Role>) -> Self {
         let inbox = name.eq_ignore_ascii_case(INBOX);
-        let name: Arc<str> = if inbox { INBOX.into() } else { name.into() };
+        let name: FolderName = if inbox { INBOX.into() } else { name.into() };
+        let path = crate::domain::modified_utf7::decode(name.as_str()).into();
         Self {
             account,
-            path: crate::domain::modified_utf7::decode(&name).into(),
+            path,
             name,
             role: if inbox { Some(Role::Inbox) } else { role },
             unread: None,

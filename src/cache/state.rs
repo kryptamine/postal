@@ -3,13 +3,13 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Changes, Error, correspondence, folder_key::FolderKey, moves};
 use crate::{
-    domain::flag::Flag, domain::new_message::NewMessage, domain::sync_state::SyncState,
-    domain::uid::Uid,
+    domain::flag::Flag, domain::folder_name::FolderName, domain::new_message::NewMessage,
+    domain::sync_state::SyncState, domain::uid::Uid,
 };
 
 impl Cache {
     /// `None` before the first resync of `folder`.
-    pub fn state(&self, folder: &str) -> Result<Option<SyncState>, Error> {
+    pub fn state(&self, folder: &FolderName) -> Result<Option<SyncState>, Error> {
         let state = self
             .connection()
             .prepare_cached(
@@ -29,7 +29,7 @@ impl Cache {
 
     /// Every UID of `folder` the server holds as the Cache knows it,
     /// ascending: a queued Delete's too, an Undo's old one not.
-    pub fn uids(&self, folder: &str) -> Result<Vec<Uid>, Error> {
+    pub fn uids(&self, folder: &FolderName) -> Result<Vec<Uid>, Error> {
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
             "SELECT uid FROM message WHERE account = ?2 AND mailbox = ?1
@@ -47,7 +47,7 @@ impl Cache {
 
     /// Whether the Cache held every Message of `folder` when the server last
     /// counted them: then the server has nothing older than the Cache.
-    pub fn whole(&self, folder: &str) -> Result<bool, Error> {
+    pub fn whole(&self, folder: &FolderName) -> Result<bool, Error> {
         let exists: Option<usize> = self
             .connection()
             .prepare_cached("SELECT exists_count FROM mailbox WHERE account = ?2 AND name = ?1")?
@@ -61,7 +61,7 @@ impl Cache {
         Ok(self.uids(folder)?.len() >= exists)
     }
 
-    pub fn oldest_uid(&self, folder: &str) -> Result<Option<Uid>, Error> {
+    pub fn oldest_uid(&self, folder: &FolderName) -> Result<Option<Uid>, Error> {
         let oldest = self
             .connection()
             .prepare_cached("SELECT min(uid) FROM message WHERE account = ?2 AND mailbox = ?1")?
@@ -70,7 +70,7 @@ impl Cache {
     }
 
     /// When the oldest cached Message of `folder` arrived.
-    pub fn oldest_arrival(&self, folder: &str) -> Result<Option<DateTime<Utc>>, Error> {
+    pub fn oldest_arrival(&self, folder: &FolderName) -> Result<Option<DateTime<Utc>>, Error> {
         let oldest: Option<i64> = self
             .connection()
             .prepare_cached(
@@ -80,13 +80,13 @@ impl Cache {
         Ok(oldest.and_then(|at| DateTime::from_timestamp(at, 0)))
     }
 
-    pub fn apply(&self, folder: &str, changes: &Changes) -> Result<(), Error> {
+    pub fn apply(&self, folder: &FolderName, changes: &Changes) -> Result<(), Error> {
         self.write(|connection| apply(connection, self.key(folder), changes))
     }
 
     /// Adds rows older than every cached one in one transaction, leaving
     /// the Folder's state as the last resync wrote it.
-    pub fn backfill(&self, folder: &str, older: &[NewMessage]) -> Result<(), Error> {
+    pub fn backfill(&self, folder: &FolderName, older: &[NewMessage]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             insert(&transaction, self.key(folder), older)?;

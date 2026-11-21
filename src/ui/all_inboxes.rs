@@ -1,6 +1,6 @@
 use crate::{
     cache::{self, Cache},
-    domain::folder::INBOX,
+    domain::folder_name::FolderName,
     domain::inbox::Inbox,
     domain::per_account::{AccountId, PerAccount},
     ui::inbox_view::InboxView,
@@ -17,15 +17,15 @@ pub fn read(
     let (mut messages, mut elsewhere, mut edge) = (Vec::new(), Vec::new(), None);
     let mut synced = false;
     for (account, cache) in caches.iter() {
-        let Some(inbox) = cache.inbox(INBOX, limit)? else {
+        let Some(inbox) = cache.inbox(FolderName::inbox(), limit)? else {
             continue;
         };
 
         synced = true;
         messages.extend(inbox.messages);
         elsewhere.extend(inbox.elsewhere);
-        let bottomed = view.bottomed(cache, account, INBOX)?;
-        let arrival = cache.oldest_arrival(INBOX)?;
+        let bottomed = view.bottomed(cache, account, FolderName::inbox())?;
+        let arrival = cache.oldest_arrival(FolderName::inbox())?;
         if !bottomed && arrival > edge.map(|(at, _)| at) {
             edge = arrival.map(|at| (at, account));
         }
