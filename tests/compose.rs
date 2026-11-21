@@ -283,7 +283,7 @@ fn an_empty_to_refuses_send() {
 fn a_bad_address_refuses_send() {
     refused(
         "To: bob at example\nSubject: Hello\n\nBody\n",
-        "no Correspondent matches bob at example",
+        "`To` holds a bad address",
     );
 }
 

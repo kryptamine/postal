@@ -20,20 +20,9 @@ pub struct Correspondent {
     pub account: String,
     /// Whether an Account wrote to it.
     pub written: bool,
-    /// Each word of its names and of its address, lowercased.
-    words: Vec<String>,
 }
 
 impl Correspondent {
-    /// Whether every word of `query` begins one of its words.
-    pub fn matches(&self, query: &[String]) -> bool {
-        query.iter().all(|asked| {
-            self.words
-                .iter()
-                .any(|word| word.starts_with(asked.as_str()))
-        })
-    }
-
     /// As a Draft's header holds it.
     pub fn mailbox(&self) -> String {
         self.address.parse().map_or_else(
@@ -41,13 +30,6 @@ impl Correspondent {
             |address| Mailbox::new(self.name.clone(), address).to_string(),
         )
     }
-}
-
-/// The lowercased words of `text` a Query is matched against.
-pub fn words(text: &str) -> impl Iterator<Item = String> + '_ {
-    text.split(|c: char| c.is_whitespace() || "\"(),<>".contains(c))
-        .filter(|word| !word.is_empty())
-        .map(str::to_lowercase)
 }
 
 /// What the rows of one address add up to.
@@ -60,7 +42,6 @@ struct Tally {
     /// The latest name written to, and the latest seen, with when.
     named_written: Option<(DateTime<Utc>, String)>,
     named_seen: Option<(DateTime<Utc>, String)>,
-    names: Vec<String>,
 }
 
 /// Every Correspondent of `seen` but the Accounts' own addresses and a
@@ -90,11 +71,7 @@ pub fn ranked(
         };
 
         if latest.as_ref().is_none_or(|(at, _)| *at <= row.at) {
-            *latest = Some((row.at, name.clone()));
-        }
-
-        if !tally.names.contains(&name) {
-            tally.names.push(name);
+            *latest = Some((row.at, name));
         }
     }
 
@@ -133,13 +110,6 @@ fn correspondent(address: String, tally: Tally, first: &str) -> Correspondent {
         best.map(|(account, _)| account.clone()).unwrap_or_default()
     };
 
-    let (local, domain) = address.split_once('@').unwrap_or((&address, ""));
-    let mut words: Vec<String> = tally.names.iter().flat_map(|n| words(n)).collect();
-    words.push(address.clone());
-    words.extend(local.split(['.', '-', '_', '+']).map(str::to_owned));
-    words.push(domain.to_owned());
-    words.extend(domain.split('.').map(str::to_owned));
-    words.retain(|word| !word.is_empty());
     let name = tally
         .named_written
         .or(tally.named_seen)
@@ -149,7 +119,6 @@ fn correspondent(address: String, tally: Tally, first: &str) -> Correspondent {
         name,
         account,
         written: tally.written,
-        words,
     }
 }
 

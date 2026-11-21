@@ -47,12 +47,8 @@ impl DraftPane<'_> {
     fn lines(&self) -> Vec<Line<'_>> {
         let preview = self.preview;
         let mut lines = Vec::new();
-        // It says why the Draft does not parse, better than the parse error.
-        if !preview.unmatched.is_empty() {
-            let unmatched = preview.unmatched.join(", ");
-            let error = format!("no Correspondent matches {unmatched}: e to edit");
-            lines.push(Line::styled(error, self.theme.error));
-        } else if let Some(error) = preview.draft.as_ref().err().or(preview.failure.as_ref()) {
+        let error = preview.draft.as_ref().err().or(preview.failure.as_ref());
+        if let Some(error) = error {
             lines.push(Line::styled(error.as_str(), self.theme.error));
         }
 

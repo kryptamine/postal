@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use crate::{answering::Answering, draft::Draft, notes::Notes, recipient_picker::RecipientPicker};
+use crate::{answering::Answering, draft::Draft, notes::Notes};
 
 /// A Draft shown after the editor exits, for `y` to send, `e` to edit again,
 /// `d` to keep or `q` to discard.
@@ -19,11 +19,6 @@ pub struct DraftPreview {
     pub answering: Option<Answering>,
     /// An Outbox Message, shown read-only.
     pub queued: bool,
-    /// A picker for each recipient several Correspondents match, the first
-    /// shown over the preview.
-    pub choosing: Vec<RecipientPicker>,
-    /// The recipients no Correspondent matches, as written.
-    pub unmatched: Vec<String>,
 }
 
 impl DraftPreview {
@@ -60,8 +55,6 @@ impl DraftPreview {
             failure: None,
             answering,
             queued: false,
-            choosing: Vec::new(),
-            unmatched: Vec::new(),
         }
     }
 }
