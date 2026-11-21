@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Cache, Changes, Error, correspondence, moves};
+use super::{Cache, Changes, Error, correspondence, folder_key::FolderKey, moves};
 use crate::{flag::Flag, new_message::NewMessage, sync_state::SyncState, uid::Uid};
 
 impl Cache {
@@ -78,7 +78,7 @@ impl Cache {
     }
 
     pub fn apply(&self, folder: &str, changes: &Changes) -> Result<(), Error> {
-        self.write(|connection| apply(connection, (self.email(), folder), changes))
+        self.write(|connection| apply(connection, self.key(folder), changes))
     }
 
     /// Adds rows older than every cached one in one transaction, leaving
@@ -86,17 +86,14 @@ impl Cache {
     pub fn backfill(&self, folder: &str, older: &[NewMessage]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            insert(&transaction, (self.email(), folder), older)?;
+            insert(&transaction, self.key(folder), older)?;
             transaction.commit()
         })
     }
 }
 
-fn apply(
-    connection: &Connection,
-    (account, folder): (&str, &str),
-    changes: &Changes,
-) -> rusqlite::Result<()> {
+fn apply(connection: &Connection, key: FolderKey<'_>, changes: &Changes) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     let transaction = connection.unchecked_transaction()?;
     if changes.replace {
         for table in ["message", "flag_change", "moved"] {
@@ -107,8 +104,8 @@ fn apply(
         }
     }
 
-    insert(&transaction, (account, folder), &changes.new)?;
-    moves::settle(&transaction, (account, folder))?;
+    insert(&transaction, key, &changes.new)?;
+    moves::settle(&transaction, key)?;
     // A row an Undo put back stays: the expunge is its move's.
     let mut delete = transaction.prepare_cached(
         "DELETE FROM message WHERE account = ?3 AND mailbox = ?1 AND uid = ?2
@@ -144,16 +141,17 @@ fn apply(
         ])?;
     }
 
-    write_state(&transaction, (account, folder), changes)?;
+    write_state(&transaction, key, changes)?;
     drop((delete, seen, answered));
     transaction.commit()
 }
 
 fn write_state(
     connection: &Connection,
-    (account, folder): (&str, &str),
+    key: FolderKey<'_>,
     changes: &Changes,
 ) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     let state = &changes.state;
     connection.execute(
         "INSERT INTO mailbox
@@ -179,9 +177,10 @@ fn write_state(
 /// still lists it in `folder`.
 fn insert(
     connection: &Connection,
-    (account, folder): (&str, &str),
+    key: FolderKey<'_>,
     rows: &[NewMessage],
 ) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     let mut insert = connection.prepare_cached(
         "INSERT OR REPLACE INTO message
          (uid, body_key, received, received_offset, unread, sender, subject, snippet,
@@ -218,5 +217,5 @@ fn insert(
     }
 
     drop(insert);
-    correspondence::learn(connection, (account, folder), rows)
+    correspondence::learn(connection, key, rows)
 }

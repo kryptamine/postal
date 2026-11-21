@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Cache, Error};
+use super::{Cache, Error, folder_key::FolderKey};
 use crate::{body_key::BodyKey, message_ref::MessageRef, thread_id::ThreadId, uid::Uid};
 
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
@@ -41,7 +41,7 @@ impl Cache {
             )?;
             let mut any = false;
             for MessageRef { folder, uid } in messages {
-                any |= delete(&transaction, batch, (account, folder, *uid))?;
+                any |= delete(&transaction, batch, FolderKey { account, folder }, *uid)?;
             }
 
             transaction.commit()?;
@@ -68,7 +68,14 @@ impl Cache {
                 .query_map([batch], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .collect::<Result<_, _>>()?;
             for (trash, uid) in trashed {
-                drop_row(&transaction, (account, &trash, uid))?;
+                drop_row(
+                    &transaction,
+                    FolderKey {
+                        account,
+                        folder: &trash,
+                    },
+                    uid,
+                )?;
             }
 
             let rows: Vec<(i64, String)> = transaction
@@ -172,10 +179,8 @@ impl Cache {
 }
 
 /// Once its new UID is in `folder`, an Undo's row gives way to it.
-pub(super) fn settle(
-    connection: &Connection,
-    (account, folder): (&str, &str),
-) -> rusqlite::Result<()> {
+pub(super) fn settle(connection: &Connection, key: FolderKey<'_>) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     let arrived = "NOT at_trash AND at_uid != uid
         AND EXISTS (SELECT 1 FROM message n WHERE n.account = ?2 AND n.mailbox = ?1
                       AND n.uid = at_uid)";
@@ -211,8 +216,10 @@ pub(super) fn forget_settled(connection: &Connection) -> rusqlite::Result<()> {
 fn delete(
     connection: &Connection,
     batch: i64,
-    (account, folder, uid): (&str, &str, Uid),
+    key: FolderKey<'_>,
+    uid: Uid,
 ) -> rusqlite::Result<bool> {
+    let FolderKey { account, folder } = key;
     let key: Option<(BodyKey, Option<ThreadId>)> = connection
         .prepare_cached(
             "SELECT body_key, thread FROM message WHERE account = ?3 AND mailbox = ?1
@@ -279,7 +286,14 @@ fn lose(connection: &Connection, id: i64) -> rusqlite::Result<()> {
         .query_row([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .optional()?;
     if let Some((account, folder, uid)) = shown {
-        drop_row(connection, (&account, &folder, uid))?;
+        drop_row(
+            connection,
+            FolderKey {
+                account: &account,
+                folder: &folder,
+            },
+            uid,
+        )?;
     }
 
     connection.execute("DELETE FROM moved WHERE id = ?1", [id])?;
@@ -305,10 +319,8 @@ fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
 }
 
 /// Drops one row from the Message List, with its share of the Unread count.
-fn drop_row(
-    connection: &Connection,
-    (account, folder, uid): (&str, &str, Uid),
-) -> rusqlite::Result<()> {
+fn drop_row(connection: &Connection, key: FolderKey<'_>, uid: Uid) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     connection
         .prepare_cached(
             "UPDATE mailbox SET unread = max(unread - 1, 0) WHERE account = ?3 AND name = ?1

@@ -1,6 +1,6 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Cache, Error};
+use super::{Cache, Error, folder_key::FolderKey};
 use crate::{correspondence::Correspondence, folder::Role, new_message::NewMessage, uid::Uid};
 
 /// How far the pass over the Folder with the Sent role has read.
@@ -63,9 +63,10 @@ impl Cache {
 /// Learns from `rows` fetched into `folder`, unless it is Trash or Spam.
 pub(super) fn learn(
     connection: &Connection,
-    (account, folder): (&str, &str),
+    key: FolderKey<'_>,
     rows: &[NewMessage],
 ) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     let role: Option<String> = connection
         .prepare_cached("SELECT role FROM mailbox WHERE account = ?1 AND name = ?2")?
         .query_row(params![account, folder], |row| row.get(0))

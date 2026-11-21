@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params};
 
-use super::{Cache, Error};
+use super::{Cache, Error, folder_key::FolderKey};
 use crate::folder::{Folder, Role};
 
 impl Cache {
@@ -58,7 +58,7 @@ impl Cache {
                 .iter()
                 .filter(|c| !listed.iter().any(|f| *f.name == **c))
             {
-                forget(&transaction, (self.email(), gone))?;
+                forget(&transaction, self.key(gone))?;
             }
 
             drop(upsert);
@@ -80,14 +80,15 @@ impl Cache {
     pub fn remove_folder(&self, folder: &str) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            forget(&transaction, (self.email(), folder))?;
+            forget(&transaction, self.key(folder))?;
             transaction.commit()
         })
     }
 }
 
 /// Drops `folder` with its rows and its queued changes.
-fn forget(connection: &Connection, (account, folder): (&str, &str)) -> rusqlite::Result<()> {
+fn forget(connection: &Connection, key: FolderKey<'_>) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     for table in ["message", "flag_change", "moved"] {
         connection.execute(
             &format!("DELETE FROM {table} WHERE account = ?2 AND mailbox = ?1"),

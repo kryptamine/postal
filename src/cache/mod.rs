@@ -6,6 +6,7 @@ mod changes;
 mod correspondence;
 mod error;
 mod flags;
+mod folder_key;
 mod folders;
 mod forget;
 mod list;

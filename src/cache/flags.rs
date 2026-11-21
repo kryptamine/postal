@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Cache, Error};
+use super::{Cache, Error, folder_key::FolderKey};
 use crate::{
     body_key::BodyKey, flag::Flag, flag_change::FlagChange, message_ref::MessageRef, uid::Uid,
 };
@@ -19,7 +19,7 @@ impl Cache {
             let transaction = connection.unchecked_transaction()?;
             let mut changed = false;
             for MessageRef { folder, uid } in messages {
-                changed |= mark(&transaction, (self.email(), folder, *uid), unread)?;
+                changed |= mark(&transaction, self.key(folder), *uid, unread)?;
             }
 
             transaction.commit()?;
@@ -53,7 +53,7 @@ impl Cache {
                     .execute(params![key, account])?;
             }
 
-            queue(&transaction, (account, folder, uid), Flag::Answered, true)?;
+            queue(&transaction, FolderKey { account, folder }, uid, Flag::Answered, true)?;
             transaction.commit()
         })
     }
@@ -117,9 +117,11 @@ impl Cache {
 /// One Message of `Cache::mark`; false when it is not cached or already so.
 fn mark(
     connection: &Connection,
-    (account, folder, uid): (&str, &str, Uid),
+    key: FolderKey<'_>,
+    uid: Uid,
     unread: bool,
 ) -> rusqlite::Result<bool> {
+    let FolderKey { account, folder } = key;
     let key: Option<BodyKey> = connection
         .prepare_cached(
             "SELECT body_key FROM message WHERE account = ?4 AND mailbox = ?1 AND uid = ?2
@@ -161,7 +163,13 @@ fn mark(
     connection
         .prepare_cached("UPDATE thread_message SET unread = ?2 WHERE account = ?3 AND key = ?1")?
         .execute(params![key, unread, account])?;
-    queue(connection, (account, folder, uid), Flag::Seen, !unread)?;
+    queue(
+        connection,
+        FolderKey { account, folder },
+        uid,
+        Flag::Seen,
+        !unread,
+    )?;
     Ok(true)
 }
 
@@ -169,10 +177,12 @@ fn mark(
 /// server holds it by after an Undo.
 fn queue(
     connection: &Connection,
-    (account, folder, uid): (&str, &str, Uid),
+    key: FolderKey<'_>,
+    uid: Uid,
     flag: Flag,
     added: bool,
 ) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     connection
         .prepare_cached(
             "INSERT OR REPLACE INTO flag_change (account, mailbox, uid, flag, added)
