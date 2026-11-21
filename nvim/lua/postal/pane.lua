@@ -160,9 +160,10 @@ function M.winbar(buf)
 	end
 
 	for _, key in ipairs(keys) do
-		local wide = #gap + vim.fn.strdisplaywidth(key.lhs .. " " .. (key.short or ""))
+		local label = help.label(key.lhs):gsub("%%", "%%%%")
+		local wide = #gap + vim.fn.strdisplaywidth(help.label(key.lhs) .. " " .. (key.short or ""))
 		if key.short and wide <= room then
-			table.insert(bar, gap .. "%#PostalKey#" .. key.lhs .. "%#PostalDim# " .. key.short)
+			table.insert(bar, gap .. "%#PostalKey#" .. label .. "%#PostalDim# " .. key.short)
 			room, gap = room - wide, "  "
 		end
 	end

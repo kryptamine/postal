@@ -5,6 +5,14 @@ local M = {}
 
 local NS = vim.api.nvim_create_namespace("postal-help")
 
+--- `lhs` as it is typed: `<leader>` as the leader key, a space as `␣`.
+function M.label(lhs)
+	local leader = (vim.g.mapleader or "\\"):gsub(" ", "␣")
+	return (lhs:gsub("<[Ll]eader>", function()
+		return leader
+	end))
+end
+
 --- Opens it over `win`; `sections` are `{ title, keys }`, each key a
 --- `{ lhs = ..., desc = ... }`.
 --- `q`, `<Esc>`, `?` or leaving it closes it.
@@ -12,7 +20,7 @@ function M.open(win, sections)
 	local wide = 0
 	for _, section in ipairs(sections) do
 		for _, key in ipairs(section[2]) do
-			wide = math.max(wide, vim.fn.strdisplaywidth(key.lhs))
+			wide = math.max(wide, vim.fn.strdisplaywidth(M.label(key.lhs)))
 		end
 	end
 
@@ -25,9 +33,10 @@ function M.open(win, sections)
 		table.insert(lines, " " .. section[1])
 		table.insert(marks, { #lines - 1, 1, #lines[#lines], "PostalSection" })
 		for _, key in ipairs(section[2]) do
-			local pad = string.rep(" ", wide - vim.fn.strdisplaywidth(key.lhs))
-			table.insert(lines, "   " .. key.lhs .. pad .. "   " .. key.desc .. " ")
-			table.insert(marks, { #lines - 1, 3, 3 + #key.lhs, "PostalKey" })
+			local label = M.label(key.lhs)
+			local pad = string.rep(" ", wide - vim.fn.strdisplaywidth(label))
+			table.insert(lines, "   " .. label .. pad .. "   " .. key.desc .. " ")
+			table.insert(marks, { #lines - 1, 3, 3 + #label, "PostalKey" })
 		end
 	end
 

@@ -252,7 +252,7 @@ shows({ "hi bob", "> Shall we meet?" })
 left("2 hunks left")
 -- A narrow pane drops whole keys, never the count
 vim.api.nvim_win_set_width(vim.fn.bufwinid(pane_buf), 34)
-left("2 hunks left  <leader>a accept")
+left("2 hunks left  \\a accept")
 if left_text():find("reject", 1, true) then
 	fail("a key that does not fit is on the winbar")
 end
