@@ -15,7 +15,12 @@ end
 
 require("postal").setup({
 	cmd = os.getenv("POSTAL_BIN") or stub,
-	agents = { stub = acp(agent_log), locked = acp("locked") },
+	agents = {
+		stub = acp(agent_log),
+		locked = acp("locked"),
+		absent = { cmd = { "postal-no-such-agent" } },
+		fetched = { cmd = { "postal-no-such-agent" }, npx = "postal-acp-package" },
+	},
 	agent = "stub",
 })
 
@@ -278,6 +283,63 @@ then
 end
 
 vim.cmd("bwipeout! " .. locked_buf)
+
+-- An agent off PATH says what to do, in the pane and in an error
+local notified = {}
+vim.notify = function(msg)
+	table.insert(notified, msg)
+end
+
+local function chat(name)
+	local file = drafts .. "/" .. name .. ".eml"
+	vim.fn.writefile({ "To: bob@example.com", "", "hi" }, file)
+	vim.cmd.edit(file)
+	local buf = vim.api.nvim_get_current_buf()
+	vim.cmd("PostalAgent " .. name)
+	return buf, right_pane()
+end
+
+local function said(buf)
+	return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+end
+
+local absent_buf, absent_pane = chat("absent")
+local hint = "absent needs `postal-no-such-agent`, which is not on PATH"
+if not said(absent_pane):find(hint, 1, true) or not (notified[1] or ""):find(hint, 1, true) then
+	fail("no hint for a missing agent: " .. vim.inspect(said(absent_pane)) .. " " .. vim.inspect(notified))
+end
+
+vim.cmd("bwipeout! " .. absent_buf)
+
+-- Off PATH, an agent with an npx package runs through npx
+local bin = vim.fn.tempname()
+vim.fn.mkdir(bin, "p")
+vim.fn.writefile({
+	"#!/bin/sh",
+	'[ "$1 $2" = "-y postal-acp-package" ] || exit 3',
+	("exec '%s' --clean -l '%s' locked"):format(vim.v.progpath, acp_stub),
+}, bin .. "/npx")
+vim.fn.setfperm(bin .. "/npx", "rwxr-xr-x")
+vim.env.PATH = bin .. ":" .. vim.env.PATH
+local fetched_buf, fetched_pane = chat("fetched")
+if
+	not vim.wait(10000, function()
+		return said(fetched_pane):find("Run `acp-stub login`.", 1, true) ~= nil
+	end) or not said(fetched_pane):find("npx fetches postal-acp-package", 1, true)
+then
+	fail("npx did not stand in: " .. vim.inspect(said(fetched_pane)))
+end
+
+vim.cmd("bwipeout! " .. fetched_buf)
+vim.cmd("checkhealth postal")
+local health = said(0)
+for _, want in ipairs({ "runs `postal thread show`", hint, "npx fetches postal-acp-package" }) do
+	if not health:find(want, 1, true) then
+		fail("checkhealth lacks " .. vim.inspect(want) .. " in " .. vim.inspect(health))
+	end
+end
+
+vim.cmd("bwipeout!")
 
 -- The session ends with its Draft's buffer
 vim.cmd("bwipeout! " .. draft_buf)

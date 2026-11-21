@@ -46,8 +46,8 @@ local function complete_agent(typed)
 end
 
 --- `opts.cmd` is the command Postal runs as, `postal` by default;
---- `opts.agents` adds ACP agents by name, `{ cmd = { ... } }`, and
---- `opts.agent` names the one `:PostalAgent` starts.
+--- `opts.agents` adds ACP agents by name, `{ cmd = { ... }, npx = "..." }`,
+--- and `opts.agent` names the one `:PostalAgent` starts.
 function M.setup(opts)
 	opts = opts or {}
 	recipients.cmd = opts.cmd or recipients.cmd

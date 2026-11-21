@@ -49,16 +49,19 @@ the review to end.
 ```lua
 require("postal").setup({
   agents = {
-    claude = { cmd = { "claude-agent-acp" } },
+    claude = { cmd = { "claude-agent-acp" }, npx = "@agentclientprotocol/claude-agent-acp" },
     gemini = { cmd = { "gemini", "--experimental-acp" } },
   },
   agent = "claude",
 })
 ```
 
-`claude` is set up by default. `:PostalAgent gemini` starts another agent
-by name. The agent signs in through its own CLI (`claude /login`); when it
-asks for that, the pane says how. A session lasts as long as the Draft's
+`claude` is set up by default. When `cmd` is not on `PATH`, the `npx`
+package runs through `npx` instead, so Node.js is all it needs; the first
+start fetches it. `:checkhealth postal` says what is missing and how to
+get it. `:PostalAgent gemini` starts another agent by name. The agent
+signs in through its own CLI (`claude /login`); when it asks for that,
+the pane says how. A session lasts as long as the Draft's
 buffer.
 
 `make check` formats, lints and runs the headless smoke check, against

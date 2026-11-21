@@ -5,12 +5,16 @@ local acp = require("postal.acp")
 local body = require("postal.body")
 local pane = require("postal.pane")
 local recipients = require("postal.recipients")
+local requirements = require("postal.requirements")
 local review = require("postal.review")
 
 local M = {}
 
---- Each agent by name, `{ cmd = { ... } }`, and the one a chat starts with.
-M.agents = { claude = { cmd = { "claude-agent-acp" } } }
+--- Each agent by name, `{ cmd = { ... }, npx = "..." }`, and the one a chat
+--- starts with; `npx` names the package npx runs when `cmd` is not on PATH.
+M.agents = {
+	claude = { cmd = { "claude-agent-acp" }, npx = "@agentclientprotocol/claude-agent-acp" },
+}
 M.default = "claude"
 
 local RULES = [[
@@ -46,7 +50,7 @@ function Chat:fetch_thread()
 			self.thread = result.stdout
 		else
 			self.thread = false
-			self.pane:say("No Thread for the agent: " .. vim.trim(result.stderr))
+			self.pane:say("No Thread for the agent: " .. requirements.thread(recipients.cmd, result.stderr))
 		end
 
 		self:next()
@@ -285,12 +289,24 @@ local function start(draft, name, shown)
 	end)
 
 	chats[draft] = self
+	local cmd, note = requirements.agent(name, M.agents[name])
+	if not cmd then
+		self.pane:say(note)
+		vim.notify("postal: " .. note, vim.log.levels.ERROR)
+		self.ended = true
+		return self
+	end
+
+	if note then
+		self.pane:say(note)
+	end
+
 	self:fetch_thread()
 	-- An empty directory: the agent's own tools find nothing on disk, the
 	-- Draft's headers and the other Drafts included.
 	local cwd = vim.fn.tempname()
 	vim.fn.mkdir(cwd, "p")
-	local conn, failure = acp.start(M.agents[name].cmd, cwd, {
+	local conn, failure = acp.start(cmd, cwd, {
 		request = function(method, params, respond)
 			self:request(method, params, respond)
 		end,
