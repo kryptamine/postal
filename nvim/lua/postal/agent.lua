@@ -240,6 +240,13 @@ function Chat:stop()
 	end
 end
 
+--- Ends a chat whose agent cannot start, saying why.
+function Chat:give_up(why)
+	self.pane:notice(why)
+	vim.notify("postal: " .. why, vim.log.levels.ERROR)
+	self.ended = true
+end
+
 function Chat:fail_to_start(failed)
 	self.pane:notice("The agent failed to start: " .. tostring(failed.message))
 	self:stop()
@@ -280,15 +287,15 @@ end
 local function start(draft, name, shown)
 	local self = setmetatable({ draft = draft, name = name, calls = {}, queue = {} }, Chat)
 	self.path = vim.api.nvim_buf_get_name(draft)
+	-- The pane outlives an agent that ends, so its keys reach whichever
+	-- chat is the Draft's now.
 	self.pane = shown
 		or pane.new(draft, {
 			send = function(text)
 				M.send(draft, text)
 			end,
 			stop = function()
-				if chats[draft] then
-					chats[draft]:cancel()
-				end
+				chats[draft]:cancel()
 			end,
 			close = function()
 				M.close(draft)
@@ -300,9 +307,7 @@ local function start(draft, name, shown)
 	chats[draft] = self
 	local how, missing = requirements.agent(name, M.agents[name])
 	if not how then
-		self.pane:notice(missing)
-		vim.notify("postal: " .. missing, vim.log.levels.ERROR)
-		self.ended = true
+		self:give_up(missing)
 		return self
 	end
 
@@ -310,7 +315,6 @@ local function start(draft, name, shown)
 		self.pane:notice(how.note)
 	end
 
-	self:fetch_thread()
 	-- An empty directory: the agent's own tools find nothing on disk, the
 	-- Draft's headers and the other Drafts included.
 	local cwd = vim.fn.tempname()
@@ -336,12 +340,12 @@ local function start(draft, name, shown)
 	})
 
 	if not conn then
-		self.pane:notice(name .. " cannot start: " .. failure)
-		self.ended = true
+		self:give_up(name .. " cannot start: " .. failure)
 		return self
 	end
 
 	self.conn = conn
+	self:fetch_thread()
 	self:begin(cwd)
 	return self
 end
