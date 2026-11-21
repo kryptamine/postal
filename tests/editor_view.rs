@@ -10,14 +10,14 @@
 
 mod support;
 
-use std::{path::Path, time::Duration};
+use std::path::Path;
 
 use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
 };
-use termlens::{Key, Screen, Terminal};
+use termlens::{Key, Screen};
 
 const HTML: &str = "<p>Read <a href=\"https://example.com/notes\">the notes</a>.</p>\
     <p>See you <i>soon</i>.</p>";
@@ -46,16 +46,9 @@ fn opened(body: FakeBody, keys: &[Key]) -> (String, bool) {
         record = record.display(),
         writable = writable.display(),
     );
-    let mut t = Terminal::builder()
-        .size(80, 24)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("TZ", "UTC")
+    let mut t = home
+        .terminal()
         .env("EDITOR", Path::new(&editor))
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     t.wait_until(main_screen).unwrap();

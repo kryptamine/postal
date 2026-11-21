@@ -2,9 +2,10 @@
 //! `$XDG_STATE_HOME` for its log, an `$XDG_CACHE_HOME` for its Cache and an
 //! `$XDG_DATA_HOME` for its Drafts and its Outbox.
 
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
 
 use tempfile::TempDir;
+use termlens::{Terminal, TerminalBuilder};
 
 use super::{
     fake_imap::{EMAIL, FakeImap},
@@ -38,6 +39,20 @@ impl Home {
             server.port,
             fake_oauth::shared().config()
         ))
+    }
+
+    /// An 80×24 terminal on this home alone, but `PATH`, for `sh` to find
+    /// the commands of a `$PAGER` or `$EDITOR`.
+    pub fn terminal(&self) -> TerminalBuilder {
+        Terminal::builder()
+            .size(80, 24)
+            .env_clear()
+            .env("XDG_CONFIG_HOME", self.xdg_config_home())
+            .env("XDG_STATE_HOME", self.xdg_state_home())
+            .env("XDG_CACHE_HOME", self.xdg_cache_home())
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .env("TZ", "UTC")
+            .timeout(Duration::from_secs(10))
     }
 
     pub fn xdg_config_home(&self) -> PathBuf {

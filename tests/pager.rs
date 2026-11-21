@@ -9,34 +9,21 @@
 
 mod support;
 
-use std::{path::Path, time::Duration};
+use std::path::Path;
 
 use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
 };
-use termlens::{Key, Screen, Terminal, TerminalBuilder};
+use termlens::{Key, Screen, Terminal};
 
 const HTML: &str = "<p>Read <a href=\"https://example.com/notes\">the notes</a> \
     and <a href=\"https://example.com/agenda\"><b>the agenda</b></a>.</p>\
     <p>See you <i>soon</i>.</p>";
 
-/// `PATH` stays, for `sh` to find the pager's commands.
-fn terminal(home: &Home) -> TerminalBuilder {
-    Terminal::builder()
-        .size(80, 24)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
-}
-
 fn postal(home: &Home, envs: &[(&str, &Path)], no_color: bool) -> Terminal {
-    let mut builder = terminal(home);
+    let mut builder = home.terminal();
     for (key, value) in envs {
         builder = builder.env(key, value);
     }
