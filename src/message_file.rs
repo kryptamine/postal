@@ -5,13 +5,17 @@ use std::{
 
 use mail_parser::MessageParser;
 
-use crate::{body_text, html_preview::Links, message::Message, message_header::DATE};
+use crate::{
+    body_text::{self, WIDTH},
+    html_preview::Links,
+    message::Message,
+    message_header::DATE,
+    xdg,
+};
 
-/// Columns an HTML body is laid out in: the line RFC 5322 recommends.
-const WIDTH: usize = 78;
-
-/// A Message as a read-only file for the editor, under `dir`, removed when
-/// dropped. The plugin knows it by `messages/` in its path.
+/// A Message as a read-only file for the editor in
+/// `$XDG_CACHE_HOME/postal/messages`, removed when dropped. The plugin knows
+/// it by that directory.
 pub struct MessageFile {
     path: PathBuf,
 }
@@ -19,7 +23,7 @@ pub struct MessageFile {
 impl MessageFile {
     /// Writes `message` with its `raw` body: the header block, a blank line,
     /// and the body as plain text, its Quote included.
-    pub fn write(dir: &Path, message: &Message, raw: &[u8]) -> io::Result<Self> {
+    pub fn write(message: &Message, raw: &[u8]) -> io::Result<Self> {
         let body = MessageParser::default()
             .parse(raw)
             .map(|parsed| body_text::plain(&parsed, WIDTH, Links::Footnotes))
@@ -33,7 +37,8 @@ impl MessageFile {
             body.trim_end()
         );
 
-        fs::create_dir_all(dir)?;
+        let dir = xdg::cache_dir().map_err(io::Error::other)?.join("messages");
+        fs::create_dir_all(&dir)?;
         let path = dir.join(format!("{}.eml", message.body_key));
         // One left by a run that crashed is read-only, so it cannot be
         // written over.

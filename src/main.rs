@@ -83,6 +83,7 @@ mod notes;
 mod oauth;
 mod older_pages;
 mod onboarding;
+mod open_outside;
 mod outage;
 mod outbox;
 mod outbox_flush;

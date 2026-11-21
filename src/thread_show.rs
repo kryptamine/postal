@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::{
     answering::Answering,
-    body_text,
+    body_text::{self, WIDTH},
     cache::{Reader, ThreadMessage},
     cli::ThreadShow,
     command_output,
@@ -15,9 +15,6 @@ use crate::{
     notes::Notes,
     xdg,
 };
-
-/// Columns an HTML body is laid out in: the line RFC 5322 recommends.
-const WIDTH: usize = 78;
 
 /// What the text answer says for a body not in the Cache.
 const MISSING: &str = "[body not in the Cache]";

@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
-use crate::mode::Mode;
+use crate::{mode::Mode, open_outside::Outside};
 
 #[derive(Clone, Copy)]
 pub enum Action {
@@ -14,11 +14,9 @@ pub enum Action {
     Step(Direction),
     /// Folds or unfolds the Message at the cursor.
     Fold,
-    /// The selected Message in `$PAGER`; in Reading, the one at the cursor.
-    Page,
-    /// The selected Message read-only in `$EDITOR`; in Reading, the one at
-    /// the cursor.
-    OpenInEditor,
+    /// The selected Message outside the TUI; in Reading, the one at the
+    /// cursor.
+    Open(Outside),
     /// Mark Unread: the selected Thread's newest Message, or in Reading the
     /// one at the cursor.
     MarkUnread,
@@ -725,7 +723,7 @@ pub const fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         (_, KeyCode::Char('o')) => Some(Action::Links),
         (_, KeyCode::Char('v')) => Some(Action::SwitchView),
         (_, KeyCode::Char('z')) => Some(Action::SwitchQuoted),
-        (_, KeyCode::Char('|')) => Some(Action::Page),
+        (_, KeyCode::Char('|')) => Some(Action::Open(Outside::Pager)),
         (_, KeyCode::Char('?')) => Some(Action::Help),
         (_, KeyCode::Char('L')) => Some(Action::SignIn),
         (_, KeyCode::Char(',')) => Some(Action::Settings),
@@ -767,7 +765,7 @@ const fn on_message(code: KeyCode) -> Option<Action> {
         KeyCode::Char('U') => Some(Action::MarkUnread),
         KeyCode::Backspace => Some(Action::Delete),
         KeyCode::Char('u') => Some(Action::Undo),
-        KeyCode::Char('E') => Some(Action::OpenInEditor),
+        KeyCode::Char('E') => Some(Action::Open(Outside::Editor)),
         KeyCode::Char('c') => Some(Action::Compose),
         KeyCode::Char('r') => Some(Action::Reply { all: false }),
         KeyCode::Char('R') => Some(Action::Reply { all: true }),

@@ -17,7 +17,6 @@ use crate::{
     config::IconChoice,
     draft_pane::DraftPane,
     draft_preview::DraftPreview,
-    editor,
     folder::{Folder, Role},
     folder_picker::FolderPicker,
     help_popup::HelpPopup,
@@ -32,19 +31,16 @@ use crate::{
     local_drafts::LocalDrafts,
     local_drafts_pane::LocalDraftsPane,
     message::Message,
-    message_file::MessageFile,
     message_header,
     message_list::{self, MessageList},
     mode::Mode,
     older_pages::OlderPages,
+    open_outside::{self, Outside},
     outbox::Outbox,
-    pager, pager_text,
     picker_popup::PickerPopup,
     preview_pane::{self, PreviewPane},
-    preview_render::{self, Job},
     previews::Previews,
     reading::Reading,
-    rendered_previews::PreviewKey,
     reply_fetch::ReplyFetch,
     routes::Routes,
     screen::Screen,
@@ -62,7 +58,6 @@ use crate::{
     toast::Toast,
     undo::Undo,
     update::Update,
-    xdg,
 };
 
 #[derive(Debug)]
@@ -216,8 +211,7 @@ pub async fn run(
                     Step::Links => label_links(&mut screen, previews, &view, text),
                     step @ (Step::Folders | Step::Show(_) | Step::Search | Step::Read(_) | Step::MarkUnread | Step::Delete | Step::Undo) => steer(step, &mut view, &mut screen, caches, &asks)?,
                     Step::Browse(url) => screen.toast = browse(&url),
-                    Step::Page => screen.toast = open(terminal, &mut events, theme, caches, (&view, screen.reading.as_ref()))?,
-                    Step::OpenInEditor => screen.toast = open_in_editor(terminal, &mut events, caches, (&view, screen.reading.as_ref()))?,
+                    Step::Open(to) => screen.toast = open_outside::open(to, (terminal, &mut events), theme, caches, (&view, screen.reading.as_ref()))?,
                     step @ (Step::Compose | Step::Edit | Step::Send) => {
                         let from = accounts.noted(composing_from(&view));
                         draft(&step, terminal, &mut events, &mut screen, (accounts, from, outbox, &asks))?;
@@ -567,8 +561,7 @@ enum Step {
     Delete,
     Undo,
     Browse(Arc<str>),
-    Page,
-    OpenInEditor,
+    Open(Outside),
     LocalDrafts,
     Compose,
     /// Reply, or Reply All when true.
@@ -651,8 +644,7 @@ fn act(
             screen.list();
             Step::Stay
         }
-        Some(Action::Page) => Step::Page,
-        Some(Action::OpenInEditor) => Step::OpenInEditor,
+        Some(Action::Open(to)) => Step::Open(to),
         Some(Action::SignIn) => screen.signed_out().map_or(Step::Stay, Step::SignIn),
         Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
@@ -1301,93 +1293,6 @@ pub fn outside(
     }
 
     Ok(())
-}
-
-/// Shows the selected Message in the pager. Returns the Toast to show
-/// instead while its body is not in the Cache; `None` drops any shown.
-fn open(
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
-    theme: &Theme,
-    caches: &[Cache],
-    (view, reading): (&InboxView, Option<&Reading>),
-) -> Result<Option<Toast>, Error> {
-    let (message, body) = match shown_body(caches, (view, reading))? {
-        Shown::Body(message, body) => (message, body),
-        Shown::Nothing => return Ok(None),
-        Shown::Missing => return Ok(Some(Toast::new("not downloaded"))),
-    };
-
-    let width = terminal.size().map_err(Error::Terminal)?.width;
-    let preview = preview_render::paged(&Job {
-        key: PreviewKey {
-            account: message.account,
-            body: message.body_key,
-            width,
-            view: view.html,
-            // The pager shows the Message whole.
-            quoted: true,
-        },
-        body,
-        look: theme.mail_look(),
-    });
-
-    let text = pager_text::ansi(message, &preview, theme);
-    outside(terminal, events, || pager::page(&text))?;
-    Ok(None)
-}
-
-enum Shown<'a> {
-    Body(&'a Message, Vec<u8>),
-    Nothing,
-    /// The body is not in the Cache.
-    Missing,
-}
-
-/// The selected Message, in Reading the one at the cursor, with its body.
-fn shown_body<'a>(
-    caches: &[Cache],
-    (view, reading): (&'a InboxView, Option<&Reading>),
-) -> Result<Shown<'a>, Error> {
-    let message = reading.map_or_else(
-        || view.selected_message(),
-        |reading| view.stack().find(|m| m.body_key == reading.cursor),
-    );
-
-    let Some(message) = message else {
-        return Ok(Shown::Nothing);
-    };
-
-    let found = caches[message.account].body(message.body_key);
-    Ok(found
-        .map_err(Error::Cache)?
-        .map_or(Shown::Missing, |body| Shown::Body(message, body)))
-}
-
-/// Opens the selected Message read-only in the editor, as `open` does in
-/// the pager.
-fn open_in_editor(
-    terminal: &mut Terminal<TerminalBackend>,
-    events: &mut Input,
-    caches: &[Cache],
-    (view, reading): (&InboxView, Option<&Reading>),
-) -> Result<Option<Toast>, Error> {
-    let (message, body) = match shown_body(caches, (view, reading))? {
-        Shown::Body(message, body) => (message, body),
-        Shown::Nothing => return Ok(None),
-        Shown::Missing => return Ok(Some(Toast::new("not downloaded"))),
-    };
-
-    let written = xdg::cache_dir()
-        .map_err(io::Error::other)
-        .and_then(|dir| MessageFile::write(&dir.join("messages"), message, &body));
-    let file = match written {
-        Ok(file) => file,
-        Err(error) => return Ok(Some(Toast::error(error.to_string()))),
-    };
-
-    outside(terminal, events, || editor::edit(file.path()))?;
-    Ok(None)
 }
 
 /// The Account a Compose goes out from: the shown Folder's; in All

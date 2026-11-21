@@ -2,6 +2,9 @@ use mail_parser::{Message, PartType};
 
 use crate::html_preview::{self, Links};
 
+/// Columns an HTML body is laid out in: the line RFC 5322 recommends.
+pub const WIDTH: usize = 78;
+
 /// The `text/plain` part of `message`, else its HTML one as text laid out
 /// in `width` columns, its links as `links` says.
 pub fn plain(message: &Message<'_>, width: usize, links: Links) -> String {
