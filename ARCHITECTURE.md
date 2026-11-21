@@ -3,8 +3,10 @@
 `src/` holds one directory per layer. `main.rs` alone sits at the root: it
 declares the layers, reads the arguments and hands the command to `cli` or
 `app`. A layer's `mod.rs` only declares its modules, and callers name them
-in full, `crate::<layer>::<module>`. `cache` is the one layer that is a
-single module: its `mod.rs` re-exports `Cache` and the few items callers use.
+in full, `crate::<layer>::<module>`. A module only its own layer names is
+private: `mod`, not `pub mod`, so the compiler keeps the others out of it.
+`cache` is the one layer that is a single module: its `mod.rs` re-exports
+`Cache` and the few items callers use.
 
 ## Codemap
 
@@ -63,6 +65,7 @@ Where a module could sit in two layers, its imports decided:
   addresses and envelopes with lettre; only `mail` sends.
 - `render` reads no files and opens no sockets; its one I/O is the layout
   process `render::render_process` runs.
-- `ui` never speaks IMAP: it imports neither `mail::imap` nor `mail::smtp`,
-  and asks the connections through `Steering` and the fetch requests.
+- `ui` never speaks IMAP: `mail::imap` and `mail::smtp` are private to
+  `mail`, and the screen asks the connections through `Steering` and the
+  fetch requests.
 - Nothing outside `ui` draws: ratatui and crossterm are imported in `ui` alone.
