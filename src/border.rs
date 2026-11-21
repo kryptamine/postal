@@ -1,6 +1,7 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::Style, symbols::line};
 
-/// `├───┤` across the bordered `pane` on row `y`, joined to its sides.
+/// `├───┤` across the bordered `pane` on row `y`, joined to its sides, over
+/// whatever was drawn there.
 pub fn rule(buf: &mut Buffer, pane: Rect, y: u16, style: Style) {
     let right = pane.right().saturating_sub(1);
     for x in pane.x..=right {
@@ -13,6 +14,7 @@ pub fn rule(buf: &mut Buffer, pane: Rect, y: u16, style: Style) {
         };
 
         if let Some(cell) = buf.cell_mut((x, y)) {
+            cell.reset();
             cell.set_symbol(symbol).set_style(style);
         }
     }

@@ -107,13 +107,11 @@ impl ThreadPane<'_> {
     fn pin(&self, buf: &mut Buffer, (pane, text): (Rect, Rect), placed: &Placed<'_>, rows: usize) {
         let first = message_header::ROWS - rows;
         for (y, offset) in (text.y..text.bottom()).zip(first..message_header::ROWS) {
+            let line = Rect::new(text.x, y, text.width, 1);
+            Clear.render(line, buf);
             if offset + 1 == message_header::ROWS {
-                // A rule only patches its style: a body's background would show.
-                Clear.render(Rect::new(pane.x, y, pane.width, 1), buf);
                 border::rule(buf, pane, y, self.theme.border);
             } else {
-                let line = Rect::new(text.x, y, text.width, 1);
-                Clear.render(line, buf);
                 self.row(buf, line, placed, offset);
             }
         }
