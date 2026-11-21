@@ -1,8 +1,7 @@
--- The MCP server an agent edits a Draft through (ADR 0020), run as
--- `nvim -l mcp.lua <servername> <buffer>`: JSON-RPC over stdio, one message
--- per line. It knows no tool: the editor that owns the Draft lists and runs
--- them (`postal.tools`).
-local server, draft = arg[1], tonumber(arg[2])
+-- The MCP server an agent reaches a mail through (ADR 0020), run as
+-- `nvim -l mcp.lua <servername> <buffer> <kind>`: JSON-RPC over stdio, one
+-- message per line. The editor that owns the mail lists and runs its tools.
+local server, mail, kind = arg[1], tonumber(arg[2]), arg[3]
 local editor = vim.fn.sockconnect("pipe", server, { rpc = true })
 
 local function send(message)
@@ -11,7 +10,7 @@ local function send(message)
 	io.stdout:flush()
 end
 
--- Runs Lua `code` in the editor that owns the Draft, on the arguments after it.
+-- Runs Lua `code` in the editor that owns the mail, on the arguments after it.
 local function ask(code, ...)
 	return vim.rpcrequest(editor, "nvim_exec_lua", code, { ... })
 end
@@ -26,11 +25,11 @@ for line in io.lines() do
 			serverInfo = { name = "postal", version = "0" },
 		}
 	elseif message.method == "tools/list" then
-		result = { tools = ask("return require('postal.tools').list()") }
+		result = { tools = ask("return require('postal.tools').list(...)", kind) }
 	elseif message.method == "tools/call" then
 		local params = message.params
 		local code = "return require('postal.agent').serve(...)"
-		result = ask(code, draft, params.name, params.arguments or vim.empty_dict())
+		result = ask(code, mail, params.name, params.arguments or vim.empty_dict())
 	elseif message.method == "ping" then
 		result = vim.empty_dict()
 	end

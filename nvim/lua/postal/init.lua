@@ -1,6 +1,6 @@
 -- Completes the recipients of a Postal Draft from its Correspondents as
 -- they are typed (blink.cmp, else Neovim's own menu or `<C-x><C-o>`), and
--- chats with an ACP agent about the Draft through `:PostalAgent`.
+-- chats with an ACP agent about a Draft or a Message through `:PostalAgent`.
 local agent = require("postal.agent")
 local colors = require("postal.colors")
 local icons = require("postal.icons")
@@ -10,6 +10,8 @@ local M = {}
 
 -- Where Postal keeps its Drafts, whatever `$XDG_DATA_HOME` is.
 local DRAFTS = "*/postal/drafts/*.eml"
+-- Where Postal writes a Message `E` opens, until the editor exits.
+local MESSAGES = "*/postal/messages/*.eml"
 
 -- Registers the source with blink.cmp once, on the first Draft, so blink
 -- loads no earlier than it would. False without blink.
@@ -47,6 +49,12 @@ local function complete_agent(typed)
 	end, vim.tbl_keys(agent.agents))
 end
 
+local function agent_command(buf, desc)
+	vim.api.nvim_buf_create_user_command(buf, "PostalAgent", function(command)
+		agent.ask(buf, command.fargs[1])
+	end, { nargs = "?", complete = complete_agent, desc = desc })
+end
+
 --- `opts.cmd` is the command Postal runs as, `postal` by default;
 --- `opts.agents` adds ACP agents by name, `{ cmd = { ... }, npx = "..." }`,
 --- `opts.agent` names the one `:PostalAgent` starts, and `opts.nerd_font`
@@ -73,15 +81,24 @@ function M.setup(opts)
 				native(event.buf)
 			end
 
-			vim.api.nvim_buf_create_user_command(event.buf, "PostalAgent", function(command)
-				agent.ask(event.buf, command.fargs[1])
-			end, { nargs = "?", complete = complete_agent, desc = "Chat with an ACP agent about this Draft" })
+			agent_command(event.buf, "Chat with an ACP agent about this Draft")
+		end,
+	})
+
+	vim.api.nvim_create_autocmd("BufReadPost", {
+		group = group,
+		pattern = MESSAGES,
+		callback = function(event)
+			vim.b[event.buf].postal_message = true
+			vim.bo[event.buf].readonly = true
+			vim.bo[event.buf].modifiable = false
+			agent_command(event.buf, "Ask an ACP agent about this Message")
 		end,
 	})
 
 	vim.api.nvim_create_autocmd("BufWinEnter", {
 		group = group,
-		pattern = DRAFTS,
+		pattern = { DRAFTS, MESSAGES },
 		callback = function()
 			-- Mail is paragraphs on long lines, whatever `wrap` is globally.
 			vim.wo[0][0].wrap = true
@@ -92,7 +109,7 @@ function M.setup(opts)
 
 	vim.api.nvim_create_autocmd("BufUnload", {
 		group = group,
-		pattern = DRAFTS,
+		pattern = { DRAFTS, MESSAGES },
 		callback = function(event)
 			agent.close(event.buf)
 		end,

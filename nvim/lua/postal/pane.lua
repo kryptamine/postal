@@ -1,4 +1,4 @@
--- The chat pane beside a Draft, a markdown buffer laid out like a chat:
+-- The chat pane beside a mail, a markdown buffer laid out like a chat:
 -- each message under `## Me` or `## <agent>`, and the user's next one typed
 -- under the `## Me` at its bottom.
 local help = require("postal.help")
@@ -11,19 +11,25 @@ local NS = vim.api.nvim_create_namespace("postal-pane")
 local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 local RULE = { { string.rep("─", 200), "PostalRule" } }
 local ME = "Me"
-local INTRO = [[
+local INTRO = {
+	draft = [[
 Ask the agent to write or rework this Draft. It reads the Thread the Draft
 answers and the body, your edits included; its changes land in the Draft for
 you to review, hunk by hunk. It never touches the headers and never sends.
-Try: "answer that Friday works for me, and ask for the agenda".]]
+Try: "answer that Friday works for me, and ask for the agenda".]],
+	message = [[
+Ask the agent about this Message: to find something in it, sum it up or
+explain it. It reads the Message, headers and body, and changes nothing.
+Try: "what does it ask me to do, and by when?".]],
+}
 
 local Pane = {}
 Pane.__index = Pane
 
---- A pane for the Draft in buffer `draft`, shown at once; `actions` are
---- `send(text)`, `stop()` and `close()`.
-function M.new(draft, actions)
-	local self = setmetatable({ draft = draft, actions = actions }, Pane)
+--- A pane for the `kind` mail in buffer `mail`, shown at once; `actions`
+--- are `send(text)`, `stop()` and `close()`.
+function M.new(mail, kind, actions)
+	local self = setmetatable({ mail = mail, kind = kind, actions = actions }, Pane)
 	local function submit()
 		self:submit()
 	end
@@ -40,7 +46,12 @@ function M.new(draft, actions)
 			short = "keys",
 			desc = "list the keys",
 			run = function()
-				help.open(vim.api.nvim_get_current_win(), { { "Chat", self.keys }, { "Review, in the Draft", review.keys } })
+				local groups = { { "Chat", self.keys } }
+				if kind == "draft" then
+					table.insert(groups, { "Review, in the Draft", review.keys })
+				end
+
+				help.open(vim.api.nvim_get_current_win(), groups)
 			end,
 		},
 	}
@@ -60,7 +71,7 @@ function Pane:buffer()
 	vim.bo[self.buf].filetype = "markdown"
 	-- Highlights and conceals markdown even where no config starts treesitter.
 	pcall(vim.treesitter.start, self.buf, "markdown")
-	local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(self.draft), ":t")
+	local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(self.mail), ":t")
 	vim.api.nvim_buf_set_name(self.buf, "postal-agent://" .. name .. "#" .. self.buf)
 	vim.api.nvim_buf_set_lines(self.buf, 0, -1, false, { "## " .. ME, "" })
 	-- The input's header: whatever the pane adds goes in above it.
@@ -70,17 +81,17 @@ function Pane:buffer()
 		vim.keymap.set(key.modes, key.lhs, key.run, { buffer = self.buf, desc = key.desc })
 	end
 
-	self:notice(INTRO)
+	self:notice(INTRO[self.kind])
 	return self.buf
 end
 
---- Opens the pane's window right of the Draft's, unless one shows it; with
+--- Opens the pane's window right of the mail's, unless one shows it; with
 --- `focus`, puts the cursor at the end of its input.
 function Pane:show(focus)
 	local buf = self:buffer()
 	local win = vim.fn.bufwinid(buf)
 	if win == -1 then
-		local beside = vim.fn.bufwinid(self.draft)
+		local beside = vim.fn.bufwinid(self.mail)
 		win = vim.api.nvim_open_win(buf, false, { split = "right", win = beside ~= -1 and beside or 0 })
 		vim.wo[win].wrap = true
 		vim.wo[win].linebreak = true

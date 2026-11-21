@@ -1,6 +1,6 @@
 -- Run by `make smoke` and tests/nvim.rs: in a bare nvim, a Draft's `Cc:`
 -- completes a recipient from Postal's Correspondents, and its body nothing;
--- `:PostalAgent` chats with a stub ACP agent about a Draft.
+-- `:PostalAgent` chats with a stub ACP agent about a Draft and a Message.
 local function fail(msg)
 	io.stderr:write("smoke: " .. msg .. "\n")
 	vim.cmd("cquit 1")
@@ -379,6 +379,61 @@ then
 end
 
 vim.cmd("bwipeout! " .. fetched_buf)
+
+-- A Message opened to read cannot be changed, by the user or the agent,
+-- and the agent reads it whole
+local messages = vim.fn.tempname() .. "/postal/messages"
+vim.fn.mkdir(messages, "p")
+local message_text = { "From: Ada <ada@example.com>", "Subject: Weekly notes", "", "See you soon." }
+vim.fn.writefile(message_text, messages .. "/7.eml")
+home()
+vim.cmd.edit(messages .. "/7.eml")
+local message_buf = vim.api.nvim_get_current_buf()
+if vim.bo.modifiable or not vim.bo.readonly or not vim.wo.wrap then
+	fail("the Message can be changed, or is not wrapped")
+end
+
+local before_message = #prompts()
+vim.cmd("PostalAgent")
+local message_pane = vim.api.nvim_get_current_buf()
+if not said(message_pane):find("Ask the agent about this Message", 1, true) then
+	fail("the Message's pane says " .. vim.inspect(said(message_pane)))
+end
+
+vim.api.nvim_buf_set_lines(0, -2, -1, false, { "what is it about?" })
+vim.cmd.normal(vim.keycode("<CR>"))
+if not vim.wait(10000, function()
+	return said(message_pane):find("It is about Weekly notes.", 1, true) ~= nil
+end) then
+	fail("the agent did not read the Message: " .. vim.inspect(said(message_pane)))
+end
+
+local asked = prompts()[before_message + 1].params.prompt
+local message_blocks = vim.tbl_map(function(block)
+	return block.resource and block.resource.uri:match("^[%w-]+") or block.text
+end, asked)
+
+local want_blocks = { asked[1].text, "postal-message", "what is it about?" }
+if not vim.deep_equal(message_blocks, want_blocks) or not asked[1].text:find("read_message", 1, true) then
+	fail("the Message's prompt holds " .. vim.inspect(asked))
+end
+
+if asked[2].resource.text ~= table.concat(message_text, "\n") .. "\n" then
+	fail("the Message resource is " .. vim.inspect(asked[2].resource.text))
+end
+
+local message_outcomes = vim.tbl_map(function(message)
+	return message.result.outcome.optionId
+end, vim.list_slice(answers(), #answers() - 1))
+
+if not vim.deep_equal(message_outcomes, { "no", "yes" }) then
+	fail("over a Message the agent was answered " .. vim.inspect(message_outcomes))
+end
+
+vim.cmd("bwipeout! " .. message_buf)
+if vim.api.nvim_buf_is_valid(message_pane) then
+	fail("the pane outlived its Message")
+end
 vim.cmd("checkhealth postal")
 local health = said(0)
 for _, want in ipairs({ "runs `postal thread show`", hint, "npx fetches postal-acp-package" }) do

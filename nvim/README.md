@@ -75,5 +75,15 @@ the pane says how. `nerd_font` draws the pane's icons from a Nerd Font,
 on by default when `vim.g.have_nerd_font` is set. A session lasts as
 long as the Draft's buffer.
 
+## Reading with an agent
+
+`E` in Postal opens the selected Message in your editor, read-only: its
+headers, then its body as text, its Quote kept and each link's URL listed
+at the end, for searching and copying. Postal removes the file once the
+editor exits. `:PostalAgent` in it opens the same chat pane, to ask about
+the Message: the agent gets it whole in the first prompt, and through the
+`read_message` tool, and can change nothing. The keys are a Draft's, with
+no review.
+
 `make check` formats, lints and runs the headless smoke check, against
 stub `postal` and ACP agents, the gate before a commit; `make` lists every target.

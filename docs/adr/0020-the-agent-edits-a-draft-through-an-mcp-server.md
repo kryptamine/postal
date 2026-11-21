@@ -16,6 +16,11 @@ the list `postal.tools` holds and passes each call there. There are two:
   included, or the agent's last write in this turn.
 - `write_draft` takes the whole new body and opens the hunk review.
 
+A Message opened to read, with `E` in the TUI, gets one tool instead:
+`read_message` gives the whole buffer, headers included, as nothing in it
+is the agent's to change. The server takes the chat's kind as a third
+argument.
+
 The headers never leave the editor, and a write lands in the buffer, never
 on disk. The client offers no `fs/*` any more, and the body goes in each
 prompt as a `postal-draft://` resource rather than a `file://` one, which

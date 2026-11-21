@@ -1,6 +1,6 @@
--- A chat with an ACP agent about one Draft buffer: its pane, its session,
--- and the one write the agent is allowed, to the Draft's body through
--- Postal's MCP server, reviewed hunk by hunk (ADR 0018, 0019, 0020).
+-- A chat with an ACP agent about one mail buffer, a Draft or a Message
+-- opened to read: its pane, its session, and for a Draft the one write the
+-- agent is allowed, to the body, reviewed hunk by hunk (ADR 0018, 0019, 0020).
 local acp = require("postal.acp")
 local body = require("postal.body")
 local pane = require("postal.pane")
@@ -18,13 +18,19 @@ M.agents = {
 }
 M.default = "claude"
 
-local RULES = [[
+local RULES = {
+	draft = [[
 You are helping the user write the email Draft open in their editor.
 - Read and change the Draft's body only through the postal tools `read_draft` and `write_draft`; no other tool reaches the Draft. Its headers are not yours to see or change.
 - Keep the quote, the `>` lines of the Message the Draft answers, as it is.
 - Never send the Draft: sending is the user's.
 - The Thread resource, when there is one, is the whole correspondence, oldest first.
-- Each prompt carries the body as it stands, the user's own edits included, then what the user asks.]]
+- Each prompt carries the body as it stands, the user's own edits included, then what the user asks.]],
+	message = [[
+You are helping the user read the email Message open in their editor: find things in it, explain and analyse it.
+- The Message resource is the whole Message, its headers then its body as text, each link's URL listed at the end; the postal tool `read_message` gives it again. No other tool reaches it.
+- It is read-only: you cannot change it, reply to it or send anything. Answer in the chat.]],
+}
 
 local chats = {}
 
@@ -74,16 +80,23 @@ function Chat:prompt(instruction)
 	local blocks = {}
 	if first then
 		self.prompted = true
-		table.insert(blocks, { type = "text", text = RULES })
+		table.insert(blocks, { type = "text", text = RULES[self.kind] })
+		if self.kind == "message" then
+			table.insert(blocks, self:resource("postal-message://" .. self.path, self:text()))
+		end
+
 		if self.thread then
 			table.insert(blocks, self:resource("postal-thread://" .. self.path, self.thread))
 			self.pane:dim("context", "Context: the Thread the Draft answers")
 		end
 	end
 
-	self.sent = body.get(self.draft)
-	self.proposed = nil
-	table.insert(blocks, self:resource("postal-draft://" .. self.path, self.sent))
+	if self.kind == "draft" then
+		self.sent = body.get(self.mail)
+		self.proposed = nil
+		table.insert(blocks, self:resource("postal-draft://" .. self.path, self.sent))
+	end
+
 	table.insert(blocks, { type = "text", text = instruction })
 	self.busy = true
 	self.pane:begin_turn(self.name)
@@ -150,7 +163,7 @@ end
 
 function Chat:permit(params, respond)
 	local call = vim.tbl_extend("force", self.calls[params.toolCall.toolCallId] or {}, params.toolCall)
-	local allowed = tools.asked(call)
+	local allowed = tools.asked(self.kind, call)
 	-- Never `allow_always`: the agent would stop asking for that tool.
 	local wanted = allowed and { "allow_once" } or { "reject_once", "reject_always" }
 	for _, kind in ipairs(wanted) do
@@ -177,10 +190,15 @@ function Chat:request(method, params, respond)
 	end
 end
 
+--- The whole buffer, headers included.
+function Chat:text()
+	return table.concat(vim.api.nvim_buf_get_lines(self.mail, 0, -1, false), "\n") .. "\n"
+end
+
 --- The body the agent sees: its last write this turn, whatever the review
 --- made of it, else the Draft's own.
 function Chat:body()
-	return self.proposed or body.get(self.draft)
+	return self.proposed or body.get(self.mail)
 end
 
 --- Opens a review of the agent's body `text` against the one its turn was
@@ -195,7 +213,7 @@ function Chat:propose(text)
 		self.review:settle(false, true)
 	end
 
-	self.review = review.new(self.draft, self.sent, text, function(summary)
+	self.review = review.new(self.mail, self.sent, text, function(summary)
 		self:reviewed(summary)
 	end)
 
@@ -262,7 +280,7 @@ function Chat:begin(cwd)
 		local server = {
 			name = "postal",
 			command = vim.v.progpath,
-			args = { "--clean", "--headless", "-l", MCP, vim.v.servername, tostring(self.draft) },
+			args = { "--clean", "--headless", "-l", MCP, vim.v.servername, tostring(self.mail), self.kind },
 			env = {},
 		}
 
@@ -279,26 +297,27 @@ function Chat:begin(cwd)
 	end)
 end
 
---- Starts agent `name` on Draft buffer `draft`, its pane reused when given.
-local function start(draft, name, shown)
-	local self = setmetatable({ draft = draft, name = name, calls = {}, queue = {} }, Chat)
-	self.path = vim.api.nvim_buf_get_name(draft)
+--- Starts agent `name` on mail buffer `mail`, its pane reused when given.
+local function start(mail, name, shown)
+	local kind = vim.b[mail].postal_message and "message" or "draft"
+	local self = setmetatable({ mail = mail, kind = kind, name = name, calls = {}, queue = {} }, Chat)
+	self.path = vim.api.nvim_buf_get_name(mail)
 	-- The pane outlives an agent that ends, so its keys reach whichever
-	-- chat is the Draft's now.
+	-- chat is the mail's now.
 	self.pane = shown
-		or pane.new(draft, {
+		or pane.new(mail, kind, {
 			send = function(text)
-				M.send(draft, text)
+				M.send(mail, text)
 			end,
 			stop = function()
-				chats[draft]:cancel()
+				chats[mail]:cancel()
 			end,
 			close = function()
-				M.close(draft)
+				M.close(mail)
 			end,
 		})
 
-	chats[draft] = self
+	chats[mail] = self
 	local how, missing = requirements.agent(name, M.agents[name])
 	if not how then
 		self:give_up(missing)
@@ -339,17 +358,23 @@ local function start(draft, name, shown)
 	end
 
 	self.conn = conn
-	self:fetch_thread()
+	if kind == "draft" then
+		self:fetch_thread()
+	else
+		-- A Message is read alone, without its Thread.
+		self.thread = false
+	end
+
 	self:begin(cwd)
 	return self
 end
 
---- Opens Draft buffer `draft`'s chat, the cursor in its input, starting
+--- Opens mail buffer `mail`'s chat, the cursor in its input, starting
 --- agent `name`, or the default, when none chats about it yet.
-function M.ask(draft, name)
-	local chat = chats[draft]
+function M.ask(mail, name)
+	local chat = chats[mail]
 	if chat and not chat.ended and name and name ~= chat.name then
-		vim.notify("postal: this Draft already chats with " .. chat.name, vim.log.levels.WARN)
+		vim.notify("postal: this mail already chats with " .. chat.name, vim.log.levels.WARN)
 		return
 	end
 
@@ -360,18 +385,18 @@ function M.ask(draft, name)
 	end
 
 	if not chat or chat.ended then
-		chat = start(draft, name, chat and chat.pane)
+		chat = start(mail, name, chat and chat.pane)
 	end
 
 	chat.pane:show(true)
 end
 
---- Sends `text` to Draft buffer `draft`'s agent, starting it again when it
+--- Sends `text` to mail buffer `mail`'s agent, starting it again when it
 --- has ended.
-function M.send(draft, text)
-	local chat = chats[draft]
+function M.send(mail, text)
+	local chat = chats[mail]
 	if chat.ended then
-		chat = start(draft, chat.name, chat.pane)
+		chat = start(mail, chat.name, chat.pane)
 	end
 
 	if not chat.ended then
@@ -379,20 +404,20 @@ function M.send(draft, text)
 	end
 end
 
---- Answers a call of Postal's MCP server for Draft buffer `draft`.
-function M.serve(draft, name, args)
-	local chat = chats[draft]
+--- Answers a call of Postal's MCP server for mail buffer `mail`.
+function M.serve(mail, name, args)
+	local chat = chats[mail]
 	if not chat or chat.ended then
-		return { content = { { type = "text", text = "the chat about this Draft has ended" } }, isError = true }
+		return { content = { { type = "text", text = "the chat about this mail has ended" } }, isError = true }
 	end
 
 	return tools.run(chat, name, args)
 end
 
---- Ends Draft buffer `draft`'s chat and closes its pane.
-function M.close(draft)
-	local chat = chats[draft]
-	chats[draft] = nil
+--- Ends mail buffer `mail`'s chat and closes its pane.
+function M.close(mail)
+	local chat = chats[mail]
+	chats[mail] = nil
 	if not chat then
 		return
 	end

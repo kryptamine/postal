@@ -1,7 +1,8 @@
 -- An ACP agent for `make smoke`, run by `nvim -l`: each turn streams a
 -- message, asks to run a command, to read the Draft's file and to write
 -- through the client's MCP server, which upper-cases the body it was sent,
--- a line `drop me` dropped. `locked` wants a sign-in.
+-- a line `drop me` dropped. `locked` wants a sign-in. Over a Message, a
+-- turn tries to write, then reads it and says its subject.
 local log = arg[1]
 local locked = log == "locked"
 
@@ -90,7 +91,25 @@ local OPTIONS = {
 	{ optionId = "no", name = "Reject", kind = "reject_once" },
 }
 
+-- Asks to write and to read the Message, then says the subject it read.
+local function read_message(session)
+	local claude = { claudeCode = { toolName = "mcp__postal__write_draft" } }
+	local write = { toolCallId = "write", title = "postal - write_draft (MCP)", _meta = claude }
+	call("session/request_permission", { sessionId = session, toolCall = write, options = OPTIONS })
+	local read = { toolCallId = "read", title = "mcp__postal__read_message", kind = "other" }
+	call("session/request_permission", { sessionId = session, toolCall = read, options = OPTIONS })
+	local written = mcp.call("tools/call", { name = "write_draft", arguments = { body = "gone" } })
+	local text = mcp.call("tools/call", { name = "read_message", arguments = vim.empty_dict() }).content[1].text
+	local subject = text:match("\nSubject: ([^\n]*)") or "none"
+	chunk(session, "It is about " .. subject .. (written.isError and "." or ", and I changed it."))
+end
+
 local function turn(session, prompt)
+	if mcp.message then
+		read_message(session)
+		return
+	end
+
 	local path, sent
 	for _, block in ipairs(prompt) do
 		if block.type == "resource" and block.resource.uri:match("^postal%-draft://") then
@@ -176,7 +195,8 @@ while true do
 			return tool.name
 		end, mcp.call("tools/list", vim.empty_dict()).tools)
 
-		assert(vim.deep_equal(tools, { "read_draft", "write_draft" }), vim.inspect(tools))
+		mcp.message = vim.deep_equal(tools, { "read_message" })
+		assert(mcp.message or vim.deep_equal(tools, { "read_draft", "write_draft" }), vim.inspect(tools))
 		send({ id = message.id, result = { sessionId = "stub" } })
 	elseif message.method == "session/prompt" then
 		local stopped = turn(message.params.sessionId, message.params.prompt)
