@@ -6,14 +6,10 @@ use crate::{
     backfill,
     cache::Cache,
     imap::MailServer,
-    sent_pass, snippets,
+    spare_work::SpareWork,
     sync::{self, Error},
     update::Update,
 };
-
-/// How long the fetch connection goes without a request before its pass
-/// over Sent, so the first Preview never waits on it.
-const QUIET: Duration = Duration::from_secs(1);
 
 /// Work for the fetch connection.
 pub enum Request {
@@ -31,8 +27,6 @@ struct Pending {
     bodies: Option<BodyRequest>,
     older: Option<Arc<str>>,
     reply: Option<(Arc<str>, u32)>,
-    /// Whether this connection made its pass over Sent.
-    sent_read: bool,
 }
 
 impl Pending {
@@ -73,9 +67,9 @@ pub enum Fetched {
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each went:
-/// a Reply's body, bodies, a page of older Messages, one batch of its
-/// Snippets, each in its own Folder, and once quiet, the pass over Sent.
-/// Only a failure other than a refusal ends the serving.
+/// a Reply's body, bodies, then a page of older Messages, each in its own
+/// Folder, and `SpareWork` while none waits. Only a failure other than a
+/// refusal ends the serving.
 #[expect(
     clippy::future_not_send,
     reason = "Postal runs on a current-thread runtime"
@@ -86,14 +80,16 @@ pub async fn serve(
     (requests, mut examined): (&mut UnboundedReceiver<Request>, Option<Arc<str>>),
     send: impl Fn(Update),
 ) -> Result<(), Error> {
-    let mut pending = Pending::default();
-    // Rows of this Folder below this UID still wait for their Snippets.
-    let mut snippets_below: Option<(Arc<str>, u32)> = None;
+    let (mut pending, mut spare) = (Pending::default(), SpareWork::new());
     loop {
-        if pending.is_empty() && snippets_below.is_none() {
-            let state = (&mut pending, &mut examined);
-            if !wait(server, cache, requests, state, &send).await? {
-                return Ok(());
+        if pending.is_empty() {
+            match next(requests, spare.patience()).await {
+                Next::Request(request) => pending.take(request),
+                Next::Spare => {
+                    spare.step(server, cache, (&mut examined, &send)).await?;
+                    continue;
+                }
+                Next::Closed => return Ok(()),
             }
         }
 
@@ -138,60 +134,30 @@ pub async fn serve(
             // The page examines the Folder itself, and may find it gone.
             examined = None;
             let below = backfill::page(server, cache, &folder, report, written).await?;
-            // The higher bound keeps an earlier page's uncut rows in.
-            snippets_below = match (snippets_below, below) {
-                (Some((same, earlier)), Some(below)) if same == folder => {
-                    Some((same, earlier.max(below)))
-                }
-                (kept, None) => kept,
-                (_, Some(below)) => Some((folder, below)),
-            };
-        } else if let Some((folder, below)) = snippets_below.clone() {
-            // One batch at a time, so a body asked for meanwhile goes next.
-            let written = || send(Update::Inbox);
-            if !open(server, &mut examined, &folder).await?
-                || !snippets::batch(server, cache, &folder, Some(below), written).await?
-            {
-                snippets_below = None;
-            }
+            spare.backfilled(folder, below);
         }
     }
 }
 
-/// Takes the next request into `pending`; false once the channel closes.
-/// The pass over Sent goes first, should `QUIET` pass before one comes and
-/// none was made yet.
-#[expect(
-    clippy::future_not_send,
-    reason = "Postal runs on a current-thread runtime"
-)]
-async fn wait(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    requests: &mut UnboundedReceiver<Request>,
-    (pending, examined): (&mut Pending, &mut Option<Arc<str>>),
-    send: &impl Fn(Update),
-) -> Result<bool, Error> {
-    let next = if pending.sent_read {
-        Some(requests.next().await)
-    } else {
-        tokio::time::timeout(QUIET, requests.next()).await.ok()
+enum Next {
+    Request(Request),
+    /// The patience asked for ran out first.
+    Spare,
+    Closed,
+}
+
+/// The next request, waiting no longer than `patience` when given.
+async fn next(requests: &mut UnboundedReceiver<Request>, patience: Option<Duration>) -> Next {
+    let next = match patience {
+        Some(patience) => tokio::time::timeout(patience, requests.next()).await.ok(),
+        None => Some(requests.next().await),
     };
 
-    let next = if let Some(next) = next {
-        next
-    } else {
-        pending.sent_read = true;
-        *examined = sent_pass::read(server, cache, send).await?;
-        requests.next().await
-    };
-
-    let Some(request) = next else {
-        return Ok(false);
-    };
-
-    pending.take(request);
-    Ok(true)
+    match next {
+        Some(Some(request)) => Next::Request(request),
+        Some(None) => Next::Closed,
+        None => Next::Spare,
+    }
 }
 
 /// Fetches the body a Reply waits on; one whose Folder is gone is refused.
@@ -246,7 +212,7 @@ async fn fetch_each(
 
 /// Examines `folder` unless it is `examined` already; false when the
 /// server no longer has it.
-async fn open(
+pub async fn open(
     server: &mut impl MailServer,
     examined: &mut Option<Arc<str>>,
     folder: &Arc<str>,

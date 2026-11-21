@@ -124,6 +124,7 @@ mod sign_in;
 mod smtp;
 mod snippet;
 mod snippets;
+mod spare_work;
 mod stack;
 mod stack_str;
 mod status;
@@ -151,11 +152,7 @@ mod wake;
 mod wrap;
 mod xdg;
 
-use std::{
-    error::Error,
-    path::Path,
-    process::ExitCode,
-};
+use std::{error::Error, path::Path, process::ExitCode};
 
 use futures::{TryFutureExt, channel::mpsc::UnboundedReceiver};
 use steering::{Ask, Steering};
