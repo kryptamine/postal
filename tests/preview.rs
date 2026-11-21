@@ -260,6 +260,9 @@ fn scrolling_past_unfetched_rows_fetches_only_where_it_stops() {
     let mut t = postal(&home, 120);
     t.wait_until(|s| s.contains("Loading…") && s.contains(" 1/30 "))
         .unwrap();
+    // The placeholder shows before the fetch connection is up; scrolling
+    // first would leave row 1 never asked for.
+    wait_for(|| server.commands().contains(&uid_fetch("130")));
     for row in 2..=6 {
         t.send(Key::Char('j')).unwrap();
         t.wait_until(|s| s.contains(&format!(" {row}/30 ")))
