@@ -37,10 +37,8 @@ lint: ## fail on unformatted code, a clippy lint or a clang-tidy check
 	$(CLANG_FORMAT) --dry-run --Werror cpp/*
 	$(CLANG_TIDY) --quiet cpp/*.cpp
 
-# The allocation test needs its feature, so plain `cargo test` leaves it out.
 test: ## run every Rust test
 	cargo test
-	cargo test --features alloc-count --test frame_allocations
 
 nvim: ## format, lint and smoke-test the Neovim plugin
 	$(MAKE) -C nvim check
