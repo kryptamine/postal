@@ -9,6 +9,7 @@ use futures::channel::mpsc::UnboundedSender;
 use crate::{
     body::Body,
     body_fetch::{BodyRequest, Fetched, Request},
+    body_key::BodyKey,
     cache::{self, Cache},
     folder,
     inbox_view::InboxView,
@@ -157,7 +158,7 @@ impl Previews {
         &mut self,
         caches: &[Cache],
         view: &InboxView,
-        (unfolded, cursor): (impl Fn(i64) -> bool, i64),
+        (unfolded, cursor): (impl Fn(BodyKey) -> bool, BodyKey),
         width: u16,
     ) -> Result<(), cache::Error> {
         let stack = view.stack().filter(|m| unfolded(m.body_key));

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use crate::thread::Key;
+use crate::{body_key::BodyKey, thread::Key};
 
 /// How long the selection rests on a Thread before a Mark Read: long enough
 /// to scroll past a row without marking it.
@@ -12,7 +12,7 @@ const DELAY: Duration = Duration::from_secs(1);
 #[derive(Default)]
 pub struct Dwell {
     /// The Thread, the body key of its newest Message, and since when.
-    on: Option<(Key, i64, Instant)>,
+    on: Option<(Key, BodyKey, Instant)>,
     /// Marked Unread by hand: no Dwell on it until the selection leaves it.
     spared: Option<Key>,
 }
@@ -21,7 +21,7 @@ impl Dwell {
     /// Follows the screen: `selected` is the selected Thread, `target` it
     /// with its newest body key while it is Unread and its body shows. A
     /// new newest Message starts the Dwell over.
-    pub fn follow(&mut self, selected: Option<Key>, target: Option<(Key, i64)>, now: Instant) {
+    pub fn follow(&mut self, selected: Option<Key>, target: Option<(Key, BodyKey)>, now: Instant) {
         if self.spared != selected {
             self.spared = None;
         }

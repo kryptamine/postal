@@ -11,6 +11,7 @@ use crate::{
     awaited_reply::AwaitedReply,
     backfill::Backfill,
     body::Body,
+    body_key::BodyKey,
     browser,
     cache::{self, Cache},
     composing,
@@ -450,7 +451,7 @@ fn apply(
     match update {
         Update::Inbox => {
             let (thread, selected) = (view.selected_key(), view.selected_body());
-            let stack: Vec<i64> = match screen.showing {
+            let stack: Vec<BodyKey> = match screen.showing {
                 Showing::Reading(_) => view.stack().map(|m| m.body_key).collect(),
                 Showing::List | Showing::Query => Vec::new(),
             };
@@ -766,7 +767,7 @@ fn dwelling(
     screen: &Screen,
     previews: &Previews,
     text: Option<Rect>,
-) -> Option<(Key, i64)> {
+) -> Option<(Key, BodyKey)> {
     let listed = matches!(screen.showing.mode(), Mode::List | Mode::Query)
         && screen.over.picker.is_none()
         && screen.over.local.is_none()

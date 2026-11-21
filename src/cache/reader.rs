@@ -4,7 +4,7 @@ use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Error, schema};
-use crate::{answering::Answering, folder::Role};
+use crate::{answering::Answering, body_key::BodyKey, folder::Role};
 
 /// The Cache for reading alone, beside a TUI that may be writing it: it
 /// can neither rebuild nor write, and reads every Account's rows at once.
@@ -71,7 +71,7 @@ impl Reader {
         account: &str,
         answering: &Answering,
     ) -> Result<Option<Vec<ThreadMessage>>, Error> {
-        let rows: Vec<(i64, ThreadMessage)> = match (answering.thread, &answering.original) {
+        let rows: Vec<(BodyKey, ThreadMessage)> = match (answering.thread, &answering.original) {
             (Some(thread), _) => {
                 let mut statement = self.connection.prepare(&format!(
                     "SELECT body_key, {THREAD_ROW}
@@ -119,7 +119,7 @@ impl Reader {
 }
 
 /// A row of the body key, then `THREAD_ROW`, as its Message without a body.
-fn thread_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<(i64, ThreadMessage)> {
+fn thread_message(row: &rusqlite::Row<'_>) -> rusqlite::Result<(BodyKey, ThreadMessage)> {
     let offset = FixedOffset::east_opt(row.get(2)?).unwrap_or_else(|| Utc.fix());
     let received = DateTime::from_timestamp(row.get(1)?, 0)
         .unwrap_or_default()

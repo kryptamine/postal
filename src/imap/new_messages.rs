@@ -6,7 +6,7 @@ use chrono::DateTime;
 
 use super::{Error, Pushed, connect::Transport, tagged, text_part};
 use crate::{
-    body_key::body_key,
+    body_key::BodyKey,
     correspondence::{self, Correspondence, Person},
     header,
     message::Message,
@@ -92,7 +92,7 @@ fn message(
     let envelope = envelope(attributes);
     let row = Message {
         uid,
-        body_key: body_key(gmail_id, uid_validity, uid),
+        body_key: BodyKey::new(gmail_id, uid_validity, uid),
         received,
         unread: flags.unread,
         answered: flags.answered,

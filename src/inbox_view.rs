@@ -3,6 +3,7 @@ use std::{collections::HashSet, sync::Arc};
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 use crate::{
+    body_key::BodyKey,
     cache::{self, Cache},
     folder::Folder,
     inbox::Inbox,
@@ -44,7 +45,7 @@ pub struct InboxView {
     /// How the Preview shows HTML mail, for every Message.
     pub html: View,
     /// The Messages shown with their Quote, by Account and body key.
-    quoted: HashSet<(usize, i64)>,
+    quoted: HashSet<(usize, BodyKey)>,
     /// The local offset as of the last `show`: chrono's `Local` rereads the
     /// time zone every second, and that allocates inside a frame.
     zone: FixedOffset,
@@ -95,7 +96,7 @@ impl InboxView {
     }
 
     /// Selects the Thread `key`, else the same row clamped to the rows shown.
-    fn keep(&mut self, key: Option<Key>, body: Option<i64>) {
+    fn keep(&mut self, key: Option<Key>, body: Option<BodyKey>) {
         let last = self.rows().saturating_sub(1);
         self.selected = key
             .and_then(|key| self.position(key))
@@ -222,7 +223,7 @@ impl InboxView {
     }
 
     /// Shows the Quote of the Message `body` of `account`, or hides it.
-    pub fn switch_quoted(&mut self, account: usize, body: i64) {
+    pub fn switch_quoted(&mut self, account: usize, body: BodyKey) {
         if !self.quoted.remove(&(account, body)) {
             self.quoted.insert((account, body));
         }
@@ -263,7 +264,7 @@ impl InboxView {
 
     /// The body key of the selected Thread's newest Message: a UID names
     /// another Message in each Folder.
-    pub fn selected_body(&self) -> Option<i64> {
+    pub fn selected_body(&self) -> Option<BodyKey> {
         self.selected_message().map(|m| m.body_key)
     }
 

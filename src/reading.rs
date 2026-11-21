@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
+    body_key::BodyKey,
     keymap::{By, Direction, Scroll},
     message::Message,
 };
@@ -8,18 +9,18 @@ use crate::{
 /// Reading: the selected Thread as a stack of Messages, the oldest then the
 /// rest newest first, each folded to a line or unfolded to its header and body.
 pub struct Reading {
-    unfolded: HashSet<i64>,
+    unfolded: HashSet<BodyKey>,
     /// The body key of the Message at the cursor, which tells apart Messages
     /// of different Folders; one gone from the Thread falls back to the
     /// newest as the stack is laid out.
-    pub cursor: i64,
+    pub cursor: BodyKey,
     /// The stack's first row shown, kept in range as it is laid out.
     pub scroll: usize,
     /// Until the next scroll, each frame brings the cursor's Message into view.
     pub reveal: bool,
     /// The Message at the top of the window, by body key, and the rows into
     /// it, as last laid out.
-    pub top: Option<(i64, usize)>,
+    pub top: Option<(BodyKey, usize)>,
     /// Set when Messages joined the stack: the next layout puts `top` back.
     pub hold: bool,
 }
@@ -41,7 +42,7 @@ impl Reading {
         })
     }
 
-    pub fn unfolded(&self, key: i64) -> bool {
+    pub fn unfolded(&self, key: BodyKey) -> bool {
         self.unfolded.contains(&key)
     }
 

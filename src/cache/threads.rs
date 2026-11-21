@@ -1,7 +1,9 @@
 use rusqlite::params;
 
 use super::{Cache, Error, bodies, correspondence};
-use crate::{correspondence::Correspondence, message::Message, thread_id::ThreadId};
+use crate::{
+    body_key::BodyKey, correspondence::Correspondence, message::Message, thread_id::ThreadId,
+};
 
 /// The columns `Cache::message` reads, in its order, of a `thread_message`
 /// row `t`, which has no UID.
@@ -16,7 +18,7 @@ impl Cache {
         &self,
         id: ThreadId,
         (messages, learnt): (&[Message], &[Correspondence]),
-        bodies: &[(i64, Vec<u8>)],
+        bodies: &[(BodyKey, Vec<u8>)],
     ) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;

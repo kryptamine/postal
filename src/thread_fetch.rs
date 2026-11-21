@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
+    body_key::BodyKey,
     cache::Cache,
     folder::{Folder, Role},
     imap::MailServer,
@@ -58,7 +59,7 @@ async fn fetched(
         }
     }
 
-    let keys: HashMap<u32, i64> = found.iter().map(|m| (m.row.uid, m.row.body_key)).collect();
+    let keys: HashMap<u32, BodyKey> = found.iter().map(|m| (m.row.uid, m.row.body_key)).collect();
     let bodies: Vec<_> = bodies(server, &missing)
         .await?
         .into_iter()

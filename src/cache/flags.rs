@@ -3,7 +3,7 @@ use std::sync::Arc;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
-use crate::{flag::Flag, flag_change::FlagChange};
+use crate::{body_key::BodyKey, flag::Flag, flag_change::FlagChange};
 
 /// A Folder's flag changes for the server.
 pub type FolderFlags = (Arc<str>, Vec<FlagChange>);
@@ -31,7 +31,7 @@ impl Cache {
         let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            let key: Option<i64> = transaction
+            let key: Option<BodyKey> = transaction
                 .prepare_cached(
                     "SELECT body_key FROM message WHERE account = ?3 AND mailbox = ?1 AND uid = ?2",
                 )?
@@ -118,7 +118,7 @@ fn mark(
     (account, folder, uid): (&str, &str, u32),
     unread: bool,
 ) -> rusqlite::Result<bool> {
-    let key: Option<i64> = connection
+    let key: Option<BodyKey> = connection
         .prepare_cached(
             "SELECT body_key FROM message WHERE account = ?4 AND mailbox = ?1 AND uid = ?2
                AND unread != ?3",

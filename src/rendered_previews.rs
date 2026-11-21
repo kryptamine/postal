@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{preview::Preview, view::View};
+use crate::{body_key::BodyKey, preview::Preview, view::View};
 
 /// The bytes of rendered Previews kept (ADR 0001); past it the least
 /// recently used go first.
@@ -12,7 +12,7 @@ const BYTES: usize = 8 * 1024 * 1024;
 pub struct PreviewKey {
     /// The Account the body key is of: keys repeat across Accounts.
     pub account: usize,
-    pub body: i64,
+    pub body: BodyKey,
     pub width: u16,
     pub view: View,
     /// The Quote is shown.

@@ -2,11 +2,13 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
 
+use crate::body_key::BodyKey;
+
 /// The raw bodies kept, in bytes; past it the least recently used go first.
 const BODY_BYTES: i64 = 200 * 1024 * 1024;
 
 impl Cache {
-    pub fn has_body(&self, key: i64) -> Result<bool, Error> {
+    pub fn has_body(&self, key: BodyKey) -> Result<bool, Error> {
         let found = self
             .connection()
             .prepare_cached("SELECT 1 FROM body WHERE account = ?2 AND key = ?1")?
@@ -17,7 +19,7 @@ impl Cache {
 
     /// The body cached under `key`, marked as just used; `None` until it is
     /// fetched.
-    pub fn body(&self, key: i64) -> Result<Option<Vec<u8>>, Error> {
+    pub fn body(&self, key: BodyKey) -> Result<Option<Vec<u8>>, Error> {
         let found = self
             .connection()
             .prepare_cached("SELECT raw FROM body WHERE account = ?2 AND key = ?1")?
@@ -64,7 +66,7 @@ impl Cache {
 pub(super) fn store(
     connection: &Connection,
     account: &str,
-    bodies: &[(i64, Vec<u8>)],
+    bodies: &[(BodyKey, Vec<u8>)],
 ) -> rusqlite::Result<()> {
     let mut insert = connection.prepare_cached(
         "INSERT OR REPLACE INTO body (account, key, raw, size, used)

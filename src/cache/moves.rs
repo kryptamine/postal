@@ -4,6 +4,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error};
 
+use crate::{body_key::BodyKey, thread_id::ThreadId};
+
 /// The columns `moved` keeps of a `message` row but its Folder and UID.
 const ROW: &str = "account, body_key, received, received_offset, unread, answered, sender,
     from_line, to_line, subject, thread, from_me, snippet, text_section, text_encoding,
@@ -212,7 +214,7 @@ fn delete(
     batch: i64,
     (account, folder, uid): (&str, &str, u32),
 ) -> rusqlite::Result<bool> {
-    let key: Option<(i64, Option<i64>)> = connection
+    let key: Option<(BodyKey, Option<ThreadId>)> = connection
         .prepare_cached(
             "SELECT body_key, thread FROM message WHERE account = ?3 AND mailbox = ?1
                AND uid = ?2",

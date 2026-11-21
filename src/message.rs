@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::thread_id::ThreadId;
+use crate::{body_key::BodyKey, thread_id::ThreadId};
 
 /// One Message as the Message List knows it.
 #[derive(Clone)]
 pub struct Message {
     pub uid: u32,
-    /// Where the Message's body is cached, from `body_key::body_key`.
-    pub body_key: i64,
+    /// Where the Message's body is cached, a `BodyKey`.
+    pub body_key: BodyKey,
     /// The server's `INTERNALDATE`: both the sort key and the date column.
     pub received: DateTime<FixedOffset>,
     pub unread: bool,
