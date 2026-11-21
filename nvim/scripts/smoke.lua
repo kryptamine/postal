@@ -148,7 +148,6 @@ end
 local pane_buf = right_pane()
 local pane = table.concat(vim.api.nvim_buf_get_lines(pane_buf, 0, -1, false), "\n")
 local wants = {
-	"> Ask the agent to write or rework this Draft.",
 	"## Me\n\nmake it formal\n",
 	"## stub\n\nRewriting the body.\nDone soon.\n",
 	"✗ Denied: Run ls\n✗ Denied: Read …/drafts/2.eml\n",
@@ -417,10 +416,6 @@ end
 local before_message = #prompts()
 vim.cmd("PostalAgent")
 local message_pane = vim.api.nvim_get_current_buf()
-if not said(message_pane):find("Ask the agent about this Message", 1, true) then
-	fail("the Message's pane says " .. vim.inspect(said(message_pane)))
-end
-
 vim.api.nvim_buf_set_lines(0, -2, -1, false, { "what is it about?" })
 vim.cmd.normal(vim.keycode("<CR>"))
 if not vim.wait(10000, function()

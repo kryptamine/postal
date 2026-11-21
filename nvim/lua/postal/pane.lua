@@ -84,7 +84,6 @@ function Pane:buffer()
 		end,
 	})
 
-	self:notice(self.kind.intro)
 	return self.buf
 end
 
