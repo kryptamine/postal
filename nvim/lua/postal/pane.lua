@@ -85,7 +85,11 @@ function Pane:show(focus)
 		vim.wo[win].breakindent = true
 		vim.wo[win].number = false
 		vim.wo[win].relativenumber = false
-		vim.wo[win].signcolumn = "no"
+		vim.wo[win].foldenable = false
+		vim.wo[win].list = false
+		-- A blank gutter, the pane's left margin; it draws no sign.
+		vim.wo[win].signcolumn = "yes:1"
+		vim.wo[win].statuscolumn = "  "
 		vim.wo[win].conceallevel = 2
 		vim.wo[win].concealcursor = "nc"
 		vim.wo[win].winbar = self.winbar
