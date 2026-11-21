@@ -4,7 +4,7 @@ use async_imap::{
 };
 use chrono::DateTime;
 
-use super::{Error, Pushed, connect::Transport, tagged, text_part};
+use super::{Error, Pushed, connect::Transport, origin::Origin, tagged, text_part};
 use crate::{
     body_key::BodyKey,
     correspondence::{self, Correspondence, Person},
@@ -28,15 +28,16 @@ const INTERNAL_DATE: &str = "%d-%b-%Y %H:%M:%S %z";
 pub async fn fetch(
     session: &mut Session<Box<dyn Transport>>,
     command: String,
-    (uid_validity, email): (u32, &str),
-    (pushed, progress): (&mut Vec<Pushed>, impl Fn(u32)),
+    origin: Origin<'_>,
+    pushed: &mut Vec<Pushed>,
+    progress: impl Fn(u32),
 ) -> Result<Vec<NewMessage>, Error> {
     let mut messages = Vec::new();
     let mut received = 0;
     tagged::run(session, command, |response| {
         let row = match response {
             Response::Fetch(_, attributes) if envelope(attributes).is_some() => {
-                message(attributes, (uid_validity, email))
+                message(attributes, origin)
             }
             _ => {
                 pushed.extend(Pushed::from_response(response));
@@ -54,11 +55,8 @@ pub async fn fetch(
     Ok(messages)
 }
 
-/// `None` when the server left out the UID; `email` is the Account's.
-fn message(
-    attributes: &[AttributeValue<'_>],
-    (uid_validity, email): (u32, &str),
-) -> Option<NewMessage> {
+/// `None` when the server left out the UID.
+fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewMessage> {
     let uid = attributes.iter().find_map(|a| match a {
         AttributeValue::Uid(uid) => Some(*uid),
         _ => None,
@@ -93,7 +91,7 @@ fn message(
     let envelope = envelope(attributes);
     let row = Message {
         uid: Uid::new(uid),
-        body_key: BodyKey::new(gmail_id, uid_validity, uid),
+        body_key: BodyKey::new(gmail_id, origin.uid_validity, uid),
         received,
         unread: flags.unread,
         answered: flags.answered,
@@ -105,7 +103,7 @@ fn message(
         subject: subject(envelope),
         snippet: String::new(),
         thread,
-        from_me: envelope.is_some_and(|e| from(e, email)),
+        from_me: envelope.is_some_and(|e| from(e, origin.email)),
         folder: None,
         account: (),
     };

@@ -56,7 +56,8 @@ impl SpareWork {
         &mut self,
         server: &mut impl MailServer,
         cache: &Cache,
-        (examined, send): (&mut Option<Arc<str>>, &impl Fn(Update)),
+        examined: &mut Option<Arc<str>>,
+        send: &impl Fn(Update),
     ) -> Result<(), Error> {
         if let Some((folder, below)) = self.snippets_below.clone() {
             let written = || send(Update::Inbox);

@@ -84,7 +84,7 @@ pub async fn resync(
                 );
             }
 
-            refetch(server, (folder, &examined), unread, report).await?
+            refetch(server, folder, &examined, unread, report).await?
         }
     };
 
@@ -95,7 +95,8 @@ pub async fn resync(
 
 async fn refetch(
     server: &mut impl MailServer,
-    (folder, examined): (&str, &Examined),
+    folder: &str,
+    examined: &Examined,
     unread: usize,
     report: &dyn Fn(Status),
 ) -> Result<Changes, Error> {

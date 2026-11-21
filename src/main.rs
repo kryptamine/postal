@@ -144,6 +144,7 @@ mod steering;
 mod styled_line;
 mod sync;
 mod sync_state;
+mod tell;
 mod terminal_backend;
 mod terminal_background;
 mod terminal_slot;
@@ -199,6 +200,7 @@ use crate::{
     run::{Background, Exit},
     sign_in::SignIn,
     status::Status,
+    tell::Tell,
     terminal_slot::TerminalSlot,
     theme::Theme,
     update::Update,
@@ -294,7 +296,7 @@ fn try_main() -> Result<(), Box<dyn Error>> {
         let (mut configs, mut sign_ins) = opened(slot, &dir).await?;
         let mut failure = None;
         loop {
-            let exit = Box::pin(session((slot, &dir), (&configs, &sign_ins), failure)).await?;
+            let exit = Box::pin(session(slot, &dir, &configs, &sign_ins, failure)).await?;
             failure = None;
             match exit {
                 Exit::Quit => return Ok(()),
@@ -458,8 +460,10 @@ fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn E
 /// The TUI until it exits, each Account of `configs` signed out without
 /// its sign-in; `failure` toasts what failed before it.
 async fn session(
-    (slot, dir): (&mut TerminalSlot, &Path),
-    (configs, sign_ins): (&PerAccount<Config>, &PerAccount<Option<SignIn>>),
+    slot: &mut TerminalSlot,
+    dir: &Path,
+    configs: &PerAccount<Config>,
+    sign_ins: &PerAccount<Option<SignIn>>,
     failure: Option<&'static str>,
 ) -> Result<Exit, Box<dyn Error>> {
     let emails = configs.map(|config| config.email.as_str());
@@ -492,13 +496,7 @@ async fn session(
         };
 
         let cache = &caches[account];
-        works.push(Box::pin(served(
-            config,
-            cache,
-            (asked, requested),
-            sender,
-            send,
-        )));
+        works.push(Box::pin(served(cache, asked, requested, sender, send)));
     }
 
     let requests = Routes::new(requests.into_iter().collect());
@@ -535,22 +533,18 @@ const fn starting(sign_in: Option<&SignIn>) -> Status {
     }
 }
 
-/// One Account's connections until the screen stops asking; signed out,
-/// it ends and leaves the others running.
+/// The connections of the Account `sender` sends from until the screen
+/// stops asking; signed out, they end and leave the others running.
 async fn served(
-    config: &Config,
     cache: &Cache,
-    (asked, requested): (UnboundedReceiver<Ask>, UnboundedReceiver<Request>),
+    asked: UnboundedReceiver<Ask>,
+    requested: UnboundedReceiver<Request>,
     sender: Sender<'_>,
     send: impl Fn(Update),
 ) -> Result<(), sync::Error> {
+    let config = sender.outgoing.config;
     let report = |status| send(Update::Status(status));
-    let synced = sync(
-        config,
-        cache,
-        (Steering::new(asked), sender),
-        (&send, report),
-    );
+    let synced = sync(cache, Steering::new(asked), sender, &send, report);
     let fetched = bodies(config, sender.sign_in, cache, requested, &send);
     match futures::future::try_join(synced, fetched).await {
         Err(error) if error.signed_out() => {
@@ -578,7 +572,7 @@ async fn bodies(
         while requests.try_recv().is_ok() {}
         report(Status::Live);
         let examined = Some(folder::INBOX.into());
-        body_fetch::serve(&mut session, cache, (&mut requests, examined), &send).await
+        body_fetch::serve(&mut session, cache, &mut requests, examined, &send).await
     };
 
     // The status slot follows the sync connection alone, but for a refused Account.
@@ -593,16 +587,19 @@ async fn bodies(
 
 /// Resyncs, IDLEs and sends the Outbox on one connection, as the sequence
 /// numbers IDLE sends count in its `EXAMINE`, on the Folder `steering`
-/// follows. `send` follows every Cache write, `report` the connection.
+/// follows, for the Account `sender` sends from. `send` follows every Cache
+/// write, `report` the connection.
 async fn sync(
-    config: &Config,
     cache: &Cache,
-    (mut steering, sender): (Steering, Sender<'_>),
-    (send, report): (&impl Fn(Update), impl Fn(Status)),
+    mut steering: Steering,
+    sender: Sender<'_>,
+    send: &impl Fn(Update),
+    report: impl Fn(Status),
 ) -> Result<(), sync::Error> {
     let attempt = async |report: &dyn Fn(Status)| {
-        let session = ImapSession::open(config, sender.sign_in).await?;
-        idle::listen(session, cache, (&mut steering, sender), send, report).await
+        let session = ImapSession::open(sender.outgoing.config, sender.sign_in).await?;
+        let tell = Tell { send, report };
+        idle::listen(session, cache, &mut steering, sender, tell).await
     };
 
     reconnect::retry(attempt, report).await

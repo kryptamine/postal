@@ -8,6 +8,7 @@ mod moved;
 mod moved_uids;
 mod named_roles;
 mod new_messages;
+mod origin;
 mod pushed;
 mod session;
 mod tagged;

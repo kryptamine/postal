@@ -201,7 +201,7 @@ pub async fn run(
                     continue;
                 };
 
-                let arrived = replies.notice((account, &update), ui.screen.replying.as_mut());
+                let arrived = replies.notice(account, &update, ui.screen.replying.as_mut());
                 let (account, update) = older.notice((account, update));
                 apply(account, update, &mut ui, world, previews)?;
                 if let Some(result) = arrived {

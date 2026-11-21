@@ -34,7 +34,8 @@ impl ReplyFetch {
     /// `awaited` waits on, or why the answered one will not come.
     pub fn notice(
         &mut self,
-        (account, update): (AccountId, &Update),
+        account: AccountId,
+        update: &Update,
         awaited: Option<&mut AwaitedReply>,
     ) -> Option<Result<(), String>> {
         let awaited = match update {

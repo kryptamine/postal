@@ -83,7 +83,8 @@ impl Fetched {
 pub async fn serve(
     server: &mut impl MailServer,
     cache: &Cache,
-    (requests, mut examined): (&mut UnboundedReceiver<Request>, Option<Arc<str>>),
+    requests: &mut UnboundedReceiver<Request>,
+    mut examined: Option<Arc<str>>,
     send: impl Fn(Update),
 ) -> Result<(), Error> {
     let (mut pending, mut spare) = (Pending::default(), SpareWork::new());
@@ -92,7 +93,7 @@ pub async fn serve(
             match next(requests, spare.patience()).await {
                 Next::Request(request) => pending.take(request),
                 Next::Spare => {
-                    spare.step(server, cache, (&mut examined, &send)).await?;
+                    spare.step(server, cache, &mut examined, &send).await?;
                     continue;
                 }
                 Next::Closed => return Ok(()),

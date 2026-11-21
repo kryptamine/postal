@@ -9,8 +9,8 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, Moved, connect::Transport, login, moved_uids, named_roles, new_messages, pushed::Pushed,
-    tagged, traced::Traced, whole_bodies, wire_trace,
+    Error, Moved, connect::Transport, login, moved_uids, named_roles, new_messages, origin::Origin,
+    pushed::Pushed, tagged, traced::Traced, whole_bodies, wire_trace,
 };
 use crate::{
     config::Config,
@@ -228,12 +228,17 @@ impl ImapSession {
         // What came before stays ahead of what comes during the fetch.
         let earlier = self.pushed();
         self.pending = earlier;
-        let pushed = (&mut self.pending, progress);
+        let origin = Origin {
+            uid_validity: self.uid_validity,
+            email: &self.email,
+        };
+
         new_messages::fetch(
             &mut self.session,
             command,
-            (self.uid_validity, &self.email),
-            pushed,
+            origin,
+            &mut self.pending,
+            progress,
         )
         .await
     }

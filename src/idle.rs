@@ -10,9 +10,9 @@ use crate::{
     outbox_flush::{self, Sender},
     sequence_numbers::SequenceNumbers,
     snippets,
-    status::Status,
     steering::{Asked, Steering},
     sync::{self, Error},
+    tell::Tell,
     thread_fetch,
     update::Update,
 };
@@ -28,9 +28,9 @@ const PERIOD: Duration = Duration::from_secs(10 * 60);
 pub async fn listen<S: MailServer>(
     mut server: S,
     cache: &Cache,
-    (steering, sender): (&mut Steering, Sender<'_>),
-    send: &impl Fn(Update),
-    report: &dyn Fn(Status),
+    steering: &mut Steering,
+    sender: Sender<'_>,
+    tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<(), Error> {
     let Some(mut asked) = steering.take() else {
         return Ok(());
@@ -40,8 +40,8 @@ pub async fn listen<S: MailServer>(
     asked.send = true;
 
     // Before the resync, so it reads the flags they set and the moves they made.
-    send_changes(&mut server, cache, None, send).await?;
-    let mut sequence = shown(&mut server, cache, steering, send, report).await?;
+    send_changes(&mut server, cache, None, tell.send).await?;
+    let mut sequence = shown(&mut server, cache, steering, tell).await?;
     // `None` while the Folder selected on the server is not known.
     let mut selected = Some(Arc::clone(&steering.folder));
     // What came during the resync and the Snippets goes first.
@@ -49,28 +49,28 @@ pub async fn listen<S: MailServer>(
     loop {
         // Ahead of a switch, while `selected` is still the Folder selected.
         if std::mem::take(&mut asked.changes) {
-            selected = send_changes(&mut server, cache, selected.take(), send).await?;
+            selected = send_changes(&mut server, cache, selected.take(), tell.send).await?;
             asked.switched |= selected.as_deref() != Some(&*steering.folder);
             pushed.extend(server.pushed());
             continue;
         }
 
         if std::mem::take(&mut asked.send) {
-            pushed.extend(send_outbox(&mut server, cache, (sender, &mut asked), send).await?);
+            pushed.extend(send_outbox(&mut server, cache, sender, &mut asked, tell.send).await?);
             continue;
         }
 
         // The switch goes first, so `STATUS` never reaches the selected Folder.
         if std::mem::take(&mut asked.switched) {
-            sequence = shown(&mut server, cache, steering, send, report).await?;
+            sequence = shown(&mut server, cache, steering, tell).await?;
             selected = Some(Arc::clone(&steering.folder));
             pushed = server.pushed();
             continue;
         }
 
         if std::mem::take(&mut asked.list) {
-            if !folder_list::refresh(&mut server, cache, &steering.folder, send).await? {
-                gone(steering, send);
+            if !folder_list::refresh(&mut server, cache, &steering.folder, tell.send).await? {
+                gone(steering, tell.send);
                 asked.switched = true;
             }
 
@@ -79,7 +79,7 @@ pub async fn listen<S: MailServer>(
         }
 
         if let Some(id) = asked.thread.take() {
-            thread_fetch::fetch(&mut server, cache, id, send).await?;
+            thread_fetch::fetch(&mut server, cache, id, tell.send).await?;
             // All Mail is examined now, so the shown Folder is selected again.
             selected = None;
             asked.switched = true;
@@ -100,12 +100,12 @@ pub async fn listen<S: MailServer>(
         let folder = Arc::clone(&steering.folder);
         if let Some(why) = resync_for(cache, &folder, &sequence, &pushed)? {
             tracing::info!("{why}: resyncing");
-            sequence = resynced(&mut server, cache, &folder, send, report).await?;
+            sequence = resynced(&mut server, cache, &folder, tell).await?;
             pushed = server.pushed();
             continue;
         }
 
-        take_in(&mut server, cache, (&folder, &mut sequence), pushed, send).await?;
+        take_in(&mut server, cache, &mut sequence, pushed, tell.send).await?;
         pushed = server.pushed();
     }
 }
@@ -129,7 +129,8 @@ async fn send_changes(
 async fn send_outbox(
     server: &mut impl MailServer,
     cache: &Cache,
-    (sender, asked): (Sender<'_>, &mut Asked),
+    sender: Sender<'_>,
+    asked: &mut Asked,
     send: &impl Fn(Update),
 ) -> Result<Vec<Pushed>, Error> {
     if outbox_flush::flush(server, cache, sender, send).await? {
@@ -140,19 +141,20 @@ async fn send_outbox(
     Ok(server.pushed())
 }
 
-/// Writes what `pushed` changed in `folder` to the Cache, with the Snippets
-/// of new rows.
+/// Writes what `pushed` changed in the Folder of `sequence` to the Cache,
+/// with the Snippets of new rows.
 async fn take_in(
     server: &mut impl MailServer,
     cache: &Cache,
-    (folder, sequence): (&str, &mut SequenceNumbers),
+    sequence: &mut SequenceNumbers,
     pushed: Vec<Pushed>,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
-    let Some(changes) = changes(server, cache, (folder, sequence), pushed).await? else {
+    let Some(changes) = changes(server, cache, sequence, pushed).await? else {
         return Ok(());
     };
 
+    let folder = sequence.folder();
     cache.apply(folder, &changes)?;
     tracing::debug!(
         "IDLE: {} new, {} expunged, {} flag changes",
@@ -174,17 +176,16 @@ async fn shown(
     server: &mut impl MailServer,
     cache: &Cache,
     steering: &mut Steering,
-    send: &impl Fn(Update),
-    report: &dyn Fn(Status),
+    tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<SequenceNumbers, Error> {
     server.pushed();
     let folder = Arc::clone(&steering.folder);
-    match resynced(server, cache, &folder, send, report).await {
+    match resynced(server, cache, &folder, tell).await {
         Err(Error::Gone(error)) if *folder != *INBOX => {
             tracing::warn!("{folder} is gone: {error}");
             cache.remove_folder(&folder)?;
-            gone(steering, send);
-            resynced(server, cache, INBOX, send, report).await
+            gone(steering, tell.send);
+            resynced(server, cache, INBOX, tell).await
         }
         result => result,
     }
@@ -222,29 +223,30 @@ async fn resynced(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &str,
-    send: &impl Fn(Update),
-    report: &dyn Fn(Status),
+    tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<SequenceNumbers, Error> {
-    let examined = sync::resync(server, cache, folder, report).await?;
+    let examined = sync::resync(server, cache, folder, tell.report).await?;
+    let send = tell.send;
     send(Update::Inbox);
     snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
     let uids = cache.uids(folder)?;
     Ok(SequenceNumbers::new(
+        folder.into(),
         examined.exists,
         examined.state.uid_next,
         uids,
     ))
 }
 
-/// The rows of `folder` that `pushed` changes, plus the Unread count;
-/// `None` before the first resync has written the Folder.
+/// The rows of the Folder of `sequence` that `pushed` changes, plus the
+/// Unread count; `None` before the first resync has written the Folder.
 async fn changes(
     server: &mut impl MailServer,
     cache: &Cache,
-    (folder, sequence): (&str, &mut SequenceNumbers),
+    sequence: &mut SequenceNumbers,
     pushed: Vec<Pushed>,
 ) -> Result<Option<Changes>, Error> {
-    let Some(state) = cache.state(folder)? else {
+    let Some(state) = cache.state(sequence.folder())? else {
         return Ok(None);
     };
 
