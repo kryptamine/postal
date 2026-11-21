@@ -161,6 +161,13 @@ for _, said in ipairs(wants) do
 	end
 end
 
+-- The pane names its agent and the mail it is about
+local pane_win = vim.fn.bufwinid(pane_buf)
+local status = vim.api.nvim_eval_statusline(vim.wo[pane_win].statusline, { winid = pane_win }).str
+if not status:find("stub · Re: Hi", 1, true) then
+	fail("the pane's statusline is " .. vim.inspect(status))
+end
+
 local first = prompts()[1].params.prompt
 local thread = vim.tbl_filter(function(block)
 	return block.type == "resource" and block.resource.uri:match("^postal%-thread:")

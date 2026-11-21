@@ -127,6 +127,7 @@ function Pane:show(focus)
 		vim.wo[win].conceallevel = 2
 		vim.wo[win].concealcursor = "nc"
 		vim.wo[win].winbar = "%{%v:lua.require'postal.pane'.winbar(" .. buf .. ")%}"
+		vim.wo[win].statusline = "%{%v:lua.require'postal.pane'.statusline(" .. buf .. ")%}"
 	end
 
 	if focus then
@@ -185,6 +186,34 @@ function M.winbar(buf)
 	end
 
 	return table.concat(bar) .. tail
+end
+
+--- Names agent `who` on the statusline.
+function Pane:title(who)
+	self.agent = who
+end
+
+--- The statusline of the pane on buffer `buf`: whom it chats with, and
+--- about which mail.
+function M.statusline(buf)
+	local self = panes[buf]
+	if not self or not vim.api.nvim_buf_is_valid(self.mail) then
+		return ""
+	end
+
+	local subject = ""
+	for _, line in ipairs(vim.api.nvim_buf_get_lines(self.mail, 0, -1, false)) do
+		if line == "" then
+			break
+		end
+
+		subject = line:match("^[Ss]ubject:%s*(.-)%s*$") or subject
+	end
+
+	local glyph = icons.get("agent")
+	local who = glyph .. " " .. (self.agent or "")
+	subject = subject ~= "" and subject or "(no subject)"
+	return "%#PostalAgent#  " .. who:gsub("%%", "%%%%") .. "%#PostalDim# · " .. subject:gsub("%%", "%%%%")
 end
 
 --- Shows the `## who` header at `row` in the look of `role`, `me` or

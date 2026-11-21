@@ -287,6 +287,7 @@ local function start(mail, name, shown)
 			end,
 		})
 
+	self.pane:title(name)
 	chats[mail] = self
 	local how, missing = requirements.agent(name, M.agents[name])
 	if not how then
