@@ -814,16 +814,12 @@ fn mark_unread(
         return Ok(());
     };
 
-    let Some(folder) = message.folder.as_ref() else {
+    let Some(marked) = message.on_server() else {
         screen.toast = Some(Toast::new("only in another Folder"));
         return Ok(());
     };
 
-    let marked = [MessageRef {
-        folder: Arc::clone(folder),
-        uid: message.uid,
-    }];
-    let account = message.account;
+    let (account, marked) = (message.account, [marked]);
     if let Some(key) = view.selected_key() {
         screen.dwell.spare(key);
     }
