@@ -2,6 +2,8 @@
 -- they are typed (blink.cmp, else Neovim's own menu or `<C-x><C-o>`), and
 -- chats with an ACP agent about the Draft through `:PostalAgent`.
 local agent = require("postal.agent")
+local colors = require("postal.colors")
+local icons = require("postal.icons")
 local recipients = require("postal.recipients")
 
 local M = {}
@@ -47,13 +49,19 @@ end
 
 --- `opts.cmd` is the command Postal runs as, `postal` by default;
 --- `opts.agents` adds ACP agents by name, `{ cmd = { ... }, npx = "..." }`,
---- and `opts.agent` names the one `:PostalAgent` starts.
+--- `opts.agent` names the one `:PostalAgent` starts, and `opts.nerd_font`
+--- draws the pane's icons from a Nerd Font.
 function M.setup(opts)
 	opts = opts or {}
+	if opts.nerd_font ~= nil then
+		icons.nerd = opts.nerd_font
+	end
+
 	recipients.cmd = opts.cmd or recipients.cmd
 	agent.agents = vim.tbl_deep_extend("force", agent.agents, opts.agents or {})
 	agent.default = opts.agent or agent.default
 	local group = vim.api.nvim_create_augroup("postal", { clear = true })
+	colors.setup(group)
 	vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
 		group = group,
 		pattern = DRAFTS,

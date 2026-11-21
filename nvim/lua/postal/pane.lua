@@ -1,17 +1,16 @@
 -- The chat pane beside a Draft, a markdown buffer laid out like a chat:
 -- each message under `## Me` or `## <agent>`, and the user's next one typed
 -- under the `## Me` at its bottom.
+local help = require("postal.help")
+local icons = require("postal.icons")
+local review = require("postal.review")
+
 local M = {}
 
 local NS = vim.api.nvim_create_namespace("postal-pane")
 local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
-local RULE = { { string.rep("─", 200), "WinSeparator" } }
-local HINT = "<CR> send · q stop · ? keys"
-local KEYS = {
-	{ "<CR>, <C-s>", "send what is typed under the last ## Me" },
-	{ "q", "stop the agent's turn" },
-	{ "<C-c>", "end the chat and close the pane" },
-}
+local RULE = { { string.rep("─", 200), "PostalRule" } }
+local ME = "Me"
 
 local Pane = {}
 Pane.__index = Pane
@@ -19,13 +18,31 @@ Pane.__index = Pane
 --- A pane for the Draft in buffer `draft`, shown at once; `actions` are
 --- `send(text)`, `stop()` and `close()`.
 function M.new(draft, actions)
-	local self = setmetatable({ draft = draft, actions = actions, winbar = "" }, Pane)
+	local self = setmetatable({ draft = draft, actions = actions }, Pane)
+	local function submit()
+		self:submit()
+	end
+
+	-- `short` puts a key on the winbar.
+	self.keys = {
+		{ modes = "n", lhs = "<CR>", short = "send", desc = "send what is typed under the last Me", run = submit },
+		{ modes = { "n", "i" }, lhs = "<C-s>", desc = "send, from insert mode too", run = submit },
+		{ modes = "n", lhs = "q", short = "stop", desc = "stop the agent's turn", run = actions.stop },
+		{ modes = "n", lhs = "<C-c>", short = "end", desc = "end the chat and close the pane", run = actions.close },
+		{
+			modes = "n",
+			lhs = "?",
+			short = "keys",
+			desc = "list the keys",
+			run = function()
+				help.open(vim.api.nvim_get_current_win(), { { "Chat", self.keys }, { "Review, in the Draft", review.keys } })
+			end,
+		},
+	}
+
+	self:status()
 	self:show()
 	return self
-end
-
-function Pane:map(modes, lhs, action, desc)
-	vim.keymap.set(modes, lhs, action, { buffer = self.buf, desc = desc })
 end
 
 function Pane:buffer()
@@ -36,30 +53,18 @@ function Pane:buffer()
 	self.buf = vim.api.nvim_create_buf(false, true)
 	self.speaker, self.open = nil, nil
 	vim.bo[self.buf].filetype = "markdown"
+	-- Highlights and conceals markdown even where no config starts treesitter.
+	pcall(vim.treesitter.start, self.buf, "markdown")
 	local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(self.draft), ":t")
 	vim.api.nvim_buf_set_name(self.buf, "postal-agent://" .. name .. "#" .. self.buf)
-	vim.api.nvim_buf_set_lines(self.buf, 0, -1, false, { "## Me", "" })
+	vim.api.nvim_buf_set_lines(self.buf, 0, -1, false, { "## " .. ME, "" })
 	-- The input's header: whatever the pane adds goes in above it.
-	self.input = vim.api.nvim_buf_set_extmark(self.buf, NS, 0, 0, {
-		virt_text = { { "  " .. HINT, "Comment" } },
-		virt_lines = { RULE },
-		virt_lines_above = true,
-	})
+	self.input = vim.api.nvim_buf_set_extmark(self.buf, NS, 0, 0, { virt_lines = { RULE }, virt_lines_above = true })
+	self:label(0, ME, "me")
+	for _, key in ipairs(self.keys) do
+		vim.keymap.set(key.modes, key.lhs, key.run, { buffer = self.buf, desc = key.desc })
+	end
 
-	self:map({ "n", "i" }, "<C-s>", function()
-		self:submit()
-	end, "Send to the agent")
-	self:map("n", "<CR>", function()
-		self:submit()
-	end, "Send to the agent")
-	self:map("n", "q", self.actions.stop, "Stop the agent's turn")
-	self:map("n", "<C-c>", self.actions.close, "End the chat")
-	self:map("n", "?", function()
-		local lines = vim.tbl_map(function(key)
-			return { ("%-12s %s\n"):format(key[1], key[2]) }
-		end, KEYS)
-		vim.api.nvim_echo(lines, false, {})
-	end, "List the chat's keys")
 	return self.buf
 end
 
@@ -77,6 +82,8 @@ function Pane:show(focus)
 		vim.wo[win].number = false
 		vim.wo[win].relativenumber = false
 		vim.wo[win].signcolumn = "no"
+		vim.wo[win].conceallevel = 2
+		vim.wo[win].concealcursor = "nc"
 		vim.wo[win].winbar = self.winbar
 	end
 
@@ -86,13 +93,50 @@ function Pane:show(focus)
 	end
 end
 
---- The winbar's text; a narrow pane cuts its end.
-function Pane:status(text)
-	self.winbar = " " .. text:gsub("%%", "%%%%") .. "%<"
+--- The winbar: the keys, and `summary` at its right unless nil; a narrow
+--- pane cuts the keys first.
+function Pane:status(summary)
+	local hint = {}
+	for _, key in ipairs(self.keys) do
+		if key.short then
+			table.insert(hint, "%#PostalKey#" .. key.lhs .. "%#PostalDim# " .. key.short)
+		end
+	end
+
+	local right = ""
+	if summary then
+		local glyph, group = icons.get("review")
+		right = "%#" .. group .. "#" .. glyph .. " " .. summary:gsub("%%", "%%%%") .. " "
+	end
+
+	self.winbar = "%< " .. table.concat(hint, "  ") .. "%=" .. right
 	local win = self.buf and vim.fn.bufwinid(self.buf) or -1
 	if win ~= -1 then
 		vim.wo[win].winbar = self.winbar
 	end
+end
+
+--- Shows the `## who` header at `row` in the look of `role`, `me` or
+--- `agent`: its icon, and the name in its colour.
+function Pane:label(row, who, role)
+	local glyph, group = icons.get(role)
+	self:sign(row, 3, glyph .. " ", group)
+	self:paint(row, 3, 3 + #who, group)
+end
+
+--- Hides the first `width` columns of `row` behind `sign`.
+function Pane:sign(row, width, sign, group)
+	vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, {
+		end_col = width,
+		conceal = "",
+		virt_text = { { sign, group } },
+		virt_text_pos = "inline",
+	})
+end
+
+--- Colours columns `from` to `to` of `row` over markdown's own colours.
+function Pane:paint(row, from, to, group)
+	vim.api.nvim_buf_set_extmark(self.buf, NS, row, from, { end_col = to, hl_group = group, priority = 200 })
 end
 
 --- The 0-based row of the input's header.
@@ -134,13 +178,15 @@ function Pane:grow(row)
 	vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, { id = self.open.mark })
 end
 
---- A `## who` header with the rule over it, unless it is the first line.
-function Pane:header(who)
+--- A `## who` header in the look of `role`, with the rule over it unless
+--- it is the first line.
+function Pane:header(who, role)
 	local row = self:block(nil, { "## " .. who })
 	if row > 0 then
 		vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, { virt_lines = { RULE }, virt_lines_above = true })
 	end
 
+	self:label(row, who, role)
 	self.speaker = who
 	return row
 end
@@ -155,7 +201,7 @@ function Pane:submit()
 
 	self:write(function(buf)
 		vim.api.nvim_buf_set_lines(buf, row + 1, -1, false, { "" })
-		self:header("Me")
+		self:header(ME, "me")
 		self:block(nil, vim.split(text, "\n", { plain = true }))
 	end)
 
@@ -166,7 +212,7 @@ end
 function Pane:stream(who, text)
 	self:write(function(buf)
 		if self.speaker ~= who then
-			self:header(who)
+			self:header(who, "agent")
 		end
 
 		if not (self.open and self.open.kind == "text") then
@@ -181,11 +227,12 @@ function Pane:stream(who, text)
 	end)
 end
 
---- One dim line, `icon` before `text`: a tool call, a denial, a context;
---- a run of them has no blank lines between.
-function Pane:dim(icon, text)
+--- One dim line, the icon of `kind` (`ok`, `denied`, `context`) before
+--- `text`; a run of them has no blank lines between.
+function Pane:dim(kind, text)
 	self:write(function(buf)
-		local line = { icon .. " " .. text:gsub("\n", " ") }
+		local glyph, group = icons.get(kind)
+		local line = { glyph .. " " .. text:gsub("\n", " ") }
 		local row
 		if self.open and self.open.kind == "dim" then
 			row = self:tail() + 1
@@ -195,19 +242,25 @@ function Pane:dim(icon, text)
 			row = self:block("dim", line)
 		end
 
-		vim.api.nvim_buf_set_extmark(buf, NS, row, 0, { end_row = row + 1, hl_group = "Comment", hl_eol = true })
+		vim.api.nvim_buf_set_extmark(buf, NS, row, 0, { end_row = row + 1, hl_group = "PostalDim", hl_eol = true })
+		self:paint(row, 0, #glyph, group)
 	end)
 end
 
 --- What the plugin itself says, as a quote.
 function Pane:notice(text)
 	self:write(function()
-		self:block(
+		local glyph, group = icons.get("notice")
+		local lines = vim.split(text, "\n", { plain = true })
+		local row = self:block(
 			nil,
 			vim.tbl_map(function(line)
 				return "> " .. line
-			end, vim.split(text, "\n", { plain = true }))
+			end, lines)
 		)
+		for i = 0, #lines - 1 do
+			self:sign(row + i, 2, (i == 0 and glyph or " ") .. " ", group)
+		end
 	end)
 end
 
@@ -215,7 +268,7 @@ end
 function Pane:begin_turn(who)
 	self:end_turn()
 	self:write(function(buf)
-		self.spin = vim.api.nvim_buf_set_extmark(buf, NS, self:header(who), 0, {})
+		self.spin = vim.api.nvim_buf_set_extmark(buf, NS, self:header(who, "agent"), 0, {})
 	end)
 
 	if self.closed then
@@ -233,7 +286,7 @@ function Pane:begin_turn(who)
 			end
 
 			frame = frame % #SPINNER + 1
-			local spin = { { " " .. SPINNER[frame], "Comment" } }
+			local spin = { { " " .. SPINNER[frame], "PostalAgent" } }
 			vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, { id = self.spin, virt_text = spin })
 		end)
 	end)

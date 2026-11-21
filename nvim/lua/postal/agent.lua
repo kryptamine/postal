@@ -77,7 +77,7 @@ function Chat:prompt(instruction)
 		table.insert(blocks, { type = "text", text = RULES })
 		if self.thread then
 			table.insert(blocks, self:resource("postal-thread://" .. self.path, self.thread))
-			self.pane:dim("≡", "Context: the Thread the Draft answers")
+			self.pane:dim("context", "Context: the Thread the Draft answers")
 		end
 	end
 
@@ -157,7 +157,7 @@ function Chat:permit(params, respond)
 		for _, option in ipairs(params.options or {}) do
 			if option.kind == kind then
 				if not allowed then
-					self.pane:dim("✗", "Denied: " .. tostring(call.title))
+					self.pane:dim("denied", "Denied: " .. tostring(call.title))
 				end
 
 				respond({ outcome = { outcome = "selected", optionId = option.optionId } })
@@ -200,23 +200,18 @@ function Chat:propose(text)
 	end)
 
 	if not self.review then
-		self:status()
-		self.pane:dim("✓", "write_draft · the edit changes nothing")
+		self.pane:status()
+		self.pane:dim("ok", "write_draft · the edit changes nothing")
 		return
 	end
 
-	self.pane:dim("✓", "write_draft · the edit is in the Draft for review, hunk by hunk")
+	self.pane:dim("ok", "write_draft · the edit is in the Draft for review, hunk by hunk")
 	self:reviewed(self.review:summary())
-end
-
---- The pane's winbar: the agent, and what is left to review.
-function Chat:status(summary)
-	self.pane:status(self.name .. (summary and " · " .. summary or ""))
 end
 
 --- Shows what is left to review; with nothing, sends what waits for it.
 function Chat:reviewed(summary)
-	self:status(summary)
+	self.pane:status(summary)
 	if not summary then
 		self.review = nil
 		self:next()
@@ -302,8 +297,6 @@ local function start(draft, name, shown)
 				M.close(draft)
 			end,
 		})
-
-	self:status()
 
 	chats[draft] = self
 	local how, missing = requirements.agent(name, M.agents[name])

@@ -5,22 +5,28 @@ local hunks = require("postal.hunks")
 
 local M = {}
 
---- The keys a review maps in its Draft's buffer while it is open.
+local function under(accept)
+	return function(review)
+		review:under_cursor(accept)
+	end
+end
+
+local function all(accept)
+	return function(review)
+		review:settle(accept)
+	end
+end
+
+--- The keys a review maps in its Draft's buffer while it is open; `short`
+--- names one in the summary.
 M.keys = {
-	accept = "<LocalLeader>a",
-	reject = "<LocalLeader>r",
-	accept_all = "<LocalLeader>A",
-	reject_all = "<LocalLeader>R",
+	{ lhs = "<LocalLeader>a", short = "accept", desc = "accept the hunk under the cursor", run = under(true) },
+	{ lhs = "<LocalLeader>r", short = "reject", desc = "reject the hunk under the cursor", run = under(false) },
+	{ lhs = "<LocalLeader>A", short = "all", desc = "accept every hunk", run = all(true) },
+	{ lhs = "<LocalLeader>R", short = "none", desc = "reject every hunk", run = all(false) },
 }
 
 local NS = vim.api.nvim_create_namespace("postal-review")
-
--- Set on each review: `:colorscheme` clears them.
-local function highlights()
-	vim.api.nvim_set_hl(0, "PostalReviewAdd", { link = "DiffAdd", default = true })
-	vim.api.nvim_set_hl(0, "PostalReviewDelete", { link = "DiffDelete", default = true })
-	vim.api.nvim_set_hl(0, "PostalReviewConflict", { link = "DiffText", default = true })
-end
 
 local Review = {}
 Review.__index = Review
@@ -35,7 +41,6 @@ function M.new(draft, sent, proposed, changed)
 	end
 
 	local self = setmetatable({ draft = draft, changed = changed, hunks = found }, Review)
-	highlights()
 	self:place()
 	self:map()
 	return self
@@ -148,33 +153,16 @@ function Review:range(hunk)
 end
 
 function Review:map()
-	local function under(accept)
-		return function()
-			self:under_cursor(accept)
-		end
-	end
-
-	local function all(accept)
-		return function()
-			self:settle(accept)
-		end
-	end
-
-	local maps = {
-		{ M.keys.accept, under(true), "Accept the agent's hunk" },
-		{ M.keys.reject, under(false), "Reject the agent's hunk" },
-		{ M.keys.accept_all, all(true), "Accept every hunk of the agent's" },
-		{ M.keys.reject_all, all(false), "Reject every hunk of the agent's" },
-	}
-
-	for _, map in ipairs(maps) do
-		vim.keymap.set("n", map[1], map[2], { buffer = self.draft, desc = map[3] })
+	for _, key in ipairs(M.keys) do
+		vim.keymap.set("n", key.lhs, function()
+			key.run(self)
+		end, { buffer = self.draft, desc = key.desc })
 	end
 end
 
 function Review:unmap()
-	for _, lhs in pairs(M.keys) do
-		pcall(vim.keymap.del, "n", lhs, { buffer = self.draft })
+	for _, key in ipairs(M.keys) do
+		pcall(vim.keymap.del, "n", key.lhs, { buffer = self.draft })
 	end
 end
 
@@ -234,9 +222,10 @@ function Review:summary()
 		text = text .. (" (%d %s)"):format(conflicts, conflicts == 1 and "conflict" or "conflicts")
 	end
 
-	local keys = M.keys
-	local how = "%s accept  %s reject  %s all  %s none"
-	return text .. "  " .. how:format(keys.accept, keys.reject, keys.accept_all, keys.reject_all)
+	local how = vim.tbl_map(function(key)
+		return key.lhs .. " " .. key.short
+	end, M.keys)
+	return text .. "  " .. table.concat(how, "  ")
 end
 
 function Review:report()

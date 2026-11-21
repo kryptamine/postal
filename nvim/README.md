@@ -37,13 +37,14 @@ Each message sits under `## Me` or `## <agent>`; type under the last
 `## Me` and send with `<CR>` or `<C-s>`. `q` stops the agent's turn,
 `<C-c>` ends the chat, `?` lists the keys. A spinner shows while the agent
 works, a dim line each tool call it was denied or the edit it made, and
-the winbar the hunks left to review. The agent reads the Thread the Draft
-answers, from `postal thread show`, and the body as it stands each turn,
-your own edits included. It reaches the body only through the
-`read_draft` and `write_draft` tools of an MCP server the plugin hands it,
-so the agent must take MCP servers from its client. It cannot see or
-change the headers, run commands, or send. The Draft's text goes to
-whichever provider the agent talks to, and only once you ask.
+the winbar the keys and the hunks left to review. The agent reads the
+Thread the Draft answers, from `postal thread show`, and the body as it
+stands each turn, your own edits included. It reaches the body only
+through the `read_draft` and `write_draft` tools of an MCP server the
+plugin hands it, so the agent must take MCP servers from its client. It
+cannot see or change the headers, run commands, or send. The Draft's
+text goes to whichever provider the agent talks to, and only once you
+ask.
 
 The agent's edit lands in the buffer, never on disk, for review hunk by
 hunk: its lines highlighted, the ones they replace shown over them.
@@ -61,6 +62,7 @@ require("postal").setup({
     gemini = { cmd = { "gemini", "--experimental-acp" } },
   },
   agent = "claude",
+  nerd_font = true,
 })
 ```
 
@@ -69,8 +71,9 @@ package runs through `npx` instead, so Node.js is all it needs; the first
 start fetches it. `:checkhealth postal` says what is missing and how to
 get it. `:PostalAgent gemini` starts another agent by name. The agent
 signs in through its own CLI (`claude /login`); when it asks for that,
-the pane says how. A session lasts as long as the Draft's
-buffer.
+the pane says how. `nerd_font` draws the pane's icons from a Nerd Font,
+on by default when `vim.g.have_nerd_font` is set. A session lasts as
+long as the Draft's buffer.
 
 `make check` formats, lints and runs the headless smoke check, against
 stub `postal` and ACP agents, the gate before a commit; `make` lists every target.
