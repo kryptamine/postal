@@ -74,7 +74,7 @@ function Chat:prompt(instruction)
 	vim.list_extend(blocks, self.kind.turn(self))
 	table.insert(blocks, { type = "text", text = instruction })
 	self.busy = true
-	self.pane:begin_turn(self.name)
+	self.pane:begin_turn()
 	self.conn:request("session/prompt", { sessionId = self.session, prompt = blocks }, function(failed, result)
 		self.busy = false
 		self.pane:end_turn()
@@ -129,7 +129,7 @@ end
 function Chat:update(update)
 	local kind = update.sessionUpdate
 	if kind == "agent_message_chunk" and update.content and update.content.type == "text" then
-		self.pane:stream(self.name, update.content.text)
+		self.pane:stream(update.content.text)
 	elseif kind == "tool_call" or kind == "tool_call_update" then
 		local call = self.calls[update.toolCallId] or {}
 		self.calls[update.toolCallId] = vim.tbl_extend("force", call, update)

@@ -195,7 +195,7 @@ function M.winbar(buf)
 	return table.concat(bar) .. tail
 end
 
---- Names agent `who` on the statusline.
+--- Names agent `who`, on the statusline and over what it says.
 function Pane:title(who)
 	self.agent = who
 end
@@ -210,7 +210,7 @@ function M.statusline(buf)
 
 	local subject = body.header(self.mail, "Subject") or ""
 	local glyph = icons.get("agent")
-	local who = glyph .. " " .. (self.agent or "")
+	local who = glyph .. " " .. self.agent
 	subject = subject ~= "" and subject or "(no subject)"
 	return "%#PostalAgent#  " .. who:gsub("%%", "%%%%") .. "%#PostalDim# · " .. subject:gsub("%%", "%%%%")
 end
@@ -308,11 +308,11 @@ function Pane:submit()
 	self.actions.send(text)
 end
 
---- Adds a chunk of `who`'s message, under their header.
-function Pane:stream(who, text)
+--- Adds a chunk of the agent's message, under its header.
+function Pane:stream(text)
 	self:write(function(buf)
-		if self.speaker ~= who then
-			self:header(who, "agent")
+		if self.speaker ~= self.agent then
+			self:header(self.agent, "agent")
 		end
 
 		if not (self.open and self.open.kind == "text") then
@@ -364,11 +364,11 @@ function Pane:notice(text)
 	end)
 end
 
---- Opens `who`'s turn: their header, spinning until `end_turn`.
-function Pane:begin_turn(who)
+--- Opens the agent's turn: its header, spinning until `end_turn`.
+function Pane:begin_turn()
 	self:end_turn()
 	self:write(function(buf)
-		self.spin = vim.api.nvim_buf_set_extmark(buf, NS, self:header(who, "agent"), 0, {})
+		self.spin = vim.api.nvim_buf_set_extmark(buf, NS, self:header(self.agent, "agent"), 0, {})
 	end)
 
 	if self.closed then
