@@ -71,6 +71,17 @@ function M.setup(opts)
 		end,
 	})
 
+	vim.api.nvim_create_autocmd("BufWinEnter", {
+		group = group,
+		pattern = DRAFTS,
+		callback = function()
+			-- Mail is paragraphs on long lines, whatever `wrap` is globally.
+			vim.wo[0][0].wrap = true
+			vim.wo[0][0].linebreak = true
+			vim.wo[0][0].breakindent = true
+		end,
+	})
+
 	vim.api.nvim_create_autocmd("BufUnload", {
 		group = group,
 		pattern = DRAFTS,
