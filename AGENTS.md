@@ -106,6 +106,8 @@ checks this.
 - `make` lists the targets: `make check` is lint, tests and the Neovim
   check; `make install` puts a release build and the plugin where a user
   has them.
+- After a feature or a bug fix is committed, run `make install`, so the
+  user can try the change in their own Postal and Neovim at once.
 - While working, run the single test file you touch. Run the full suite once,
   as the last step before the commit: after the code review and its fixes.
 - The code is the source of truth, then the docs, then a comment. A doc that
