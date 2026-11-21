@@ -1,9 +1,8 @@
 use crate::{
     cache::{Cache, SentPass},
     domain::folder::Role,
-    domain::folder_name::FolderName,
     domain::uid::Uid,
-    mail::imap::MailServer,
+    mail::imap::{MailServer, Mode},
     mail::role_folder,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -14,21 +13,22 @@ use crate::{
 const WINDOW: u32 = 1000;
 
 /// Learns Correspondents from the envelopes of the Folder with the Sent
-/// role newer than the last pass read. Returns the Folder it examined;
-/// `None` when none has the role or the server refused it.
+/// role newer than the last pass read; does nothing when no Folder has the
+/// role or the server refused it.
 pub async fn read(
     server: &mut impl MailServer,
     cache: &Cache,
     send: &impl Fn(Update),
-) -> Result<Option<FolderName>, Error> {
+) -> Result<(), Error> {
     let Some(folder) = role_folder::find(server, cache, Role::Sent, send).await? else {
-        return Ok(None);
+        return Ok(());
     };
 
-    let examined = match sync::examine(server, &folder).await {
+    // A fresh EXAMINE, for this moment's UIDNEXT and count.
+    let examined = match sync::reopen(server, &folder, Mode::Examine).await {
         Err(Error::Gone(error)) => {
             tracing::warn!("examining {folder} for Correspondents was refused: {error}");
-            return Ok(None);
+            return Ok(());
         }
         result => result?,
     };
@@ -64,5 +64,5 @@ pub async fn read(
         "learnt Correspondents from {} Messages of {folder}",
         read.len()
     );
-    Ok(Some(folder))
+    Ok(())
 }

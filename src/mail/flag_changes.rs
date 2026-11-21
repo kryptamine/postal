@@ -1,34 +1,22 @@
 use crate::{
     cache::Cache,
     domain::flag::Flag,
-    domain::folder_name::FolderName,
     domain::uid::Uid,
-    mail::imap::MailServer,
+    mail::imap::{MailServer, Mode},
     mail::sync::{self, Error},
 };
 
 /// Stores every flag change the Cache holds for the server, selecting each
-/// Folder it is in. Takes the Folder selected now and returns it, or `None`
-/// once another was selected. A refused change is dropped and only logged.
-pub async fn send(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    mut selected: Option<FolderName>,
-) -> Result<Option<FolderName>, Error> {
-    let mut reselected = false;
+/// Folder it is in. A refused change is dropped and only logged.
+pub async fn send(server: &mut impl MailServer, cache: &Cache) -> Result<(), Error> {
     for (folder, changes) in cache.pending_flags()? {
-        if selected.as_ref() != Some(&folder) {
-            // A failed SELECT leaves no Folder selected (RFC 3501 6.3.1).
-            (selected, reselected) = (None, true);
-            match sync::select(server, &folder).await {
-                Ok(_) => selected = Some(folder.clone()),
-                Err(Error::Gone(error)) => {
-                    tracing::warn!("{folder} is gone, its flag changes with it: {error}");
-                    cache.flags_sent(&folder, &changes)?;
-                    continue;
-                }
-                Err(error) => return Err(error),
+        match sync::open(server, &folder, Mode::Select).await {
+            Err(Error::Gone(error)) => {
+                tracing::warn!("{folder} is gone, its flag changes with it: {error}");
+                cache.flags_sent(&folder, &changes)?;
+                continue;
             }
+            result => result?,
         }
 
         for flag in [Flag::Seen, Flag::Answered] {
@@ -54,5 +42,5 @@ pub async fn send(
         cache.flags_sent(&folder, &changes)?;
     }
 
-    Ok(selected.filter(|_| !reselected))
+    Ok(())
 }

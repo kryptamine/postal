@@ -8,7 +8,7 @@ use crate::{
     domain::message_ref::MessageRef,
     domain::uid::Uid,
     mail::backfill,
-    mail::imap::MailServer,
+    mail::imap::{MailServer, Mode},
     mail::spare_work::SpareWork,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -85,7 +85,6 @@ pub async fn serve(
     server: &mut impl MailServer,
     cache: &Cache,
     requests: &mut UnboundedReceiver<Request>,
-    mut examined: Option<FolderName>,
     send: impl Fn(Update),
 ) -> Result<(), Error> {
     let (mut pending, mut spare) = (Pending::default(), SpareWork::new());
@@ -94,7 +93,7 @@ pub async fn serve(
             match next(requests, spare.patience()).await {
                 Next::Request(request) => pending.take(request),
                 Next::Spare => {
-                    spare.step(server, cache, &mut examined, &send).await?;
+                    spare.step(server, cache, &send).await?;
                     continue;
                 }
                 Next::Closed => return Ok(()),
@@ -103,11 +102,11 @@ pub async fn serve(
 
         pending.receive(requests);
         if let Some(reply) = pending.reply.take() {
-            fetch_reply(server, cache, &mut examined, reply, &send).await?;
+            fetch_reply(server, cache, reply, &send).await?;
         }
 
         while let Some(request) = pending.bodies.take() {
-            if !open(server, &mut examined, &request.folder).await? {
+            if !open(server, &request.folder).await? {
                 continue;
             }
 
@@ -139,8 +138,6 @@ pub async fn serve(
         if let Some(folder) = pending.older.take() {
             let report = |backfill| send(Update::Backfill(backfill));
             let written = || send(Update::Inbox);
-            // The page examines the Folder itself, and may find it gone.
-            examined = None;
             let below = backfill::page(server, cache, &folder, report, written).await?;
             spare.backfilled(folder, below);
         }
@@ -173,7 +170,6 @@ async fn next(requests: &mut UnboundedReceiver<Request>, patience: Option<Durati
 async fn fetch_reply(
     server: &mut impl MailServer,
     cache: &Cache,
-    examined: &mut Option<FolderName>,
     bodies: Vec<MessageRef>,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
@@ -186,7 +182,7 @@ async fn fetch_reply(
     }
 
     for (folder, uids) in folders {
-        let (uids, reason) = if open(server, examined, &folder).await? {
+        let (uids, reason) = if open(server, &folder).await? {
             let answered = fetch_each(server, cache, &folder, uids.clone(), send).await?;
             let unanswered = uids.into_iter().filter(|u| !answered.contains(u));
             (
@@ -240,23 +236,11 @@ async fn fetch_each(
     Ok(answered)
 }
 
-/// Examines `folder` unless it is `examined` already; false when the
-/// server no longer has it.
-pub async fn open(
-    server: &mut impl MailServer,
-    examined: &mut Option<FolderName>,
-    folder: &FolderName,
-) -> Result<bool, Error> {
-    if examined.as_ref() == Some(folder) {
-        return Ok(true);
-    }
-
-    *examined = None;
-    match sync::examine(server, folder).await {
-        Ok(_) => {
-            *examined = Some(folder.clone());
-            Ok(true)
-        }
+/// Examines `folder` unless it is open already; false when the server no
+/// longer has it.
+pub async fn open(server: &mut impl MailServer, folder: &FolderName) -> Result<bool, Error> {
+    match sync::open(server, folder, Mode::Examine).await {
+        Ok(()) => Ok(true),
         Err(Error::Gone(error)) => {
             tracing::warn!("{folder} is gone: {error}");
             Ok(false)

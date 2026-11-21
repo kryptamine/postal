@@ -3,28 +3,25 @@ use crate::{
     domain::folder::Role,
     domain::folder_name::FolderName,
     domain::uid::Uid,
-    mail::imap::MailServer,
-    mail::imap::Moved,
+    mail::imap::{MailServer, Mode, Moved},
     mail::role_folder,
     mail::sync::{self, Error},
     mail::update::Update,
 };
 
 /// Makes every move the Cache queues for the server, selecting the Folder
-/// each starts from. Takes the Folder selected now and returns it, or `None`
-/// once another was selected: what that one announced is not the shown one's.
+/// each starts from.
 pub async fn send(
     server: &mut impl MailServer,
     cache: &Cache,
-    mut selected: Option<FolderName>,
     send: &impl Fn(Update),
-) -> Result<Option<FolderName>, Error> {
+) -> Result<(), Error> {
     let pending = cache.pending_moves()?;
     if pending.is_empty() {
-        return Ok(selected);
+        return Ok(());
     }
 
-    let (mut trash, mut reselected) = (None, false);
+    let mut trash = None;
     for group in pending.chunk_by(|a, b| (&a.from, &a.to) == (&b.from, &b.to)) {
         let first = &group[0];
         let to = match &first.to {
@@ -48,18 +45,13 @@ pub async fn send(
             continue;
         };
 
-        if selected.as_ref() != Some(&first.from) {
-            // A failed SELECT leaves no Folder selected (RFC 3501 6.3.1).
-            (selected, reselected) = (None, true);
-            match sync::select(server, &first.from).await {
-                Ok(_) => selected = Some(first.from.clone()),
-                Err(Error::Gone(error)) => {
-                    tracing::warn!("{} is gone, its moves with it: {error}", first.from);
-                    refused(cache, group, send)?;
-                    continue;
-                }
-                Err(error) => return Err(error),
+        match sync::open(server, &first.from, Mode::Select).await {
+            Err(Error::Gone(error)) => {
+                tracing::warn!("{} is gone, its moves with it: {error}", first.from);
+                refused(cache, group, send)?;
+                continue;
             }
+            result => result?,
         }
 
         let uids: Vec<Uid> = group.iter().map(|m| m.uid).collect();
@@ -78,7 +70,7 @@ pub async fn send(
     }
 
     send(Update::Inbox);
-    Ok(selected.filter(|_| !reselected))
+    Ok(())
 }
 
 /// Writes where the server put `group`, into `to` under the UIDs `moved`

@@ -41,17 +41,17 @@ pub async fn listen<S: MailServer>(
     asked.send = true;
 
     // Before the resync, so it reads the flags they set and the moves they made.
-    send_changes(&mut server, cache, None, tell.send).await?;
+    send_changes(&mut server, cache, tell.send).await?;
     let mut sequence = shown(&mut server, cache, steering, tell).await?;
-    // `None` while the Folder selected on the server is not known.
-    let mut selected = Some(steering.folder.clone());
     // What came during the resync and the Snippets goes first.
     let mut pushed = server.pushed();
     loop {
-        // Ahead of a switch, while `selected` is still the Folder selected.
+        // Another Folder opened since: what the server announces is its own.
+        asked.switched |= server.opening() != Some(sequence.opening());
+
+        // Ahead of a switch, while the shown Folder is still open.
         if std::mem::take(&mut asked.changes) {
-            selected = send_changes(&mut server, cache, selected.take(), tell.send).await?;
-            asked.switched |= selected.as_ref() != Some(&steering.folder);
+            send_changes(&mut server, cache, tell.send).await?;
             pushed.extend(server.pushed());
             continue;
         }
@@ -64,7 +64,6 @@ pub async fn listen<S: MailServer>(
         // The switch goes first, so `STATUS` never reaches the selected Folder.
         if std::mem::take(&mut asked.switched) {
             sequence = shown(&mut server, cache, steering, tell).await?;
-            selected = Some(steering.folder.clone());
             pushed = server.pushed();
             continue;
         }
@@ -81,9 +80,6 @@ pub async fn listen<S: MailServer>(
 
         if let Some(id) = asked.thread.take() {
             thread_fetch::fetch(&mut server, cache, id, tell.send).await?;
-            // All Mail is examined now, so the shown Folder is selected again.
-            selected = None;
-            asked.switched = true;
             continue;
         }
 
@@ -112,16 +108,14 @@ pub async fn listen<S: MailServer>(
 }
 
 /// Sends the flag changes and the moves the Cache queues, flags first, as
-/// a move would leave them behind. Takes the Folder selected and returns it;
-/// `None` once another was.
+/// a move would leave them behind.
 async fn send_changes(
     server: &mut impl MailServer,
     cache: &Cache,
-    selected: Option<FolderName>,
     send: &impl Fn(Update),
-) -> Result<Option<FolderName>, Error> {
-    let selected = flag_changes::send(server, cache, selected).await?;
-    move_changes::send(server, cache, selected, send).await
+) -> Result<(), Error> {
+    flag_changes::send(server, cache).await?;
+    move_changes::send(server, cache, send).await
 }
 
 /// Sends the Outbox and returns what the server pushed meanwhile. After a
@@ -171,15 +165,13 @@ async fn take_in(
     Ok(())
 }
 
-/// Resyncs the Folder `steering` follows, dropping what the server
-/// announced of the one selected before; back to the Inbox when it is gone.
+/// Resyncs the Folder `steering` follows; back to the Inbox when it is gone.
 async fn shown(
     server: &mut impl MailServer,
     cache: &Cache,
     steering: &mut Steering,
     tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<SequenceNumbers, Error> {
-    server.pushed();
     let folder = steering.folder.clone();
     match resynced(server, cache, &folder, tell).await {
         Err(Error::Gone(error)) if folder != *FolderName::inbox() => {
@@ -232,7 +224,7 @@ async fn resynced(
     snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
     let uids = cache.uids(folder)?;
     Ok(SequenceNumbers::new(
-        folder.clone(),
+        examined.opening,
         examined.exists,
         examined.state.uid_next,
         uids,

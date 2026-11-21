@@ -3,7 +3,7 @@ use crate::{
     domain::folder_name::FolderName,
     domain::sync_state::SyncState,
     domain::uid::Uid,
-    mail::imap::{self, Examined, MailServer},
+    mail::imap::{self, Examined, MailServer, Mode},
     mail::outage::Outage,
     mail::status::Status,
 };
@@ -37,14 +37,22 @@ impl Error {
     }
 }
 
-/// Examines `folder` and returns what it saw; `Gone` when refused.
-pub async fn examine(server: &mut impl MailServer, folder: &FolderName) -> Result<Examined, Error> {
-    server.examine(folder).await.map_err(gone)
+/// Opens `folder` as `mode` unless the open Folder covers it; `Gone` when refused.
+pub async fn open(
+    server: &mut impl MailServer,
+    folder: &FolderName,
+    mode: Mode,
+) -> Result<(), Error> {
+    server.open(folder, mode).await.map_err(gone)
 }
 
-/// As `examine`, opening `folder` for flag changes too.
-pub async fn select(server: &mut impl MailServer, folder: &FolderName) -> Result<Examined, Error> {
-    server.select(folder).await.map_err(gone)
+/// Opens `folder` as `mode` and returns what it saw; `Gone` when refused.
+pub async fn reopen(
+    server: &mut impl MailServer,
+    folder: &FolderName,
+    mode: Mode,
+) -> Result<Examined, Error> {
+    server.reopen(folder, mode).await.map_err(gone)
 }
 
 /// A refusal to open a Folder means the server no longer has it.
@@ -66,7 +74,7 @@ pub async fn resync(
     report: &dyn Fn(Status),
 ) -> Result<Examined, Error> {
     // Selected, not examined, so a Mark Read can be stored: ADR 0011.
-    let examined = select(server, folder).await?;
+    let examined = reopen(server, folder, Mode::Select).await?;
     let unread = server.unread_count().await?;
     let known = cache.state(folder)?;
     let cached = cache.uids(folder)?;

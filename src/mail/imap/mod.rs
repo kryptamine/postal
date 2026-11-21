@@ -8,6 +8,7 @@ mod moved;
 mod moved_uids;
 mod named_roles;
 mod new_messages;
+mod opening;
 mod origin;
 mod pushed;
 mod session;
@@ -20,5 +21,6 @@ mod xoauth2;
 
 pub use error::Error;
 pub use moved::Moved;
+pub use opening::{Mode, Opening};
 pub use pushed::Pushed;
 pub use session::{Examined, ImapSession, MailServer};

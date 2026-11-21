@@ -1,12 +1,13 @@
 use crate::domain::folder_name::FolderName;
 use crate::domain::uid::Uid;
+use crate::mail::imap::Opening;
 
 /// The ordered UID list: which cached Message a sequence number from the
 /// IDLE connection names. The Cache holds the newest Messages without gaps,
 /// so a sequence number past the older ones indexes straight into it.
 pub struct SequenceNumbers {
-    /// The Folder whose `SELECT` numbered them.
-    folder: FolderName,
+    /// The `SELECT` that numbered them.
+    opening: Opening,
     /// Messages on the server older than every cached one.
     older: u32,
     /// The cached UIDs, ascending.
@@ -16,21 +17,25 @@ pub struct SequenceNumbers {
 impl SequenceNumbers {
     /// `exists` is the count `SELECT` saw, before any Message at or past
     /// `uid_next` arrived; `None` counts every cached UID as seen by it.
-    pub fn new(folder: FolderName, exists: u32, uid_next: Option<Uid>, uids: Vec<Uid>) -> Self {
+    pub fn new(opening: Opening, exists: u32, uid_next: Option<Uid>, uids: Vec<Uid>) -> Self {
         let examined = uids
             .iter()
             .filter(|&&uid| uid_next.is_none_or(|next| uid < next))
             .count();
         let examined = u32::try_from(examined).unwrap_or(u32::MAX);
         Self {
-            folder,
+            opening,
             older: exists.saturating_sub(examined),
             uids,
         }
     }
 
     pub const fn folder(&self) -> &FolderName {
-        &self.folder
+        self.opening.folder()
+    }
+
+    pub const fn opening(&self) -> &Opening {
+        &self.opening
     }
 
     pub fn uid(&self, sequence: u32) -> Option<Uid> {

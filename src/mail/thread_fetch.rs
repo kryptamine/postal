@@ -7,14 +7,14 @@ use crate::{
     domain::folder_name::FolderName,
     domain::thread_id::ThreadId,
     domain::uid::Uid,
-    mail::imap::MailServer,
+    mail::imap::{MailServer, Mode},
     mail::snippets,
     mail::sync::{self, Error},
     mail::update::Update,
 };
 
 /// Caches the Messages of Gmail's Thread `id` as All Mail holds them, with
-/// their bodies and Snippets, leaving All Mail examined. A refusal is only
+/// their bodies and Snippets, leaving All Mail open. A refusal is only
 /// logged. See docs/adr/0009-threads-from-gmail-thread-id.md.
 pub async fn fetch(
     server: &mut impl MailServer,
@@ -46,7 +46,7 @@ async fn fetched(
         return Ok(());
     };
 
-    sync::examine(server, &all).await?;
+    sync::open(server, &all, Mode::Examine).await?;
     let uids = server.thread(id).await?;
     let found = if uids.is_empty() {
         Vec::new()

@@ -9,8 +9,15 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, Moved, connect::Transport, login, moved_uids, named_roles, new_messages, origin::Origin,
-    pushed::Pushed, tagged, traced::Traced, whole_bodies, wire_trace,
+    Error, Moved,
+    connect::Transport,
+    login, moved_uids, named_roles, new_messages,
+    opening::{Mode, Opening},
+    origin::Origin,
+    pushed::Pushed,
+    tagged,
+    traced::Traced,
+    whole_bodies, wire_trace,
 };
 use crate::{
     account::config::Config,
@@ -48,15 +55,21 @@ const POLL: Duration = Duration::from_secs(60);
 pub struct Examined {
     pub exists: u32,
     pub state: SyncState,
+    pub opening: Opening,
 }
 
 /// What Postal needs from a mail server, kept apart from the IMAP library.
 pub trait MailServer {
-    /// Opens the Folder named `folder` read-only; later commands read it.
-    async fn examine(&mut self, folder: &FolderName) -> Result<Examined, Error>;
+    /// Opens `folder` as `mode`, unless the open Folder already covers it;
+    /// later commands read it. An open on the wire is as `reopen`'s.
+    async fn open(&mut self, folder: &FolderName, mode: Mode) -> Result<(), Error>;
 
-    /// As `examine`, but `store` may change the Folder's flags.
-    async fn select(&mut self, folder: &FolderName) -> Result<Examined, Error>;
+    /// Opens `folder` as `mode` on the wire, for this moment's counts. Drops
+    /// what the server announced of the Folder open before.
+    async fn reopen(&mut self, folder: &FolderName, mode: Mode) -> Result<Examined, Error>;
+
+    /// The last open; `None` before one, and after one failed.
+    fn opening(&self) -> Option<&Opening>;
 
     /// Adds `flag` to `uids` of the selected Folder, or removes it.
     async fn store(&mut self, uids: &[Uid], flag: flag::Flag, added: bool) -> Result<(), Error>;
@@ -161,8 +174,12 @@ pub trait MailServer {
 pub struct ImapSession {
     session: Session<Box<dyn Transport>>,
     items: &'static str,
-    /// As of the last `examine`, for the body key of a server without Gmail's.
+    /// As of the last open, for the body key of a server without Gmail's.
     uid_validity: u32,
+    /// A failed `SELECT` or `EXAMINE` leaves none open (RFC 3501 6.3.1).
+    opening: Option<Opening>,
+    /// Opens made on the wire, to tell one open of a Folder from the next.
+    opens: u64,
     /// What the server announced during a command read by hand, not yet
     /// taken by `pushed`.
     pending: Vec<Pushed>,
@@ -213,6 +230,8 @@ impl ImapSession {
             session,
             items: if gmail { GMAIL_ITEMS } else { ITEMS },
             uid_validity: 0,
+            opening: None,
+            opens: 0,
             pending: Vec::new(),
             email: config.email.clone(),
             listed,
@@ -261,9 +280,11 @@ impl ImapSession {
         Ok((self, pushed))
     }
 
-    fn opened(&mut self, mailbox: &async_imap::types::Mailbox) -> Examined {
+    fn opened(&mut self, mailbox: &async_imap::types::Mailbox, opening: Opening) -> Examined {
         self.uid_validity = mailbox.uid_validity.unwrap_or_default();
+        self.opening = Some(opening.clone());
         Examined {
+            opening,
             exists: mailbox.exists,
             state: SyncState {
                 uid_validity: self.uid_validity,
@@ -280,16 +301,34 @@ impl ImapSession {
 }
 
 impl MailServer for ImapSession {
-    async fn examine(&mut self, folder: &FolderName) -> Result<Examined, Error> {
-        // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
-        // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
-        let mailbox = self.session.examine(folder).await?;
-        Ok(self.opened(&mailbox))
+    async fn open(&mut self, folder: &FolderName, mode: Mode) -> Result<(), Error> {
+        if self
+            .opening
+            .as_ref()
+            .is_some_and(|o| o.covers(folder, mode))
+        {
+            return Ok(());
+        }
+
+        self.reopen(folder, mode).await.map(drop)
     }
 
-    async fn select(&mut self, folder: &FolderName) -> Result<Examined, Error> {
-        let mailbox = self.session.select(folder).await?;
-        Ok(self.opened(&mailbox))
+    async fn reopen(&mut self, folder: &FolderName, mode: Mode) -> Result<Examined, Error> {
+        self.opening = None;
+        self.pushed();
+        self.opens += 1;
+        let mailbox = match mode {
+            // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
+            // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
+            Mode::Examine => self.session.examine(folder).await?,
+            Mode::Select => self.session.select(folder).await?,
+        };
+        let opening = Opening::new(folder.clone(), mode, self.opens);
+        Ok(self.opened(&mailbox, opening))
+    }
+
+    fn opening(&self) -> Option<&Opening> {
+        self.opening.as_ref()
     }
 
     async fn store(&mut self, uids: &[Uid], flag: flag::Flag, added: bool) -> Result<(), Error> {
@@ -547,6 +586,8 @@ impl MailServer for ImapSession {
             session,
             items,
             uid_validity,
+            opening,
+            opens,
             pending,
             email,
             listed,
@@ -568,6 +609,8 @@ impl MailServer for ImapSession {
             session: handle.done().await?,
             items,
             uid_validity,
+            opening,
+            opens,
             pending: Vec::new(),
             email,
             listed,

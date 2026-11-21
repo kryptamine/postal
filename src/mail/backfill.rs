@@ -2,7 +2,7 @@ use crate::{
     cache::Cache,
     domain::folder_name::FolderName,
     domain::uid::Uid,
-    mail::imap::MailServer,
+    mail::imap::{MailServer, Mode},
     mail::sync::{self, Error},
 };
 
@@ -43,7 +43,7 @@ pub async fn page(
     };
 
     // A fresh EXAMINE, so the sequence numbers below are this moment's.
-    let examined = match sync::examine(server, folder).await {
+    let examined = match sync::reopen(server, folder, Mode::Examine).await {
         Err(Error::Gone(error)) => {
             tracing::warn!("{folder} is gone: {error}");
             report(paged(Some(oldest)));

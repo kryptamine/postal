@@ -51,25 +51,23 @@ impl SpareWork {
         };
     }
 
-    /// One batch of Snippets, else the pass over Sent; `examined` follows
-    /// the Folder each leaves examined.
+    /// One batch of Snippets, else the pass over Sent.
     pub async fn step(
         &mut self,
         server: &mut impl MailServer,
         cache: &Cache,
-        examined: &mut Option<FolderName>,
         send: &impl Fn(Update),
     ) -> Result<(), Error> {
         if let Some((folder, below)) = &self.snippets_below {
             let written = || send(Update::Inbox);
-            if !open(server, examined, folder).await?
+            if !open(server, folder).await?
                 || !snippets::batch(server, cache, folder, Some(*below), written).await?
             {
                 self.snippets_below = None;
             }
         } else if self.sent_due {
             self.sent_due = false;
-            *examined = sent_pass::read(server, cache, send).await?;
+            sent_pass::read(server, cache, send).await?;
         }
 
         Ok(())
