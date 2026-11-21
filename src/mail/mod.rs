@@ -16,6 +16,7 @@ pub mod role_folder;
 pub mod routes;
 pub mod sent_pass;
 pub mod sequence_numbers;
+pub mod serve;
 pub mod smtp;
 pub mod snippet;
 pub mod snippets;

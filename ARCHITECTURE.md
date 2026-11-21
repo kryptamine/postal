@@ -1,10 +1,10 @@
 # Architecture
 
 `src/` holds one directory per layer. `main.rs` alone sits at the root: it
-declares the layers and wires one run. A layer's `mod.rs` only declares its
-modules, and callers name them in full, `crate::<layer>::<module>`. `cache`
-is the one layer that is a single module: its `mod.rs` re-exports `Cache`
-and the few items callers use.
+declares the layers, reads the arguments and hands the command to `cli` or
+`app`. A layer's `mod.rs` only declares its modules, and callers name them
+in full, `crate::<layer>::<module>`. `cache` is the one layer that is a
+single module: its `mod.rs` re-exports `Cache` and the few items callers use.
 
 ## Codemap
 
@@ -21,17 +21,22 @@ Lowest first:
 - `compose/`: Drafts and their notes, Replies, the Outbox on disk, the editor,
   the Account a Message goes out from.
 - `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
-  reconnecting, the sign-in check, and what the connections tell the screen
-  (`Update`, `Status`, `Steering`).
+  reconnecting, the sign-in check, one Account's two connections
+  (`mail::serve`), and what they tell the screen (`Update`, `Status`,
+  `Steering`).
 - `ui/`: the TUI: the event loop, panes, popups, the Theme, the
   keymap, the Onboarding and Settings, the log file.
 - `cli/`: the commands beside the TUI: the arguments, `correspondent list`,
   `thread show`.
+- `app/`: the TUI's run and `postal login`: the Accounts signed in, the
+  Onboarding when one is not, each Account's connections and the screen
+  over them, opened again after Settings or a sign-in.
 
 ## Direction
 
 A layer imports only from the layers listed before it. `ui` and `cli` are
-peers: neither imports the other. `main.rs` may import any layer.
+peers: neither imports the other. `app` may import any layer but `cli`, and
+`main.rs` any layer.
 
 Where a module could sit in two layers, its imports decided:
 
