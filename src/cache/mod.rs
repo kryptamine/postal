@@ -1,14 +1,21 @@
 //! The Cache: `SQLite` in WAL mode, one row per Message keyed by Folder
 //! and UID, with each Folder's UIDVALIDITY beside them.
 
+mod bodies;
 mod changes;
 mod correspondence;
 mod error;
+mod flags;
+mod folders;
 mod forget;
+mod list;
 mod moves;
 mod reader;
 mod schema;
+mod snippets;
+mod state;
 mod store;
+mod threads;
 
 pub use changes::Changes;
 pub use correspondence::SentPass;
