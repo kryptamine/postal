@@ -148,6 +148,7 @@ end
 local pane_buf = right_pane()
 local pane = table.concat(vim.api.nvim_buf_get_lines(pane_buf, 0, -1, false), "\n")
 local wants = {
+	"> Ask the agent to write or rework this Draft.",
 	"## Me\n\nmake it formal\n",
 	"## stub\n\nRewriting the body.\nDone soon.\n",
 	"✗ Denied: Run ls\n✗ Denied: Read ",

@@ -11,6 +11,11 @@ local NS = vim.api.nvim_create_namespace("postal-pane")
 local SPINNER = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
 local RULE = { { string.rep("─", 200), "PostalRule" } }
 local ME = "Me"
+local INTRO = [[
+Ask the agent to write or rework this Draft. It reads the Thread the Draft
+answers and the body, your edits included; its changes land in the Draft for
+you to review, hunk by hunk. It never touches the headers and never sends.
+Try: "answer that Friday works for me, and ask for the agenda".]]
 
 local Pane = {}
 Pane.__index = Pane
@@ -65,6 +70,7 @@ function Pane:buffer()
 		vim.keymap.set(key.modes, key.lhs, key.run, { buffer = self.buf, desc = key.desc })
 	end
 
+	self:notice(INTRO)
 	return self.buf
 end
 
