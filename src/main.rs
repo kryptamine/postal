@@ -102,6 +102,7 @@ mod partial_config;
 mod per_account;
 mod picker_popup;
 mod preview;
+mod preview_lines;
 mod preview_pane;
 mod preview_render;
 mod previews;
@@ -509,8 +510,7 @@ async fn session(
         .next()
         .map_or(IconChoice::Auto, |config| config.icons);
     let mut theme = Theme::from_env(background, Icons::choose(icons));
-    let to_previews = (configs, sender);
-    let mut previews = Previews::start(requests, to_previews, theme.mail_look());
+    let mut previews = Previews::start(requests, configs, sender, theme.mail_look());
     let background = Background {
         work: futures::future::try_join_all(works).map_ok(drop),
         updates,

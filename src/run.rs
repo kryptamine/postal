@@ -300,10 +300,7 @@ fn want(
 
     let view = &ui.view;
     match ui.screen.showing.reading() {
-        Some(reading) => {
-            let stack = (|key| reading.unfolded(key), reading.cursor);
-            previews.want_stack(caches, view, stack, text.width)
-        }
+        Some(reading) => previews.want_stack(caches, view, reading, text.width),
         None => previews.want(caches, view, text.width),
     }?;
 
@@ -468,7 +465,7 @@ fn apply(
 
             relist(ui, caches)?;
         }
-        Update::Bodies(folder, fetched) => previews.fetched((account, &folder), fetched),
+        Update::Bodies(folder, fetched) => previews.fetched(account, &folder, fetched),
         Update::BodyLink(live) => {
             previews.link(account, live);
             ui.screen.backfill = None;

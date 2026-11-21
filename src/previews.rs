@@ -9,7 +9,6 @@ use futures::channel::mpsc::UnboundedSender;
 use crate::{
     body::Body,
     body_fetch::{BodyRequest, Fetched, Request},
-    body_key::BodyKey,
     cache::{self, Cache},
     config::Config,
     folder,
@@ -19,6 +18,7 @@ use crate::{
     per_account::{AccountId, PerAccount},
     preview::Preview,
     preview_render::{self, Job},
+    reading::Reading,
     rendered_previews::{PreviewKey, RenderedPreviews},
     routes::Routes,
     uid::Uid,
@@ -66,7 +66,8 @@ impl Previews {
     /// Starts the render thread, which sends each Preview back to `updates`.
     pub fn start(
         requests: Routes<Request>,
-        (accounts, updates): (&PerAccount<Config>, UnboundedSender<(AccountId, Update)>),
+        accounts: &PerAccount<Config>,
+        updates: UnboundedSender<(AccountId, Update)>,
         look: MailLook,
     ) -> Self {
         let (jobs, queue) = mpsc::channel::<Job>();
@@ -150,41 +151,41 @@ impl Previews {
         let folder = view
             .selected_message()
             .and_then(|m| Some((m.account, m.folder.as_ref()?)));
-        self.ready(caches, (view, folder), wanted, width)?;
+        let key = |m: &Message| view.preview_key(m, width);
+        self.ready(caches, folder.or_else(|| shown(view)), wanted, key)?;
         Ok(())
     }
 
-    /// Readies the Previews of the selected Thread's `unfolded` Messages at
-    /// `width`, the one at `cursor` asked for first.
+    /// Readies the Previews of the selected Thread's Messages `reading` unfolds
+    /// at `width`, the one at its cursor asked for first.
     pub fn want_stack(
         &mut self,
         caches: &PerAccount<Cache>,
         view: &InboxView,
-        (unfolded, cursor): (impl Fn(BodyKey) -> bool, BodyKey),
+        reading: &Reading,
         width: u16,
     ) -> Result<(), cache::Error> {
-        let stack = view.stack().filter(|m| unfolded(m.body_key));
+        let cursor = reading.cursor;
+        let stack = view.stack().filter(|m| reading.unfolded(m.body_key));
         let wanted = stack.clone().map(|m| (m, m.body_key == cursor));
         let at_cursor = stack
             .filter(|m| m.body_key == cursor)
             .find_map(|m| Some((m.account, m.folder.as_ref()?)));
-        self.ready(caches, (view, at_cursor), wanted, width)
+        let key = |m: &Message| view.preview_key(m, width);
+        self.ready(caches, at_cursor.or_else(|| shown(view)), wanted, key)
     }
 
-    /// Renders each `(message, selected)` whose body is cached and asks the
-    /// server in `folder` for the rest of that Folder's: the shown one when
-    /// `None`, and none in All Inboxes. When all are rendered already this
-    /// does not allocate.
+    /// Renders each `(message, selected)` whose body is cached under its `key`
+    /// and asks the server in `folder`, if any, for the rest of that Folder's.
+    /// When all are rendered already this does not allocate.
     fn ready<'m>(
         &mut self,
         caches: &PerAccount<Cache>,
-        (view, folder): (&InboxView, Option<(AccountId, &Arc<str>)>),
+        folder: Option<(AccountId, &Arc<str>)>,
         wanted: impl Iterator<Item = (&'m Message, bool)>,
-        width: u16,
+        key: impl Fn(&Message) -> PreviewKey,
     ) -> Result<(), cache::Error> {
-        let shown = view.folder.folder().map(|f| (f.account, &f.name));
-        let asking = folder.or(shown);
-        if let Some((account, folder)) = asking
+        if let Some((account, folder)) = folder
             && (self.account != Some(account) || self.folder != *folder)
         {
             self.switch(account, folder);
@@ -199,8 +200,8 @@ impl Previews {
         };
 
         for (message, selected) in wanted {
-            let key = view.preview_key(message, width);
-            let here = asking.is_some() && self.holds(message);
+            let key = key(message);
+            let here = folder.is_some() && self.holds(message);
             if self.rendered.touch(key)
                 || self.rendering.contains(&key)
                 || (here && self.unavailable(message.uid))
@@ -293,7 +294,7 @@ impl Previews {
 
     /// Bodies fetched in `folder`; those of a Folder no longer shown are
     /// in the Cache, and no UID here waits on them.
-    pub fn fetched(&mut self, (account, folder): (AccountId, &str), fetched: Fetched) {
+    pub fn fetched(&mut self, account: AccountId, folder: &str, fetched: Fetched) {
         if self.account != Some(account) || *self.folder != *folder {
             return;
         }
@@ -336,4 +337,9 @@ impl Previews {
         self.rendering.remove(&key);
         self.rendered.insert(key, preview);
     }
+}
+
+/// The Folder the list shows, none in All Inboxes.
+fn shown(view: &InboxView) -> Option<(AccountId, &Arc<str>)> {
+    view.folder.folder().map(|f| (f.account, &f.name))
 }

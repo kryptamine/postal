@@ -10,15 +10,11 @@ use crate::{ansi, browser, message::Message, message_header, preview::Preview, t
 pub fn ansi(message: &Message, preview: &Preview, theme: &Theme) -> Vec<u8> {
     let mut out = Vec::new();
     // Writing to a `Vec` cannot fail.
-    write(&mut out, (message, preview), theme).ok();
+    write(&mut out, message, preview, theme).ok();
     out
 }
 
-fn write(
-    out: &mut Vec<u8>,
-    (message, preview): (&Message, &Preview),
-    theme: &Theme,
-) -> io::Result<()> {
+fn write(out: &mut Vec<u8>, message: &Message, preview: &Preview, theme: &Theme) -> io::Result<()> {
     let [from, rest @ ..] = message_header::fields(theme, message);
     field(out, from, theme)?;
     out.write_all(b"  ")?;

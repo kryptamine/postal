@@ -98,7 +98,8 @@ impl Widget for PickerPopup<'_> {
                     height: 1,
                     ..list
                 },
-                (folder, style),
+                folder,
+                style,
             );
         }
     }
@@ -106,7 +107,7 @@ impl Widget for PickerPopup<'_> {
 
 impl PickerPopup<'_> {
     /// One Folder in `row`: its icon and label, then its Unread count.
-    fn folder(&self, buf: &mut Buffer, row: Rect, (folder, style): (&Shown, Style)) {
+    fn folder(&self, buf: &mut Buffer, row: Rect, folder: &Shown, style: Style) {
         let mut count = StackStr::<24>::new();
         if let Some(unread) = folder.unread().filter(|&n| n > 0) {
             write!(count, "{unread}").ok();

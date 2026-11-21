@@ -13,7 +13,9 @@ use crate::{
     date_label::DateLabel,
     inbox_view::InboxView,
     link_hints::LinkHints,
-    message_header, preview_pane,
+    message_header,
+    preview_lines::PreviewLines,
+    preview_pane,
     previews::Previews,
     reading::Reading,
     stack::{self, Placed},
@@ -71,7 +73,7 @@ impl StatefulWidget for ThreadPane<'_> {
                 }
             }
 
-            self.pin(buf, (area, text), &placed, placed.pinned(&window));
+            self.pin(buf, area, &placed, placed.pinned(&window));
         }
 
         let mut title = StackStr::<24>::new();
@@ -94,8 +96,14 @@ impl ThreadPane<'_> {
 
         match body {
             Body::Rendered(preview) => {
-                let hints = self.hints.map(|hints| (hints, placed.index));
-                preview_pane::line(self.theme, hints, buf, row, (preview, index));
+                let lines = PreviewLines {
+                    theme: self.theme,
+                    preview,
+                    hints: self.hints,
+                    part: placed.index,
+                };
+
+                lines.draw(buf, row, index);
             }
             Body::Loading => truncate::draw(buf, row, "Loading…", self.theme.muted),
             Body::Unavailable(why) => truncate::draw(buf, row, why, self.theme.muted),
@@ -103,8 +111,9 @@ impl ThreadPane<'_> {
     }
 
     /// Draws the last `rows` rows of the header of `placed` over the top of
-    /// `text`, the last of them a rule across `pane` as in the Preview.
-    fn pin(&self, buf: &mut Buffer, (pane, text): (Rect, Rect), placed: &Placed<'_>, rows: usize) {
+    /// the text of `pane`, the last of them a rule across it as in the Preview.
+    fn pin(&self, buf: &mut Buffer, pane: Rect, placed: &Placed<'_>, rows: usize) {
+        let text = preview_pane::text_area(pane);
         let first = message_header::ROWS - rows;
         for (y, offset) in (text.y..text.bottom()).zip(first..message_header::ROWS) {
             let line = Rect::new(text.x, y, text.width, 1);

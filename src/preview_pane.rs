@@ -8,7 +8,8 @@ use ratatui::{
 
 use crate::{
     body::Body, border, centred::centred, inbox_view::InboxView, layout::PADDING,
-    link_hints::LinkHints, message_header, preview::Preview, stack_str::StackStr, theme::Theme,
+    link_hints::LinkHints, message_header, preview_lines::PreviewLines, stack_str::StackStr,
+    theme::Theme,
 };
 
 /// Where a Preview's text goes in `pane`: inside the border, padded each
@@ -95,53 +96,16 @@ impl StatefulWidget for PreviewPane<'_> {
 
         let last_top = preview.body.len().saturating_sub(usize::from(body.height));
         view.preview_scroll = view.preview_scroll.min(last_top);
-        let lines = view.preview_scroll..preview.body.len();
-        for (y, index) in (body.y..body.bottom()).zip(lines) {
-            let hints = self.hints.map(|hints| (hints, 0));
-            line(
-                self.theme,
-                hints,
-                buf,
-                Rect::new(text.x, y, text.width, 1),
-                (preview, index),
-            );
-        }
-    }
-}
+        let lines = PreviewLines {
+            theme: self.theme,
+            preview,
+            hints: self.hints,
+            part: 0,
+        };
 
-/// Body line `index` of `preview`, with the labels `hints` give body `part`.
-pub fn line(
-    theme: &Theme,
-    hints: Option<(&LinkHints, usize)>,
-    buf: &mut Buffer,
-    row: Rect,
-    (preview, index): (&Preview, usize),
-) {
-    let Some(line) = preview.body.get(index) else {
-        return;
-    };
-
-    let room = |x: u16| usize::from(row.right().saturating_sub(x));
-    let mut x = row.x;
-    for (run, segment) in line.segments().enumerate() {
-        let label = hints.and_then(|(hints, part)| hints.label(part, index, run));
-        // Text moves right to make room for a label; a laid out mail
-        // keeps its columns, and the label covers the link's start.
-        if let Some(label) = label.as_ref().filter(|_| !preview.laid_out) {
-            x = buf
-                .set_stringn(x, row.y, label.as_str(), room(x), theme.label)
-                .0;
-        }
-
-        if room(x) == 0 {
-            return;
-        }
-
-        let start = x;
-        let style = theme.painted(segment.marks, segment.paint);
-        x = buf.set_stringn(x, row.y, segment.text, room(x), style).0;
-        if let Some(label) = label.filter(|_| preview.laid_out) {
-            buf.set_stringn(start, row.y, label.as_str(), room(start), theme.label);
+        let shown = view.preview_scroll..preview.body.len();
+        for (y, index) in (body.y..body.bottom()).zip(shown) {
+            lines.draw(buf, Rect::new(text.x, y, text.width, 1), index);
         }
     }
 }

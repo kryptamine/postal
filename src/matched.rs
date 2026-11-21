@@ -1,4 +1,4 @@
-use ratatui::{buffer::Buffer, layout::Rect, style::Style};
+use ratatui::layout::Rect;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -26,27 +26,22 @@ impl<'a> Matched<'a> {
         })
     }
 
-    /// Restyles the matched graphemes of `text`, drawn by `truncate::draw`
+    /// The cells of the matched graphemes of `text`, drawn by `truncate::draw`
     /// on `area`'s first row; `start` is the unit `text` starts at.
-    pub fn draw(&self, buf: &mut Buffer, area: Rect, (text, start): (&str, u32), style: Style) {
-        if self.units.is_empty() {
-            return;
-        }
-
+    pub fn cells(&self, area: Rect, text: &str, start: u32) -> impl Iterator<Item = Rect> {
         let (shown, _) = truncate::fit(text, usize::from(area.width));
-        let mut x = area.x;
-        let mut unit = start;
-        for grapheme in shown.graphemes(true) {
+        let (mut x, mut unit) = (area.x, start);
+        shown.graphemes(true).filter_map(move |grapheme| {
             let next = unit + self.step(grapheme);
             let width = u16::try_from(grapheme.width()).unwrap_or(u16::MAX);
             let from = self.units.partition_point(|&u| u < unit);
-            if self.units.get(from).is_some_and(|&u| u < next) {
-                buf.set_style(Rect::new(x, area.y, width, 1).intersection(area), style);
-            }
-
-            x = x.saturating_add(width);
-            unit = next;
-        }
+            let cell = Rect::new(x, area.y, width, 1).intersection(area);
+            (x, unit) = (x.saturating_add(width), next);
+            self.units
+                .get(from)
+                .is_some_and(|&u| u < next)
+                .then_some(cell)
+        })
     }
 
     /// How many units `text` spans.

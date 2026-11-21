@@ -296,7 +296,9 @@ impl Cards<'_> {
 
         let count = count(thread);
         place(shown, names(senders, &count), |area, (n, name), _| {
-            matched.draw(buf, area, (name, start(n)), style);
+            for cell in matched.cells(area, name, start(n)) {
+                buf.set_style(cell, style);
+            }
         });
 
         let after = start(thread.senders.len()).saturating_sub(gap) + 1;
@@ -307,7 +309,9 @@ impl Cards<'_> {
             .zip(starts)
         {
             if !area.is_empty() {
-                matched.draw(buf, area, (text, after + start), style);
+                for cell in matched.cells(area, text, after + start) {
+                    buf.set_style(cell, style);
+                }
             }
         }
     }
