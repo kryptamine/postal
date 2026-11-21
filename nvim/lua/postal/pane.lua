@@ -1,6 +1,7 @@
 -- The chat pane beside a mail, a markdown buffer laid out like a chat:
 -- each message under `## Me` or `## <agent>`, and the user's next one typed
 -- under the `## Me` at its bottom.
+local body = require("postal.body")
 local help = require("postal.help")
 local icons = require("postal.icons")
 
@@ -207,15 +208,7 @@ function M.statusline(buf)
 		return ""
 	end
 
-	local subject = ""
-	for _, line in ipairs(vim.api.nvim_buf_get_lines(self.mail, 0, -1, false)) do
-		if line == "" then
-			break
-		end
-
-		subject = line:match("^[Ss]ubject:%s*(.-)%s*$") or subject
-	end
-
+	local subject = body.header(self.mail, "Subject") or ""
 	local glyph = icons.get("agent")
 	local who = glyph .. " " .. (self.agent or "")
 	subject = subject ~= "" and subject or "(no subject)"

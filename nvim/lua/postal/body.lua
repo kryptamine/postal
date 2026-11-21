@@ -15,6 +15,16 @@ local function start(buf)
 	return #lines, false
 end
 
+--- The value of header `name`, in any case, or nil when there is none.
+function M.header(buf, name)
+	local prefix = name:lower() .. ":"
+	for _, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, (start(buf)), false)) do
+		if line:sub(1, #prefix):lower() == prefix then
+			return vim.trim(line:sub(#prefix + 1))
+		end
+	end
+end
+
 --- Every line, the headers' too.
 function M.whole(buf)
 	return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n") .. "\n"
