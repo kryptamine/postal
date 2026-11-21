@@ -55,9 +55,15 @@ function Pane:buffer()
 		return self.buf
 	end
 
-	panes[self.buf or -1] = nil
-	self.buf = vim.api.nvim_create_buf(false, true)
-	panes[self.buf] = self
+	local buf = vim.api.nvim_create_buf(false, true)
+	self.buf, panes[buf] = buf, self
+	vim.api.nvim_create_autocmd("BufWipeout", {
+		buffer = buf,
+		callback = function()
+			panes[buf] = nil
+		end,
+	})
+
 	self.speaker, self.open = nil, nil
 	vim.bo[self.buf].filetype = "markdown"
 	local glyphs = vim.tbl_map(function(kind)
@@ -414,7 +420,6 @@ function Pane:close()
 		pcall(vim.api.nvim_win_close, win, true)
 	end
 
-	panes[self.buf] = nil
 	vim.api.nvim_buf_delete(self.buf, { force = true })
 end
 
