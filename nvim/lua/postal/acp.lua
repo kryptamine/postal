@@ -74,6 +74,10 @@ function Connection:request(method, params, callback)
 	self:write({ id = self.next_id, method = method, params = params })
 end
 
+function Connection:notify(method, params)
+	self:write({ method = method, params = params })
+end
+
 function Connection:receive(line)
 	local message = decode(line)
 	if not message then

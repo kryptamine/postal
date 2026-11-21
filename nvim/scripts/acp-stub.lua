@@ -99,6 +99,15 @@ local function turn(session, prompt)
 		end
 	end
 
+	-- Told `hang`, it says nothing until the turn is cancelled.
+	if prompt[#prompt].text == "hang" then
+		repeat
+			local message = receive()
+		until message.method == "session/cancel"
+
+		return "cancelled"
+	end
+
 	chunk(session, "Rewriting")
 	chunk(session, " the bo")
 	chunk(session, "dy.\nDone soon.")
@@ -168,7 +177,7 @@ while true do
 		assert(vim.deep_equal(tools, { "read_draft", "write_draft" }), vim.inspect(tools))
 		send({ id = message.id, result = { sessionId = "stub" } })
 	elseif message.method == "session/prompt" then
-		turn(message.params.sessionId, message.params.prompt)
-		send({ id = message.id, result = { stopReason = "end_turn" } })
+		local stopped = turn(message.params.sessionId, message.params.prompt)
+		send({ id = message.id, result = { stopReason = stopped or "end_turn" } })
 	end
 end

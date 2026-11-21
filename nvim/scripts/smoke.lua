@@ -83,9 +83,22 @@ local function body()
 	return vim.api.nvim_buf_get_lines(draft_buf, 2, -1, false)
 end
 
-local instruction
-vim.ui.input = function(_, on_confirm)
-	on_confirm(instruction)
+-- Back to the window that shows a Draft, where `:PostalAgent` is.
+local function home()
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if vim.b[vim.api.nvim_win_get_buf(win)].postal_draft then
+			vim.api.nvim_set_current_win(win)
+			return
+		end
+	end
+end
+
+-- Types `text` in the pane's input and sends it, as the user would.
+local function ask(text)
+	home()
+	vim.cmd("PostalAgent")
+	vim.api.nvim_buf_set_lines(0, -2, -1, false, { text })
+	vim.cmd.normal(vim.keycode("<CR>"))
 end
 
 local function sent()
@@ -118,11 +131,14 @@ local function turn(want)
 	end
 end
 
-instruction = "make it formal"
-vim.cmd("PostalAgent")
+ask("make it formal")
 turn({ "", "HI BOB", "", "> SHALL WE MEET?" })
 if vim.api.nvim_buf_get_lines(draft_buf, 0, 2, false)[1] ~= "To: bob@example.com" then
 	fail("the headers changed")
+end
+
+local function said(buf)
+	return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
 end
 
 local function right_pane()
@@ -131,8 +147,14 @@ end
 
 local pane_buf = right_pane()
 local pane = table.concat(vim.api.nvim_buf_get_lines(pane_buf, 0, -1, false), "\n")
-local denied = { "Denied: Run ls", "Denied: Read " }
-for _, said in ipairs({ "You: make it formal", "stub: Rewriting the body.\nDone soon.", unpack(denied) }) do
+local wants = {
+	"## Me\n\nmake it formal\n",
+	"## stub\n\nRewriting the body.\nDone soon.\n",
+	"✗ Denied: Run ls\n✗ Denied: Read ",
+	"✓ write_draft · the edit is in the Draft for review",
+}
+
+for _, said in ipairs(wants) do
 	if not pane:find(said, 1, true) then
 		fail("the pane lacks " .. vim.inspect(said) .. " in " .. vim.inspect(pane))
 	end
@@ -197,12 +219,13 @@ end
 
 local function left(want)
 	local winbar = vim.wo[vim.fn.bufwinid(pane_buf)].winbar
-	if want == "" and winbar ~= "" or not winbar:find(want, 1, true) then
+	if want == "" and winbar:find("hunk") or not winbar:find(want, 1, true) then
 		fail("the pane says " .. vim.inspect(winbar) .. ", not " .. vim.inspect(want))
 	end
 end
 
 local function press(row, lhs)
+	home()
 	vim.api.nvim_win_set_cursor(0, { row, 0 })
 	vim.cmd.normal(vim.keycode(lhs))
 end
@@ -226,8 +249,7 @@ left("")
 -- A hand edit goes with the next turn, which carries no rules again
 vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "hello bob" })
 vim.api.nvim_buf_set_lines(draft_buf, -1, -1, false, { "", "drop me" })
-instruction = "shorter"
-vim.cmd("PostalAgent")
+ask("shorter")
 turn({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
 shows({ "hello bob", "> Shall we meet?", "drop me" })
 local second = prompts()[2].params.prompt
@@ -237,8 +259,7 @@ if #second ~= 2 or second[1].resource.text ~= asked or second[2].text ~= "shorte
 end
 
 -- An instruction waits for the review of the agent's last edit
-instruction = "slowly"
-vim.cmd("PostalAgent")
+ask("slowly")
 vim.wait(200)
 if #prompts() ~= 2 then
 	fail("prompted while a review was open")
@@ -266,14 +287,34 @@ is({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
 shows({})
 left("")
 
+-- `q` in the pane stops a turn, and the pane says so
+ask("hang")
+if not vim.wait(5000, function()
+	return #prompts() == 4
+end) then
+	fail("hang was never sent")
+end
+
+vim.cmd.normal("q")
+if not vim.wait(5000, function()
+	return said(pane_buf):find("> Stopped.", 1, true) ~= nil
+end) then
+	fail("the turn was not stopped: " .. vim.inspect(said(pane_buf)))
+end
+
+local tail = vim.api.nvim_buf_get_lines(pane_buf, -4, -1, false)
+if not vim.deep_equal(tail, { "", "## Me", "" }) or not said(pane_buf):find("## Me\n\nhang\n", 1, true) then
+	fail("the input is not left empty at the bottom: " .. vim.inspect(said(pane_buf)))
+end
+
 -- An agent wanting a sign-in shows its command
 local locked = drafts .. "/3.eml"
 vim.fn.writefile({ "To: bob@example.com", "", "hi" }, locked)
+home()
 vim.cmd.edit(locked)
 local locked_buf = vim.api.nvim_get_current_buf()
-instruction = "anything"
 vim.cmd("PostalAgent locked")
-local locked_pane = right_pane()
+local locked_pane = vim.api.nvim_get_current_buf()
 if
 	not vim.wait(10000, function()
 		local said = table.concat(vim.api.nvim_buf_get_lines(locked_pane, 0, -1, false), "\n")
@@ -294,14 +335,11 @@ end
 local function chat(name)
 	local file = drafts .. "/" .. name .. ".eml"
 	vim.fn.writefile({ "To: bob@example.com", "", "hi" }, file)
+	home()
 	vim.cmd.edit(file)
 	local buf = vim.api.nvim_get_current_buf()
 	vim.cmd("PostalAgent " .. name)
-	return buf, right_pane()
-end
-
-local function said(buf)
-	return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+	return buf, vim.api.nvim_get_current_buf()
 end
 
 local absent_buf, absent_pane = chat("absent")

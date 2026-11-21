@@ -30,8 +30,12 @@ The list is what Postal has synced: run `postal` once before.
 ## Writing with an agent
 
 `:PostalAgent` in a Draft opens a chat pane beside it with an agent that
-speaks [ACP](https://agentclientprotocol.com), and asks what to change;
-`<CR>` in the pane asks again. The agent reads the Thread the Draft
+speaks [ACP](https://agentclientprotocol.com), the cursor in its input.
+Each message sits under `## Me` or `## <agent>`; type under the last
+`## Me` and send with `<CR>` or `<C-s>`. `q` stops the agent's turn,
+`<C-c>` ends the chat, `?` lists the keys. A spinner shows while the agent
+works, a dim line each tool call it was denied or the edit it made, and
+the winbar the hunks left to review. The agent reads the Thread the Draft
 answers, from `postal thread show`, and the body as it stands each turn,
 your own edits included. It reaches the body only through the
 `read_draft` and `write_draft` tools of an MCP server the plugin hands it,

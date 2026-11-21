@@ -48,7 +48,7 @@ function Chat:fetch_thread()
 			self.thread = result.stdout
 		else
 			self.thread = false
-			self.pane:say("No Thread for the agent: " .. requirements.thread(recipients.cmd, result.stderr))
+			self.pane:notice("No Thread for the agent: " .. requirements.thread(recipients.cmd, result.stderr))
 		end
 
 		self:next()
@@ -76,7 +76,6 @@ function Chat:resource(uri, text)
 end
 
 function Chat:prompt(instruction)
-	self.pane:say("You: " .. instruction)
 	local first = not self.prompted
 	local blocks = {}
 	if first then
@@ -84,6 +83,7 @@ function Chat:prompt(instruction)
 		table.insert(blocks, { type = "text", text = RULES })
 		if self.thread then
 			table.insert(blocks, self:resource("postal-thread://" .. self.path, self.thread))
+			self.pane:dim("≡", "Context: the Thread the Draft answers")
 		end
 	end
 
@@ -92,8 +92,10 @@ function Chat:prompt(instruction)
 	table.insert(blocks, self:resource("postal-draft://" .. self.path, self.sent))
 	table.insert(blocks, { type = "text", text = instruction })
 	self.busy = true
+	self.pane:busy(true)
 	self.conn:request("session/prompt", { sessionId = self.session, prompt = blocks }, function(failed, result)
 		self.busy = false
+		self.pane:busy(false)
 		if failed and first then
 			-- The rules go with the next prompt instead.
 			self.prompted = false
@@ -103,9 +105,11 @@ function Chat:prompt(instruction)
 			self:sign_in()
 			return
 		elseif failed then
-			self.pane:say("The agent failed: " .. tostring(failed.message))
+			self.pane:notice("The agent failed: " .. tostring(failed.message))
+		elseif result.stopReason == "cancelled" then
+			self.pane:notice("Stopped.")
 		elseif result.stopReason ~= "end_turn" then
-			self.pane:say("The agent stopped: " .. tostring(result.stopReason))
+			self.pane:notice("The agent stopped: " .. tostring(result.stopReason))
 		end
 
 		self:next()
@@ -124,16 +128,26 @@ end
 function Chat:send(instruction)
 	table.insert(self.queue, instruction)
 	if self.review then
-		self.pane:say("Sent once the agent's edit is reviewed: " .. instruction)
+		self.pane:notice("Sent once the agent's edit is reviewed.")
+	elseif self.busy then
+		self.pane:notice("Sent once the agent's turn ends.")
 	end
 
 	self:next()
 end
 
+--- Stops the turn that runs, and drops what waits for it.
+function Chat:cancel()
+	self.queue = {}
+	if self.busy and self.conn then
+		self.conn:notify("session/cancel", { sessionId = self.session })
+	end
+end
+
 function Chat:update(update)
 	local kind = update.sessionUpdate
 	if kind == "agent_message_chunk" and update.content and update.content.type == "text" then
-		self.pane:stream(self.name, update.content.text)
+		self.pane:stream(update.content.text)
 	elseif kind == "tool_call" or kind == "tool_call_update" then
 		local call = self.calls[update.toolCallId] or {}
 		self.calls[update.toolCallId] = vim.tbl_extend("force", call, update)
@@ -156,7 +170,7 @@ function Chat:permit(params, respond)
 		for _, option in ipairs(params.options or {}) do
 			if option.kind == kind then
 				if not allowed then
-					self.pane:say("Denied: " .. tostring(call.title))
+					self.pane:dim("✗", "Denied: " .. tostring(call.title))
 				end
 
 				respond({ outcome = { outcome = "selected", optionId = option.optionId } })
@@ -207,11 +221,11 @@ function Chat:propose(text)
 
 	if not self.review then
 		self.pane:status("")
-		self.pane:say("The agent's edit changes nothing.")
+		self.pane:dim("✓", "write_draft · the edit changes nothing")
 		return
 	end
 
-	self.pane:say("The agent's edit is in the Draft for review, hunk by hunk.")
+	self.pane:dim("✓", "write_draft · the edit is in the Draft for review, hunk by hunk")
 	self:reviewed(self.review:summary())
 end
 
@@ -230,7 +244,7 @@ function Chat:sign_in()
 		return method.description or method.name
 	end, self.auth_methods or {})
 
-	self.pane:say(self.name .. " needs you to sign in first. " .. table.concat(how, " "))
+	self.pane:notice(self.name .. " needs you to sign in first. " .. table.concat(how, " "))
 	self:stop()
 end
 
@@ -243,7 +257,7 @@ function Chat:stop()
 end
 
 function Chat:fail_to_start(failed)
-	self.pane:say("The agent failed to start: " .. tostring(failed.message))
+	self.pane:notice("The agent failed to start: " .. tostring(failed.message))
 	self:stop()
 end
 
@@ -282,21 +296,35 @@ end
 local function start(draft, name, shown)
 	local self = setmetatable({ draft = draft, name = name, calls = {}, queue = {} }, Chat)
 	self.path = vim.api.nvim_buf_get_name(draft)
-	self.pane = shown or pane.new(draft, function()
-		M.ask(draft)
-	end)
+	self.pane = shown
+		or pane.new(draft, name, {
+			send = function(text)
+				M.send(draft, text)
+			end,
+			stop = function()
+				if chats[draft] then
+					chats[draft]:cancel()
+				end
+			end,
+			close = function()
+				M.close(draft)
+			end,
+		})
+
+	self.pane.name = name
+	self.pane:status("")
 
 	chats[draft] = self
 	local cmd, note = requirements.agent(name, M.agents[name])
 	if not cmd then
-		self.pane:say(note)
+		self.pane:notice(note)
 		vim.notify("postal: " .. note, vim.log.levels.ERROR)
 		self.ended = true
 		return self
 	end
 
 	if note then
-		self.pane:say(note)
+		self.pane:notice(note)
 	end
 
 	self:fetch_thread()
@@ -317,14 +345,15 @@ local function start(draft, name, shown)
 			self.ended = true
 			self.busy = false
 			self.queue = {}
+			self.pane:busy(false)
 			if not self.closing then
-				self.pane:say(name .. " ended (" .. code .. "): " .. vim.trim(stderr))
+				self.pane:notice(name .. " ended (" .. code .. "): " .. vim.trim(stderr))
 			end
 		end,
 	})
 
 	if not conn then
-		self.pane:say(name .. " cannot start: " .. failure)
+		self.pane:notice(name .. " cannot start: " .. failure)
 		self.ended = true
 		return self
 	end
@@ -334,8 +363,8 @@ local function start(draft, name, shown)
 	return self
 end
 
---- Asks for an instruction and sends it to Draft buffer `draft`'s agent,
---- starting agent `name`, or the default, when none chats about it yet.
+--- Opens Draft buffer `draft`'s chat, the cursor in its input, starting
+--- agent `name`, or the default, when none chats about it yet.
 function M.ask(draft, name)
 	local chat = chats[draft]
 	if chat and not chat.ended and name and name ~= chat.name then
@@ -351,17 +380,22 @@ function M.ask(draft, name)
 
 	if not chat or chat.ended then
 		chat = start(draft, name, chat and chat.pane)
-		if chat.ended then
-			return
-		end
 	end
 
-	chat.pane:show()
-	vim.ui.input({ prompt = name .. ": " }, function(instruction)
-		if instruction and instruction ~= "" and not chat.ended then
-			chat:send(instruction)
-		end
-	end)
+	chat.pane:show(true)
+end
+
+--- Sends `text` to Draft buffer `draft`'s agent, starting it again when it
+--- has ended.
+function M.send(draft, text)
+	local chat = chats[draft]
+	if chat.ended then
+		chat = start(draft, chat.name, chat.pane)
+	end
+
+	if not chat.ended then
+		chat:send(text)
+	end
 end
 
 --- Answers a call of Postal's MCP server for Draft buffer `draft`.
