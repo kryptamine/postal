@@ -155,8 +155,9 @@ fn correspondence(envelope: Option<&Envelope<'_>>, row: &Message) -> Corresponde
     }
 }
 
-/// `None` for a group's start or end, which has no host.
-fn person(address: &Address<'_>) -> Option<Person> {
+/// Its address and decoded display name, if it has one; `None` for a
+/// group's start or end, which has no host.
+fn parts(address: &Address<'_>) -> Option<(String, Option<String>)> {
     let mailbox = address.mailbox.as_deref().filter(|m| !m.is_empty())?;
     let host = address.host.as_deref().filter(|h| !h.is_empty())?;
     let email = format!(
@@ -165,22 +166,21 @@ fn person(address: &Address<'_>) -> Option<Person> {
         String::from_utf8_lossy(host)
     );
     let name = address.name.as_deref().map(header::decode);
+    Some((email, name.filter(|name| !name.trim().is_empty())))
+}
+
+fn person(address: &Address<'_>) -> Option<Person> {
+    let (email, name) = parts(address)?;
     Some(Person::new(&email, name))
 }
 
 /// Whether the first `From` address is `email`; addresses compare without case.
 fn from(envelope: &Envelope<'_>, email: &str) -> bool {
-    let Some(from) = envelope.from.as_ref().and_then(|f| f.first()) else {
-        return false;
-    };
-
-    let part = |p: Option<&[u8]>| String::from_utf8_lossy(p.unwrap_or_default()).into_owned();
-    let address = format!(
-        "{}@{}",
-        part(from.mailbox.as_deref()),
-        part(from.host.as_deref())
-    );
-    address.eq_ignore_ascii_case(email)
+    envelope
+        .from
+        .as_ref()
+        .and_then(|from| parts(from.first()?))
+        .is_some_and(|(address, _)| address.eq_ignore_ascii_case(email))
 }
 
 fn envelope<'a>(attributes: &'a [AttributeValue<'_>]) -> Option<&'a Envelope<'a>> {
@@ -193,20 +193,8 @@ fn envelope<'a>(attributes: &'a [AttributeValue<'_>]) -> Option<&'a Envelope<'a>
 /// The `From` display name, else the full address; `None` when the server
 /// found no address in the header.
 fn sender(envelope: &Envelope<'_>) -> Option<String> {
-    let from = envelope.from.as_ref()?.first()?;
-    let mailbox = from.mailbox.as_deref().filter(|m| !m.is_empty())?;
-    let host = from.host.as_deref().filter(|h| !h.is_empty())?;
-    if let Some(name) = from.name.as_deref().map(header::decode)
-        && !name.trim().is_empty()
-    {
-        return Some(name);
-    }
-
-    Some(format!(
-        "{}@{}",
-        String::from_utf8_lossy(mailbox),
-        String::from_utf8_lossy(host)
-    ))
+    let (email, name) = parts(envelope.from.as_ref()?.first()?)?;
+    Some(name.unwrap_or(email))
 }
 
 /// The first `From` address as `one` shows it, else the header as sent.
@@ -222,19 +210,12 @@ fn shown<'a>(addresses: impl Iterator<Item = &'a Address<'a>>) -> String {
     addresses.filter_map(one).collect::<Vec<_>>().join(", ")
 }
 
-/// `Name <address>`, or the address alone; `None` for a group's start or
-/// end, which has no host.
+/// `Name <address>`, or the address alone when the name is none or only
+/// repeats it.
 fn one(address: &Address<'_>) -> Option<String> {
-    let mailbox = address.mailbox.as_deref().filter(|m| !m.is_empty())?;
-    let host = address.host.as_deref().filter(|h| !h.is_empty())?;
-    let email = format!(
-        "{}@{}",
-        String::from_utf8_lossy(mailbox),
-        String::from_utf8_lossy(host)
-    );
-    let name = address.name.as_deref().map(header::decode);
+    let (email, name) = parts(address)?;
     Some(
-        match name.filter(|n| !n.trim().is_empty() && !n.eq_ignore_ascii_case(&email)) {
+        match name.filter(|name| !name.eq_ignore_ascii_case(&email)) {
             Some(name) => format!("{name} <{email}>"),
             None => email,
         },
