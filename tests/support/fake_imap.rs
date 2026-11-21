@@ -693,6 +693,13 @@ fn answer(
         let status = moves::transfer(server, command, &mut inbox, opened, view);
         server.enqueue_status(status);
     } else {
+        if matches!(command.body, CommandBody::Store { .. })
+            && let Some(folder) = inbox.folder(&opened.folder)
+        {
+            // A UID command may carry what other clients changed (RFC 3501 7.4.1).
+            announce(server, view, folder);
+        }
+
         respond(server, command, &mut inbox, opened);
     }
 

@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FIRST_UID, FakeImap, FakeMessage, INBOX, Outage},
+    fake_imap::{FIRST_UID, FakeImap, FakeMessage, INBOX, Outage, Stall},
     home::Home,
     picker::{picked, picker},
 };
@@ -211,6 +211,58 @@ fn a_search_match_in_another_folder_is_marked_there() {
     let store = at(&format!("UID STORE {FIRST_UID} {READ}"));
     assert!(at("SELECT \"Work\"") < store, "{commands:#?}");
     assert!(store < at("SELECT \"INBOX\""), "{commands:#?}");
+}
+
+// What the server announces of another Folder while a mark is stored there
+// must not be read against the shown one, selected again after it.
+#[test]
+fn an_expunge_in_another_folder_leaves_the_shown_one_alone() {
+    let server = FakeImap::start(vec![
+        message("Alice", "Oldest", "2024-03-01T09:00:00Z"),
+        message("Bob", "Middle", "2024-03-02T09:00:00Z"),
+        message("Carol", "Unread", "2024-03-03T09:00:00Z").unread(),
+        message("Dave", "Newest", "2024-03-04T09:00:00Z"),
+    ]);
+    // Ahead of INBOX by name, so its marks are stored first.
+    server.add_folder(
+        "Archive",
+        &[],
+        vec![
+            message("Dana", "Budget", "2024-02-01T09:00:00Z").unread(),
+            message("Erin", "Standup", "2024-02-02T09:00:00Z"),
+        ],
+    );
+    server.add_folder("Trash", &["\\Trash"], Vec::new());
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Newest");
+    show(&mut t, "archive", " Archive · ", "Body of Standup");
+    show(&mut t, "inbox", " Inbox · ", "Body of Newest");
+
+    // Both marks wait behind a held Delete, to go out in one pass.
+    server.stall(Stall::Move);
+    t.send(Key::Backspace).unwrap();
+    wait_for(|| server.commands().iter().any(|c| c.starts_with("UID MOVE")));
+    t.wait_until(|s| card(s, "Carol") == Some(false)).unwrap();
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("budget").unwrap();
+    t.wait_until(|s| s.contains("Body of Budget")).unwrap();
+    std::thread::sleep(Duration::from_millis(1500));
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| s.contains("Body of Unread")).unwrap();
+
+    server.clear_commands();
+    server.stall(Stall::Store);
+    wait_for(|| server.commands().iter().any(|c| c.starts_with("UID STORE")));
+    server.empty("Archive");
+    server.release();
+    wait_for(|| server.seen(INBOX, FIRST_UID + 2));
+    std::thread::sleep(Duration::from_millis(300));
+    let screen = t.snapshot_after(|_| true).unwrap();
+    quit(t);
+    assert!(
+        screen.contains("Oldest") && screen.contains("Middle"),
+        "{screen}"
+    );
 }
 
 // A mark made offline waits in the Cache, across a restart, and the resync

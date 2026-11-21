@@ -25,6 +25,8 @@ pub enum Stall {
     Sequence,
     /// After a `UID MOVE` is recorded, before it is made.
     Move,
+    /// After a `UID STORE` is recorded, before it is made.
+    Store,
 }
 
 pub(super) async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
@@ -33,7 +35,7 @@ pub(super) async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
     }
 }
 
-/// Holds a `FETCH` or a `UID MOVE` while a stall covers it.
+/// Holds a `FETCH`, a `UID MOVE` or a `UID STORE` while a stall covers it.
 pub(super) async fn wait_unless_command_stalled(inbox: &Mutex<Inbox>, body: &CommandBody<'static>) {
     match body {
         CommandBody::Fetch {
@@ -42,6 +44,7 @@ pub(super) async fn wait_unless_command_stalled(inbox: &Mutex<Inbox>, body: &Com
             ..
         } => wait_unless_fetch_stalled(inbox, macro_or_item_names, *uid).await,
         CommandBody::Move { .. } => wait_unless_stalled(inbox, Stall::Move).await,
+        CommandBody::Store { .. } => wait_unless_stalled(inbox, Stall::Store).await,
         _ => {}
     }
 }
