@@ -52,6 +52,13 @@ struct Shared {
     unreported_failure: Cell<bool>,
 }
 
+/// The columns `Cache::message` reads, in its order, of a `message` row.
+const MESSAGE_ROW: &str = "uid, body_key, received, received_offset, unread, sender, subject,
+    coalesce(snippet, ''), thread, from_me, answered, from_line, to_line";
+/// The same of a `thread_message` row `t`, which has no UID.
+const THREAD_ROW: &str = "0, t.key, t.received, t.received_offset, t.unread, t.sender,
+    t.subject, t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line";
+
 impl Cache {
     /// The Cache in `dir`, one handle per address of `accounts`, in order.
     pub fn open(dir: &Path, accounts: &[&str]) -> Result<Vec<Self>, Error> {
@@ -111,12 +118,11 @@ impl Cache {
 
         // SQLite reads a negative LIMIT as no limit.
         let limit = limit.map_or(-1, |n| i64::try_from(n).unwrap_or(i64::MAX));
-        let mut statement = connection.prepare_cached(
-            "SELECT uid, body_key, received, received_offset, unread, sender, subject,
-                    coalesce(snippet, ''), thread, from_me, answered, from_line, to_line
+        let mut statement = connection.prepare_cached(&format!(
+            "SELECT {MESSAGE_ROW}
              FROM message WHERE account = ?3 AND mailbox = ?1
-             ORDER BY received DESC, uid DESC LIMIT ?2",
-        )?;
+             ORDER BY received DESC, uid DESC LIMIT ?2"
+        ))?;
         let name: Arc<str> = folder.into();
         let messages = statement
             .query_map(params![folder, limit, self.email()], |row| {
@@ -127,16 +133,15 @@ impl Cache {
             })?
             .collect::<Result<_, _>>()?;
         // Only those whose body is cached: that body comes with the Thread alone.
-        let mut statement = connection.prepare_cached(
-            "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
-                    t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line
+        let mut statement = connection.prepare_cached(&format!(
+            "SELECT {THREAD_ROW}
              FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
              WHERE t.account = ?2
                AND t.thread IN (SELECT thread FROM message WHERE account = ?2 AND mailbox = ?1)
                AND t.key NOT IN
                    (SELECT body_key FROM message WHERE account = ?2 AND mailbox = ?1)
-             ORDER BY t.received, t.key",
-        )?;
+             ORDER BY t.received, t.key"
+        ))?;
         let elsewhere = statement
             .query_map(params![folder, self.email()], |row| self.message(row))?
             .collect::<Result<_, _>>()?;
@@ -154,11 +159,10 @@ impl Cache {
         folders.retain(|f| !matches!(f.role, Some(Role::Trash | Role::Spam)));
         folders.sort_by_key(|f| Some(&*f.name) != shown);
         let connection = self.connection();
-        let mut statement = connection.prepare_cached(
-            "SELECT uid, body_key, received, received_offset, unread, sender, subject,
-                    coalesce(snippet, ''), thread, from_me, answered, from_line, to_line
-             FROM message WHERE account = ?2 AND mailbox = ?1",
-        )?;
+        let mut statement = connection.prepare_cached(&format!(
+            "SELECT {MESSAGE_ROW}
+             FROM message WHERE account = ?2 AND mailbox = ?1"
+        ))?;
         let (mut messages, mut keys) = (Vec::new(), HashSet::new());
         for folder in &folders {
             let rows = statement.query_map(params![&*folder.name, self.email()], |row| {
@@ -177,13 +181,12 @@ impl Cache {
 
         messages.sort_unstable_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
         let threads: HashSet<u64> = messages.iter().filter_map(|m| m.thread).collect();
-        let mut statement = connection.prepare_cached(
-            "SELECT 0, t.key, t.received, t.received_offset, t.unread, t.sender, t.subject,
-                    t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line
+        let mut statement = connection.prepare_cached(&format!(
+            "SELECT {THREAD_ROW}
              FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
              WHERE t.account = ?1
-             ORDER BY t.received, t.key",
-        )?;
+             ORDER BY t.received, t.key"
+        ))?;
         let mut elsewhere = Vec::new();
         for row in statement.query_map([self.email()], |row| self.message(row))? {
             let row = row?;
@@ -627,6 +630,7 @@ impl Cache {
         Ok(write(&shared.connection.borrow())?)
     }
 
+    /// A row of `MESSAGE_ROW` or `THREAD_ROW` as a Message.
     fn message(&self, row: &Row<'_>) -> rusqlite::Result<Message> {
         let offset = FixedOffset::east_opt(row.get(3)?).unwrap_or_else(|| Utc.fix());
         let received = DateTime::from_timestamp(row.get(2)?, 0)
