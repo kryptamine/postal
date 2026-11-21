@@ -1,6 +1,7 @@
 -- The chat pane beside a mail, a markdown buffer laid out like a chat:
 -- each message under `## Me` or `## <agent>`, and the user's next one typed
 -- under the `## Me` at its bottom.
+local bar = require("postal.bar")
 local body = require("postal.body")
 local help = require("postal.help")
 local icons = require("postal.icons")
@@ -159,45 +160,15 @@ function Pane:status(summary)
 	vim.cmd.redrawstatus({ bang = true })
 end
 
---- The winbar of the pane on buffer `buf`: as many whole keys, in order,
---- as fit, and the one listing them all at the right.
+--- The winbar of the pane on buffer `buf`, in the window it is drawn in.
 function M.winbar(buf)
 	local self = panes[buf]
 	if not self then
 		return ""
 	end
 
-	local function hint(key)
-		local label = help.label(key.lhs)
-		local text = "%#PostalKey#" .. label:gsub("%%", "%%%%") .. "%#PostalDim# " .. key.short
-		return text, vim.fn.strdisplaywidth(label .. " " .. key.short)
-	end
-
-	local more, wide = hint(self.more)
-	local bar, keys = { "  " }, self.keys
-	local room = vim.api.nvim_win_get_width(0) - wide - 5
-	if self.summary then
-		local glyph, group = icons.get("review")
-		local lead = glyph .. " " .. self.summary
-		table.insert(bar, "%#" .. group .. "#" .. lead:gsub("%%", "%%%%") .. "  ")
-		room = room - vim.fn.strdisplaywidth(lead) - 2
-		keys = self.kind.review
-	end
-
-	local gap = ""
-	for _, key in ipairs(keys) do
-		if key.short and key ~= self.more then
-			local text, width = hint(key)
-			if #gap + width > room then
-				break
-			end
-
-			table.insert(bar, gap .. text)
-			room, gap = room - #gap - width, "  "
-		end
-	end
-
-	return table.concat(bar) .. "%=" .. more .. " "
+	local keys = self.summary and self.kind.review or self.keys
+	return bar.winbar(vim.api.nvim_win_get_width(0), keys, self.more, self.summary)
 end
 
 --- Names agent `who`, on the statusline and over what it says.
@@ -205,19 +176,14 @@ function Pane:title(who)
 	self.agent = who
 end
 
---- The statusline of the pane on buffer `buf`: whom it chats with, and
---- about which mail.
+--- The statusline of the pane on buffer `buf`.
 function M.statusline(buf)
 	local self = panes[buf]
 	if not self or not vim.api.nvim_buf_is_valid(self.mail) then
 		return ""
 	end
 
-	local subject = body.header(self.mail, "Subject") or ""
-	local glyph = icons.get("agent")
-	local who = glyph .. " " .. self.agent
-	subject = subject ~= "" and subject or "(no subject)"
-	return "%#PostalAgent#  " .. who:gsub("%%", "%%%%") .. "%#PostalDim# · " .. subject:gsub("%%", "%%%%")
+	return bar.statusline(self.agent, body.header(self.mail, "Subject"))
 end
 
 --- Shows the `## who` header at `row` in the look of `role`, `me` or
