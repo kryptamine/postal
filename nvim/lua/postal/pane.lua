@@ -68,8 +68,36 @@ function Pane:buffer()
 		vim.keymap.set(key.modes, key.lhs, key.run, { buffer = self.buf, desc = key.desc })
 	end
 
+	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		buffer = self.buf,
+		callback = function()
+			self:placeholder()
+		end,
+	})
+
 	self:notice(self.kind.intro)
 	return self.buf
+end
+
+--- Says how to send over the input while it is empty.
+function Pane:placeholder()
+	local row = self:bottom() + 1
+	local lines = vim.api.nvim_buf_get_lines(self.buf, row, -1, false)
+	if #lines == 0 or vim.trim(table.concat(lines)) ~= "" then
+		if self.hint then
+			vim.api.nvim_buf_del_extmark(self.buf, NS, self.hint)
+			self.hint = nil
+		end
+
+		return
+	end
+
+	local text = { { "Type here, <C-s> to send", "PostalDim" } }
+	self.hint = vim.api.nvim_buf_set_extmark(self.buf, NS, row, 0, {
+		id = self.hint,
+		virt_text = text,
+		virt_text_pos = "overlay",
+	})
 end
 
 --- Opens the pane's window right of the mail's, unless one shows it; with
@@ -165,6 +193,7 @@ function Pane:write(edit)
 	end
 
 	edit(self:buffer())
+	self:placeholder()
 	for _, win in ipairs(vim.fn.win_findbuf(self.buf)) do
 		if win ~= vim.api.nvim_get_current_win() then
 			vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(self.buf), 0 })
