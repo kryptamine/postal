@@ -7,6 +7,11 @@ addresses your accounts have mail from or wrote to, best first, as
 it, Neovim's own menu opens as you type (`'autocomplete'`, Neovim 0.12),
 and `<C-x><C-o>` asks for it on an older one.
 
+A Draft's headers are `To:`, `Cc:`, `Subject:` and `Attach:`, one file
+per `Attach:` line and as many lines as files:
+`Attach: ~/Documents/report.pdf`. A relative path is under your home
+directory, and the plugin completes it as you type.
+
 Needs Neovim 0.10 or newer, and `postal` on `PATH`.
 
 With [lazy.nvim](https://github.com/folke/lazy.nvim):

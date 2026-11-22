@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod attach;
 pub mod awaited_reply;
 pub mod draft;
 pub mod draft_file;

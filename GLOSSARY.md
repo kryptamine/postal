@@ -133,7 +133,7 @@ Writing a Message in answer to one with `r`, from the Account it reached, to its
 _Avoid_: respond, answer
 
 **Draft**:
-A Message being written, kept on this machine until it is sent or discarded (ADR 0013); `d` in its preview keeps it for later.
+A Message being written, kept on this machine until it is sent or discarded (ADR 0013); `d` in its preview keeps it for later. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox.
 _Avoid_: unsent mail, composition
 
 **Local Drafts**:

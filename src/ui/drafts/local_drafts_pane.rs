@@ -17,9 +17,12 @@ const KIND: u16 = 8;
 const TO_SHARE: u16 = 40;
 /// The sender's share, with several Accounts, in percent.
 const FROM_SHARE: u16 = 30;
+/// The width of the count of files attached, at the right.
+const ATTACHED_WIDTH: u16 = 5;
 
 /// Local Drafts over the whole body: a row per Draft or Outbox Message,
-/// its kind, its sender with several Accounts, its recipients and its subject.
+/// its kind, its sender with several Accounts, its recipients, its subject
+/// and how many files it attaches.
 pub struct LocalDraftsPane<'a> {
     pub theme: &'a Theme,
     pub local: &'a LocalDrafts,
@@ -81,7 +84,14 @@ impl Widget for LocalDraftsPane<'_> {
             let to_x = from_x.saturating_add(from_width).min(list.right());
             truncate::draw(buf, cell(to_x, to_width.saturating_sub(1)), &row.to, style);
             let subject_x = to_x.saturating_add(to_width).min(list.right());
-            truncate::draw(buf, cell(subject_x, list.right()), &row.subject, style);
+            let attached_x = list.right().saturating_sub(ATTACHED_WIDTH).max(subject_x);
+            let subject_width = attached_x.saturating_sub(subject_x).saturating_sub(1);
+            truncate::draw(buf, cell(subject_x, subject_width), &row.subject, style);
+            if row.attached > 0 {
+                let count = format!("{} {}", self.theme.icons.attachment(), row.attached);
+                let muted = self.theme.muted.patch(style);
+                truncate::draw(buf, cell(attached_x, ATTACHED_WIDTH), &count, muted);
+            }
         }
     }
 }

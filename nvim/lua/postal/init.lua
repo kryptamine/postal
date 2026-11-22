@@ -1,7 +1,8 @@
--- Completes the recipients of a Postal Draft from its Correspondents as
--- they are typed (blink.cmp, else Neovim's own menu or `<C-x><C-o>`), and
+-- Completes a Postal Draft's recipients from its Correspondents and its
+-- `Attach:` paths as they are typed (blink.cmp, else Neovim's own menu), and
 -- chats with an ACP agent about a Draft or a Message through `:PostalAgent`.
 local agent = require("postal.agent")
+local attach = require("postal.attach")
 local colors = require("postal.colors")
 local icons = require("postal.icons")
 local recipients = require("postal.recipients")
@@ -124,12 +125,22 @@ function M.setup(opts)
 	})
 end
 
---- `:h complete-functions` over the recipient under the cursor.
+-- What the last `findstart` found under the cursor: "attach" or "recipient".
+local completing
+
+--- `:h complete-functions` over the recipient or the `Attach:` path under
+--- the cursor.
 function M.omnifunc(findstart, base)
 	if findstart == 1 then
 		local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+		local start = attach.start(0, row, col)
+		completing = start and "attach" or "recipient"
 		-- -3 leaves completion without an error message.
-		return recipients.start(0, row, col) or -3
+		return start or recipients.start(0, row, col) or -3
+	end
+
+	if completing == "attach" then
+		return { words = attach.list(base), refresh = "always" }
 	end
 
 	local items = {}

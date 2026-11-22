@@ -1,5 +1,5 @@
--- Run by `make smoke` and tests/nvim.rs: in a bare nvim, a Draft's `Cc:`
--- completes a recipient from Postal's Correspondents, and its body nothing;
+-- Run by `make smoke` and tests/nvim.rs: in a bare nvim, a Draft completes
+-- `Cc:` from Postal's Correspondents, `Attach:` under $HOME, its body nothing;
 -- `:PostalAgent` chats with a stub ACP agent about a Draft and a Message.
 local function fail(msg)
 	io.stderr:write("smoke: " .. msg .. "\n")
@@ -74,6 +74,22 @@ end
 if at(5, #"pet") ~= -3 then
 	fail("the body offered recipients")
 end
+
+-- `Attach:` completes as Postal reads it: a relative path is under $HOME
+local real_home = vim.env.HOME
+vim.env.HOME = vim.fn.tempname()
+vim.fn.mkdir(vim.env.HOME .. "/Documents", "p")
+vim.fn.writefile({}, vim.env.HOME .. "/Documents/report.pdf")
+for typed, want_path in pairs({ ["Documents/rep"] = "Documents/report.pdf", ["~/Doc"] = "~/Documents/" }) do
+	vim.api.nvim_buf_set_lines(0, 3, 3, false, { "Attach: " .. typed })
+	local path_start, paths = at(4, #"Attach: " + #typed)
+	vim.api.nvim_buf_set_lines(0, 3, 4, false, {})
+	if path_start ~= #"Attach: " or not vim.deep_equal(paths, { want_path }) then
+		fail("`Attach: " .. typed .. "` offered " .. vim.inspect(paths) .. " from " .. path_start)
+	end
+end
+
+vim.env.HOME = real_home
 
 local reply = drafts .. "/2.eml"
 vim.fn.writefile({ "To: bob@example.com", "Subject: Re: Hi", "", "hi bob", "", "> Shall we meet?" }, reply)

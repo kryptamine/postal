@@ -78,6 +78,10 @@ impl DraftPane<'_> {
         }
 
         lines.push(field("Subject ", draft.subject.clone()));
+        for attach in &draft.attached {
+            lines.push(field("Attach  ", attach.written.clone()));
+        }
+
         lines.push(Line::default());
         lines.extend(draft.body.lines().map(Line::raw));
         lines

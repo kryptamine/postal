@@ -9,6 +9,8 @@ pub struct LocalDraft {
     pub queued: bool,
     pub to: String,
     pub subject: String,
+    /// Its `Attach:` lines naming a file.
+    pub attached: usize,
     /// The address of the Account it goes out from, as its notes name it.
     pub account: Option<String>,
 }
@@ -21,6 +23,10 @@ impl LocalDraft {
             queued,
             to: draft::header(text, "To").unwrap_or_default(),
             subject: draft::header(text, "Subject").unwrap_or_default(),
+            attached: draft::headers(text, "Attach")
+                .iter()
+                .filter(|file| !file.is_empty())
+                .count(),
         }
     }
 }

@@ -1,5 +1,7 @@
 -- The recipients of a Postal Draft: where one starts under the cursor, and
 -- the Correspondents `postal correspondent list` offers for it.
+local header = require("postal.header")
+
 local M = {}
 
 --- The command Postal runs as; `setup` may point it at a build.
@@ -13,25 +15,14 @@ local asking = {}
 --- the `To` or `Cc` header of buffer `buf` or a line folded into it; nil
 --- anywhere else. `row` is 1-based and `col` a 0-based byte column.
 function M.start(buf, row, col)
-	local lines = vim.api.nvim_buf_get_lines(buf, 0, row, false)
-	for n = 1, row do
-		if lines[n] == "" then
-			return nil
-		end
-	end
-
-	local header = row
-	while header >= 1 and lines[header]:match("^[ \t]") do
-		header = header - 1
-	end
-
-	local name = header >= 1 and lines[header]:match("^([^:%s]+):")
-	if not name or not vim.tbl_contains({ "to", "cc" }, name:lower()) then
+	local name, at = header.at(buf, row)
+	if not vim.tbl_contains({ "to", "cc" }, name) then
 		return nil
 	end
 
-	local before = lines[row]:sub(1, col)
-	local start = header == row and #name + 1 or 0
+	local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1]
+	local before = line:sub(1, col)
+	local start = at == row and #name + 1 or 0
 	-- A comma inside quotes or angle brackets is part of one recipient.
 	local quoted, angled = false, false
 	for n = start + 1, #before do

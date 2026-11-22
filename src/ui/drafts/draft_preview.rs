@@ -62,7 +62,7 @@ impl DraftPreview {
     pub fn new(path: PathBuf, text: String, notes: DraftNotes) -> Self {
         Self {
             account: notes.account,
-            draft: Draft::parse(&text),
+            draft: Draft::parse(&text).and_then(|draft| draft.attachable().map(|()| draft)),
             path,
             text,
             failure: None,
