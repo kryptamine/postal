@@ -424,11 +424,19 @@ fn a_sent_reply_joins_the_stack_it_answers() {
     send_and_wait(&mut t, &[Key::Char('r')]);
     // The fake SMTP server files nothing: the copy Gmail keeps goes in ahead.
     imap.deliver_to("[Gmail]/Sent Mail", mine());
+    imap.clear_commands();
     t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("My answer") && !s.contains(" Draft "))
         .unwrap();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
+
+    // Read before the server has it, the Thread would drop `\Answered`.
+    let commands = imap.commands();
+    let at = |wanted: &dyn Fn(&str) -> bool| commands.iter().position(|c| wanted(c));
+    let store = at(&|c| c == format!("UID STORE {FIRST_UID} +FLAGS.SILENT (\\Answered)")).unwrap();
+    let search = at(&|c| c.starts_with("UID SEARCH X-GM-THRID")).unwrap();
+    assert!(store < search, "{commands:#?}");
 }
 
 // `\Answered` tells other clients the Message was answered: a Reply still

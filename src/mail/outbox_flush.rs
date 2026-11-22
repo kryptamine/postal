@@ -129,9 +129,8 @@ async fn submit(
             match smtp::send(config, sender.sign_in, &envelope, &message).await {
                 Ok(()) => {
                     let written = correspondence(&draft, &message);
-                    let thread = notes.answering.as_ref().and_then(|a| a.thread);
                     return accept(cache, queued, notes, written.as_ref(), send)
-                        .map(|()| Submitted::Accepted(thread));
+                        .map(Submitted::Accepted);
                 }
                 Err(error) if error.refused() => error.to_string(),
                 Err(error) => {
@@ -180,14 +179,15 @@ fn correspondence(draft: &Draft, message: &[u8]) -> Option<Correspondence> {
 }
 
 /// What follows SMTP's acceptance: the sent mark, Correspondents learnt
-/// from `written`, then `\Answered` queued on the Message a Reply answers.
+/// from `written`, then `\Answered` queued on the Message a Reply answers;
+/// the Gmail Thread it answers.
 fn accept(
     cache: &Cache,
     queued: &mut Queued,
     notes: Notes,
     written: Option<&Correspondence>,
     send: &impl Fn(Update),
-) -> Result<(), Error> {
+) -> Result<Option<ThreadId>, Error> {
     tracing::info!("SMTP accepted {}", queued.path.display());
     if let Err(error) = queued.mark_sent() {
         // Unmarked, the Message is sent again should its removal fail too.
@@ -198,13 +198,15 @@ fn accept(
         cache.sent(written)?;
     }
 
-    let original = notes.answering.and_then(|answering| answering.original);
+    let (original, thread) = notes.answering.map_or((None, None), |answering| {
+        (answering.original, answering.thread)
+    });
     if let Some(MessageRef { folder, uid }) = original {
         cache.answer(&folder, uid)?;
     }
 
     send(Update::Sent);
-    Ok(())
+    Ok(thread)
 }
 
 /// Saves the copy of a Message SMTP accepted to the Folder with the Sent

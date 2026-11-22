@@ -119,8 +119,8 @@ async fn send_changes(
 }
 
 /// Sends the Outbox and returns what the server pushed meanwhile. After a
-/// Message SMTP accepted, reads the Thread it answers again, then asks for
-/// its `\Answered` and for a resync of the shown Folder, which shows it in Sent.
+/// Message SMTP accepted: its `\Answered`, then the Thread it answers read
+/// again, then a resync of the shown Folder, which shows it in Sent.
 async fn send_outbox(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -129,16 +129,18 @@ async fn send_outbox(
     send: &impl Fn(Update),
 ) -> Result<Vec<Pushed>, Error> {
     let accepted = outbox_flush::flush(server, cache, sender, send).await?;
-    if !accepted.is_empty() {
-        asked.changes = true;
-        asked.switched = true;
+    if accepted.is_empty() {
+        return Ok(server.pushed());
     }
 
+    // Before the Thread is read, or its rows lose the `\Answered` just set.
+    send_changes(server, cache, send).await?;
     // Gmail files the Reply in All Mail itself; the stack shows it from there.
     for id in accepted.into_iter().flatten() {
         thread_fetch::fetch(server, cache, id, send).await?;
     }
 
+    asked.switched = true;
     Ok(server.pushed())
 }
 
