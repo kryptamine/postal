@@ -20,13 +20,8 @@ const DATE_GAP: u16 = 2;
 /// Each header row of `message`: its label, its value and the value's style.
 pub fn fields<'a>(theme: &Theme, message: &'a Message) -> [(&'static str, &'a str, Style); 3] {
     let [from, to, subject] = LABELS;
-    let sender = if message.from_me {
-        theme.muted
-    } else {
-        theme.sender
-    };
     [
-        (from, &message.from, sender),
+        (from, &message.from, theme.sender_of(message)),
         (to, &message.to, theme.sender),
         (subject, &message.subject, theme.subject),
     ]

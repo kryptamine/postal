@@ -1,8 +1,8 @@
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::{
-    render::icons::Icons, render::mail_colours::MailColours, render::mail_look::MailLook,
-    render::marks::Marks, render::paint::Paint, render::rgb::Rgb,
+    domain::message::Message, render::icons::Icons, render::mail_colours::MailColours,
+    render::mail_look::MailLook, render::marks::Marks, render::paint::Paint, render::rgb::Rgb,
 };
 
 /// The terminal's own palette: named ANSI colours and modifiers, no explicit
@@ -90,6 +90,15 @@ impl Theme {
         MailLook {
             colours: self.mail,
             icons: self.icons,
+        }
+    }
+
+    /// The style of the sender of `message`: muted for the Account's own.
+    pub const fn sender_of(&self, message: &Message) -> Style {
+        if message.from_me {
+            self.muted
+        } else {
+            self.sender
         }
     }
 

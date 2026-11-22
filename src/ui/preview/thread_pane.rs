@@ -181,12 +181,7 @@ impl ThreadPane<'_> {
         );
 
         let sender = thread::sender(message);
-        let style = if message.from_me {
-            self.theme.muted
-        } else {
-            self.theme.sender
-        };
-
+        let style = self.theme.sender_of(message);
         let style = if message.unread {
             style.patch(self.theme.unread)
         } else {
