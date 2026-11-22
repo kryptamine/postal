@@ -133,7 +133,7 @@ Writing a Message in answer to one with `r`, from the Account it reached, to its
 _Avoid_: respond, answer
 
 **Signature**:
-The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `signature` in `config.toml`, or the text file `signature-file` names, `~` the home directory and a relative path beside `config.toml`; at the top level for the Account named there, in an `[[account]]` for that one. Compose and Reply write it into the Draft, where it is the user's to change; `Enter` on an Account in Settings opens `$EDITOR` on it. In the Preview and Reading, the Signature of a plain-text Message shows muted, down to its Quote; an HTML one shows as the mail lays it out.
+The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `signature` in `config.toml`, or the text file `signature-file` names, `~` the home directory and a relative path beside `config.toml`; at the top level for the Account named there, in an `[[account]]` for that one. Compose and Reply write it into the Draft, where it is the user's to change; `Enter` on its row under the Account in Settings opens `$EDITOR` on it. In the Preview and Reading, the Signature of a plain-text Message shows muted, down to its Quote; an HTML one shows as the mail lays it out.
 _Avoid_: footer, sign-off
 
 **Draft**:
@@ -157,7 +157,7 @@ The screen that signs an Account in: on a first run, and after `postal login` or
 _Avoid_: setup wizard, registration
 
 **Settings**:
-A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once: the Accounts, each with its Provider and the first line of its Signature, then Add account, and the General settings, Icons, Name and Secrets. `Enter` on an Account opens `$EDITOR` on its Signature; `d` unlinks it after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
+A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once: the Accounts, each with its Provider and under it its Signature by its first line, then Add account, and the General settings, Icons, Name and Secrets. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
 _Avoid_: preferences, options, config screen
 
 **Unlink**:

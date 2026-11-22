@@ -21,8 +21,6 @@ const CHROME: u16 = 4;
 const FIXED_ROWS: u16 = 5;
 /// Columns between the border and a row's text, each side.
 const PADDING: u16 = 1;
-/// Columns between an Account's address and its signature.
-const GAP: u16 = 2;
 /// A row's text under its heading.
 const INDENT: u16 = 2;
 
@@ -93,8 +91,7 @@ impl Widget for SettingsPopup<'_> {
 }
 
 impl SettingsPopup<'_> {
-    /// One row in `area`: its label, then its value right-aligned; an
-    /// Account's signature, its first line, muted beside its address.
+    /// One row in `area`: its label, then its value right-aligned.
     fn row(&self, buf: &mut Buffer, area: Rect, row: Row, style: Style) {
         let settings = self.settings;
         let (label, value, muted) = match row {
@@ -102,6 +99,10 @@ impl SettingsPopup<'_> {
                 let (email, provider) = &settings.accounts[account];
                 (email.as_str(), provider.service(), false)
             }
+            Row::Signature(account) => match settings.signatures.get(account) {
+                Some(Some(first)) => ("  Signature", first.as_str(), false),
+                _ => ("  Signature", "none", true),
+            },
             Row::Add => ("+ Add account", "", false),
             Row::Icons => ("Icons", settings.icons.key(), false),
             Row::Name => match (&settings.editing, &settings.name) {
@@ -127,20 +128,6 @@ impl SettingsPopup<'_> {
         };
 
         truncate::draw(buf, label_area, label, style);
-        if let Row::Account(account) = row
-            && let Some(Some(signature)) = settings.signatures.get(account)
-        {
-            let taken = u16::try_from(label.width()).unwrap_or(u16::MAX);
-            let taken = taken.saturating_add(GAP).min(label_area.width);
-            let beside = Rect {
-                x: label_area.x + taken,
-                width: label_area.width - taken,
-                ..label_area
-            };
-
-            truncate::draw(buf, beside, signature, style.patch(self.theme.muted));
-        }
-
         let value_area = Rect {
             x: area.right() - width,
             width,
@@ -155,8 +142,11 @@ impl SettingsPopup<'_> {
         self.settings.editing.as_ref()?;
         let inner = inner(popup(area, self.settings));
         let accounts = u16::try_from(self.settings.accounts.len()).unwrap_or(u16::MAX);
-        // Below the Accounts heading and rows, Add, a blank row, General and Icons.
-        let y = inner.y.saturating_add(accounts.saturating_add(5));
+        // Below the Accounts heading, two rows each, Add, a blank row,
+        // General and Icons.
+        let y = inner
+            .y
+            .saturating_add(accounts.saturating_mul(2).saturating_add(5));
         (y < inner.bottom()).then(|| Position::new(inner.right(), y))
     }
 }

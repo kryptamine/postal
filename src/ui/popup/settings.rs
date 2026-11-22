@@ -18,6 +18,8 @@ use crate::{
 pub enum Row {
     /// The Account at this place in `config.toml`.
     Account(usize),
+    /// The signature of the Account at this place.
+    Signature(usize),
     Add,
     Icons,
     Name,
@@ -83,12 +85,10 @@ impl Settings {
     }
 
     pub fn rows(&self) -> impl Iterator<Item = Row> {
-        (0..self.accounts.len()).map(Row::Account).chain([
-            Row::Add,
-            Row::Icons,
-            Row::Name,
-            Row::Secrets,
-        ])
+        let accounts = 0..self.accounts.len();
+        let accounts =
+            accounts.flat_map(|account| [Row::Account(account), Row::Signature(account)]);
+        accounts.chain([Row::Add, Row::Icons, Row::Name, Row::Secrets])
     }
 
     pub fn selected(&self) -> Row {
@@ -152,7 +152,8 @@ impl Settings {
 
     fn act(&mut self) -> Step {
         match self.selected() {
-            Row::Account(account) => {
+            Row::Account(_) => {}
+            Row::Signature(account) => {
                 if let Some((email, _)) = self.accounts.get(account) {
                     self.failure = None;
                     return Step::Signature(email.clone());

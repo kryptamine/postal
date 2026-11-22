@@ -91,7 +91,8 @@ fn icons_cycle_and_redraw_at_once() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, false);
     settings(&mut t);
-    // The Account, Add account, then Icons.
+    // The Account, its Signature, Add account, then Icons.
+    t.send(Key::Down).unwrap();
     t.send(Key::Down).unwrap();
     t.send(Key::Down).unwrap();
     t.send(Key::Enter).unwrap();
@@ -115,7 +116,7 @@ fn the_name_is_typed_in_place() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, false);
     settings(&mut t);
-    for _ in 0..3 {
+    for _ in 0..4 {
         t.send(Key::Char('j')).unwrap();
     }
 
@@ -142,6 +143,7 @@ fn a_change_keeps_the_comments() {
     settings(&mut t);
     t.send(Key::Down).unwrap();
     t.send(Key::Down).unwrap();
+    t.send(Key::Down).unwrap();
     t.send(Key::Enter).unwrap();
     wait_for(|| config(&home).contains("icons = \"nerd\""));
     assert!(
@@ -164,7 +166,7 @@ fn a_refused_store_switch_changes_nothing() {
     let before = config(&home);
     let mut t = postal(&home, true);
     settings(&mut t);
-    for _ in 0..4 {
+    for _ in 0..5 {
         t.send(Key::Char('j')).unwrap();
     }
 
@@ -183,6 +185,7 @@ fn add_account_opens_the_onboarding() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, false);
     settings(&mut t);
+    t.send(Key::Char('j')).unwrap();
     t.send(Key::Char('j')).unwrap();
     t.send(Key::Enter).unwrap();
     t.wait_until(|s| s.contains("iCloud") && !s.contains("Weekly notes"))
@@ -224,6 +227,7 @@ fn unlinking_an_account_forgets_it() {
     let mut t = postal(&home, false);
     t.wait_until(|s| s.contains("Bravo notes")).unwrap();
     settings(&mut t);
+    t.send(Key::Char('j')).unwrap();
     t.send(Key::Char('j')).unwrap();
     t.send(Key::Char('d')).unwrap();
     t.wait_until(|s| s.contains(&format!("Unlink {OTHER}")))

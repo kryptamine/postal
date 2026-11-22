@@ -34,7 +34,7 @@ pub const HELP: &[Binding] = &[
         signed_out: false,
         keys: &[Key::Enter],
         aliases: &[],
-        description: "change the setting, add an Account, or edit its signature",
+        description: "change the setting, edit a Signature, or add an Account",
         hint: Some(Hint {
             keys: "Enter",
             description: "change",

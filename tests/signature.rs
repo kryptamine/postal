@@ -295,7 +295,11 @@ fn each_account_has_its_own_signature() {
     t.send(Key::Char(',')).unwrap();
     t.wait_until(|s| s.contains("Secrets") && s.contains("First"))
         .unwrap();
-    t.send(Key::Char('j')).unwrap();
+    // Past the first Account and its Signature, and the second Account.
+    for _ in 0..3 {
+        t.send(Key::Char('j')).unwrap();
+    }
+
     t.send(Key::Enter).unwrap();
     t.wait_until(|s| s.contains("Zoë Example")).unwrap();
     let config = fs::read_to_string(home.config_path()).unwrap();
@@ -403,12 +407,14 @@ fn a_signature_ends_where_the_quote_starts() {
     assert!(!dimmed(&screen, "wrote:"), "{screen}");
 }
 
-/// Settings, once the Message List shows; the selection is on the Account.
+/// Settings, once the Message List shows, with the selection moved from
+/// the Account to its Signature.
 fn settings(t: &mut Terminal) {
     t.wait_until(listed).unwrap();
     t.send(Key::Char(',')).unwrap();
-    t.wait_until(|s| s.contains("Settings") && s.contains("Secrets"))
+    t.wait_until(|s| s.contains("Settings") && s.contains("Signature"))
         .unwrap();
+    t.send(Key::Char('j')).unwrap();
 }
 
 /// The signature `config.toml` gives the Account as text.
@@ -421,14 +427,14 @@ fn configured(home: &Home) -> Option<String> {
 // Settings open on the Accounts read at start: the next Compose signs
 // with what was typed there.
 #[test]
-fn enter_on_an_account_in_settings_edits_its_signature() {
+fn enter_on_a_signature_in_settings_edits_it() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp, "");
     let editor = Editor::new();
     let mut t = postal(&home, &editor.command());
     settings(&mut t);
     t.send(Key::Enter).unwrap();
-    // The Account's row shows how it signs now.
+    // Its row shows how the Account signs now.
     t.wait_until(|s| s.contains("Zoë Example")).unwrap();
     assert_eq!(configured(&home).as_deref(), Some("Zoë Example\nPostal"));
     assert_eq!(editor.opened(), "");
