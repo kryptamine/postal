@@ -102,6 +102,13 @@ void snap_box(const element::ptr& el, uint32_t fill)
     one_cell_thick(b, tag_is(el, "hr"));
     css.set_borders(b);
 
+    // A block set as wide as its container spills by its borders: 2 px in
+    // a browser, two columns here, where the right one left the pane.
+    css_length w = css.get_width();
+    bool full = !w.is_predefined() && w.units() == css_units_percentage && w.val() >= 100;
+    bool block = css.get_display() == display_block && css.get_float() == float_none && !tag_is(el, "img");
+    if(full && block && (shown(b.left) || shown(b.right))) css.set_width(css_length::predef_value(sizing_auto));
+
     // A share of the page's height has no base: a mail has no page to
     // fill, and `height: 100%` took the 1000-row viewport instead.
     css_length h = css.get_height();

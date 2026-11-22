@@ -83,6 +83,8 @@ class grid_container : public document_container, public Grid
     ImageLabels images;
     // A glyph fell past the last column, where the grid has no cell.
     bool lost_text = false;
+    // A side of a box was past the pane, where its words were not.
+    bool lost_border = false;
     // Long words are parsed in pieces a line may break between.
     bool break_words;
     // The size the mail's body is set in (`body_size`).
@@ -107,6 +109,7 @@ class grid_container : public document_container, public Grid
         frames.clear();
         clips.clear();
         lost_text = false;
+        lost_border = false;
     }
 
     bool visible(int row, int col, const position* extra = nullptr) const
@@ -333,6 +336,7 @@ class grid_container : public document_container, public Grid
             clips = f.clips;
             auto [r0, r1, c0, c1] = f.box;
             bool top = on(f.b.top), bottom = on(f.b.bottom), left = on(f.b.left), right = on(f.b.right);
+            lost_border = lost_border || (left && c0 < 0) || (right && c1 >= cols);
             bool page = top && bottom && left && right && f.box.holds(mail);
             uint32_t flags = page ? CG_BORDER | CG_PAGE_BOX : CG_BORDER;
             int tr = r0, br = r1;
@@ -522,7 +526,7 @@ extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
     try
     {
         cg_grid* grid = rendered(html, len, cols, false);
-        if(!grid || !grid->container.lost_text) return grid;
+        if(!grid || !(grid->container.lost_text || grid->container.lost_border)) return grid;
         delete grid;
         return rendered(html, len, cols, true);
     } catch(...)

@@ -79,6 +79,21 @@ fn a_section_with_a_border_of_its_own_gets_no_second_frame() {
     assert_eq!(frames(&screen), 1, "{}", screen.text());
 }
 
+// A block as wide as its container spills by its borders, and a table of
+// 598 px by a column: the right side of each was past the pane.
+#[test]
+fn a_box_as_wide_as_the_pane_keeps_its_right_side() {
+    for boxed in [
+        "<div style=\"border:1px solid #888;width:100%\"><p>Inside</p></div>",
+        "<table width=\"598\" style=\"border:1px solid #888\"><tr><td>Inside</td></tr></table>",
+    ] {
+        let screen = preview(html(&format!("<p>Above</p>{boxed}")), &DEFAULT, "Inside");
+        let rows = pane(&screen);
+        let corners = |c: char| rows.iter().filter(|r| r.contains(c)).count();
+        assert_eq!((corners('┐'), corners('┘')), (1, 1), "{}", rows.join("\n"));
+    }
+}
+
 // A border round the whole mail only boxed the page, a frame round every
 // line of it; a band against it still takes it as its shape.
 #[test]
