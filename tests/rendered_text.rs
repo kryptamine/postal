@@ -181,6 +181,36 @@ fn a_floated_cell_stays_a_cell() {
     assert!(screen.contains("Distance 7 km"), "{}", screen.text());
 }
 
+// The space between two floated tables was drawn over the first letter
+// of the first: `Crypto is high risk` read `rypto`.
+#[test]
+fn a_space_between_two_floats_hides_no_letter() {
+    let float = |side: &str, width: u16, text: &str| {
+        format!(
+            "<table align=\"{side}\" width=\"100%\" style=\"float:{side};width:100%;\
+             max-width:{width}px\"><tr><td><p style=\"margin:0\">{text}</p></td></tr></table>"
+        )
+    };
+
+    let body = html(&format!(
+        "<table width=\"600\"><tr><td style=\"padding:8px 35px\">\n{}\n{}\n</td></tr></table>",
+        float(
+            "left",
+            341,
+            "Crypto is high risk. Its value can go up or down and you could lose some or \
+             all of the money you put in."
+        ),
+        float("right", 144, "Amsterdam")
+    ));
+    let screen = preview(body, &DEFAULT, "Amsterdam");
+    let rows = pane(&screen);
+    assert!(
+        rows.iter().any(|r| r.contains("Crypto is high risk")),
+        "{}",
+        rows.join("\n")
+    );
+}
+
 // A line is one row: `line-height: 1.5 !important` beat the layout's own
 // rule and put a blank row between the lines of a title.
 #[test]

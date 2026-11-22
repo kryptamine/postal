@@ -170,7 +170,10 @@ class grid_container : public document_container, public Grid
 
             cg_cell* c = at(row, col);
             if(!c && col >= cols && cp != ' ' && cp != 0xA0) lost_text = true;
-            if(c && visible(row, col, clip))
+            bool blank = cp == ' ' || cp == 0xA0 || cp == 0x2007;
+            // A space between two floats is laid over the first one's words.
+            bool over_word = blank && c && (c->flags & CG_TEXT) && !is(*c, " ");
+            if(c && visible(row, col, clip) && !over_word)
             {
                 if(cp == 0xA0 || cp == 0x2007) set_glyph(*c, " ", 1);
                 else set_glyph(*c, start, size_t(s - start));
