@@ -53,7 +53,8 @@ prefixes are how Gmail, Apple Mail and Thunderbird's Gloda search mail.
   is how an uppercase letter still makes the Query case-sensitive.
 - **Showing.** The matched Threads are rows as in ADR 0022, their cards
   read for the window; highlights are computed for the visible cards.
-  Only the candidates' text is held, for nucleo.
+  Only the candidates' text is held, for nucleo. Reading the window again
+  allocates nothing once its buffers have grown, as ADR 0001 asks.
 - **Updates.** An `Update::Inbox` while a Search is open runs it again.
 
 What is lost against ADR 0007: a fuzzy match across a word's letters

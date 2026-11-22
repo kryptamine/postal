@@ -122,7 +122,7 @@ impl InboxView {
     pub fn fill(&mut self, caches: &PerAccount<Cache>, screen: usize) -> Result<(), cache::Error> {
         self.screen = screen;
         if let Some(search) = &mut self.search {
-            return search.fill(caches, &self.folder, self.selected, screen);
+            return search.fill(caches, self.selected, screen);
         }
 
         match &mut self.list {

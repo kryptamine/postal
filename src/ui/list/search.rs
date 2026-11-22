@@ -6,7 +6,7 @@ use nucleo_matcher::{
 };
 
 use crate::{
-    cache::{self, Cache},
+    cache::{self, Cache, Scope},
     domain::listing::Listing,
     domain::message::Message,
     domain::per_account::PerAccount,
@@ -46,6 +46,8 @@ pub struct Search {
     listing: Listing,
     /// The window's Threads, kept for its buffer.
     wanted: Vec<(Key, i64)>,
+    /// The Folders searched, and the window's buffers.
+    scope: Scope,
     /// The Thread selected at the last `/`.
     pub before: Option<Key>,
     /// Reused for each card's highlight, so drawing does not allocate.
@@ -69,6 +71,7 @@ impl Search {
             window: 0..0,
             listing: Listing::empty(),
             wanted: Vec::new(),
+            scope: Scope::empty(),
             before: None,
             card: String::new(),
             graphemes: Vec::new(),
@@ -106,7 +109,8 @@ impl Search {
     /// Asks the Cache for the Query's candidates and ranks them; the next
     /// `fill` reads the window anew.
     pub fn run(&mut self, caches: &PerAccount<Cache>, shown: &Shown) -> Result<(), cache::Error> {
-        let found = cache::candidates(caches, shown, &self.query, LIMIT)?;
+        self.scope.reload(caches, shown)?;
+        let found = cache::candidates(caches, &self.scope, &self.query, LIMIT)?;
         self.more = found.more;
         self.threads.clear();
         self.haystacks.clear();
@@ -156,11 +160,10 @@ impl Search {
     }
 
     /// Reads the window anew around `selected` unless it holds the rows
-    /// within `screen` of it already; `shown` wins the copies (ADR 0010).
+    /// within `screen` of it already.
     pub fn fill(
         &mut self,
         caches: &PerAccount<Cache>,
-        shown: &Shown,
         selected: usize,
         screen: usize,
     ) -> Result<(), cache::Error> {
@@ -176,9 +179,9 @@ impl Search {
         }
 
         self.window = window;
-        let wanted = &self.wanted;
+        let (wanted, scope) = (&self.wanted, &mut self.scope);
         self.listing
-            .refill(|here, elsewhere| cache::threads(caches, shown, wanted, (here, elsewhere)))
+            .refill(|here, elsewhere| cache::threads(caches, scope, wanted, (here, elsewhere)))
     }
 
     /// The Messages and Thread of the card at `row`, with its matched units:

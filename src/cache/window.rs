@@ -132,7 +132,7 @@ impl Cache {
 }
 
 /// A row of `HERE` or `ELSEWHERE` into `message`, its strings' buffers reused.
-fn read(row: &Row<'_>, message: &mut Message) -> rusqlite::Result<()> {
+pub(super) fn read(row: &Row<'_>, message: &mut Message) -> rusqlite::Result<()> {
     let offset = FixedOffset::east_opt(row.get(3)?).unwrap_or_else(|| Utc.fix());
     message.received = DateTime::from_timestamp(row.get(2)?, 0)
         .unwrap_or_default()

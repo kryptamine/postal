@@ -6,32 +6,51 @@ use std::{
     fmt::Write,
 };
 
-use chrono::{DateTime, FixedOffset, Offset, Utc};
 use rusqlite::{Row, params, params_from_iter, types::Type};
 
-use super::{Cache, Error};
+use super::{
+    Cache, Error,
+    scope::{self, Scope},
+    window,
+};
 use crate::{
     domain::body_key::BodyKey,
-    domain::folder::Role,
-    domain::folder_name::FolderName,
     domain::message::Message,
     domain::per_account::{AccountId, PerAccount},
     domain::pool::Pool,
-    domain::shown::Shown,
     domain::thread::Key,
     domain::thread_id::ThreadId,
 };
 
-/// The columns `message` reads, in its order, of a `message` row, at the
-/// local offset: the cards show local dates.
-const MESSAGE_ROW: &str = "uid, body_key, received,
-    unixepoch(received, 'unixepoch', 'localtime') - received, unread, sender, subject,
-    coalesce(snippet, ''), thread, from_me, answered, from_line, to_line";
+/// The columns `window::read` takes, of a `message` row, at the local
+/// offset: the cards show local dates. Literals, so a window allocates
+/// nothing.
+macro_rules! message_row {
+    () => {
+        "uid, body_key, received,
+         unixepoch(received, 'unixepoch', 'localtime') - received, unread, sender, subject,
+         coalesce(snippet, ''), thread, from_me, answered, from_line, to_line"
+    };
+}
 
-/// `MESSAGE_ROW` of a `thread_message` row `t`, which has no UID.
-const THREAD_ROW: &str = "0, t.key, t.received,
+/// The rows of one Message's Threads, `?1`, and of Gmail Threads, `?3`, as
+/// JSON arrays. Without the index named, the planner scans the Account.
+const HERE: &str = concat!(
+    "SELECT ",
+    message_row!(),
+    ", mailbox FROM message WHERE rowid IN (SELECT value FROM json_each(?1))
+     UNION ALL SELECT ",
+    message_row!(),
+    ", mailbox FROM message INDEXED BY message_by_thread
+     WHERE account = ?2 AND thread IN (SELECT value FROM json_each(?3))"
+);
+
+/// The Messages of the Gmail Threads `?2` whose body is cached, by key.
+const ELSEWHERE: &str = "SELECT 0, t.key, t.received,
     unixepoch(t.received, 'unixepoch', 'localtime') - t.received, t.unread, t.sender,
-    t.subject, t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line";
+    t.subject, t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line
+    FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
+    WHERE t.account = ?1 AND t.thread IN (SELECT value FROM json_each(?2))";
 
 /// What a Query is ranked by: the sender, subject and Snippet and, of a
 /// Message the Account sent, its recipients, a newline apart.
@@ -73,10 +92,10 @@ pub struct Candidates {
 
 /// The newest `limit` Messages of every Folder but Trash and Spam whose
 /// words start with each word of `query`, every Message for no words; of
-/// each, the row of its copy in `shown`, else the first in Folder order.
+/// each, the row of the copy `scope` ranks first.
 pub fn candidates(
     caches: &PerAccount<Cache>,
-    shown: &Shown,
+    scope: &Scope,
     query: &str,
     limit: usize,
 ) -> Result<Candidates, Error> {
@@ -89,7 +108,6 @@ pub fn candidates(
         return Ok(found);
     };
 
-    let accounts = searched(caches, |account| shown.of(account))?;
     let terms = terms(query);
     let sql = if terms.is_empty() {
         CANDIDATES
@@ -112,15 +130,17 @@ pub fn candidates(
         }
 
         let email = text(row, 0)?;
-        let Some(searched) = accounts.iter().find(|a| a.email == email) else {
+        let Some((account, folders)) =
+            (scope.accounts.iter()).find(|(account, _)| caches[*account].email() == email)
+        else {
             continue;
         };
 
-        let Some(&rank) = searched.folders.get(text(row, 1)?) else {
+        let Some(rank) = scope::rank(folders, text(row, 1)?) else {
             continue;
         };
 
-        let (account, body) = (searched.account, row.get::<_, BodyKey>(2)?);
+        let (account, body) = (*account, row.get::<_, BodyKey>(2)?);
         match seen.entry((account, body)) {
             Entry::Occupied(mut copy) => {
                 if let (true, Some(at)) = (rank < copy.get().0, copy.get().1) {
@@ -150,142 +170,123 @@ pub fn candidates(
 }
 
 /// Fills `here` with the Messages of `wanted`'s Threads, by key and a row,
-/// in every Folder but Trash and Spam, newest first, once as ADR 0010 picks;
-/// `elsewhere` with those only elsewhere whose body is cached, oldest first.
+/// in `scope`'s Folders, newest first, each once as it ranks them; `elsewhere`
+/// with those only elsewhere whose body is cached, oldest first.
 pub fn threads(
     caches: &PerAccount<Cache>,
-    shown: &Shown,
+    scope: &mut Scope,
     wanted: &[(Key, i64)],
     (here, elsewhere): (&mut Pool<Message>, &mut Pool<Message>),
 ) -> Result<(), Error> {
-    for searched in &searched(caches, |account| shown.of(account))? {
-        caches[searched.account].threads_of(searched, wanted, (here, elsewhere))?;
+    scope.ranks.clear();
+    for at in 0..scope.accounts.len() {
+        let account = scope.accounts[at].0;
+        if lists(account, wanted, scope) {
+            caches[account].threads_of(scope, at, (here, elsewhere))?;
+        }
     }
 
+    // Unstable: a stable sort allocates its buffer.
     here.as_mut_slice()
-        .sort_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
-    elsewhere.as_mut_slice().sort_by_key(|m| m.received);
+        .sort_unstable_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
+    elsewhere
+        .as_mut_slice()
+        .sort_unstable_by_key(|m| (m.received, m.body_key.get()));
     Ok(())
 }
 
-/// One Account as a Search reads it: each Folder searched by name, ranked
-/// by which copy of a Message wins, lowest first.
-struct Searched<'a> {
-    account: AccountId,
-    email: &'a str,
-    folders: HashMap<String, usize>,
-}
-
-/// Every Account's Folders but Trash and Spam, the one `shown` names for
-/// it first, then in Folder order.
-fn searched<'a, 's>(
-    caches: &'a PerAccount<Cache>,
-    shown: impl Fn(AccountId) -> Option<&'s FolderName>,
-) -> Result<Vec<Searched<'a>>, Error> {
-    let mut accounts = Vec::new();
-    for (account, cache) in caches.iter() {
-        let mut folders = cache.folders()?;
-        folders.retain(|f| !matches!(f.role, Some(Role::Trash | Role::Spam)));
-        folders.sort_by_key(|f| Some(&f.name) != shown(account));
-        accounts.push(Searched {
-            account,
-            email: cache.email(),
-            folders: (folders.iter().enumerate())
-                .map(|(rank, f)| (f.name.as_str().to_owned(), rank))
-                .collect(),
-        });
-    }
-
-    Ok(accounts)
-}
-
 impl Cache {
-    /// Appends this Account's Messages of the Threads `wanted` names.
+    /// Appends this Account's Messages of the Threads `scope`'s lists name,
+    /// its Folders the `at`th of `scope`'s.
     fn threads_of(
         &self,
-        searched: &Searched<'_>,
-        wanted: &[(Key, i64)],
+        scope: &mut Scope,
+        at: usize,
         (here, elsewhere): (&mut Pool<Message>, &mut Pool<Message>),
     ) -> Result<(), Error> {
-        let Some((lone, threads)) = lists(searched.account, wanted) else {
-            return Ok(());
-        };
-
         let connection = self.connection();
-        // Without the index named, the planner scans the Account by arrival.
-        let mut statement = connection.prepare_cached(&format!(
-            "SELECT {MESSAGE_ROW}, mailbox FROM message
-             WHERE rowid IN (SELECT value FROM json_each(?1))
-             UNION ALL
-             SELECT {MESSAGE_ROW}, mailbox FROM message INDEXED BY message_by_thread
-             WHERE account = ?2 AND thread IN (SELECT value FROM json_each(?3))"
-        ))?;
-        let mut rows = statement.query(params![lone, self.email(), threads])?;
-        let mut kept: HashMap<BodyKey, (usize, Message)> = HashMap::new();
+        let (account, start) = (self.account(), here.as_slice().len());
+        let folders = &scope.accounts[at].1;
+        // Not `prepare_cached`: it allocates its key on every call.
+        let mut statement = connection.prepare(HERE)?;
+        let mut rows = statement.query(params![scope.lone, self.email(), scope.threads])?;
         while let Some(row) = rows.next()? {
-            let Some(&rank) = searched.folders.get(text(row, 13)?) else {
+            let Some(rank) = scope::rank(folders, text(row, 13)?) else {
                 continue;
             };
 
-            let message = message(row, self.account())?;
-            match kept.entry(message.body_key) {
-                Entry::Occupied(copy) if copy.get().0 <= rank => {}
-                Entry::Occupied(mut copy) => {
-                    copy.insert((rank, folder(row, message)?));
+            let body: BodyKey = row.get(1)?;
+            let read = here.as_slice()[start..]
+                .iter()
+                .position(|m| m.body_key == body);
+            let slot = match read {
+                Some(i) if rank >= scope.ranks[start + i] => continue,
+                Some(i) => {
+                    scope.ranks[start + i] = rank;
+                    &mut here.as_mut_slice()[start + i]
                 }
-                Entry::Vacant(new) => {
-                    new.insert((rank, folder(row, message)?));
+                None => {
+                    scope.ranks.push(rank);
+                    here.next(|| Message::blank(account))
                 }
-            }
+            };
+
+            window::read(row, slot)?;
+            slot.folder = Some(folders[rank].clone());
+            slot.account = account;
         }
 
-        let mut statement = connection.prepare_cached(&format!(
-            "SELECT {THREAD_ROW}
-             FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
-             WHERE t.account = ?1 AND t.thread IN (SELECT value FROM json_each(?2))"
-        ))?;
-        let rows = statement.query_map(params![self.email(), threads], |row| {
-            message(row, self.account())
-        })?;
-        for row in rows {
-            let row = row?;
-            if !kept.contains_key(&row.body_key) {
-                *elsewhere.next(|| Message::blank(self.account())) = row;
+        let mut statement = connection.prepare(ELSEWHERE)?;
+        let mut rows = statement.query(params![self.email(), scope.threads])?;
+        while let Some(row) = rows.next()? {
+            let body: BodyKey = row.get(1)?;
+            if here.as_slice()[start..].iter().any(|m| m.body_key == body) {
+                continue;
             }
-        }
 
-        for (_, message) in kept.into_values() {
-            *here.next(|| Message::blank(self.account())) = message;
+            let slot = elsewhere.next(|| Message::blank(account));
+            window::read(row, slot)?;
+            slot.folder = None;
+            slot.account = account;
         }
 
         Ok(())
     }
 }
 
-/// `account`'s Threads of `wanted` as JSON arrays: the rows of those of
-/// one Message, and the Gmail Threads; `None` for none of its own.
-fn lists(account: AccountId, wanted: &[(Key, i64)]) -> Option<(String, String)> {
-    let (mut lone, mut threads) = (Vec::new(), Vec::new());
+/// Writes into `scope`'s lists `account`'s Threads of `wanted` as JSON
+/// arrays: the rows of those of one Message, and the Gmail Threads; false
+/// when it has none.
+fn lists(account: AccountId, wanted: &[(Key, i64)], scope: &mut Scope) -> bool {
+    let (lone, threads) = (&mut scope.lone, &mut scope.threads);
+    for list in [&mut *lone, &mut *threads] {
+        list.clear();
+        list.push('[');
+    }
+
+    // Writing to a `String` cannot fail.
     for &(key, row) in wanted {
         match key {
-            Key::Gmail(of, id) if of == account => threads.push(id.get().cast_signed()),
-            Key::Lone(of, _) if of == account => lone.push(row),
+            Key::Gmail(of, id) if of == account => {
+                write!(threads, "{},", id.get().cast_signed()).ok();
+            }
+            Key::Lone(of, _) if of == account => {
+                write!(lone, "{row},").ok();
+            }
             _ => {}
         }
     }
 
-    let json = |ids: &[i64]| {
-        let mut json = String::from("[");
-        for (n, id) in ids.iter().enumerate() {
-            let gap = if n == 0 { "" } else { "," };
-            // Writing to a `String` cannot fail.
-            write!(json, "{gap}{id}").ok();
+    let any = lone.len() > 1 || threads.len() > 1;
+    for list in [lone, threads] {
+        if list.ends_with(',') {
+            list.pop();
         }
 
-        json + "]"
-    };
+        list.push(']');
+    }
 
-    (!lone.is_empty() || !threads.is_empty()).then(|| (json(&lone), json(&threads)))
+    any
 }
 
 /// The Query as `FTS5` terms: each word a quoted prefix, all required, cut
@@ -304,40 +305,8 @@ fn terms(query: &str) -> String {
     terms
 }
 
-/// `message` with the Folder its row names last.
-fn folder(row: &Row<'_>, message: Message) -> rusqlite::Result<Message> {
-    Ok(Message {
-        folder: Some(row.get(13)?),
-        ..message
-    })
-}
-
 fn text<'r>(row: &'r Row<'_>, index: usize) -> rusqlite::Result<&'r str> {
     row.get_ref(index)?.as_str().map_err(|error| {
         rusqlite::Error::FromSqlConversionFailure(index, Type::Text, Box::new(error))
-    })
-}
-
-/// A row of `MESSAGE_ROW` or `THREAD_ROW` as a Message of `account`.
-fn message(row: &Row<'_>, account: AccountId) -> rusqlite::Result<Message> {
-    let offset = FixedOffset::east_opt(row.get(3)?).unwrap_or_else(|| Utc.fix());
-    let received = DateTime::from_timestamp(row.get(2)?, 0)
-        .unwrap_or_default()
-        .with_timezone(&offset);
-    Ok(Message {
-        uid: row.get(0)?,
-        body_key: row.get(1)?,
-        received,
-        unread: row.get(4)?,
-        sender: row.get(5)?,
-        subject: row.get(6)?,
-        snippet: row.get(7)?,
-        thread: row.get(8)?,
-        from_me: row.get(9)?,
-        answered: row.get(10)?,
-        from: row.get(11)?,
-        to: row.get(12)?,
-        folder: None,
-        account,
     })
 }
