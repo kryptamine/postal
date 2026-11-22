@@ -66,6 +66,23 @@ void fill_from_border(const element::ptr& el)
     css.set_bg(bg);
 }
 
+// The boxes round `button` in its own fill that show nothing else are its
+// shape too: a cell of `height: 50px` stood as a slab round the label.
+void collapse_shell(const element::ptr& button, const Contents& contents)
+{
+    const web_color& fill = button->css().get_bg().m_color;
+    // A page-light button gives way to the terminal: its frame is its shape.
+    if(!filled(button)) return;
+    const std::string label = contents.of(button.get()).words();
+    for(auto box = button->parent(); box; box = box->parent())
+    {
+        const web_color& bg = box->css().get_bg().m_color;
+        bool shell = (!bg.alpha || rgb(bg) == rgb(fill)) && contents.of(box.get()).words() == label;
+        if(!shell) return;
+        if(bg.alpha) collapse(box);
+    }
+}
+
 void flatten(const element::ptr& el, const Contents& contents, std::vector<element::ptr>& out)
 {
     // A word has no box of its own, and litehtml leaves its styles unset.
@@ -76,6 +93,7 @@ void flatten(const element::ptr& el, const Contents& contents, std::vector<eleme
         // A slab three rows high reads as no button, and a border a cell
         // thick only adds a row to the fill that is its shape.
         collapse(el);
+        collapse_shell(el, contents);
         out.push_back(el);
         return;
     }

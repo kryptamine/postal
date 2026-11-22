@@ -51,6 +51,30 @@ fn a_filled_button_is_one_row_with_no_border() {
     }
 }
 
+// A cell in the button's own fill, sized for the button, is part of it:
+// with its `height: 50px` it stood as a slab of fill round the label.
+#[test]
+fn a_cell_in_the_fill_of_its_button_is_cut_back_with_it() {
+    let body = html(
+        "<p>x</p><table width=\"400\"><tr><td align=\"center\" bgcolor=\"#892de1\" \
+         style=\"height:50px\"><a href=\"https://learn.example\" style=\"display:inline-block;\
+         background:#892de1;color:#fff;padding:10px 40px\">Explore courses</a></td></tr></table>\
+         <p>x</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Explore courses");
+    let (row, col) = at(&screen, "Explore courses");
+    assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
+    assert_eq!(
+        bg(&screen, row, col - 4),
+        Color::Default,
+        "{}",
+        screen.text()
+    );
+    for r in [row - 1, row + 1] {
+        assert_eq!(bg(&screen, r, col), Color::Default, "row {r}");
+    }
+}
+
 // Mail draws a button as a fill, a border, a full-width slab or a tight
 // box. Each is its label in bold on two cells of fill at either side.
 #[test]
