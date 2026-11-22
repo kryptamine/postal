@@ -7,9 +7,11 @@ use crate::{
 
 /// The labels, padded so the values line up.
 const LABELS: [&str; 3] = ["From    ", "To      ", "Subject "];
-/// The header rows over a body, with the row under them: a rule in the
-/// Preview, blank in a stack.
+/// The header rows over a body in the Preview, with the rule under them.
 pub const ROWS: usize = LABELS.len() + 1;
+/// A stack's, which leave out the Subject for the border's and end in a
+/// blank row.
+pub const STACK_ROWS: usize = ROWS - 1;
 const LABEL_WIDTH: u16 = 8;
 /// Columns between the `From` value and the date at the row's right.
 const DATE_GAP: u16 = 2;

@@ -8,13 +8,14 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    domain::message::Message,
     domain::thread,
     render::body::Body,
     render::stack_str::StackStr,
     ui::list::date_label::DateLabel,
     ui::list::inbox_view::InboxView,
     ui::preview::link_hints::LinkHints,
-    ui::preview::message_header,
+    ui::preview::message_header::{self, STACK_ROWS as HEADER},
     ui::preview::preview_lines::PreviewLines,
     ui::preview::preview_pane,
     ui::preview::previews::Previews,
@@ -77,14 +78,45 @@ impl StatefulWidget for ThreadPane<'_> {
             self.pin(buf, area, &placed, placed.pinned(&window));
         }
 
-        let mut title = StackStr::<24>::new();
-        write!(title, " {}/{count} ", cursor + 1).ok();
-        let title = [title.as_str()];
-        border::label(buf, area, (area.x + 1, area.y), &title, self.theme.title);
+        let mut place = StackStr::<24>::new();
+        write!(place, " {}/{count} ", cursor + 1).ok();
+        self.title(buf, area, place.as_str());
     }
 }
 
 impl ThreadPane<'_> {
+    /// Titles the border with the Thread's subject and its senders in order
+    /// of first appearance, cut to fit, and `place` at the right.
+    fn title(&self, buf: &mut Buffer, area: Rect, place: &str) {
+        let place_width = u16::try_from(place.width()).unwrap_or(u16::MAX);
+        let place_x = area.right().saturating_sub(1 + place_width).max(area.x + 1);
+        border::label(buf, area, (place_x, area.y), &[place], self.theme.title);
+
+        let stack = self.view.stack();
+        let subject = stack.clone().next().map_or("", |m| m.subject.as_str());
+        let first = |(n, message): &(usize, &Message)| {
+            let name = thread::sender(message);
+            !stack.clone().take(*n).any(|m| thread::sender(m) == name)
+        };
+
+        let names = stack.clone().enumerate().filter(first).enumerate();
+        let names =
+            names.flat_map(|(n, (_, m))| [if n == 0 { "" } else { ", " }, thread::sender(m)]);
+        let mut x = area.x + 1;
+        for part in [" ", subject, " · "].into_iter().chain(names).chain([" "]) {
+            // One border cell before `place`.
+            let room = Rect::new(x, area.y, place_x.saturating_sub(x + 1), 1);
+            if room.is_empty() {
+                break;
+            }
+
+            truncate::draw(buf, room, part, self.theme.title);
+            x += u16::try_from(part.width())
+                .unwrap_or(u16::MAX)
+                .min(room.width);
+        }
+    }
+
     /// Row `offset` of the Message `placed`, from its top.
     fn row(&self, buf: &mut Buffer, row: Rect, placed: &Placed<'_>, offset: usize) {
         if placed.count > 1 {
@@ -97,8 +129,13 @@ impl ThreadPane<'_> {
             return self.folded(buf, row, placed);
         };
 
-        let Some(index) = offset.checked_sub(message_header::ROWS) else {
-            return message_header::draw(self.theme, buf, row, placed.message, offset);
+        let Some(index) = offset.checked_sub(HEADER) else {
+            // The last row of the header is blank.
+            if offset + 1 < HEADER {
+                message_header::draw(self.theme, buf, row, placed.message, offset);
+            }
+
+            return;
         };
 
         match body {
@@ -121,11 +158,11 @@ impl ThreadPane<'_> {
     /// the text of `pane`, the last of them a rule across it as in the Preview.
     fn pin(&self, buf: &mut Buffer, pane: Rect, placed: &Placed<'_>, rows: usize) {
         let text = preview_pane::text_area(pane);
-        let first = message_header::ROWS - rows;
-        for (y, offset) in (text.y..text.bottom()).zip(first..message_header::ROWS) {
+        let first = HEADER - rows;
+        for (y, offset) in (text.y..text.bottom()).zip(first..HEADER) {
             let line = Rect::new(text.x, y, text.width, 1);
             Clear.render(line, buf);
-            if offset + 1 == message_header::ROWS {
+            if offset + 1 == HEADER {
                 border::rule(buf, pane, y, self.theme.border);
             } else {
                 self.row(buf, line, placed, offset);

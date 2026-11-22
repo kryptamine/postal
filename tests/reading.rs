@@ -219,7 +219,10 @@ fn reading_unfolds_the_newest_and_the_unread_and_starts_on_the_oldest_unread() {
                 && folded(s, "Cid", "Cid agrees", "2024-03-03")
         })
         .unwrap();
-    assert!(screen.contains(" 2/4 "), "{screen}");
+    assert!(screen.contains(" 2/4 ┐"), "{screen}");
+    // The border names the Thread once, so no Message repeats its subject.
+    assert!(screen.contains("┌ Plans · Ada, Bob, Cid, Dee "), "{screen}");
+    assert!(!screen.contains("Subject"), "{screen}");
     assert!(screen.contains("│▎From    Bob"), "{screen}");
     assert!(screen.contains("│ From    Dee"), "{screen}");
     assert!(!screen.contains("From    Ada"), "{screen}");
@@ -361,7 +364,7 @@ fn a_scrolled_message_keeps_its_header_on_top() {
     }
 
     let screen = t
-        .snapshot_after(|s| s.row_text(5).contains("Line 11"))
+        .snapshot_after(|s| s.row_text(4).contains("Line 11"))
         .unwrap();
     insta::assert_snapshot!(screen);
     quit(t);
@@ -387,13 +390,13 @@ fn the_next_message_pushes_a_pinned_header_up() {
     t.wait_until(|s| s.contains(" 1/2 ") && s.contains("Ada 01"))
         .unwrap();
 
-    // Ada's 44 rows end three rows below the top: her header's last three.
+    // Ada's 43 rows end two rows below the top: her header's last two.
     for _ in 0..41 {
         t.send(Key::Char('j')).unwrap();
     }
 
     let screen = t
-        .snapshot_after(|s| s.row_text(1).contains("To") && s.row_text(5).contains("From    Bob"))
+        .snapshot_after(|s| s.row_text(1).contains("To") && s.row_text(4).contains("From    Bob"))
         .unwrap();
     insta::assert_snapshot!(screen);
     quit(t);

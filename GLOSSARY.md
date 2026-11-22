@@ -65,7 +65,7 @@ Taking back the latest Delete or Draft discard not yet taken back, with `u`, as 
 _Avoid_: restore, revert
 
 **Preview**:
-The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View, without its Quote. Its header names the sender and every `To` and `Cc` address with their names, the date at the right, and the subject. Each unfolded Message in Reading has the same header.
+The body of the newest Message of the selected Thread as Postal shows it: plain text wrapped, HTML in the rendered or the text View, without its Quote. Its header names the sender and every `To` and `Cc` address with their names, the date at the right, and the subject. Each unfolded Message in Reading has the same header but the subject.
 _Avoid_: reader, viewer, body pane
 
 **Quote**:
@@ -105,7 +105,7 @@ Entered with `o`: each distinct URL the Preview window shows, or every unfolded 
 _Avoid_: link mode, follow mode, footnotes
 
 **Reading**:
-The selected Thread filling the screen in place of the Message List, entered with `Enter`: its Messages in the Cache for the shown Folder at once, then on Gmail those All Mail holds in other Folders (never Trash or Spam) as the server answers, oldest on top and newest at the bottom, each folded to one line (sender, Snippet, date) or unfolded to its header and body as the Preview shows it. Until the first fold, two or more folded in a row between the oldest and the newest take one line, `N earlier messages`. An unfolded Message scrolled past its top keeps its header pinned at the top over a rule, until the next Message pushes it up. On entry the newest and every Unread Message are unfolded, and the cursor sits on the oldest Unread, else the newest. `q` or `Esc` goes back to the list.
+The selected Thread filling the screen in place of the Message List, entered with `Enter`: its Messages in the Cache for the shown Folder at once, then on Gmail those All Mail holds in other Folders (never Trash or Spam) as the server answers, oldest on top and newest at the bottom, each folded to one line (sender, Snippet, date) or unfolded to its header but the Subject and its body as the Preview shows it; the border names the Thread's subject, its senders in order of first appearance and the cursor's place. Until the first fold, two or more folded in a row between the oldest and the newest take one line, `N earlier messages`. An unfolded Message scrolled past its top keeps its header pinned at the top over a rule, until the next Message pushes it up. On entry the newest and every Unread Message are unfolded, and the cursor sits on the oldest Unread, else the newest. `q` or `Esc` goes back to the list.
 _Avoid_: reader, zoom, full view
 
 **Search**:

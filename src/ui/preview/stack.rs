@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crate::{
     domain::message::Message, render::body::Body, ui::list::inbox_view::InboxView,
-    ui::preview::message_header::ROWS as HEADER, ui::preview::previews::Previews,
+    ui::preview::message_header::STACK_ROWS as HEADER, ui::preview::previews::Previews,
     ui::preview::reading::Reading,
 };
 

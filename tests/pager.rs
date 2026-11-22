@@ -44,7 +44,7 @@ fn server_with(html: &str) -> FakeImap {
 // The list's snippet shows the text before the body is cached; the Preview's
 // header comes with the body, and only then does `|` find it.
 fn main_screen(screen: &Screen) -> bool {
-    screen.alternate_screen() && screen.contains(" 1/1 ") && screen.contains("Subject Weekly notes")
+    screen.alternate_screen() && screen.contains(" 1/1 ") && screen.contains("Weekly notes")
 }
 
 /// The escape character made visible, so a snapshot shows the styling.

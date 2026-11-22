@@ -23,7 +23,7 @@ const HTML: &str = "<p>Read <a href=\"https://example.com/notes\">the notes</a>.
     <p>See you <i>soon</i>.</p>";
 
 fn main_screen(screen: &Screen) -> bool {
-    screen.alternate_screen() && screen.contains(" 1/1 ") && screen.contains("Subject Weekly notes")
+    screen.alternate_screen() && screen.contains(" 1/1 ") && screen.contains("Weekly notes")
 }
 
 /// What a recording `$EDITOR` was handed after `keys`, and whether it could

@@ -245,8 +245,8 @@ fn the_rule_under_a_pinned_header_hides_a_background_under_it() {
         row(&screen, "After").unwrap(),
     );
 
-    // The rule is the fourth row of the pane's text.
-    let scroll = button - 4;
+    // The rule is the third row of the pane's text.
+    let scroll = button - 3;
     for _ in 0..scroll {
         t.send(Key::Char('j')).unwrap();
     }
@@ -254,9 +254,9 @@ fn the_rule_under_a_pinned_header_hides_a_background_under_it() {
     let screen = t
         .snapshot_after(|s| s.row_text(after - scroll).contains("After"))
         .unwrap();
-    assert!(screen.row_text(4).starts_with('├'), "{}", screen.text());
+    assert!(screen.row_text(3).starts_with('├'), "{}", screen.text());
     for col in 0..screen.cols() {
-        assert_eq!(bg(&screen, 4, col), Color::Default, "{}", screen.text());
+        assert_eq!(bg(&screen, 3, col), Color::Default, "{}", screen.text());
     }
 
     t.send(Key::Char('q')).unwrap();
