@@ -253,7 +253,7 @@ fn a_search_ranks_a_thread_by_its_best_match() {
         message("Bob", ("Re: Invoice", "Done"), "2024-03-02T09:00:00Z").in_thread(0),
         message(
             "Carol",
-            ("Report", "Pages and a yearly summary"),
+            ("Report", "Pages and a yearly summary, pre-payment due"),
             "2024-03-05T09:00:00Z",
         ),
     ]);
@@ -264,8 +264,8 @@ fn a_search_ranks_a_thread_by_its_best_match() {
         .unwrap();
     assert!(above(&screen, "Carol", "Alice, Bob"), "{screen}");
 
-    // `pay` whole in Alice's old Snippet beats Carol's scattered P, a and
-    // y, though Carol's Message and Bob's reply match it worse or not at all.
+    // `pay` after a space in Alice's old Snippet beats Carol's after a
+    // hyphen, though Carol's Message is newer and Bob's reply misses it.
     t.send(Key::Char('/')).unwrap();
     t.send_str("pay").unwrap();
     let screen = t

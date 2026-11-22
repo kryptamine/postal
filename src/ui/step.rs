@@ -27,6 +27,10 @@ pub enum Steer {
     Folders,
     Show(Shown),
     Search,
+    /// A character typed into the Query of the Search under way.
+    Type(char),
+    /// The Query's last character erased.
+    Erase,
     /// Reading opened, on the Gmail Thread with this ID if it has one, of
     /// this Account: its Messages in other Folders are asked for.
     Read(Option<(AccountId, ThreadId)>),

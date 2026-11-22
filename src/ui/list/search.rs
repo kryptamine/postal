@@ -1,64 +1,82 @@
-use std::{num::NonZeroUsize, panic, thread};
+use std::{collections::HashMap, num::NonZeroUsize, ops::Range, panic, thread};
 
 use nucleo_matcher::{
-    Config, Matcher, Utf32String,
+    Config, Matcher, Utf32Str, Utf32String, chars,
     pattern::{AtomKind, CaseMatching, Normalization, Pattern},
 };
 
 use crate::{
+    cache::{self, Cache},
     domain::listing::Listing,
     domain::message::Message,
+    domain::per_account::PerAccount,
+    domain::shown::Shown,
     domain::thread::{self as threads, Key, Thread},
+    ui::list::folder_list,
     ui::list::matched::Matched,
 };
 
 /// Candidates below this many are scored on one thread.
 const MIN_CHUNK: usize = 1024;
 
+/// How many candidates a Search reads from the Cache at most, newest first.
+pub const LIMIT: usize = 500;
+
 /// Between two sender names on a card, and in its haystack.
 pub const SENDER_GAP: &str = ", ";
 
-/// A Search over every cached Folder: the Query and the Threads matching it.
+/// A Search over every cached Folder: the Query, the Threads matching it,
+/// and the cards of those in a window around the selection. See
+/// docs/adr/0023-search-finds-candidates-in-fts5-and-ranks-them-with-nucleo.md.
 pub struct Search {
     query: String,
-    /// What is searched, from every Folder but Trash and Spam.
-    listing: Listing,
+    /// More candidates matched than `LIMIT`.
+    more: bool,
     pattern: Pattern,
     matcher: Matcher,
-    /// What each Message is matched by, one per Message.
-    haystacks: Vec<Utf32String>,
-    /// The Thread each Message is in, by index.
-    thread_of: Vec<usize>,
-    /// Each Thread's card as drawn, for its highlight: senders, subject, Snippet.
-    cards: Vec<Utf32String>,
-    /// The Messages matching; `None` for an empty Query.
-    matching: Option<Vec<usize>>,
+    /// The candidates' Threads, newest first, each by its key and the row
+    /// of its newest candidate.
+    threads: Vec<(Key, i64)>,
+    /// What each candidate is matched by, with its Thread's index.
+    haystacks: Vec<(usize, Utf32String)>,
     /// Threads holding a match, best match first; `None` for an empty Query.
     hits: Option<Vec<usize>>,
+    /// The rows whose Threads `listing` holds.
+    window: Range<usize>,
+    listing: Listing,
+    /// The window's Threads, kept for its buffer.
+    wanted: Vec<(Key, i64)>,
     /// The Thread selected at the last `/`.
     pub before: Option<Key>,
     /// Reused for each card's highlight, so drawing does not allocate.
+    card: String,
+    graphemes: Vec<char>,
     units: Vec<u32>,
 }
 
 impl Search {
-    pub fn new(listing: Listing) -> Self {
+    /// A Search with an empty Query over every cached Folder, `shown`'s
+    /// copies winning (ADR 0010).
+    pub fn new(caches: &PerAccount<Cache>, shown: &Shown) -> Result<Self, cache::Error> {
         let mut search = Self {
             query: String::new(),
-            listing,
+            more: false,
             pattern: Pattern::default(),
             matcher: Matcher::new(Config::DEFAULT),
+            threads: Vec::new(),
             haystacks: Vec::new(),
-            thread_of: Vec::new(),
-            cards: Vec::new(),
-            matching: None,
             hits: None,
+            window: 0..0,
+            listing: Listing::empty(),
+            wanted: Vec::new(),
             before: None,
+            card: String::new(),
+            graphemes: Vec::new(),
             units: Vec::new(),
         };
 
-        search.index();
-        search
+        search.run(caches, shown)?;
+        Ok(search)
     }
 
     pub const fn listing(&self) -> &Listing {
@@ -69,63 +87,120 @@ impl Search {
         &self.query
     }
 
-    /// Matches the Query again over what the Cache holds now.
-    pub fn reload(&mut self, listing: Listing) {
-        self.listing = listing;
-        self.index();
-        self.rematch(false);
+    /// Whether the Query matched more than the candidates shown.
+    pub const fn capped(&self) -> bool {
+        self.more && !self.query.is_empty()
     }
 
-    pub fn push(&mut self, c: char) {
-        // A longer Query matches a subset, unless `c` completes an escape.
-        let narrows = !self.query.ends_with('\\');
+    /// Types `c` into the Query; true, as the Query always changes.
+    pub fn push(&mut self, c: char) -> bool {
         self.query.push(c);
-        self.rematch(narrows);
+        true
     }
 
-    pub fn pop(&mut self) {
-        if self.query.pop().is_some() {
-            self.rematch(false);
+    /// Erases the Query's last character; whether there was one.
+    pub fn pop(&mut self) -> bool {
+        self.query.pop().is_some()
+    }
+
+    /// Asks the Cache for the Query's candidates and ranks them; the next
+    /// `fill` reads the window anew.
+    pub fn run(&mut self, caches: &PerAccount<Cache>, shown: &Shown) -> Result<(), cache::Error> {
+        let found = cache::candidates(caches, shown, &self.query, LIMIT)?;
+        self.more = found.more;
+        self.threads.clear();
+        self.haystacks.clear();
+        let mut index = HashMap::new();
+        for candidate in found.found {
+            let thread = *index.entry(candidate.key).or_insert_with(|| {
+                self.threads.push((candidate.key, candidate.row));
+                self.threads.len() - 1
+            });
+
+            self.haystacks
+                .push((thread, Utf32String::from(candidate.text)));
         }
+
+        self.window = 0..0;
+        self.rematch();
+        Ok(())
     }
 
     pub fn rows(&self) -> usize {
-        self.hits.as_ref().map_or(self.cards.len(), Vec::len)
+        self.hits.as_ref().map_or(self.threads.len(), Vec::len)
     }
 
-    /// The Thread shown at `row`.
-    pub fn row(&self, row: usize) -> Option<usize> {
-        let all = || (row < self.cards.len()).then_some(row);
-        self.hits
-            .as_ref()
-            .map_or_else(all, |hits| hits.get(row).copied())
+    pub fn key(&self, row: usize) -> Option<Key> {
+        self.threads.get(self.thread(row)?).map(|&(key, _)| key)
     }
 
-    /// Where the Thread `index` is shown.
-    pub fn position(&self, index: usize) -> Option<usize> {
-        let all = || (index < self.cards.len()).then_some(index);
-        self.hits
-            .as_ref()
-            .map_or_else(all, |hits| hits.iter().position(|&i| i == index))
+    /// The row that shows the Thread `key`.
+    pub fn find(&self, key: Key) -> Option<usize> {
+        let index = self.threads.iter().position(|&(k, _)| k == key)?;
+        let ranked = |hits: &Vec<usize>| hits.iter().position(|&i| i == index);
+        self.hits.as_ref().map_or(Some(index), ranked)
+    }
+
+    /// The Thread at `row`, when the window holds it.
+    pub fn thread_at(&self, row: usize) -> Option<&Thread> {
+        self.listing.threads().get(self.window_index(row)?)
+    }
+
+    /// Where among the window's Threads the one at `row` is.
+    fn window_index(&self, row: usize) -> Option<usize> {
+        if !self.window.contains(&row) {
+            return None;
+        }
+
+        self.listing.find(self.key(row)?)
+    }
+
+    /// Reads the window anew around `selected` unless it holds the rows
+    /// within `screen` of it already; `shown` wins the copies (ADR 0010).
+    pub fn fill(
+        &mut self,
+        caches: &PerAccount<Cache>,
+        shown: &Shown,
+        selected: usize,
+        screen: usize,
+    ) -> Result<(), cache::Error> {
+        let Some(window) = folder_list::around(&self.window, selected, screen, self.rows()) else {
+            return Ok(());
+        };
+
+        self.wanted.clear();
+        for row in window.clone() {
+            if let Some(&thread) = self.thread(row).and_then(|i| self.threads.get(i)) {
+                self.wanted.push(thread);
+            }
+        }
+
+        self.window = window;
+        let wanted = &self.wanted;
+        self.listing
+            .refill(|here, elsewhere| cache::threads(caches, shown, wanted, (here, elsewhere)))
     }
 
     /// The Messages and Thread of the card at `row`, with its matched units:
     /// none for an empty Query, or when the match is in a Message the card
-    /// does not show. Does not allocate once the buffer has grown.
+    /// does not show. Does not allocate once the buffers have grown.
     pub fn card(&mut self, row: usize) -> Option<(&[Message], &Thread, Matched<'_>)> {
-        let index = self.row(row)?;
-        let ascii = self.highlight(index)?;
-        let thread = self.listing.threads().get(index)?;
-        let matched = Matched::new(&self.units, ascii);
-        Some((self.listing.messages(), thread, matched))
-    }
-
-    /// Fills `units` for Thread `index`'s card; whether that card is ASCII.
-    fn highlight(&mut self, index: usize) -> Option<bool> {
+        // Not `thread_at`, whose borrow would cover all of `self`.
+        let at = self.window_index(row)?;
+        let thread = self.listing.threads().get(at)?;
+        let messages = self.listing.messages();
         self.units.clear();
-        let card = self.cards.get(index)?;
+        card(&mut self.card, messages, thread);
+        let ascii = self.card.is_ascii();
         if self.hits.is_some() {
-            let card = card.slice(..);
+            let card = if ascii {
+                Utf32Str::Ascii(self.card.as_bytes())
+            } else {
+                self.graphemes.clear();
+                self.graphemes.extend(chars::graphemes(&self.card));
+                Utf32Str::Unicode(&self.graphemes)
+            };
+
             // On a miss, the words before the one that missed have left
             // their units behind.
             if self
@@ -140,24 +215,18 @@ impl Search {
             self.units.dedup();
         }
 
-        Some(matches!(card, Utf32String::Ascii(_)))
+        Some((messages, thread, Matched::new(&self.units, ascii)))
     }
 
-    fn index(&mut self) {
-        let (messages, threads) = (self.listing.messages(), self.listing.threads());
-        self.haystacks = messages.iter().map(haystack).collect();
-        self.thread_of = vec![0; messages.len()];
-        for (index, thread) in threads.iter().enumerate() {
-            for &message in &thread.messages {
-                self.thread_of[message] = index;
-            }
-        }
-
-        self.cards = threads.iter().map(|t| card(messages, t)).collect();
+    /// The index among `threads` of the Thread shown at `row`.
+    fn thread(&self, row: usize) -> Option<usize> {
+        let all = || (row < self.threads.len()).then_some(row);
+        self.hits
+            .as_ref()
+            .map_or_else(all, |hits| hits.get(row).copied())
     }
 
-    /// `narrows` matches only the current matches, a superset of the new ones.
-    fn rematch(&mut self, narrows: bool) {
+    fn rematch(&mut self) {
         // `Pattern::new` takes no fzf syntax; `parse` and `reparse` would.
         self.pattern = Pattern::new(
             &self.query,
@@ -166,22 +235,14 @@ impl Search {
             AtomKind::Fuzzy,
         );
 
-        let previous = self.matching.take();
         self.hits = None;
         if self.pattern.atoms.is_empty() {
             return;
         }
 
-        let candidates = match previous {
-            Some(matching) if narrows => matching,
-            _ => (0..self.haystacks.len()).collect(),
-        };
-
-        let scored = score(&self.pattern, &self.haystacks, &candidates);
-        let mut best = vec![None; self.cards.len()];
-        for &(score, message) in &scored {
-            let thread = &mut best[self.thread_of[message]];
-            *thread = (*thread).max(Some(score));
+        let mut best = vec![None; self.threads.len()];
+        for (score, thread) in score(&self.pattern, &self.haystacks) {
+            best[thread] = best[thread].max(Some(score));
         }
 
         let mut ranked: Vec<_> = (0..best.len())
@@ -189,28 +250,26 @@ impl Search {
             .collect();
         // Threads are newest first, so a tie goes to the newer Thread.
         ranked.sort_unstable_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        self.matching = Some(scored.into_iter().map(|(_, i)| i).collect());
         self.hits = Some(ranked.into_iter().map(|(_, i)| i).collect());
     }
 }
 
-/// The candidates `pattern` matches, with their scores. Spread over a
-/// thread per core: on one, 10,000 Messages take up to 17 ms, past a frame.
-fn score(pattern: &Pattern, haystacks: &[Utf32String], candidates: &[usize]) -> Vec<(u32, usize)> {
+/// The haystacks `pattern` matches, with their scores and Threads. Spread
+/// over a thread per core: on one, 10,000 take up to 17 ms, past a frame.
+fn score(pattern: &Pattern, haystacks: &[(usize, Utf32String)]) -> Vec<(u32, usize)> {
     let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get);
-    let chunk = candidates.len().div_ceil(workers).max(MIN_CHUNK);
-    let part = |part: &[usize]| {
+    let chunk = haystacks.len().div_ceil(workers).max(MIN_CHUNK);
+    let part = |part: &[(usize, Utf32String)]| {
         let mut matcher = Matcher::new(Config::DEFAULT);
         part.iter()
-            .filter_map(|&i| {
-                let haystack = haystacks[i].slice(..);
-                Some((pattern.score(haystack, &mut matcher)?, i))
+            .filter_map(|(thread, haystack)| {
+                Some((pattern.score(haystack.slice(..), &mut matcher)?, *thread))
             })
             .collect::<Vec<_>>()
     };
 
-    if candidates.len() <= chunk {
-        return part(candidates);
+    if haystacks.len() <= chunk {
+        return part(haystacks);
     }
 
     thread::scope(|scope| {
@@ -218,7 +277,7 @@ fn score(pattern: &Pattern, haystacks: &[Utf32String], candidates: &[usize]) -> 
             clippy::needless_collect,
             reason = "every worker starts before the first join"
         )]
-        let workers: Vec<_> = candidates
+        let workers: Vec<_> = haystacks
             .chunks(chunk)
             .map(|chunk| scope.spawn(move || part(chunk)))
             .collect();
@@ -234,29 +293,21 @@ fn score(pattern: &Pattern, haystacks: &[Utf32String], candidates: &[usize]) -> 
     })
 }
 
-/// What a Query is matched against. Only a sent Message has its recipients
-/// in it: mail from others is found by who sent it.
-fn haystack(message: &Message) -> Utf32String {
-    let mut fields = vec![&*message.sender, &*message.subject, &*message.snippet];
-    if message.from_me {
-        fields.push(&message.to);
-    }
-
-    Utf32String::from(fields.join("\n"))
-}
-
-/// A card's fields joined by a newline, the separator `Matched` counts
-/// units across; its sender names are joined by `SENDER_GAP`.
-fn card(messages: &[Message], thread: &Thread) -> Utf32String {
-    let mut card = String::new();
+/// Writes into `into` a card's fields joined by a newline, the separator
+/// `Matched` counts units across; its sender names are joined by `SENDER_GAP`.
+fn card(into: &mut String, messages: &[Message], thread: &Thread) {
+    into.clear();
     for (n, &sender) in thread.senders.iter().enumerate() {
         if n > 0 {
-            card.push_str(SENDER_GAP);
+            into.push_str(SENDER_GAP);
         }
 
-        card.push_str(threads::sender(&messages[sender]));
+        into.push_str(threads::sender(&messages[sender]));
     }
 
     let (oldest, newest) = (&messages[thread.oldest()], &messages[thread.newest()]);
-    Utf32String::from(format!("{card}\n{}\n{}", oldest.subject, newest.snippet))
+    for field in [&oldest.subject, &newest.snippet] {
+        into.push('\n');
+        into.push_str(field);
+    }
 }

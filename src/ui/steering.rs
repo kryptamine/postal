@@ -1,8 +1,9 @@
 use crate::{
     mail::steering::Ask,
     ui::list::deleting,
-    ui::list::folder_show::{folders, start_search, switch},
+    ui::list::folder_show::{edit_query, folders, start_search, switch},
     ui::list::marking::{mark_read, mark_unread},
+    ui::list::search::Search,
     ui::main_screen::Ui,
     ui::popup::folder_picker::FolderPicker,
     ui::run::Error,
@@ -10,8 +11,8 @@ use crate::{
     ui::world::World,
 };
 
-/// Opens the Folder Picker as the Cache last saw the Folders, starts a
-/// Search, shows the Folder picked, or marks, deletes or restores Messages,
+/// Opens the Folder Picker as the Cache last saw the Folders, starts or
+/// edits a Search, shows the Folder picked, or marks, deletes or restores Messages,
 /// asking the sync connection to follow.
 pub fn steer(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
     let (caches, asks) = (world.caches, world.asks);
@@ -45,6 +46,8 @@ pub fn steer(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
         Steer::Delete => deleting::delete(ui, world)?,
         Steer::Undo => deleting::undo(ui, world)?,
         Steer::Search => start_search(ui, caches)?,
+        Steer::Type(c) => edit_query(ui, caches, |search| search.push(c))?,
+        Steer::Erase => edit_query(ui, caches, Search::pop)?,
     }
 
     Ok(())

@@ -7,7 +7,6 @@ use crate::{
     domain::body_key::BodyKey,
     domain::folder::Folder,
     domain::folder_name::FolderName,
-    domain::inbox::Inbox,
     domain::listing::Listing,
     domain::message::Message,
     domain::per_account::{AccountId, PerAccount},
@@ -119,30 +118,30 @@ impl InboxView {
     }
 
     /// Reads the cards around the selection unless the window holds them,
-    /// for a list `screen` cards tall. A Search shows its own.
+    /// the Search's while one is under way, for a list `screen` cards tall.
     pub fn fill(&mut self, caches: &PerAccount<Cache>, screen: usize) -> Result<(), cache::Error> {
         self.screen = screen;
+        if let Some(search) = &mut self.search {
+            return search.fill(caches, &self.folder, self.selected, screen);
+        }
+
         match &mut self.list {
-            Some(list) if self.search.is_none() => {
-                list.fill(caches, &self.folder, self.selected, screen)
-            }
-            _ => Ok(()),
+            Some(list) => list.fill(caches, &self.folder, self.selected, screen),
+            None => Ok(()),
         }
     }
 
-    /// Matches the Search under way, if any, over `everywhere` anew.
-    pub fn research(&mut self, everywhere: Inbox) {
+    /// Runs the Search under way, if any, anew over what the Cache holds now.
+    pub fn research(&mut self, caches: &PerAccount<Cache>) -> Result<(), cache::Error> {
         let (selected, body) = (self.selected_key(), self.selected_body());
         if let Some(search) = &mut self.search {
-            search.reload(Listing::new(everywhere));
-            self.keep(selected, body);
+            search.run(caches, &self.folder)?;
+            self.keep_row(selected);
+            self.fill(caches, self.screen)?;
+            self.scroll_back((selected, body));
         }
-    }
 
-    /// Selects the Thread `key`, else the same row clamped to the rows shown.
-    fn keep(&mut self, key: Option<Key>, body: Option<BodyKey>) {
-        self.keep_row(key);
-        self.scroll_back((key, body));
+        Ok(())
     }
 
     fn keep_row(&mut self, key: Option<Key>) {
@@ -183,22 +182,21 @@ impl InboxView {
         self.preview_scroll = 0;
     }
 
-    /// Starts a Search over what `everywhere` reads, or resumes the one
-    /// under way; false before any rows. Either way, Esc while typing comes
-    /// back to the selection now.
-    pub fn start_search<E>(
-        &mut self,
-        everywhere: impl FnOnce() -> Result<Inbox, E>,
-    ) -> Result<bool, E> {
+    /// Starts a Search over every cached Folder, or resumes the one under
+    /// way; false before any rows. Either way, Esc while typing comes back
+    /// to the selection now.
+    pub fn start_search(&mut self, caches: &PerAccount<Cache>) -> Result<bool, cache::Error> {
         if self.list.is_none() {
             return Ok(false);
         }
 
         let (before, body) = (self.selected_key(), self.selected_body());
         if self.search.is_none() {
-            self.search = Some(Search::new(Listing::new(everywhere()?)));
+            self.search = Some(Search::new(caches, &self.folder)?);
             self.offset = 0;
-            self.keep(before, body);
+            self.keep_row(before);
+            self.fill(caches, self.screen)?;
+            self.scroll_back((before, body));
         }
 
         if let Some(search) = &mut self.search {
@@ -208,18 +206,30 @@ impl InboxView {
         Ok(true)
     }
 
-    /// Edits the Query and selects the best match.
-    pub fn edit_query(&mut self, edit: impl FnOnce(&mut Search)) {
+    /// Edits the Query, `edit` saying whether it changed, then runs it
+    /// anew and selects the best match.
+    pub fn edit_query(
+        &mut self,
+        caches: &PerAccount<Cache>,
+        edit: impl FnOnce(&mut Search) -> bool,
+    ) -> Result<(), cache::Error> {
         let selected = self.selected_body();
         let Some(search) = &mut self.search else {
-            return;
+            return Ok(());
         };
 
-        edit(search);
+        if !edit(search) {
+            return Ok(());
+        }
+
+        search.run(caches, &self.folder)?;
         self.selected = 0;
+        self.fill(caches, self.screen)?;
         if self.selected_body() != selected {
             self.preview_scroll = 0;
         }
+
+        Ok(())
     }
 
     /// Back to the shown Folder's list, on the Thread selected before the
@@ -331,12 +341,12 @@ impl InboxView {
 
     pub fn selected_key(&self) -> Option<Key> {
         match &self.search {
-            Some(_) => self.thread_at(self.selected).map(|t| t.key),
+            Some(search) => search.key(self.selected),
             None => self.list.as_ref()?.key(self.selected),
         }
     }
 
-    /// The cards shown: the Search's, else the shown Folder's window.
+    /// The cards shown: the Search's window, else the shown Folder's.
     fn listing(&self) -> Option<&Listing> {
         self.search.as_ref().map_or_else(
             || self.list.as_ref().map(FolderList::listing),
@@ -379,7 +389,7 @@ impl InboxView {
     /// The Thread shown at `row`.
     fn thread_at(&self, row: usize) -> Option<&Thread> {
         match &self.search {
-            Some(search) => search.listing().threads().get(search.row(row)?),
+            Some(search) => search.thread_at(row),
             None => self.list.as_ref()?.thread(row),
         }
     }
@@ -387,7 +397,7 @@ impl InboxView {
     /// The row that shows the Thread `key`.
     fn position(&self, key: Key) -> Option<usize> {
         match &self.search {
-            Some(search) => search.position(search.listing().find(key)?),
+            Some(search) => search.find(key),
             None => self.list.as_ref()?.find(key),
         }
     }

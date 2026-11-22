@@ -6,11 +6,6 @@ use crate::{
     domain::thread_id::ThreadId,
 };
 
-/// The columns `Cache::message` reads, in its order, of a `thread_message`
-/// row `t`, which has no UID.
-pub(super) const THREAD_ROW: &str = "0, t.key, t.received, t.received_offset, t.unread, t.sender,
-    t.subject, t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line";
-
 impl Cache {
     /// Replaces what is cached of Gmail's Thread `id` from other Folders
     /// with `messages`, storing `bodies` by key first and learning from

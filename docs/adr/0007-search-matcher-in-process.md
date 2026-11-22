@@ -16,7 +16,8 @@ Typing a Query is not an allocation hot path (ADR 0001): matching
 allocates, and the keypress-to-frame budget still holds. Each keypress scores
 every candidate again, spread over a scoped thread per core: on 10,000
 Messages that is at most 3 ms on the reference machine, against 17 ms on one
-thread. A Query that only grows rescores the previous matches alone.
+thread. Where the candidates come from, and how many, is ADR 0023's:
+an FTS5 index of word prefixes, read anew on every keypress.
 Highlights are computed for the visible cards at draw time, into buffers kept
 between frames, so moving through the matches does not allocate.
 

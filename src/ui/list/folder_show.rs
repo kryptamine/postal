@@ -1,16 +1,8 @@
 use crate::{
-    cache::{self, Cache},
-    domain::folder::Folder,
-    domain::inbox::Inbox,
-    domain::per_account::PerAccount,
-    domain::shown::Shown,
-    ui::list::all_inboxes,
-    ui::list::inbox_view::InboxView,
-    ui::main_screen::Ui,
-    ui::popup::folder_picker::FolderPicker,
-    ui::preview::link_hints::LinkHints,
-    ui::run::Error,
-    ui::showing::Showing,
+    cache::Cache, domain::folder::Folder, domain::per_account::PerAccount, domain::shown::Shown,
+    ui::list::all_inboxes, ui::list::inbox_view::InboxView, ui::list::search::Search,
+    ui::main_screen::Ui, ui::popup::folder_picker::FolderPicker,
+    ui::preview::link_hints::LinkHints, ui::run::Error, ui::showing::Showing,
 };
 
 /// Reads the shown Folder from the Cache into `view`, at most `limit`
@@ -49,10 +41,7 @@ pub fn show(
         view.show(rows, since, caches)?;
     }
 
-    if view.search.is_some() {
-        view.research(everywhere(caches, &view.folder)?);
-    }
-
+    view.research(caches)?;
     Ok(())
 }
 
@@ -89,30 +78,21 @@ pub fn relist(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Every Account's Messages a Search matches, newest first, the shown
-/// Folder's copy winning in its Account, the Inbox's in All Inboxes (ADR 0010).
-fn everywhere(caches: &PerAccount<Cache>, shown: &Shown) -> Result<Inbox, cache::Error> {
-    let (mut messages, mut elsewhere) = (Vec::new(), Vec::new());
-    for (account, cache) in caches.iter() {
-        let found = cache.everywhere(shown.of(account))?;
-        messages.extend(found.messages);
-        elsewhere.extend(found.elsewhere);
-    }
-
-    messages.sort_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
-    elsewhere.sort_by_key(|m| m.received);
-    Ok(Inbox {
-        messages,
-        elsewhere,
-    })
-}
-
 /// Types the Query of a new Search over the whole Cache, or of the one under way.
 pub fn start_search(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
-    let shown = ui.view.folder.clone();
-    if ui.view.start_search(|| everywhere(caches, &shown))? {
+    if ui.view.start_search(caches)? {
         ui.screen.showing = Showing::Query;
     }
 
+    Ok(())
+}
+
+/// Edits the Query of the Search under way and asks the Cache for it anew.
+pub fn edit_query(
+    ui: &mut Ui,
+    caches: &PerAccount<Cache>,
+    edit: impl FnOnce(&mut Search) -> bool,
+) -> Result<(), Error> {
+    ui.view.edit_query(caches, edit)?;
     Ok(())
 }

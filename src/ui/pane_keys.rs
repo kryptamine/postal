@@ -4,7 +4,6 @@ use crate::{
     ui::exit::Exit,
     ui::keymap::Action,
     ui::list::inbox_view::InboxView,
-    ui::list::search::Search,
     ui::preview::link_hints::LinkHints,
     ui::preview::reading::Reading,
     ui::screen::Screen,
@@ -49,14 +48,8 @@ pub fn act(
             Step::Stay
         }
         Some(Action::Search) => Step::Steer(Steer::Search),
-        Some(Action::Type(c)) => {
-            view.edit_query(|search| search.push(c));
-            Step::Stay
-        }
-        Some(Action::Erase) => {
-            view.edit_query(Search::pop);
-            Step::Stay
-        }
+        Some(Action::Type(c)) => Step::Steer(Steer::Type(c)),
+        Some(Action::Erase) => Step::Steer(Steer::Erase),
         Some(Action::EndSearch { restore }) => {
             view.end_search(restore);
             screen.list();

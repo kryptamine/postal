@@ -15,6 +15,7 @@ use crate::{
     render::icons::Icons,
     render::stack_str::StackStr,
     ui::keymap::{self, HELP_HINT, Hint},
+    ui::list::search::LIMIT,
     ui::mode::Mode,
     ui::theme::Theme,
     ui::toast::Toast,
@@ -35,6 +36,8 @@ pub struct HintLine<'a> {
     pub outbox: usize,
     pub mode: Mode,
     pub query: Option<&'a str>,
+    /// The Query matched more than a Search reads.
+    pub capped: bool,
     /// What the Status's countdown counts from.
     pub now: Instant,
 }
@@ -144,12 +147,22 @@ impl HintLine<'_> {
         self.hint(buf, x.min(row.right()), row, &HELP_HINT)
     }
 
-    /// Draws `/` and `query` from `x`, cut at the row's end; returns where
-    /// they end.
+    /// Draws `/` and `query` from `x`, then whether it matched more than is
+    /// shown, cut at the row's end; returns where they end.
     fn query(&self, buf: &mut Buffer, x: u16, row: Rect, query: &str) -> u16 {
         let room = |x: u16| usize::from(row.right().saturating_sub(x));
         let (x, _) = buf.set_stringn(x, row.y, "/", room(x), self.theme.key);
-        buf.set_stringn(x, row.y, query, room(x), Style::new()).0
+        let (x, _) = buf.set_stringn(x, row.y, query, room(x), Style::new());
+        if !self.capped {
+            return x;
+        }
+
+        let mut capped = StackStr::<64>::new();
+        // The text fits, so the write cannot fail.
+        write!(capped, "newest {LIMIT} matches only: type more").ok();
+        let x = x.saturating_add(GAP).min(row.right());
+        buf.set_stringn(x, row.y, capped.as_str(), room(x), self.theme.muted)
+            .0
     }
 
     /// Draws `hint` from `x`, cut at the row's end; returns where it ends.

@@ -90,15 +90,10 @@ impl FolderList {
         selected: usize,
         screen: usize,
     ) -> Result<(), cache::Error> {
-        let all = self.rows.len();
-        let near = selected.saturating_sub(screen)..(selected + screen + 1).min(all);
-        let held = self.window.start <= near.start && near.end <= self.window.end;
-        if held && !self.window.is_empty() || near.is_empty() {
+        let Some(window) = around(&self.window, selected, screen, self.rows.len()) else {
             return Ok(());
-        }
+        };
 
-        let margin = MARGIN * screen;
-        let window = selected.saturating_sub(margin)..(selected + margin + 1).min(all);
         self.wanted.clear();
         self.wanted
             .extend(self.rows[window.clone()].iter().map(|row| row.key));
@@ -120,4 +115,22 @@ impl FolderList {
             Ok(())
         })
     }
+}
+
+/// The rows of `all` a window around `selected` reads, for a list `screen`
+/// cards tall; `None` while `held` has those within a screen of it.
+pub fn around(
+    held: &Range<usize>,
+    selected: usize,
+    screen: usize,
+    all: usize,
+) -> Option<Range<usize>> {
+    let near = selected.saturating_sub(screen)..(selected + screen + 1).min(all);
+    let holds = held.start <= near.start && near.end <= held.end;
+    if holds && !held.is_empty() || near.is_empty() {
+        return None;
+    }
+
+    let margin = MARGIN * screen;
+    Some(selected.saturating_sub(margin)..(selected + margin + 1).min(all))
 }

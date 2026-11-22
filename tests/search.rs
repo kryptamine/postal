@@ -1,5 +1,6 @@
 //! Search: `/` narrows the Message List to the Messages of every cached
-//! Folder a fuzzy Query matches, best match first, typed in the hint line.
+//! Folder with words starting with the Query's, best match first, typed in
+//! the hint line.
 
 #![allow(
     clippy::unwrap_used,
@@ -14,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FakeImap, FakeMessage},
+    fake_imap::{EMAIL, FakeImap, FakeMessage},
     home::Home,
     picker::{picked, picker},
 };
@@ -64,7 +65,7 @@ fn messages() -> Vec<FakeMessage> {
             "Carol",
             "Quarterly report",
             "2024-05-10T08:30:00Z",
-            "Pages and a yearly summary",
+            "Pages and a yearly summary, pre-payment due",
         ),
         message(
             "Dave",
@@ -133,7 +134,7 @@ fn a_query_narrows_the_list_best_match_first_and_the_preview_follows() {
     let screen = t
         .snapshot_after(|s| !list(s).contains("Holiday") && s.contains("Please pay by Friday"))
         .unwrap();
-    // `pay` whole in Alice's Snippet beats Carol's scattered P, a and y,
+    // `pay` after a space in Alice's Snippet beats Carol's after a hyphen,
     // though Carol's Message is newer.
     assert!(
         above(&screen, "Invoice 1042", "Quarterly report"),
@@ -481,5 +482,93 @@ fn a_query_finds_a_sent_message_by_its_recipients_and_no_other() {
         t.wait_until(|s| list(s).contains("Holiday")).unwrap();
     }
 
+    quit(t);
+}
+
+#[test]
+fn a_query_matching_only_inside_a_word_finds_nothing() {
+    let server = FakeImap::start(messages());
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home);
+
+    // The price of a word index: `voice` no longer finds the invoices.
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("voice").unwrap();
+    let screen = t.snapshot_after(|s| s.contains("no matches")).unwrap();
+    assert!(!list(&screen).contains("Invoice"), "{screen}");
+    quit(t);
+}
+
+#[test]
+fn a_message_deleted_while_a_search_is_open_leaves_the_results() {
+    let server = FakeImap::start(messages());
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home);
+
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("pay").unwrap();
+    wait_selected(&mut t, "Invoice 1042");
+    t.send(Key::Enter).unwrap();
+    t.send(Key::Backspace).unwrap();
+    let screen = t
+        .snapshot_after(|s| !list(s).contains("Invoice 1042"))
+        .unwrap();
+    assert_eq!(
+        selected_subject(&screen).as_deref(),
+        Some("Quarterly report")
+    );
+    assert!(hint_line(&screen).contains("/pay"), "{screen}");
+    quit(t);
+}
+
+/// A Search reads this many candidates at most.
+const LIMIT: u32 = 500;
+
+#[test]
+fn a_query_matching_more_than_a_search_reads_says_so() {
+    let server = FakeImap::start(messages());
+    server.add_folder("Lists", &[], vec![]);
+    let home = Home::for_server(&server);
+    quit(ready(&server, &home));
+
+    // Written straight into the Cache: no sync caches this many in a test.
+    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
+    cache
+        .execute(
+            "INSERT OR IGNORE INTO mailbox (account, name) VALUES (?1, 'Lists')",
+            [EMAIL.to_lowercase()],
+        )
+        .unwrap();
+    for uid in 1..=LIMIT {
+        cache
+            .execute(
+                "INSERT INTO message (account, mailbox, uid, body_key, received,
+                   received_offset, unread, answered, sender, from_line, to_line, subject,
+                   from_me, snippet)
+                 VALUES (?1, 'Lists', ?2, ?2, 1600000000 + ?2, 0, 0, 0, 'List', '', '',
+                   'Daily digest', 0, '')",
+                rusqlite::params![EMAIL.to_lowercase(), uid],
+            )
+            .unwrap();
+    }
+
+    drop(cache);
+    let mut t = ready(&server, &home);
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("digest").unwrap();
+    let screen = t
+        .snapshot_after(|s| hint_line(s).contains("type more"))
+        .unwrap();
+    assert!(hint_line(&screen).contains("newest 500"), "{screen}");
+
+    for _ in 0.."digest".len() {
+        t.send(Key::Backspace).unwrap();
+    }
+
+    t.send_str("weekly").unwrap();
+    let screen = t
+        .snapshot_after(|s| hint_line(s).contains("/weekly") && list(s).contains("Edition 2"))
+        .unwrap();
+    assert!(!hint_line(&screen).contains("type more"), "{screen}");
     quit(t);
 }

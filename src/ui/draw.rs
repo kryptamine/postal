@@ -66,6 +66,7 @@ pub fn draw(
                     query: view.search.as_ref().map(Search::query).filter(|_| {
                         !matches!(keys, Mode::Draft | Mode::LocalDrafts | Mode::Queued)
                     }),
+                    capped: view.search.as_ref().is_some_and(Search::capped),
                     now: Instant::now(),
                 };
 

@@ -109,7 +109,7 @@ The selected Thread filling the screen in place of the Message List, entered wit
 _Avoid_: reader, zoom, full view
 
 **Search**:
-The Message List narrowed to the Threads holding a Message whose sender, subject or Snippet fuzzy-match a typed Query, each ranked by its best match. A Message the Account sent matches by its recipients' names and addresses too. It matches every Folder of every Account in the Cache but Trash and Spam, each Message once; `/` starts it, and `Esc` ends it in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
+The Message List narrowed to the Threads holding a Message with a word in its sender, subject or Snippet starting with each word of a typed Query, not a fuzzy match, each Thread ranked by its best match (ADR 0023). A Message the Account sent matches by its recipients' names and addresses too. It matches every Folder of every Account in the Cache but Trash and Spam, each Message once; `/` starts it, and `Esc` ends it in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
 _Avoid_: filter, find, fzf, lookup
 
 **Query**:
