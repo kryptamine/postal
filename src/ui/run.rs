@@ -16,34 +16,27 @@ use crate::{
     mail::steering::Ask,
     mail::sync,
     mail::update::Update,
-    render::icons::Icons,
     ui::alloc_count,
-    ui::apply,
     ui::drafts::composing,
     ui::drafts::draft_preview::DraftPreview,
-    ui::drafts::drafting,
-    ui::drafts::local_list::{open_local, relist_local},
-    ui::draw,
+    ui::drafts::local_list::relist_local,
     ui::exit::Exit,
-    ui::handle,
+    ui::frame::draw,
+    ui::frame::theme::Theme,
+    ui::input::handle,
     ui::list::folder_show::show,
     ui::list::message_list,
     ui::list::older_pages::OlderPages,
-    ui::main_screen::Ui,
-    ui::opening::opening,
-    ui::outside::open_outside,
-    ui::popup::settings::Settings,
-    ui::preview::link_labels::{browse, label_links},
     ui::preview::preview_pane,
     ui::preview::previews::Previews,
-    ui::screen::Screen,
-    ui::steering::steer,
-    ui::step::Step,
+    ui::react::apply,
+    ui::react::opening::opening,
+    ui::react::take::take,
+    ui::react::timed::{expire, next_change},
+    ui::state::main_screen::Ui,
+    ui::state::screen::Screen,
     ui::terminal::terminal_backend::TerminalBackend,
     ui::terminal::tty::Tty,
-    ui::theme::Theme,
-    ui::timed::{expire, next_change},
-    ui::toast::Toast,
     ui::world::World,
 };
 
@@ -79,14 +72,14 @@ pub struct Background<'a, W, U> {
 
 /// The screen, with the terminal, the look, the Previews and the network
 /// work it acts on.
-struct Model<'a> {
-    tty: Tty<'a>,
-    theme: &'a mut Theme,
-    previews: &'a mut Previews,
-    ui: Ui,
-    world: World<'a>,
+pub struct Model<'a> {
+    pub tty: Tty<'a>,
+    pub theme: &'a mut Theme,
+    pub previews: &'a mut Previews,
+    pub ui: Ui,
+    pub world: World<'a>,
     older: OlderPages,
-    replies: ReplyFetch,
+    pub replies: ReplyFetch,
 }
 
 /// The one event loop: input, and each `Update` from the background work,
@@ -229,40 +222,12 @@ impl Model<'_> {
         let drafts = |screen: &Screen| (screen.over.is_open::<DraftPreview>(), screen.undo.len());
         let before = drafts(&self.ui.screen);
         let step = handle::handle(event, &mut self.ui, half_page(text))?;
-        let exit = self.take(step, text)?;
+        let exit = take(self, step, text)?;
         if exit.is_none() && before != drafts(&self.ui.screen) {
             relist_local(&mut self.ui.screen, self.world.outbox);
         }
 
         Ok(exit)
-    }
-
-    fn take(&mut self, step: Step, text: Option<Rect>) -> Result<Option<Exit>, Error> {
-        let (ui, world) = (&mut self.ui, self.world);
-        match step {
-            Step::Stay => {}
-            Step::Links => label_links(ui, self.previews, text),
-            Step::Steer(to) => steer(to, ui, world)?,
-            Step::Browse(url) => ui.screen.toast = browse(&url),
-            Step::Open(to) => {
-                let tty = &mut self.tty;
-                ui.screen.toast = open_outside::open(to, tty, self.theme, world.caches, ui)?;
-            }
-            Step::Draft(drafting) => drafting::draft(drafting, &mut self.tty, ui, world)?,
-            Step::Reply(to) => drafting::reply(to, &mut self.tty, ui, world, &self.replies)?,
-            Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
-            Step::Settings => match Settings::open(world.config_dir) {
-                Ok(settings) => ui.screen.over.open(settings),
-                Err(error) => ui.screen.toast = Some(Toast::error(error.to_string())),
-            },
-            Step::Icons(choice) => {
-                self.theme.icons = Icons::choose(choice);
-                self.previews.set_look(self.theme.mail_look());
-            }
-            Step::Exit(exit) => return Ok(Some(exit)),
-        }
-
-        Ok(None)
     }
 }
 

@@ -2,9 +2,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Frame, layout::Rect};
 
 use crate::{
-    domain::shown::Shown, ui::exit::Exit, ui::keymap, ui::popup::folder_picker::FolderPicker,
-    ui::popup::layer_act::Act, ui::popup::picker_popup::PickerPopup, ui::step::Steer,
-    ui::step::Step, ui::theme::Theme,
+    domain::shown::Shown, ui::exit::Exit, ui::frame::theme::Theme, ui::input::keymap,
+    ui::input::step::Steer, ui::input::step::Step, ui::popup::folder_picker::FolderPicker,
+    ui::popup::layer_act::Act, ui::popup::picker_popup::PickerPopup,
 };
 
 /// What a key does while the Folder Picker is open.

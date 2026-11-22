@@ -6,14 +6,14 @@ use crate::{
     render::preview_render::{self, Job},
     render::rendered_previews::PreviewKey,
     render::view::View,
-    ui::main_screen::Ui,
+    ui::frame::theme::Theme,
     ui::outside::message_file::MessageFile,
     ui::outside::pager,
     ui::outside::pager_text,
     ui::run::Error,
+    ui::state::main_screen::Ui,
+    ui::state::toast::Toast,
     ui::terminal::tty::Tty,
-    ui::theme::Theme,
-    ui::toast::Toast,
 };
 
 /// Where a Message opens outside the TUI.

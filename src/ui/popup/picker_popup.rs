@@ -12,8 +12,8 @@ use unicode_width::UnicodeWidthStr;
 use crate::{
     domain::shown::Shown,
     render::stack_str::StackStr,
+    ui::frame::theme::Theme,
     ui::popup::folder_picker::{FolderPicker, Row},
-    ui::theme::Theme,
     ui::widgets::centred::centred,
     ui::widgets::truncate,
 };

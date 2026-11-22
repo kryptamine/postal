@@ -17,10 +17,10 @@ use crate::{
     account::credential::Credential,
     account::provider::Provider,
     mail::login::{self, Consent, Granted},
+    ui::frame::theme::Theme,
     ui::outside::clipboard,
     ui::terminal::input::Input,
     ui::terminal::terminal_backend::TerminalBackend,
-    ui::theme::Theme,
 };
 
 pub enum Start<'a> {

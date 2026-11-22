@@ -16,7 +16,7 @@ use crate::{
     domain::uid::Uid,
     render::rendered_previews::PreviewKey,
     render::view::View,
-    ui::keymap::{By, Direction, Move, Scroll},
+    ui::input::keymap::{By, Direction, Move, Scroll},
     ui::list::folder_list::FolderList,
     ui::list::matched::Matched,
     ui::list::search::Search,

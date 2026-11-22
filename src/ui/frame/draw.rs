@@ -3,20 +3,20 @@ use tokio::time::Instant;
 
 use crate::{
     compose::accounts::Accounts,
-    ui::layout,
+    ui::frame::layout,
+    ui::frame::theme::Theme,
     ui::list::message_list::MessageList,
     ui::list::search::Search,
-    ui::main_screen::Ui,
-    ui::mode::Mode,
     ui::popup::help_popup::HelpPopup,
     ui::preview::link_hints::LinkHints,
     ui::preview::preview_pane::{self, PreviewPane},
     ui::preview::previews::Previews,
     ui::preview::thread_pane::ThreadPane,
     ui::run::Error,
-    ui::screen::Screen,
+    ui::state::main_screen::Ui,
+    ui::state::mode::Mode,
+    ui::state::screen::Screen,
     ui::terminal::terminal_backend::TerminalBackend,
-    ui::theme::Theme,
     ui::widgets::hint_line::HintLine,
 };
 

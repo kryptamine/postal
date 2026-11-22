@@ -6,15 +6,15 @@ use crate::{
     domain::per_account::{AccountId, PerAccount},
     domain::thread::Key,
     mail::status::Status,
-    ui::dwell::Dwell,
     ui::list::inbox_view::InboxView,
-    ui::mode::Mode,
     ui::popup::layer::Layer,
     ui::popup::over::Over,
     ui::preview::link_hints::LinkHints,
-    ui::showing::Showing,
-    ui::toast::Toast,
-    ui::undo::Undo,
+    ui::state::dwell::Dwell,
+    ui::state::mode::Mode,
+    ui::state::showing::Showing,
+    ui::state::toast::Toast,
+    ui::state::undo::Undo,
 };
 
 /// What the main screen shows over and beside the panes.

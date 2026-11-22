@@ -4,7 +4,7 @@ use ratatui::style::Style;
 
 use crate::{
     account::browser, domain::message::Message, render::header_date, render::preview::Preview,
-    ui::preview::message_header, ui::terminal::ansi, ui::theme::Theme,
+    ui::frame::theme::Theme, ui::preview::message_header, ui::terminal::ansi,
 };
 
 /// `preview` of `message` as the bytes piped to the pager: the header

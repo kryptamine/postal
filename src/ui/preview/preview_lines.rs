@@ -1,6 +1,8 @@
 use ratatui::{buffer::Buffer, layout::Rect};
 
-use crate::{render::preview::Preview, ui::preview::link_hints::LinkHints, ui::theme::Theme};
+use crate::{
+    render::preview::Preview, ui::frame::theme::Theme, ui::preview::link_hints::LinkHints,
+};
 
 /// The body lines of one Preview, with the labels `hints` give it as body
 /// `part` of those on screen.

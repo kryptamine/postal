@@ -5,10 +5,11 @@ use ratatui::{Frame, layout::Rect};
 
 use crate::{
     compose::accounts::Accounts, compose::local_drafts::LocalDrafts, ui::drafts::draft_layer,
-    ui::drafts::draft_preview::DraftPreview, ui::drafts::local_drafts_layer, ui::keymap::Binding,
-    ui::mode::Mode, ui::popup::folder_picker::FolderPicker, ui::popup::hints_layer,
-    ui::popup::layer_act::Act, ui::popup::picker_layer, ui::popup::settings::Settings,
-    ui::popup::settings_layer, ui::preview::link_hints::LinkHints, ui::theme::Theme,
+    ui::drafts::draft_preview::DraftPreview, ui::drafts::local_drafts_layer,
+    ui::frame::theme::Theme, ui::input::keymap::Binding, ui::popup::folder_picker::FolderPicker,
+    ui::popup::hints_layer, ui::popup::layer_act::Act, ui::popup::picker_layer,
+    ui::popup::settings::Settings, ui::popup::settings_layer, ui::preview::link_hints::LinkHints,
+    ui::state::mode::Mode,
 };
 
 /// One layer open over the panes. A new one is a variant here, a line of

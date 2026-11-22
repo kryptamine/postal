@@ -2,7 +2,7 @@ use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    domain::message::Message, render::header_date, ui::theme::Theme, ui::widgets::truncate,
+    domain::message::Message, render::header_date, ui::frame::theme::Theme, ui::widgets::truncate,
 };
 
 /// The labels, padded so the values line up; the Subject last, which a

@@ -2,13 +2,13 @@ use crate::{
     domain::folder::Role,
     domain::thread::Key,
     ui::exit::Exit,
-    ui::keymap::Action,
+    ui::input::keymap::Action,
+    ui::input::step::{Drafting, Steer, Step},
     ui::list::inbox_view::InboxView,
     ui::preview::link_hints::LinkHints,
     ui::preview::reading::Reading,
-    ui::screen::Screen,
-    ui::showing::Showing,
-    ui::step::{Drafting, Steer, Step},
+    ui::state::screen::Screen,
+    ui::state::showing::Showing,
 };
 
 /// Acts on one key the panes take.

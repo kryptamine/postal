@@ -12,13 +12,13 @@ use crate::{
     ui::drafts::local_list::relist_local,
     ui::list::folder_show::{relist, show, switch},
     ui::list::inbox_view::InboxView,
-    ui::main_screen::Ui,
     ui::preview::link_hints::LinkHints,
     ui::preview::previews::Previews,
     ui::run::Error,
-    ui::screen::Screen,
-    ui::showing::Showing,
-    ui::toast::Toast,
+    ui::state::main_screen::Ui,
+    ui::state::screen::Screen,
+    ui::state::showing::Showing,
+    ui::state::toast::Toast,
     ui::world::World,
 };
 

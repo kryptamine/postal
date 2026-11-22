@@ -14,11 +14,11 @@ use crate::{
     mail::status::Status,
     render::icons::Icons,
     render::stack_str::StackStr,
-    ui::keymap::{self, HELP_HINT, Hint},
+    ui::frame::theme::Theme,
+    ui::input::keymap::{self, HELP_HINT, Hint},
     ui::list::search::LIMIT,
-    ui::mode::Mode,
-    ui::theme::Theme,
-    ui::toast::Toast,
+    ui::state::mode::Mode,
+    ui::state::toast::Toast,
 };
 
 const GAP: u16 = 2;

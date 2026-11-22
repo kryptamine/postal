@@ -1,6 +1,6 @@
 use crate::{
-    compose::local_drafts::LocalDrafts, compose::outbox::Outbox, ui::screen::Screen,
-    ui::toast::Toast,
+    compose::local_drafts::LocalDrafts, compose::outbox::Outbox, ui::state::screen::Screen,
+    ui::state::toast::Toast,
 };
 
 pub fn open_local(screen: &mut Screen, outbox: &Outbox) {

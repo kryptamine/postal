@@ -13,12 +13,12 @@ use crate::{
     mail::status::Status,
     mail::steering::Ask,
     ui::drafts::draft_preview::DraftPreview,
-    ui::main_screen::Ui,
     ui::run::Error,
-    ui::screen::Screen,
+    ui::state::main_screen::Ui,
+    ui::state::screen::Screen,
+    ui::state::toast::Toast,
+    ui::state::undo::Undo,
     ui::terminal::tty::Tty,
-    ui::toast::Toast,
-    ui::undo::Undo,
     ui::world::World,
 };
 

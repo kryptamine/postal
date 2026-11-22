@@ -9,12 +9,12 @@ use crate::{
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_drafts_pane::LocalDraftsPane,
     ui::exit::Exit,
-    ui::keymap::{self, Binding, Hint, Key},
-    ui::mode::Mode,
+    ui::frame::theme::Theme,
+    ui::input::keymap::{self, Binding, Hint, Key},
+    ui::input::step::{Drafting, Steer, Step},
     ui::popup::layer_act::Act,
-    ui::step::{Drafting, Steer, Step},
-    ui::theme::Theme,
-    ui::toast::Toast,
+    ui::state::mode::Mode,
+    ui::state::toast::Toast,
 };
 
 /// What a key does in Local Drafts.

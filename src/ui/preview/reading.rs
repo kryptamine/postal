@@ -3,7 +3,7 @@ use std::{collections::HashSet, iter};
 use crate::{
     domain::body_key::BodyKey,
     domain::message::Message,
-    ui::keymap::{By, Direction, Scroll},
+    ui::input::keymap::{By, Direction, Scroll},
     ui::preview::stack_line::StackLine,
 };
 

@@ -6,11 +6,11 @@ use crate::{
     ui::drafts::draft_pane::DraftPane,
     ui::drafts::draft_preview::DraftPreview,
     ui::exit::Exit,
-    ui::keymap::{self, Binding, Hint, Key},
-    ui::mode::Mode,
+    ui::frame::theme::Theme,
+    ui::input::keymap::{self, Binding, Hint, Key},
+    ui::input::step::{Drafting, Step},
     ui::popup::layer_act::Act,
-    ui::step::{Drafting, Step},
-    ui::theme::Theme,
+    ui::state::mode::Mode,
 };
 
 /// What a key does while a Draft's preview is open.

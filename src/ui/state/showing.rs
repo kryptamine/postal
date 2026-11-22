@@ -1,4 +1,4 @@
-use crate::{ui::mode::Mode, ui::preview::reading::Reading};
+use crate::{ui::preview::reading::Reading, ui::state::mode::Mode};
 
 /// What the panes show under whatever is open over them.
 #[derive(Default)]

@@ -3,13 +3,13 @@ use ratatui::{Frame, layout::Rect};
 
 use crate::{
     ui::exit::Exit,
-    ui::keymap::{Binding, Hint, Key},
-    ui::mode::Mode,
+    ui::frame::theme::Theme,
+    ui::input::keymap::{Binding, Hint, Key},
+    ui::input::step::Step,
     ui::popup::layer_act::Act,
     ui::popup::settings::{self, Settings},
     ui::popup::settings_popup::SettingsPopup,
-    ui::step::Step,
-    ui::theme::Theme,
+    ui::state::mode::Mode,
 };
 
 const SETTINGS: &[Mode] = &[Mode::Settings];

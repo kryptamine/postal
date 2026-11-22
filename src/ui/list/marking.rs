@@ -4,9 +4,9 @@ use crate::{
     domain::per_account::AccountId,
     mail::steering::Ask,
     ui::list::folder_show::{relist, show},
-    ui::main_screen::Ui,
     ui::run::Error,
-    ui::toast::Toast,
+    ui::state::main_screen::Ui,
+    ui::state::toast::Toast,
     ui::world::World,
 };
 

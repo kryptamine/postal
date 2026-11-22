@@ -2,10 +2,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     compose::recipients::Recipients,
-    ui::keymap::{Action, Binding, By, Direction, Hint, Key, Move, Scroll, pressed},
-    ui::mode::Mode,
+    ui::input::keymap::{Action, Binding, By, Direction, Hint, Key, Move, Scroll, pressed},
     ui::outside::open_outside::Outside,
     ui::popup::layer,
+    ui::state::mode::Mode,
 };
 
 /// A row of the panes' keymap and what its keys do.

@@ -2,8 +2,9 @@ use crate::{
     compose::awaited_reply::AwaitedReply, compose::draft_notes::DraftNotes,
     compose::recipients::Recipients, domain::message::Message, domain::per_account::AccountId,
     domain::shown::Shown, mail::reply_fetch::ReplyFetch, ui::drafts::composing,
-    ui::drafts::draft_preview::DraftPreview, ui::list::inbox_view::InboxView, ui::main_screen::Ui,
-    ui::run::Error, ui::step::Drafting, ui::terminal::tty::Tty, ui::world::World,
+    ui::drafts::draft_preview::DraftPreview, ui::input::step::Drafting,
+    ui::list::inbox_view::InboxView, ui::run::Error, ui::state::main_screen::Ui,
+    ui::terminal::tty::Tty, ui::world::World,
 };
 
 /// Compose, or the shown Draft edited again, sent, kept or discarded.

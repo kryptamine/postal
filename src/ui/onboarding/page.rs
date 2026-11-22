@@ -7,7 +7,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use super::step::Step;
-use crate::{account::provider::Provider, render::wrap, ui::theme::Theme};
+use crate::{account::provider::Provider, render::wrap, ui::frame::theme::Theme};
 
 const TITLE: &str = " Postal ";
 const WIDTH: u16 = 72;

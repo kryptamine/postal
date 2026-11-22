@@ -1,9 +1,9 @@
 use crossterm::event::KeyEvent;
 
 use crate::{
+    ui::input::step::Step,
     ui::popup::layer_act::Act,
     ui::preview::link_hints::{LinkHints, Typed},
-    ui::step::Step,
 };
 
 /// Every key ends hint mode but a label's first letter.

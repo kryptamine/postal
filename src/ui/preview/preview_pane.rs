@@ -7,10 +7,10 @@ use ratatui::{
 };
 
 use crate::{
-    render::body::Body, render::stack_str::StackStr, ui::layout::PADDING,
-    ui::list::inbox_view::InboxView, ui::preview::link_hints::LinkHints,
-    ui::preview::message_header, ui::preview::preview_lines::PreviewLines, ui::theme::Theme,
-    ui::widgets::border, ui::widgets::centred::centred,
+    render::body::Body, render::stack_str::StackStr, ui::frame::layout::PADDING,
+    ui::frame::theme::Theme, ui::list::inbox_view::InboxView, ui::preview::link_hints::LinkHints,
+    ui::preview::message_header, ui::preview::preview_lines::PreviewLines, ui::widgets::border,
+    ui::widgets::centred::centred,
 };
 
 /// Where a Preview's text goes in `pane`: inside the border, padded each

@@ -3,9 +3,9 @@ use std::io;
 use ratatui::{Terminal, layout::Rect};
 
 use crate::{
-    ui::layout::{self, Panes},
-    ui::mode::Mode,
+    ui::frame::layout::{self, Panes},
     ui::run::Error,
+    ui::state::mode::Mode,
     ui::terminal::input::Input,
     ui::terminal::terminal_backend::{self, TerminalBackend},
 };

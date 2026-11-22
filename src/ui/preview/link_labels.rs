@@ -4,14 +4,14 @@ use crate::{
     account::browser,
     render::body::Body,
     ui::list::inbox_view::InboxView,
-    ui::main_screen::Ui,
     ui::preview::link_hints::LinkHints,
     ui::preview::message_header,
     ui::preview::preview_pane,
     ui::preview::previews::Previews,
     ui::preview::reading::Reading,
     ui::preview::stack::{self, Shape},
-    ui::toast::Toast,
+    ui::state::main_screen::Ui,
+    ui::state::toast::Toast,
 };
 
 /// Enters hint mode on the links the Preview window shows, or says there

@@ -12,6 +12,7 @@ use crate::{
     domain::thread,
     render::body::Body,
     render::stack_str::StackStr,
+    ui::frame::theme::Theme,
     ui::list::date_label::DateLabel,
     ui::list::inbox_view::InboxView,
     ui::preview::link_hints::LinkHints,
@@ -21,7 +22,6 @@ use crate::{
     ui::preview::previews::Previews,
     ui::preview::reading::Reading,
     ui::preview::stack::{self, Placed, Shape},
-    ui::theme::Theme,
     ui::widgets::border,
     ui::widgets::truncate,
 };

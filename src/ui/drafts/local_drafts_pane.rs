@@ -6,8 +6,9 @@ use ratatui::{
 };
 
 use crate::{
-    compose::accounts::Accounts, compose::local_drafts::LocalDrafts, ui::layout::PADDING,
-    ui::theme::Theme, ui::widgets::border, ui::widgets::centred::centred, ui::widgets::truncate,
+    compose::accounts::Accounts, compose::local_drafts::LocalDrafts, ui::frame::layout::PADDING,
+    ui::frame::theme::Theme, ui::widgets::border, ui::widgets::centred::centred,
+    ui::widgets::truncate,
 };
 
 /// The kind of a row, a word or an icon, and a gap after it.

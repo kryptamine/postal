@@ -1,6 +1,6 @@
 use ratatui::layout::Rect;
 
-use crate::{ui::list::message_list, ui::mode::Mode};
+use crate::{ui::list::message_list, ui::state::mode::Mode};
 
 /// From this width the Preview sits right of the Message List, else below.
 const SIDE_BY_SIDE: u16 = 84;

@@ -31,8 +31,11 @@ Lowest first:
   reconnecting, the sign-in check, one Account's two connections
   (`mail::serve`), and what they tell the screen (`Update`, `Status`,
   `Steering`).
-- `ui/`: the TUI. At its root the event loop, the Screen, the keymap, the
-  layout and the Theme; then `terminal/` (the backend, input, the tty),
+- `ui/`: the TUI. At its root the event loop (`run`) and what it hands
+  each reaction (`World`); then `state/` (the Screen, what the panes show,
+  the Mode, Toasts, Undo), `input/` (the keymap, a key's `Step`), `react/`
+  (what a `Step`, a `Steer`, an `Update` or a timer does), `frame/` (the
+  draw, the layout, the Theme), `terminal/` (the backend, input, the tty),
   `list/` (the Message List, Search, marking and deleting), `preview/` (the
   Preview, the Thread, link hints), `drafts/` (composing, the Draft and
   Local Drafts panes), `popup/` (the layers over the screen: help, the

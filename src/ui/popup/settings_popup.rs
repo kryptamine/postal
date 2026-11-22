@@ -7,8 +7,8 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    ui::frame::theme::Theme,
     ui::popup::settings::{Row, Settings},
-    ui::theme::Theme,
     ui::widgets::truncate,
 };
 

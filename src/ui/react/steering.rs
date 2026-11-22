@@ -1,13 +1,13 @@
 use crate::{
     mail::steering::Ask,
+    ui::input::step::Steer,
     ui::list::deleting,
     ui::list::folder_show::{edit_query, folders, start_search, switch},
     ui::list::marking::{mark_read, mark_unread},
     ui::list::search::Search,
-    ui::main_screen::Ui,
     ui::popup::folder_picker::FolderPicker,
     ui::run::Error,
-    ui::step::Steer,
+    ui::state::main_screen::Ui,
     ui::world::World,
 };
 

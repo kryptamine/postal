@@ -7,9 +7,9 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    ui::keymap::{self, Binding, Key},
-    ui::mode::Mode,
-    ui::theme::Theme,
+    ui::frame::theme::Theme,
+    ui::input::keymap::{self, Binding, Key},
+    ui::state::mode::Mode,
 };
 
 const TITLE: &str = " Help ";

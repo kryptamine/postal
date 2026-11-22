@@ -1,4 +1,4 @@
-use crate::{ui::keymap::Key, ui::mode::Mode};
+use crate::{ui::input::keymap::Key, ui::state::mode::Mode};
 
 /// One row of the `?` popup.
 pub struct Binding {

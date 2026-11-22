@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::{
-    ui::drafts::draft_preview::DraftPreview, ui::layout::PADDING, ui::theme::Theme,
+    ui::drafts::draft_preview::DraftPreview, ui::frame::layout::PADDING, ui::frame::theme::Theme,
     ui::widgets::border,
 };
 

@@ -4,11 +4,11 @@ use crate::{
     mail::steering::Ask,
     ui::drafts::composing,
     ui::list::folder_show::{relist, show},
-    ui::main_screen::Ui,
     ui::preview::link_hints::LinkHints,
     ui::run::Error,
-    ui::toast::Toast,
-    ui::undo::Undo,
+    ui::state::main_screen::Ui,
+    ui::state::toast::Toast,
+    ui::state::undo::Undo,
     ui::world::World,
 };
 
