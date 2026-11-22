@@ -92,7 +92,11 @@ end
 vim.env.HOME = real_home
 
 local reply = drafts .. "/2.eml"
-vim.fn.writefile({ "To: bob@example.com", "Subject: Re: Hi", "", "hi bob", "", "> Shall we meet?" }, reply)
+local said_by = "On 1 Mar 2026, Bob <bob@example.com> wrote:"
+vim.fn.writefile(
+	{ "To: bob@example.com", "Subject: Re: Hi", "", "hi bob", "", "see you", "", said_by, "> Shall we meet?" },
+	reply
+)
 vim.cmd.edit(reply)
 local draft_buf = vim.api.nvim_get_current_buf()
 local function body()
@@ -148,7 +152,8 @@ local function turn(want)
 end
 
 ask("make it formal")
-turn({ "", "HI BOB", "", "> SHALL WE MEET?" })
+-- The agent upper-cases the Quote too, which Postal keeps as it was
+turn({ "", "HI BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 if vim.api.nvim_buf_get_lines(draft_buf, 0, 2, false)[1] ~= "To: bob@example.com" then
 	fail("the headers changed")
 end
@@ -218,7 +223,10 @@ if not os.getenv("POSTAL_BIN") and not thread[1].resource.text:find("Shall we me
 	fail("the Thread is " .. vim.inspect(thread))
 end
 
-if first[#first - 1].resource.text ~= "hi bob\n\n> Shall we meet?\n" or first[#first].text ~= "make it formal" then
+if
+	first[#first - 1].resource.text ~= "hi bob\n\nsee you\n\n" .. said_by .. "\n> Shall we meet?\n"
+	or first[#first].text ~= "make it formal"
+then
 	fail("the first prompt's body and instruction: " .. vim.inspect(first))
 end
 
@@ -270,7 +278,7 @@ local function is(want)
 end
 
 -- The agent's lines are in the buffer, the ones they replace shown over it
-shows({ "hi bob", "> Shall we meet?" })
+shows({ "hi bob", "see you" })
 left("2 hunks left")
 left("? keys")
 -- A narrow pane drops whole keys, never the count or the key list
@@ -284,18 +292,18 @@ vim.cmd.wincmd("=")
 press(4, "<leader>a")
 left("1 hunk left")
 press(6, "<leader>r")
-is({ "", "HI BOB", "", "> Shall we meet?" })
+is({ "", "HI BOB", "", "see you", "", said_by, "> Shall we meet?" })
 shows({})
 left("")
 
 -- A hand edit goes with the next turn, which carries no rules again
 vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "hello bob" })
-vim.api.nvim_buf_set_lines(draft_buf, -1, -1, false, { "", "drop me" })
+vim.api.nvim_buf_set_lines(draft_buf, 6, 6, false, { "", "drop me" })
 ask("shorter")
-turn({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
-shows({ "hello bob", "> Shall we meet?", "drop me" })
+turn({ "", "HELLO BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
+shows({ "hello bob", "see you", "", "drop me" })
 local second = prompts()[2].params.prompt
-local asked = "hello bob\n\n> Shall we meet?\n\ndrop me\n"
+local asked = "hello bob\n\nsee you\n\ndrop me\n\n" .. said_by .. "\n> Shall we meet?\n"
 if #second ~= 2 or second[1].resource.text ~= asked or second[2].text ~= "shorter" then
 	fail("the second prompt is " .. vim.inspect(second))
 end
@@ -308,7 +316,7 @@ if #prompts() ~= 2 then
 end
 
 press(4, "<leader>R")
-is({ "", "hello bob", "", "> Shall we meet?", "", "drop me" })
+is({ "", "hello bob", "", "see you", "", "drop me", "", said_by, "> Shall we meet?" })
 shows({})
 if not vim.wait(5000, function()
 	return #prompts() == 3
@@ -319,13 +327,13 @@ end
 -- The user's edit while the agent works is never overwritten unasked
 vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "hey bob" })
 vim.fn.writefile({}, agent_log .. ".go")
-turn({ "", "hey bob", "", "> SHALL WE MEET?", "" })
-shows({ "HELLO BOB", "> Shall we meet?", "drop me" })
-left("3 hunks left (1 conflict)")
+turn({ "", "hey bob", "", "SEE YOU", "", said_by, "> Shall we meet?" })
+shows({ "HELLO BOB", "see you", "", "drop me" })
+left("2 hunks left (1 conflict)")
 press(4, "<leader>a")
-left("2 hunks left")
+left("1 hunk left")
 press(4, "<leader>A")
-is({ "", "HELLO BOB", "", "> SHALL WE MEET?", "" })
+is({ "", "HELLO BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 shows({})
 left("")
 
@@ -333,7 +341,7 @@ left("")
 -- before it, so no later decision writes over the wrong rows
 vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "undo bob" })
 ask("again")
-turn({ "", "UNDO BOB", "", "> SHALL WE MEET?", "" })
+turn({ "", "UNDO BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 left("1 hunk left")
 home()
 vim.cmd.undo()
@@ -343,7 +351,7 @@ end) then
 	fail("the undo left the review open: " .. vim.inspect(said(pane_buf)))
 end
 
-is({ "", "undo bob", "", "> SHALL WE MEET?", "" })
+is({ "", "undo bob", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 shows({})
 left("")
 if vim.fn.maparg("<leader>a", "n", false, true).buffer == 1 then
@@ -354,7 +362,7 @@ end
 -- next one, whose first instruction waits for it
 vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "bye bob" })
 ask("quit")
-turn({ "", "BYE BOB", "", "> SHALL WE MEET?", "" })
+turn({ "", "BYE BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 if not vim.wait(5000, function()
 	return said(pane_buf):find("stub ended", 1, true) ~= nil
 end) then
@@ -370,7 +378,7 @@ end
 
 left("1 hunk left")
 press(4, "<leader>a")
-is({ "", "BYE BOB", "", "> SHALL WE MEET?", "" })
+is({ "", "BYE BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 left("")
 if not vim.wait(10000, function()
 	return #prompts() == before_restart + 1
@@ -378,7 +386,7 @@ end) then
 	fail("the restarted chat never sent the waiting instruction")
 end
 
-turn({ "", "BYE BOB", "", "> SHALL WE MEET?", "" })
+turn({ "", "BYE BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 
 -- `q` in the pane stops a turn, and the pane says so; a chunk after the
 -- user deleted the blank line over the input still ends the agent's text

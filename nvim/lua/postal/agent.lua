@@ -5,6 +5,7 @@ local acp = require("postal.acp")
 local body = require("postal.body")
 local kinds = require("postal.kinds")
 local pane = require("postal.pane")
+local quote = require("postal.quote")
 local recipients = require("postal.recipients")
 local requirements = require("postal.requirements")
 local review = require("postal.review")
@@ -182,13 +183,15 @@ function Chat:body()
 	return self.proposed or body.get(self.mail)
 end
 
---- Opens a review of the agent's body `text` against the one its turn was
---- sent with; a later write in the same turn replaces the review.
+--- Opens a review of the agent's body `text`, with the Quote of the one its
+--- turn was sent with, against that one; a later write in the same turn
+--- replaces the review.
 function Chat:propose(text)
 	if text ~= "" and not vim.endswith(text, "\n") then
 		text = text .. "\n"
 	end
 
+	text = quote.kept(self.sent, text)
 	self.proposed = text
 	if self.review then
 		self.review:settle(false, true)
