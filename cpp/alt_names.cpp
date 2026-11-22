@@ -32,6 +32,31 @@ std::string portrayed(const std::string& name)
             return owner.substr(0, owner.size() - s.size());
     return owner;
 }
+
+// Six words or more, a squeezed alt describes the picture rather than
+// naming it: "An audience sits in a dark auditorium".
+bool description(const std::string& alt) { return std::count(alt.begin(), alt.end(), ' ') >= 5; }
+
+// One word with a `_`, as `github_original_white`.
+bool file_name(const std::string& alt)
+{
+    return alt.find(' ') == std::string::npos && alt.find('_') != std::string::npos;
+}
+
+// An icon's file says what it shows, then how it is drawn.
+std::string file_subject(const std::string& alt) { return alt.substr(0, alt.find('_')); }
+
+std::string file_words(std::string alt)
+{
+    std::replace(alt.begin(), alt.end(), '_', ' ');
+    return alt;
+}
+
+// One lowercase word, as `dots` or `car`.
+bool file_word(const std::string& alt)
+{
+    return !alt.empty() && std::all_of(alt.begin(), alt.end(), [](unsigned char c) { return std::islower(c) != 0; });
+}
 } // namespace
 
 std::string alt_name(const std::string& alt)
@@ -44,22 +69,11 @@ std::string alt_name(const std::string& alt)
     return portrayed(rest);
 }
 
-bool description(const std::string& alt) { return std::count(alt.begin(), alt.end(), ' ') >= 5; }
-
-bool file_name(const std::string& alt)
+std::string shown_alt(const std::string& alt, bool sole, bool icon)
 {
-    return alt.find(' ') == std::string::npos && alt.find('_') != std::string::npos;
-}
-
-std::string file_words(std::string alt, bool first)
-{
-    if(first) return alt.substr(0, alt.find('_'));
-    std::replace(alt.begin(), alt.end(), '_', ' ');
-    return alt;
-}
-
-bool file_word(const std::string& alt)
-{
-    return !alt.empty() && std::all_of(alt.begin(), alt.end(), [](unsigned char c) { return std::islower(c) != 0; });
+    // An icon, or a file's name, decorates the text beside it.
+    if(!sole && (icon || file_word(alt) || file_name(alt))) return "";
+    std::string shown = file_name(alt) ? (icon ? file_subject(alt) : file_words(alt)) : alt;
+    return description(shown) ? "" : shown;
 }
 } // namespace cg

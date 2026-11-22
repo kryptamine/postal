@@ -188,14 +188,10 @@ std::string ImageLabels::named(const element::ptr& img, const std::string& name,
 std::string ImageLabels::text_for(const element::ptr& el, bool icon, const element::ptr& link, bool sole)
 {
     std::string alt = name_of(el);
-    // An icon, or a file's name for an alt, decorates the text beside it.
-    bool decorates = !sole && (icon || file_word(alt));
     bool logo = logos.count(el.get()) && words(alt) <= NAME_WORDS;
-    if(invisible(el) || decorates || logo || said_already(el, alt, mail_text)) return "";
-    // A file's name says what a link's own picture opens, and no more.
-    if(file_name(alt)) alt = sole ? file_words(alt, icon) : "";
-    if(description(alt)) alt.clear();
-    if(!alt.empty() || !sole || icon) return named(el, alt, icon);
+    if(invisible(el) || logo || said_already(el, alt, mail_text)) return "";
+    std::string shown = shown_alt(alt, sole, icon);
+    if(!shown.empty() || !sole || icon) return named(el, shown, icon);
     if(labelled_links.count(link.get()) || redundant.count(link.get()) || !leads_out(link)) return "";
     labelled_links.insert(link.get());
     return "[" + link_name(link->get_attr("href")) + "]";
