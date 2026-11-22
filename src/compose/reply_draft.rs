@@ -113,7 +113,7 @@ fn subject(original: &str) -> String {
 }
 
 /// Each address of `headers` that parses, in order.
-fn mailboxes<'a>(headers: impl IntoIterator<Item = Option<&'a Address<'a>>>) -> Vec<Mailbox> {
+pub fn mailboxes<'a>(headers: impl IntoIterator<Item = Option<&'a Address<'a>>>) -> Vec<Mailbox> {
     headers
         .into_iter()
         .flatten()

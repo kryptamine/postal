@@ -52,15 +52,25 @@ pub fn template(signature: Option<&str>) -> String {
 
 /// A new Draft's file in `drafts`, holding `text`.
 pub fn create(drafts: &Path, text: &str) -> io::Result<PathBuf> {
-    std::fs::create_dir_all(drafts)?;
-    let path = drafts.join(format!("{}.eml", unique_id()));
+    let path = named(drafts);
+    create_at(&path, text)?;
+    Ok(path)
+}
+
+/// Where a new Draft's file in `drafts` goes, before it is written.
+pub fn named(drafts: &Path) -> PathBuf {
+    drafts.join(format!("{}.eml", unique_id()))
+}
+
+/// The new Draft's file at `path`, holding `text`.
+pub fn create_at(path: &Path, text: &str) -> io::Result<()> {
+    std::fs::create_dir_all(path.parent().unwrap_or(path))?;
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .mode(MODE)
-        .open(&path)?;
-    file.write_all(text.as_bytes())?;
-    Ok(path)
+        .open(path)?;
+    file.write_all(text.as_bytes())
 }
 
 /// Whether the Draft at `path` is still the `template` it opened on, however

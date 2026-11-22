@@ -34,6 +34,9 @@ pub enum Action {
     Compose,
     /// A Reply's Draft in `$EDITOR`.
     Reply(Recipients),
+    /// A Forward's Draft of the selected Message, or in Reading of the one
+    /// at the cursor, in `$EDITOR`.
+    Forward,
     /// Hint mode on the links in the Preview window.
     Links,
     /// Hint mode on the attachments of the selected Message, or in Reading

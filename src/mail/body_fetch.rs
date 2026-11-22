@@ -20,8 +20,9 @@ pub enum Request {
     Bodies(BodyRequest),
     /// The page of Messages of this Folder older than every cached one.
     Backfill(FolderName),
-    /// The bodies of these UIDs, each in its Folder, which a Reply waits
-    /// on: served first, and never passed over for a later request.
+    /// The bodies of these UIDs, each in its Folder, which a Reply or a
+    /// Forward waits on: served first, and never passed over for a later
+    /// request.
     Reply(Vec<MessageRef>),
     /// Served after a Reply's bodies, each in turn.
     Attachment(AttachmentRequest),

@@ -113,7 +113,7 @@ The desktop's notice of new Unread mail in an Inbox while Postal runs, one per b
 _Avoid_: alert, toast, popup
 
 **Status**:
-The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), fetching the body a Reply waits on, connecting, or a countdown to the next reconnect. With more than one Account, it shows the worst state among them, named by its address. A Toast covers it while shown.
+The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), fetching what a Reply or a Forward waits on, connecting, or a countdown to the next reconnect. With more than one Account, it shows the worst state among them, named by its address. A Toast covers it while shown.
 _Avoid_: indicator, banner, connection bar
 
 **Hint mode**:
@@ -144,8 +144,12 @@ _Avoid_: contact, address book, recipient
 Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with the Account's Signature above its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft. While connected, its Draft opens once every body of its Thread the Message List knows is in the Cache, those missing fetched first, so `postal thread show` reads the whole correspondence.
 _Avoid_: respond, answer
 
+**Forward**:
+Passing a Message on with `F`, from the Account it reached, as a new Thread: the selected Message, in Reading the one under the cursor, below a forwarded-message header naming its From, Date, Subject, To and Cc, its text as sent, an HTML one laid out as text, and the Account's Signature above it. `To` is left for the user, and the Subject gains `Fwd: ` once. Its attachments are fetched first and attached on `Attach:` lines (ADR 0027).
+_Avoid_: resend
+
 **Signature**:
-The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `signature` in `config.toml`, or the text file `signature-file` names, `~` the home directory and a relative path beside `config.toml`; at the top level for the Account named there, in an `[[account]]` for that one. Compose and Reply write it into the Draft, where it is the user's to change; `Enter` on its row under the Account in Settings opens `$EDITOR` on a copy of it, which the plugin's agent can write as it writes a Draft, and takes what the copy holds once the editor exits. In the Preview and Reading, the Signature of a plain-text Message shows muted, down to its Quote; an HTML one shows as the mail lays it out.
+The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `signature` in `config.toml`, or the text file `signature-file` names, `~` the home directory and a relative path beside `config.toml`; at the top level for the Account named there, in an `[[account]]` for that one. Compose, Reply and Forward write it into the Draft, where it is the user's to change; `Enter` on its row under the Account in Settings opens `$EDITOR` on a copy of it, which the plugin's agent can write as it writes a Draft, and takes what the copy holds once the editor exits. In the Preview and Reading, the Signature of a plain-text Message shows muted, down to its Quote; an HTML one shows as the mail lays it out.
 _Avoid_: footer, sign-off
 
 **Draft**:

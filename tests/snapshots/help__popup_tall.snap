@@ -2,7 +2,7 @@
 source: tests/help.rs
 expression: screen
 ---
-size: 80x38  cursor: hidden
+size: 80x39  cursor: hidden
 ┌─ 2024 ───┌ Help ──────────────────────────────────────────────────┐──────────┐
 │   Bob    │                                                        │024-11-18 │
 │   Newer  │ Navigate                                               │          │
@@ -18,10 +18,11 @@ size: 80x38  cursor: hidden
 │          │ Backspace               delete: move to Trash          │          │
 │          │ e                       archive                        │          │
 │          │ m                       move to a Folder               │          │
-└──────────│ u                       undo a move or discard         │──────────┘
-┌ Inbox · 1│ c                       compose a new Message          │──────────┐
-│ From    B│ r                       reply to the sender            │024 09:00 │
-│ To       │ R                       reply to all                   │          │
+│          │ u                       undo a move or discard         │          │
+└──────────│ c                       compose a new Message          │──────────┘
+┌ Inbox · 1│ r                       reply to the sender            │──────────┐
+│ From    B│ R                       reply to all                   │024 09:00 │
+│ To       │ F                       forward                        │          │
 │ Subject N│ a / s                   open / save an attachment      │          │
 ├──────────│                                                        │──────────┤
 │ Newer bod│ Links                                                  │          │
@@ -40,4 +41,4 @@ size: 80x38  cursor: hidden
 │          │ /                       search, or edit the Query      │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
- j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help
+ j/k move  ^d/^u scroll  enter read  F forward  o links  q quit  ?: help

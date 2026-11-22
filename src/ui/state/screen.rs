@@ -2,6 +2,7 @@ use tokio::time::Instant;
 
 use crate::{
     cache::Cache,
+    compose::awaited_forward::AwaitedForward,
     compose::awaited_reply::AwaitedReply,
     domain::per_account::{AccountId, PerAccount},
     domain::thread::Key,
@@ -33,6 +34,7 @@ pub struct Screen {
     /// What an Undo may take back, the latest last.
     pub undo: Vec<Undo>,
     pub replying: Option<AwaitedReply>,
+    pub forwarding: Option<AwaitedForward>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
 }
@@ -79,7 +81,8 @@ impl Screen {
     }
 
     /// The worst sync connection's Status, with its Account when there are
-    /// several; while all are live, a Reply's fetch, else the backfill's.
+    /// several; while all are live, a Reply's or a Forward's fetch, else
+    /// the backfill's.
     pub fn status(&self) -> (Status, Option<AccountId>) {
         let worst = self
             .statuses
@@ -88,11 +91,15 @@ impl Screen {
             .max_by_key(|&i| self.statuses[i].rank());
         let named = worst.filter(|_| self.statuses.len() > 1);
         match (worst.map(|i| self.statuses[i]), self.backfill) {
-            (Some(Status::Live) | None, _) if self.replying.is_some() => (Status::Fetching, None),
+            (Some(Status::Live) | None, _) if self.fetching() => (Status::Fetching, None),
             (Some(Status::Live) | None, Some(backfill)) => (backfill, None),
             (Some(status), _) => (status, named.filter(|_| status != Status::Live)),
             (None, None) => (Status::Live, None),
         }
+    }
+
+    const fn fetching(&self) -> bool {
+        self.replying.is_some() || self.forwarding.is_some()
     }
 
     /// The first Account the server no longer accepts.

@@ -22,8 +22,8 @@ size: 80x24  cursor: hidden
 │          │ c                       compose a new Message          │          │
 │          │ r                       reply to the sender            │          │
 │          │ R                       reply to all                   │          │
+│          │ F                       forward                        │          │
 │          │ a / s                   open / save an attachment      │          │
 │          │                                                        │          │
-│          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
- j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help
+ j/k move  ^d/^u scroll  enter read  F forward  o links  q quit  ?: help

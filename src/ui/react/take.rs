@@ -3,6 +3,7 @@ use ratatui::layout::Rect;
 use crate::{
     render::icons::Icons,
     ui::drafts::drafting,
+    ui::drafts::forwarding,
     ui::drafts::local_list::open_local,
     ui::exit::Exit,
     ui::input::step::Step,
@@ -32,6 +33,7 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         }
         Step::Draft(drafting) => drafting::draft(drafting, &mut model.tty, ui, world)?,
         Step::Reply(to) => drafting::reply(to, &mut model.tty, ui, world, &model.replies)?,
+        Step::Forward => forwarding::forward(&mut model.tty, ui, world, &model.forwards)?,
         Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
         Step::Settings => match Settings::open(world.config_dir) {
             Ok(settings) => ui.screen.over.open(settings),

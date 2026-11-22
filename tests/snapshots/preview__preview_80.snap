@@ -32,4 +32,4 @@ size: 80x30  cursor: hidden
 │ > Yes: the printer arrived on Tuesday.                                       │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
- j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help
+ j/k move  ^d/^u scroll  enter read  F forward  o links  q quit  ?: help

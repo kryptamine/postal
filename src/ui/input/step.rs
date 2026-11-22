@@ -19,6 +19,7 @@ pub enum Step {
     Steer(Steer),
     Draft(Drafting),
     Reply(Recipients),
+    Forward,
     Browse(Arc<str>),
     /// Hint mode on the attachment line, to pick one for this.
     Attachments(Purpose),

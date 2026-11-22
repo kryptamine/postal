@@ -25,7 +25,8 @@ Lowest first:
 - `render/`: an HTML part as Preview lines (html2text) or as the rendered View
   (litehtml in its layout process, the cell grid), Quotes, signatures, wrapping,
   the glyphs the font has, how a date reads.
-- `compose/`: Drafts and their notes, Replies, the Outbox on disk, the editor,
+- `compose/`: Drafts and their notes, Replies, Forwards and the files they
+  attach, the Outbox on disk, the editor,
   the Account a Message goes out from, its signature in the editor.
 - `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
   reconnecting, the sign-in check, one Account's two connections

@@ -11,6 +11,7 @@ use crate::{
     compose::accounts::Accounts,
     compose::outbox::Outbox,
     domain::per_account::{AccountId, PerAccount},
+    mail::forward_fetch::ForwardFetch,
     mail::reply_fetch::ReplyFetch,
     mail::routes::Routes,
     mail::status::Status,
@@ -20,6 +21,7 @@ use crate::{
     ui::alloc_count,
     ui::drafts::composing,
     ui::drafts::draft_preview::DraftPreview,
+    ui::drafts::forwarding,
     ui::drafts::local_list::relist_local,
     ui::exit::Exit,
     ui::frame::draw,
@@ -54,14 +56,15 @@ pub enum Error {
 }
 
 /// The network work behind the screen and what it reports; what is asked of
-/// it (older pages, a Reply's bodies, attachments) and of the sync
-/// connection; and where a Send leaves from.
+/// it (older pages, what a Reply or Forward waits on, attachments) and of
+/// the sync connection; and where a Send leaves from.
 pub struct Background<'a, W, U> {
     pub work: W,
     /// Each tells the Account it is of.
     pub updates: U,
     pub older: OlderPages,
     pub replies: ReplyFetch,
+    pub forwards: ForwardFetch,
     pub attachments: WantedAttachments,
     pub asks: Routes<Ask>,
     pub accounts: Accounts<'a>,
@@ -85,6 +88,7 @@ pub struct Model<'a> {
     pub world: World<'a>,
     older: OlderPages,
     pub replies: ReplyFetch,
+    pub forwards: ForwardFetch,
     pub attachments: WantedAttachments,
     pub notifier: Notifier,
 }
@@ -123,6 +127,7 @@ pub async fn run(
         world,
         older: background.older,
         replies: background.replies,
+        forwards: background.forwards,
         attachments: background.attachments,
         notifier: Notifier::new(background.notify),
     };
@@ -212,6 +217,8 @@ impl Model<'_> {
     fn arrive(&mut self, account: AccountId, update: Update) -> Result<(), Error> {
         let replying = self.ui.screen.replying.as_mut();
         let arrived = self.replies.notice(account, &update, replying);
+        let forwarding = self.ui.screen.forwarding.as_mut();
+        let forwarded = self.forwards.notice(account, &update, forwarding);
         if let Some(toast) = self.attachments.notice(account, &update) {
             self.ui.screen.toast = Some(toast);
         }
@@ -224,6 +231,10 @@ impl Model<'_> {
         apply::apply(account, update, &mut self.ui, self.world, self.previews)?;
         if let Some(result) = arrived {
             composing::fetched(result, &mut self.tty, &mut self.ui.screen, self.world)?;
+        }
+
+        if let Some(result) = forwarded {
+            forwarding::forwarded(result, &mut self.tty, &mut self.ui.screen, self.world)?;
         }
 
         Ok(())

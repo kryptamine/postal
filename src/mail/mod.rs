@@ -7,6 +7,7 @@ pub mod body_fetch;
 mod envelope_pass;
 mod flag_changes;
 mod folder_list;
+pub mod forward_fetch;
 mod header;
 mod idle;
 mod imap;

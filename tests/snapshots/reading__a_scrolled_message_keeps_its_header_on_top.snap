@@ -18,4 +18,4 @@ size: 100x16  cursor: hidden
 │ Line 19                                                                                          │
 │ Line 20                                                                                          │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
- j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  o links  ?: help
+ j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  F forward  o links  ?: help

@@ -30,6 +30,7 @@ pub fn act(
         Some(Action::Undo) => Step::Steer(Steer::Undo),
         Some(Action::Compose) => Step::Draft(Drafting::Compose),
         Some(Action::Reply(to)) => Step::Reply(to),
+        Some(Action::Forward) => Step::Forward,
         Some(Action::Back | Action::KeepQuery) => {
             screen.list();
             Step::Stay

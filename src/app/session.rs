@@ -11,6 +11,7 @@ use crate::{
     compose::outbox::Outbox,
     compose::outgoing::Outgoing,
     domain::per_account::PerAccount,
+    mail::forward_fetch::ForwardFetch,
     mail::outbox_flush::Sender,
     mail::reply_fetch::ReplyFetch,
     mail::routes::Routes,
@@ -71,6 +72,7 @@ pub async fn session(
     let requests = Routes::new(requests.into_iter().collect());
     let older = OlderPages::new(requests.clone(), configs.map(|_| false));
     let replies = ReplyFetch::new(requests.clone(), configs.map(|_| false));
+    let forwards = ForwardFetch::new(requests.clone(), configs.map(|_| false));
     let attachments = WantedAttachments::new(requests.clone(), configs.map(|_| false));
     let (terminal, background) = slot.take()?;
     let icons = configs
@@ -84,6 +86,7 @@ pub async fn session(
         updates,
         older,
         replies,
+        forwards,
         attachments,
         asks: Routes::new(asks.into_iter().collect()),
         accounts: Accounts(configs),

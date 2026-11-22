@@ -35,8 +35,9 @@ pub fn compose(
     accounts: Accounts,
     from: Option<AccountId>,
 ) -> Result<(), Error> {
-    // A Reply still waiting on its body would open over this Draft.
+    // A Reply or Forward still waiting would open over this Draft.
     screen.replying = None;
+    screen.forwarding = None;
     let signature = from.map_or(Ok(None), |from| accounts.outgoing(from).signature());
     let template = draft_file::template(block(&signature));
     let Some(path) = create(screen, &template) else {
@@ -66,12 +67,12 @@ pub fn compose(
 }
 
 /// The signature a new Draft holds; one that did not read is left out.
-fn block(signature: &io::Result<Option<String>>) -> Option<&str> {
+pub fn block(signature: &io::Result<Option<String>>) -> Option<&str> {
     signature.as_ref().ok().and_then(Option::as_deref)
 }
 
 /// A Toast for a signature that did not read, and so is not in the Draft.
-fn toast_unread(screen: &mut Screen, signature: &io::Result<Option<String>>) {
+pub fn toast_unread(screen: &mut Screen, signature: &io::Result<Option<String>>) {
     if let Err(error) = signature {
         tracing::error!("reading the signature failed: {error}");
         screen.toast = Some(Toast::error("could not read the signature"));
@@ -101,6 +102,7 @@ pub fn reply(
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
     screen.replying = None;
+    screen.forwarding = None;
     let message = &awaited.message;
     if let Some(path) = answered_by(message, world.accounts) {
         return edit(tty, screen, path, DraftNotes::default());
@@ -245,7 +247,7 @@ pub fn edit(
 
 /// The preview of the Draft at `path` as the file reads now; `notes` win
 /// over those beside it.
-fn preview(screen: &mut Screen, path: PathBuf, notes: DraftNotes) {
+pub fn preview(screen: &mut Screen, path: PathBuf, notes: DraftNotes) {
     match DraftPreview::read(path, notes.answering) {
         Ok(mut preview) => {
             preview.account = notes.account.or(preview.account);

@@ -7,6 +7,7 @@ use crate::{
     app::onboard,
     app::session::session,
     app::signed_in::opened,
+    compose::forwarded,
     ui::attachment_file,
     ui::exit::Exit,
     ui::onboarding::{self, Outcome, Start},
@@ -17,6 +18,10 @@ use crate::{
 pub fn run() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
     attachment_file::clear();
+    if let Err(error) = forwarded::sweep() {
+        tracing::warn!("removing the files of forwards gone failed: {error}");
+    }
+
     on_screen(async |slot| {
         let (mut configs, mut sign_ins) = opened(slot, &dir).await?;
         let mut failure = None;
