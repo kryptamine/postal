@@ -24,7 +24,11 @@ pub enum Action {
     /// Delete: the selected Thread's Messages in their Folders, or in
     /// Reading the one at the cursor.
     Delete,
-    /// Undo of the latest Delete or Draft discard not yet taken back.
+    /// Archive, as Delete takes Messages to Trash.
+    Archive,
+    /// Move, as Delete, to a Folder the Folder Picker picks.
+    MoveTo,
+    /// Undo of the latest move or Draft discard not yet taken back.
     Undo,
     /// A new Draft in `$EDITOR`.
     Compose,

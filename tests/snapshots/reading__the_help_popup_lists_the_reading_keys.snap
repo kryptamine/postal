@@ -18,12 +18,12 @@ size: 80x24  cursor: hidden
 │ Line 09  │ E                       open the Message in $EDITOR    │          │
 │ Line 10  │ U                       mark the Message Unread        │          │
 │ Line 11  │ Backspace               delete: move to Trash          │          │
-│ Line 12  │ u                       undo a delete or discard       │          │
-│ Line 13  │ c                       compose a new Message          │          │
-│ Line 14  │ r                       reply to the sender            │          │
-│ Line 15  │ R                       reply to all                   │          │
-│ Line 16  │ a / s                   open / save an attachment      │          │
-│ Line 17  │                                                        │          │
+│ Line 12  │ e                       archive                        │          │
+│ Line 13  │ m                       move to a Folder               │          │
+│ Line 14  │ u                       undo a move or discard         │          │
+│ Line 15  │ c                       compose a new Message          │          │
+│ Line 16  │ r                       reply to the sender            │          │
+│ Line 17  │ R                       reply to all                   │          │
 │ Line 18  │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

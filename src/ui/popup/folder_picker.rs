@@ -7,15 +7,24 @@ use nucleo_matcher::{
 
 use crate::{
     domain::folder::{Folder, Role},
-    domain::per_account::PerAccount,
+    domain::per_account::{AccountId, PerAccount},
     domain::shown::Shown,
 };
+
+/// What the Folder picked is for.
+#[derive(Clone, Copy)]
+pub enum Purpose {
+    Show,
+    /// The selected Messages of this Account move to it.
+    MoveTo(AccountId),
+}
 
 /// The Folder Picker: every Folder, narrowed by a typed Query with the
 /// Search matcher, and the row selected. With several Accounts, All Inboxes
 /// comes first, each Account has a section headed by its address, and Local
 /// Drafts comes after them all.
 pub struct FolderPicker {
+    purpose: Purpose,
     folders: Vec<Shown>,
     /// The section each Folder is listed in: All Inboxes', each Account's,
     /// then Local Drafts'; one section with one Account.
@@ -50,7 +59,17 @@ impl FolderPicker {
             Vec::new()
         };
 
-        let mut picker = Self {
+        Self::empty(Purpose::Show, headings).filled(folders, shown)
+    }
+
+    /// Lists the Folders of `account` but `shown`, to move Messages to.
+    pub fn moving(folders: Vec<Folder>, shown: &Shown, account: AccountId) -> Self {
+        Self::empty(Purpose::MoveTo(account), Vec::new()).filled(folders, shown)
+    }
+
+    fn empty(purpose: Purpose, headings: Vec<Arc<str>>) -> Self {
+        Self {
+            purpose,
             folders: Vec::new(),
             sections: Vec::new(),
             headings,
@@ -59,10 +78,16 @@ impl FolderPicker {
             hits: Vec::new(),
             selected: 0,
             matcher: Matcher::new(Config::DEFAULT),
-        };
+        }
+    }
 
-        picker.reload(folders, shown);
-        picker
+    fn filled(mut self, folders: Vec<Folder>, shown: &Shown) -> Self {
+        self.reload(folders, shown);
+        self
+    }
+
+    pub const fn purpose(&self) -> Purpose {
+        self.purpose
     }
 
     /// Lists `folders` anew, with All Inboxes, Local Drafts, the Query and
@@ -70,6 +95,18 @@ impl FolderPicker {
     /// knows it.
     pub fn reload(&mut self, folders: Vec<Folder>, shown: &Shown) {
         let selected = self.chosen().unwrap_or(shown).clone();
+        if let Purpose::MoveTo(account) = self.purpose {
+            let mut folders: Vec<_> = folders
+                .into_iter()
+                .filter(|f| f.account == account && !shown.is(f.account, &f.name))
+                .map(Shown::Folder)
+                .collect();
+            folders.sort_by(order);
+            self.sections = vec![0; folders.len()];
+            self.list(folders, &selected);
+            return;
+        }
+
         let all_inboxes = (!self.headings.is_empty()).then(|| counted_all_inboxes(&folders));
         let mut folders: Vec<_> = folders.into_iter().map(Shown::Folder).collect();
         if matches!(shown, Shown::Folder(_)) && !folders.iter().any(|f| f.same(shown)) {
@@ -87,13 +124,18 @@ impl FolderPicker {
 
         folders.sort_by(|a, b| section(a).cmp(&section(b)).then_with(|| order(a, b)));
         self.sections = folders.iter().map(section).collect();
+        self.list(folders, &selected);
+    }
+
+    /// Lists `folders`, sorted into their sections, with `selected` kept.
+    fn list(&mut self, folders: Vec<Shown>, selected: &Shown) {
         self.haystacks = folders.iter().map(haystack).collect();
         self.folders = folders;
         self.rematch();
         self.selected = self
             .hits
             .iter()
-            .position(|&i| self.folders[i].same(&selected))
+            .position(|&i| self.folders[i].same(selected))
             .unwrap_or(0);
     }
 

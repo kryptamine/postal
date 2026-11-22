@@ -2,9 +2,10 @@ use crate::domain::folder::{Folder, Role};
 
 /// The names a server without SPECIAL-USE (RFC 6154) gives a role's
 /// Folder: iCloud's first, then the common ones.
-const NAMES: [(Role, &[&str]); 4] = [
+const NAMES: [(Role, &[&str]); 5] = [
     (Role::Sent, &["Sent Messages", "Sent"]),
     (Role::Drafts, &["Drafts"]),
+    (Role::Archive, &["Archive"]),
     (Role::Spam, &["Junk", "Spam"]),
     (Role::Trash, &["Deleted Messages", "Trash"]),
 ];
@@ -13,7 +14,10 @@ const NAMES: [(Role, &[&str]); 4] = [
 /// of its names; a role named by special use is never given twice.
 pub fn fill(folders: &mut [Folder<()>]) {
     for (role, names) in NAMES {
-        if folders.iter().any(|f| f.role == Some(role)) {
+        // Where All Mail is, as on Gmail, archiving goes there and a Folder
+        // named Archive is a label like any other.
+        let taken = |r| folders.iter().any(|f| f.role == Some(r));
+        if taken(role) || (role == Role::Archive && taken(Role::All)) {
             continue;
         }
 

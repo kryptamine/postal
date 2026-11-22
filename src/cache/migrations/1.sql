@@ -122,18 +122,22 @@ CREATE TABLE flag_change (
     added INTEGER NOT NULL,
     PRIMARY KEY (account, mailbox, uid, flag)
 );
--- A Message a Delete took out of `message`, with its row, while the
--- server or an Undo may still move it: docs/adr/0012-delete-and-undo.md.
+-- A Message a move took out of `message`, with its row, while the server
+-- or an Undo may still move it: docs/adr/0012-delete-and-undo.md.
 CREATE TABLE moved (
     id INTEGER PRIMARY KEY,
-    -- One per Delete, shared by its Messages.
+    -- One per move, shared by its Messages.
     batch INTEGER NOT NULL,
-    -- Whether the Message is wanted in Trash and whether the server has it
-    -- there, under `at_uid` there or in `mailbox`; NULL when never said.
-    want_trash INTEGER NOT NULL,
-    at_trash INTEGER NOT NULL,
+    -- Where it goes: the Folder with the role `to_role`, else `to_folder`.
+    to_role TEXT,
+    to_folder TEXT,
+    -- Whether the Message is wanted away from `mailbox` and whether the
+    -- server has it away, in `away`, under `at_uid` there or in `mailbox`;
+    -- NULL when never said.
+    want_away INTEGER NOT NULL,
+    at_away INTEGER NOT NULL,
     at_uid INTEGER,
-    trash TEXT,
+    away TEXT,
     account TEXT NOT NULL,
     mailbox TEXT NOT NULL,
     uid INTEGER NOT NULL,
@@ -155,7 +159,6 @@ CREATE TABLE moved (
     text_html INTEGER,
     attachments TEXT NOT NULL
 );
--- What the server holds in `mailbox` that the Message List leaves out.
 -- An address a Message names, once per Message whichever Folders hold it;
 -- none from Trash or Spam: docs/adr/0016-expand-recipients-after-the-editor.md.
 CREATE TABLE correspondence (
@@ -177,8 +180,9 @@ CREATE TABLE sent_pass (
     uid_validity INTEGER NOT NULL,
     last_uid INTEGER NOT NULL
 );
-CREATE VIEW deleted AS
-    SELECT account, mailbox, at_uid AS uid FROM moved WHERE want_trash AND NOT at_trash;
+-- What the server holds in `mailbox` that the Message List leaves out.
+CREATE VIEW leaving AS
+    SELECT account, mailbox, at_uid AS uid FROM moved WHERE want_away AND NOT at_away;
 -- Rows an Undo put back under `uid`, with where the server has the Message.
 CREATE VIEW undone AS
-    SELECT account, mailbox, uid, at_trash, at_uid FROM moved WHERE NOT want_trash;
+    SELECT account, mailbox, uid, at_away, at_uid FROM moved WHERE NOT want_away;

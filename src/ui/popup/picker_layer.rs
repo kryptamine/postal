@@ -2,9 +2,15 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Frame, layout::Rect};
 
 use crate::{
-    domain::shown::Shown, ui::exit::Exit, ui::frame::theme::Theme, ui::input::keymap,
-    ui::input::step::Steer, ui::input::step::Step, ui::popup::folder_picker::FolderPicker,
-    ui::popup::layer_act::Act, ui::popup::picker_popup::PickerPopup,
+    domain::shown::Shown,
+    ui::exit::Exit,
+    ui::frame::theme::Theme,
+    ui::input::keymap,
+    ui::input::step::Steer,
+    ui::input::step::Step,
+    ui::popup::folder_picker::{FolderPicker, Purpose},
+    ui::popup::layer_act::Act,
+    ui::popup::picker_popup::PickerPopup,
 };
 
 /// What a key does while the Folder Picker is open.
@@ -14,7 +20,7 @@ enum Pick {
     Erase,
     Down,
     Up,
-    /// Shows the selected Folder.
+    /// Shows the selected Folder, or moves Messages to it.
     Choose,
     Close,
     Quit,
@@ -27,10 +33,13 @@ pub fn key(picker: &mut FolderPicker, key: KeyEvent) -> Act {
         Some(Pick::Erase) => picker.pop(),
         Some(Pick::Down) => picker.down(),
         Some(Pick::Up) => picker.up(),
-        Some(Pick::Choose) => match picker.chosen() {
-            Some(Shown::LocalDrafts) => return Act::Close(Step::LocalDrafts),
-            Some(folder) => return Act::Close(Step::Steer(Steer::Show(folder.clone()))),
-            None => {}
+        Some(Pick::Choose) => match (picker.purpose(), picker.chosen()) {
+            (Purpose::MoveTo(_), Some(Shown::Folder(folder))) => {
+                return Act::Close(Step::Steer(Steer::MoveTo(folder.clone())));
+            }
+            (_, Some(Shown::LocalDrafts)) => return Act::Close(Step::LocalDrafts),
+            (_, Some(folder)) => return Act::Close(Step::Steer(Steer::Show(folder.clone()))),
+            (_, None) => {}
         },
         Some(Pick::Close) => return Act::Close(Step::Stay),
         Some(Pick::Quit) => return Act::Step(Step::Exit(Exit::Quit)),

@@ -17,7 +17,7 @@ The Folder named `INBOX` of an Account; with one Account, the one every run star
 _Avoid_: feed
 
 **Folder Picker**:
-A popup over the screen listing every Folder with its Unread count, and Local Drafts, opened with `f`; with more than one Account, All Inboxes first, then a section per Account headed by its address; typing narrows it, `Enter` shows the chosen Folder.
+A popup over the screen listing every Folder with its Unread count, and Local Drafts, opened with `f`; with more than one Account, All Inboxes first, then a section per Account headed by its address; typing narrows it, `Enter` shows the chosen Folder. Opened by a Move, it lists only the Account's other Folders, and `Enter` moves there.
 _Avoid_: folder list, switcher, sidebar
 
 **Message**:
@@ -60,8 +60,16 @@ _Avoid_: bin, deleted items
 Moving Messages to Trash with `Backspace`: in the Message List or a Search, those of the selected Thread in its Folder; in Reading, the one under the cursor. It shows at once, reaches the server once connected, and does nothing in Trash.
 _Avoid_: remove, erase, trash (as a verb)
 
+**Archive**:
+Moving Messages, as a Delete takes them, with `e` to the Account's Folder with the archive role (RFC 6154), or by the name `Archive` without one; on Gmail to All Mail, which takes the Inbox label off. It does nothing in that Folder.
+_Avoid_: file, done
+
+**Move**:
+Moving Messages, as a Delete takes them, with `m` to the Folder the Folder Picker picks among the Account's. Not from All Mail, which holds every Message (ADR 0026).
+_Avoid_: file, label (as a verb)
+
 **Undo**:
-Taking back the latest Delete or Draft discard not yet taken back, with `u`, as many times as this run has made one: a Delete's Messages return to the Folder they left, and a discarded Draft returns to its preview.
+Taking back the latest Delete, Archive, Move or Draft discard not yet taken back, with `u`, as many times as this run has made one: the Messages moved return to the Folder they left, and a discarded Draft returns to its preview.
 _Avoid_: restore, revert
 
 **Preview**:

@@ -28,15 +28,15 @@ impl Cache {
     }
 
     /// Every UID of `folder` the server holds as the Cache knows it,
-    /// ascending: a queued Delete's too, an Undo's old one not.
+    /// ascending: a queued move's too, an Undo's old one not.
     pub fn uids(&self, folder: &FolderName) -> Result<Vec<Uid>, Error> {
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
             "SELECT uid FROM message WHERE account = ?2 AND mailbox = ?1
                AND NOT EXISTS (SELECT 1 FROM undone u
                  WHERE u.account = ?2 AND u.mailbox = ?1 AND u.uid = message.uid
-                   AND (u.at_trash OR u.at_uid != u.uid))
-             UNION SELECT uid FROM deleted WHERE account = ?2 AND mailbox = ?1
+                   AND (u.at_away OR u.at_uid != u.uid))
+             UNION SELECT uid FROM leaving WHERE account = ?2 AND mailbox = ?1
              ORDER BY uid",
         )?;
         let uids = statement
@@ -177,7 +177,7 @@ fn write_state(
     Ok(())
 }
 
-/// A row whose Delete the server has yet to see stays out: the server
+/// A row whose move the server has yet to see stays out: the server
 /// still lists it in `folder`.
 fn insert(
     connection: &Connection,
@@ -192,7 +192,7 @@ fn insert(
           answered, account, from_line, to_line, attachments)
          SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                 ?18, ?19, ?20
-         WHERE NOT EXISTS (SELECT 1 FROM deleted WHERE account = ?17 AND mailbox = ?13
+         WHERE NOT EXISTS (SELECT 1 FROM leaving WHERE account = ?17 AND mailbox = ?13
                              AND uid = ?1)",
     )?;
     for new in rows {

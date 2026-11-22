@@ -36,7 +36,8 @@ Lowest first:
   the Mode, Toasts, Undo), `input/` (the keymap, a key's `Step`), `react/`
   (what a `Step`, a `Steer`, an `Update` or a timer does), `frame/` (the
   draw, the layout, the Theme), `terminal/` (the backend, input, the tty),
-  `list/` (the Message List, Search, marking and deleting), `preview/` (the
+  `list/` (the Message List, Search, marking, and moving Messages out
+  of a Folder), `preview/` (the
   Preview, the Thread, link hints), `drafts/` (composing, the Draft and
   Local Drafts panes), `popup/` (the layers over the screen: help, the
   Folder Picker, Settings), `widgets/` (small drawing pieces), `outside/`

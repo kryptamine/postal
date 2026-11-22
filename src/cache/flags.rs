@@ -187,7 +187,7 @@ fn queue(
             "INSERT OR REPLACE INTO flag_change (account, mailbox, uid, flag, added)
              VALUES (?5, ?1, coalesce(
                  (SELECT at_uid FROM undone
-                  WHERE account = ?5 AND mailbox = ?1 AND uid = ?2 AND NOT at_trash), ?2
+                  WHERE account = ?5 AND mailbox = ?1 AND uid = ?2 AND NOT at_away), ?2
              ), ?3, ?4)",
         )?
         .execute(params![folder, uid, flag.name(), added, account])?;

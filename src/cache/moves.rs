@@ -2,8 +2,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Cache, Error, folder_key::FolderKey, schema::MOVED_ROW};
 use crate::{
-    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::message_ref::MessageRef,
-    domain::thread_id::ThreadId, domain::uid::Uid,
+    domain::body_key::BodyKey, domain::folder::Role, domain::folder_name::FolderName,
+    domain::message_ref::MessageRef, domain::thread_id::ThreadId, domain::uid::Uid,
 };
 
 /// One Message the server is to move, from the Folder to select.
@@ -14,19 +14,26 @@ pub struct PendingMove {
     pub to: Destination,
 }
 
+/// Where a Delete, an Archive or a Move takes a Message.
+#[derive(PartialEq, Eq)]
+pub enum Goal {
+    /// The Folder with this role, looked up when the move is sent.
+    Role(Role),
+    Folder(FolderName),
+}
+
 #[derive(PartialEq, Eq)]
 pub enum Destination {
-    /// For a Delete: whichever Folder the server names Trash.
-    Trash,
-    /// For an Undo: the Folder the Message was deleted from.
+    Goal(Goal),
+    /// For an Undo: the Folder the Message was moved from.
     Back(FolderName),
 }
 
 impl Cache {
-    /// Takes each `(folder, uid)` out of the Message List, with Gmail's
-    /// copies of it under other labels, and wants it in Trash. Returns the
-    /// Delete for an Undo; `None` when no row was cached.
-    pub fn delete(&self, messages: &[MessageRef]) -> Result<Option<i64>, Error> {
+    /// Takes each `(folder, uid)` out of the Message List, to be moved to
+    /// `goal`; a move to Trash or Spam takes Gmail's copies under other
+    /// labels too. Returns the move for an Undo; `None` when no row moved.
+    pub fn move_to(&self, messages: &[MessageRef], goal: &Goal) -> Result<Option<i64>, Error> {
         let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
@@ -35,17 +42,14 @@ impl Cache {
                 [],
                 |row| row.get(0),
             )?;
+            let goal = Target::of(&transaction, account, goal)?;
             let mut any = false;
             for MessageRef { folder, uid } in messages {
-                any |= delete(
-                    &transaction,
-                    batch,
-                    FolderKey {
-                        account,
-                        folder: folder.as_str(),
-                    },
-                    *uid,
-                )?;
+                let key = FolderKey {
+                    account,
+                    folder: folder.as_str(),
+                };
+                any |= take(&transaction, batch, &goal, key, *uid)?;
             }
 
             transaction.commit()?;
@@ -53,37 +57,42 @@ impl Cache {
         })
     }
 
-    /// Puts the Messages of Delete `batch` back in their Folders. Returns
-    /// the Folders they went back to; none when the server named no UID in
-    /// Trash to move them back by.
+    /// Puts the Messages of move `batch` back in their Folders, and returns
+    /// those Folders; none when the server never named the UIDs it gave
+    /// them where they went.
     pub fn undo(&self, batch: i64) -> Result<Vec<FolderName>, Error> {
         let account = self.email();
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
-            // Unreachable: in Trash under a UID the server never named.
+            // Unreachable: away under a UID the server never named.
             transaction.execute(
-                "DELETE FROM moved WHERE batch = ?1 AND at_trash AND at_uid IS NULL",
+                "DELETE FROM moved WHERE batch = ?1 AND at_away AND at_uid IS NULL",
                 [batch],
             )?;
-            let trashed: Vec<(String, Uid)> = transaction
+            // Gmail's All Mail keeps what an Undo copies out of it.
+            let arrived: Vec<(String, Uid)> = transaction
                 .prepare_cached(
-                    "SELECT trash, at_uid FROM moved WHERE batch = ?1 AND want_trash AND at_trash",
+                    "SELECT away, at_uid FROM moved m WHERE batch = ?1 AND want_away AND at_away
+                       AND NOT (thread IS NOT NULL AND EXISTS (SELECT 1 FROM mailbox b
+                         WHERE b.account = m.account AND b.name = m.away AND b.role = ?2))",
                 )?
-                .query_map([batch], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .query_map(params![batch, Role::All.label()], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })?
                 .collect::<Result<_, _>>()?;
-            for (trash, uid) in trashed {
+            for (away, uid) in arrived {
                 drop_row(
                     &transaction,
                     FolderKey {
                         account,
-                        folder: &trash,
+                        folder: &away,
                     },
                     uid,
                 )?;
             }
 
             let rows: Vec<(i64, FolderName)> = transaction
-                .prepare_cached("SELECT id, mailbox FROM moved WHERE batch = ?1 AND want_trash")?
+                .prepare_cached("SELECT id, mailbox FROM moved WHERE batch = ?1 AND want_away")?
                 .query_map([batch], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .collect::<Result<_, _>>()?;
             let mut folders: Vec<FolderName> = Vec::new();
@@ -94,31 +103,41 @@ impl Cache {
                 }
             }
 
-            transaction.execute("UPDATE moved SET want_trash = 0 WHERE batch = ?1", [batch])?;
+            transaction.execute("UPDATE moved SET want_away = 0 WHERE batch = ?1", [batch])?;
             transaction.commit()?;
             Ok(folders)
         })
     }
 
-    /// Every move the server has yet to make, those back out of Trash first.
+    /// Every move the server has yet to make, those back first.
     pub fn pending_moves(&self) -> Result<Vec<PendingMove>, Error> {
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
-            "SELECT id, want_trash, mailbox, trash, at_uid FROM moved
-             WHERE account = ?1 AND want_trash != at_trash AND at_uid IS NOT NULL
-             ORDER BY want_trash, mailbox, trash, at_uid",
+            "SELECT id, want_away, mailbox, away, at_uid, to_role, to_folder FROM moved
+             WHERE account = ?1 AND want_away != at_away AND at_uid IS NOT NULL
+             ORDER BY want_away,
+                 CASE WHEN want_away THEN mailbox ELSE away END,
+                 CASE WHEN want_away THEN coalesce('r' || to_role, 'f' || to_folder)
+                      ELSE mailbox END,
+                 at_uid",
         )?;
         let pending = statement
             .query_map([self.email()], |row| {
-                let (id, want_trash, mailbox): (i64, bool, String) =
+                let (id, want_away, mailbox): (i64, bool, String) =
                     (row.get(0)?, row.get(1)?, row.get(2)?);
                 let uid = row.get(4)?;
-                Ok(if want_trash {
+                Ok(if want_away {
+                    let role: Option<String> = row.get(5)?;
+                    let goal = match role.as_deref().and_then(Role::from_label) {
+                        Some(role) => Goal::Role(role),
+                        None => Goal::Folder(row.get::<_, String>(6)?.into()),
+                    };
+
                     PendingMove {
                         id,
                         from: mailbox.into(),
                         uid,
-                        to: Destination::Trash,
+                        to: Destination::Goal(goal),
                     }
                 } else {
                     PendingMove {
@@ -141,17 +160,17 @@ impl Cache {
         to: &FolderName,
         uid: Option<Uid>,
     ) -> Result<bool, Error> {
-        let in_trash = pending.to == Destination::Trash;
+        let away = matches!(pending.to, Destination::Goal(_));
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             transaction
                 .prepare_cached(
-                    "UPDATE moved SET at_trash = ?2, at_uid = ?3,
-                         trash = CASE WHEN ?2 THEN ?4 ELSE trash END
+                    "UPDATE moved SET at_away = ?2, at_uid = ?3,
+                         away = CASE WHEN ?2 THEN ?4 ELSE away END
                      WHERE id = ?1",
                 )?
-                .execute(params![pending.id, in_trash, uid, to])?;
-            // Gone from Trash, or into it unnamed: nothing can move it now.
+                .execute(params![pending.id, away, uid, to])?;
+            // Back where it was, or away unnamed: nothing can move it now.
             let reached = uid.is_some() || !wanted_back(&transaction, pending.id)?;
             if uid.is_none() {
                 lose(&transaction, pending.id)?;
@@ -163,13 +182,13 @@ impl Cache {
     }
 
     /// The server refused `pending`: the Message stays where it is, shown
-    /// again for a Delete and out of reach for an Undo. False for the latter.
+    /// again for a move away and out of reach for an Undo. False for the latter.
     pub fn refused(&self, pending: &PendingMove) -> Result<bool, Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
             let back = wanted_back(&transaction, pending.id)?;
-            let into_trash = pending.to == Destination::Trash;
-            if !into_trash {
+            let away = matches!(pending.to, Destination::Goal(_));
+            if !away {
                 lose(&transaction, pending.id)?;
             } else if !back {
                 restore(&transaction, pending.id)?;
@@ -177,7 +196,7 @@ impl Cache {
 
             transaction.execute("DELETE FROM moved WHERE id = ?1", [pending.id])?;
             transaction.commit()?;
-            Ok(into_trash || !back)
+            Ok(away || !back)
         })
     }
 }
@@ -185,7 +204,7 @@ impl Cache {
 /// Once its new UID is in `folder`, an Undo's row gives way to it.
 pub(super) fn settle(connection: &Connection, key: FolderKey<'_>) -> rusqlite::Result<()> {
     let FolderKey { account, folder } = key;
-    let arrived = "NOT at_trash AND at_uid != uid
+    let arrived = "NOT at_away AND at_uid != uid
         AND EXISTS (SELECT 1 FROM message n WHERE n.account = ?2 AND n.mailbox = ?1
                       AND n.uid = at_uid)";
     connection.execute(
@@ -197,7 +216,7 @@ pub(super) fn settle(connection: &Connection, key: FolderKey<'_>) -> rusqlite::R
     )?;
     connection.execute(
         &format!(
-            "DELETE FROM moved WHERE account = ?2 AND mailbox = ?1 AND NOT want_trash
+            "DELETE FROM moved WHERE account = ?2 AND mailbox = ?1 AND NOT want_away
                AND {arrived}"
         ),
         params![folder, account],
@@ -205,56 +224,167 @@ pub(super) fn settle(connection: &Connection, key: FolderKey<'_>) -> rusqlite::R
     Ok(())
 }
 
-/// Drops what an Undo of an earlier run might have needed: the Deletes the
+/// Drops what an Undo of an earlier run might have needed: the moves the
 /// server made, and those undone before it saw them.
 pub(super) fn forget_settled(connection: &Connection) -> rusqlite::Result<()> {
     connection
         .execute(
-            "DELETE FROM moved WHERE want_trash = at_trash AND (at_trash OR at_uid = uid)",
+            "DELETE FROM moved WHERE want_away = at_away AND (at_away OR at_uid = uid)",
             [],
         )
         .map(drop)
 }
 
-/// One Message of `Cache::delete`; false when it is not cached.
-fn delete(
+/// A `Goal` as `moved` stores it, with what the Cache knows of its Folder.
+struct Target<'a> {
+    role: Option<Role>,
+    folder: Option<&'a str>,
+    /// Gmail drops every label of a Message moved to Trash or Spam.
+    drops_labels: bool,
+}
+
+impl<'a> Target<'a> {
+    fn of(connection: &Connection, account: &str, goal: &'a Goal) -> rusqlite::Result<Self> {
+        let (role, folder) = match goal {
+            Goal::Role(role) => (Some(*role), None),
+            Goal::Folder(folder) => {
+                let role: Option<String> = connection
+                    .prepare_cached("SELECT role FROM mailbox WHERE account = ?1 AND name = ?2")?
+                    .query_row(params![account, folder], |row| row.get(0))
+                    .optional()?
+                    .flatten();
+                (
+                    role.as_deref().and_then(Role::from_label),
+                    Some(folder.as_str()),
+                )
+            }
+        };
+
+        Ok(Self {
+            role: folder.is_none().then_some(role).flatten(),
+            folder,
+            drops_labels: matches!(role, Some(Role::Trash | Role::Spam)),
+        })
+    }
+}
+
+/// One Message of `Cache::move_to`; false when it is not cached, in the
+/// goal already, in All Mail bound for a label, or on its way back from
+/// another move.
+fn take(
     connection: &Connection,
     batch: i64,
+    goal: &Target<'_>,
     key: FolderKey<'_>,
     uid: Uid,
 ) -> rusqlite::Result<bool> {
     let FolderKey { account, folder } = key;
-    let key: Option<(BodyKey, Option<ThreadId>)> = connection
+    let key: Option<(BodyKey, Option<ThreadId>, Option<String>)> = connection
         .prepare_cached(
-            "SELECT body_key, thread FROM message WHERE account = ?3 AND mailbox = ?1
-               AND uid = ?2",
+            "SELECT body_key, thread, (SELECT role FROM mailbox b
+                                       WHERE b.account = m.account AND b.name = m.mailbox)
+             FROM message m WHERE account = ?3 AND mailbox = ?1 AND uid = ?2",
         )?
         .query_row(params![folder, uid, account], |row| {
-            Ok((row.get(0)?, row.get(1)?))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })
         .optional()?;
-    let Some((key, thread)) = key else {
+    let Some((key, thread, role)) = key else {
         return Ok(false);
     };
 
-    // A row an Undo put back is wanted in Trash again, wherever it is.
-    let again = connection
-        .prepare_cached(
-            "UPDATE moved SET want_trash = 1, batch = ?3
-             WHERE account = ?4 AND mailbox = ?1 AND uid = ?2 AND NOT want_trash",
-        )?
-        .execute(params![folder, uid, batch, account])?;
-    if again == 0 {
-        connection
-            .prepare_cached(&format!(
-                "INSERT INTO moved (batch, want_trash, at_trash, at_uid, mailbox, uid, {MOVED_ROW})
-                 SELECT ?1, 1, 0, uid, mailbox, uid, {MOVED_ROW} FROM message
-                 WHERE account = ?4 AND mailbox = ?2 AND uid = ?3"
-            ))?
-            .execute(params![batch, folder, uid, account])?;
+    let here = role.as_deref().and_then(Role::from_label);
+    let arrived = goal
+        .folder
+        .map_or_else(|| goal.role == here, |f| f == folder);
+    if arrived || (here == Some(Role::All) && !goal.drops_labels) {
+        return Ok(false);
     }
 
-    // Gmail drops every label of a Message moved to Trash.
+    if !queue(connection, batch, goal, FolderKey { account, folder }, uid)? {
+        return Ok(false);
+    }
+
+    if goal.drops_labels {
+        drop_copies(connection, FolderKey { account, folder }, uid, key, thread)?;
+    } else {
+        drop_row(connection, FolderKey { account, folder }, uid)?;
+    }
+
+    Ok(true)
+}
+
+/// Writes `uid` of `folder` into `moved`, wanted in `goal`; false when it
+/// is on its way back from another goal, and the server still has it there.
+fn queue(
+    connection: &Connection,
+    batch: i64,
+    goal: &Target<'_>,
+    key: FolderKey<'_>,
+    uid: Uid,
+) -> rusqlite::Result<bool> {
+    let FolderKey { account, folder } = key;
+    // A row an Undo put back is wanted away again, from wherever it is.
+    let undone: Option<bool> = connection
+        .prepare_cached(
+            "SELECT at_away AND (to_role, to_folder) IS NOT (?3, ?4) FROM moved
+             WHERE account = ?5 AND mailbox = ?1 AND uid = ?2 AND NOT want_away",
+        )?
+        .query_row(
+            params![
+                folder,
+                uid,
+                goal.role.map(Role::label),
+                goal.folder,
+                account
+            ],
+            |row| row.get(0),
+        )
+        .optional()?;
+    match undone {
+        Some(true) => return Ok(false),
+        Some(false) => connection
+            .prepare_cached(
+                "UPDATE moved SET want_away = 1, batch = ?3, to_role = ?4, to_folder = ?5
+                 WHERE account = ?6 AND mailbox = ?1 AND uid = ?2 AND NOT want_away",
+            )?
+            .execute(params![
+                folder,
+                uid,
+                batch,
+                goal.role.map(Role::label),
+                goal.folder,
+                account
+            ])?,
+        None => connection
+            .prepare_cached(&format!(
+                "INSERT INTO moved (batch, to_role, to_folder, want_away, at_away, at_uid,
+                                    mailbox, uid, {MOVED_ROW})
+                 SELECT ?1, ?5, ?6, 1, 0, uid, mailbox, uid, {MOVED_ROW} FROM message
+                 WHERE account = ?4 AND mailbox = ?2 AND uid = ?3"
+            ))?
+            .execute(params![
+                batch,
+                folder,
+                uid,
+                account,
+                goal.role.map(Role::label),
+                goal.folder
+            ])?,
+    };
+
+    Ok(true)
+}
+
+/// Drops `uid` of `folder` with Gmail's copies of it under other labels.
+fn drop_copies(
+    connection: &Connection,
+    key: FolderKey<'_>,
+    uid: Uid,
+    body_key: BodyKey,
+    thread: Option<ThreadId>,
+) -> rusqlite::Result<()> {
+    let FolderKey { account, folder } = key;
     let copies =
         "account = ?4 AND ((mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL))";
     connection
@@ -262,22 +392,22 @@ fn delete(
             "UPDATE mailbox SET unread = max(unread - 1, 0) WHERE account = ?4
                AND name IN (SELECT mailbox FROM message WHERE ({copies}) AND unread)"
         ))?
-        .execute(params![folder, uid, key, account])?;
+        .execute(params![folder, uid, body_key, account])?;
     connection
         .prepare_cached(&format!("DELETE FROM message WHERE {copies}"))?
-        .execute(params![folder, uid, key, account])?;
+        .execute(params![folder, uid, body_key, account])?;
     if thread.is_some() {
         connection
             .prepare_cached("DELETE FROM thread_message WHERE account = ?2 AND key = ?1")?
-            .execute(params![key, account])?;
+            .execute(params![body_key, account])?;
     }
 
-    Ok(true)
+    Ok(())
 }
 
 fn wanted_back(connection: &Connection, id: i64) -> rusqlite::Result<bool> {
     let back = connection
-        .prepare_cached("SELECT NOT want_trash FROM moved WHERE id = ?1")?
+        .prepare_cached("SELECT NOT want_away FROM moved WHERE id = ?1")?
         .query_row([id], |row| row.get(0))
         .optional()?;
     Ok(back.unwrap_or(false))
@@ -286,7 +416,7 @@ fn wanted_back(connection: &Connection, id: i64) -> rusqlite::Result<bool> {
 /// Forgets `id` for good, with the row an Undo showed for it.
 fn lose(connection: &Connection, id: i64) -> rusqlite::Result<()> {
     let shown: Option<(String, String, Uid)> = connection
-        .prepare_cached("SELECT account, mailbox, uid FROM moved WHERE id = ?1 AND NOT want_trash")?
+        .prepare_cached("SELECT account, mailbox, uid FROM moved WHERE id = ?1 AND NOT want_away")?
         .query_row([id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .optional()?;
     if let Some((account, folder, uid)) = shown {

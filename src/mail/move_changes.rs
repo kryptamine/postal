@@ -1,5 +1,5 @@
 use crate::{
-    cache::{Cache, Destination, PendingMove},
+    cache::{Cache, Destination, Goal, PendingMove},
     domain::folder::Role,
     domain::folder_name::FolderName,
     domain::uid::Uid,
@@ -21,29 +21,26 @@ pub async fn send(
         return Ok(());
     }
 
-    let mut trash = None;
+    let copies = Copies::of(server, cache)?;
+    let mut found: Vec<(Role, Option<FolderName>)> = Vec::new();
     for group in pending.chunk_by(|a, b| (&a.from, &a.to) == (&b.from, &b.to)) {
         let first = &group[0];
-        let to = match &first.to {
-            Destination::Back(folder) => Some(folder.clone()),
-            Destination::Trash => {
-                if trash.is_none() {
-                    trash = role_folder::find(server, cache, Role::Trash, send).await?;
-                }
-
-                trash.clone()
-            }
-        };
-
+        let to = destination(server, cache, &first.to, &mut found, send).await?;
         let Some(to) = to else {
-            tracing::warn!(
-                "no Folder has the Trash role: {} Deletes taken back",
-                group.len()
-            );
+            if let Destination::Goal(Goal::Role(role)) = first.to {
+                tracing::warn!("no {role:?} Folder: {} moves taken back", group.len());
+                send(Update::NoFolder(role));
+            }
+
             refused(cache, group, send)?;
-            send(Update::NoTrash);
             continue;
         };
+
+        // The role's Folder may turn out to be the one the Messages are in.
+        if to == first.from {
+            refused(cache, group, send)?;
+            continue;
+        }
 
         match sync::open(server, &first.from, Mode::Select).await {
             Err(Error::Gone(error)) => {
@@ -55,7 +52,13 @@ pub async fn send(
         }
 
         let uids: Vec<Uid> = group.iter().map(|m| m.uid).collect();
-        let moved = match server.move_to(&uids, &to).await {
+        let moved = if copies.instead(&first.from, &to) {
+            server.copy_to(&uids, &to).await
+        } else {
+            server.move_to(&uids, &to).await
+        };
+
+        let moved = match moved {
             Err(error) if error.refusal().is_some() => {
                 tracing::warn!("moving out of {} was refused: {error}", first.from);
                 refused(cache, group, send)?;
@@ -71,6 +74,76 @@ pub async fn send(
 
     send(Update::Inbox);
     Ok(())
+}
+
+/// On Gmail a move out of All Mail but to Trash or Spam is a copy:
+/// docs/adr/0026-move-and-archive.md.
+struct Copies {
+    all_mail: Option<FolderName>,
+    apart: Vec<FolderName>,
+}
+
+impl Copies {
+    fn of(server: &impl MailServer, cache: &Cache) -> Result<Self, Error> {
+        let folders = if server.gmail() {
+            cache.folders()?
+        } else {
+            Vec::new()
+        };
+
+        let named = |role| folders.iter().find(|f| f.role == Some(role));
+        Ok(Self {
+            all_mail: named(Role::All).map(|f| f.name.clone()),
+            apart: [Role::Trash, Role::Spam]
+                .into_iter()
+                .filter_map(|role| named(role).map(|f| f.name.clone()))
+                .collect(),
+        })
+    }
+
+    fn instead(&self, from: &FolderName, to: &FolderName) -> bool {
+        self.all_mail.as_ref() == Some(from) && !self.apart.contains(to)
+    }
+}
+
+/// The Folder `to` names, each role's looked up once into `found`.
+async fn destination(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    to: &Destination,
+    found: &mut Vec<(Role, Option<FolderName>)>,
+    send: &impl Fn(Update),
+) -> Result<Option<FolderName>, Error> {
+    let role = match to {
+        Destination::Back(folder) | Destination::Goal(Goal::Folder(folder)) => {
+            return Ok(Some(folder.clone()));
+        }
+        Destination::Goal(Goal::Role(role)) => *role,
+    };
+
+    if let Some((_, folder)) = found.iter().find(|(r, _)| *r == role) {
+        return Ok(folder.clone());
+    }
+
+    let folder = with_role(server, cache, role, send).await?;
+    found.push((role, folder.clone()));
+    Ok(folder)
+}
+
+/// The Folder with `role`; for Archive on Gmail, All Mail, as archiving
+/// there takes the Inbox label off.
+async fn with_role(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    role: Role,
+    send: &impl Fn(Update),
+) -> Result<Option<FolderName>, Error> {
+    let found = role_folder::find(server, cache, role, send).await?;
+    if found.is_none() && role == Role::Archive && server.gmail() {
+        return role_folder::find(server, cache, Role::All, send).await;
+    }
+
+    Ok(found)
 }
 
 /// Writes where the server put `group`, into `to` under the UIDs `moved`

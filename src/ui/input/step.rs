@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use crate::{
     account::config::{IconChoice, NotifyChoice},
     compose::recipients::Recipients,
+    domain::folder::Folder,
     domain::per_account::AccountId,
     domain::shown::Shown,
     domain::thread_id::ThreadId,
@@ -47,6 +48,10 @@ pub enum Steer {
     Read(Option<(AccountId, ThreadId)>),
     MarkUnread,
     Delete,
+    Archive,
+    /// The Folder Picker opened to move Messages to the Folder picked.
+    Pick,
+    MoveTo(Folder),
     Undo,
 }
 

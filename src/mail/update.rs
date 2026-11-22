@@ -1,5 +1,5 @@
 use crate::{
-    domain::folder_name::FolderName, mail::arrival::Arrival,
+    domain::folder::Role, domain::folder_name::FolderName, mail::arrival::Arrival,
     mail::attachment_fetch::AttachmentFetched, mail::backfill::Backfill, mail::body_fetch::Fetched,
     mail::status::Status, render::preview::Preview, render::rendered_previews::PreviewKey,
 };
@@ -20,9 +20,9 @@ pub enum Update {
     Rendered(PreviewKey, Preview),
     Status(Status),
     Backfill(Backfill),
-    /// No Folder has the Trash role: the Deletes queued were taken back.
-    NoTrash,
-    /// An Undo found its Messages gone from Trash.
+    /// No Folder has this role: the moves queued to it were taken back.
+    NoFolder(Role),
+    /// An Undo found its Messages gone from where they were moved.
     Unrestored,
     /// SMTP accepted a Message from the Outbox.
     Sent,

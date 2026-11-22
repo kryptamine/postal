@@ -25,6 +25,8 @@ pub fn act(
         }
         Some(Action::MarkUnread) => Step::Steer(Steer::MarkUnread),
         Some(Action::Delete) => Step::Steer(Steer::Delete),
+        Some(Action::Archive) => Step::Steer(Steer::Archive),
+        Some(Action::MoveTo) => Step::Steer(Steer::Pick),
         Some(Action::Undo) => Step::Steer(Steer::Undo),
         Some(Action::Compose) => Step::Draft(Drafting::Compose),
         Some(Action::Reply(to)) => Step::Reply(to),

@@ -69,6 +69,7 @@ impl Icons {
             Some(Role::Starred) => "\u{f04ce}",
             Some(Role::Sent) => "\u{f048a}",
             Some(Role::Drafts) => DRAFT,
+            Some(Role::Archive) => "\u{f003c}",
             Some(Role::All) => "\u{f0ee7}",
             Some(Role::Spam) => "\u{f0029}",
             Some(Role::Trash) => "\u{f01b4}",

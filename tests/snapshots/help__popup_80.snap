@@ -16,14 +16,14 @@ size: 80x24  cursor: hidden
 ┌ Inbox · 1│ E                       open the Message in $EDITOR    │──────────┐
 │ From    B│ U                       mark the Message Unread        │024 09:00 │
 │ To       │ Backspace               delete: move to Trash          │          │
-│ Subject N│ u                       undo a delete or discard       │          │
-├──────────│ c                       compose a new Message          │──────────┤
-│ Newer bod│ r                       reply to the sender            │          │
+│ Subject N│ e                       archive                        │          │
+├──────────│ m                       move to a Folder               │──────────┤
+│ Newer bod│ u                       undo a move or discard         │          │
+│          │ c                       compose a new Message          │          │
+│          │ r                       reply to the sender            │          │
 │          │ R                       reply to all                   │          │
 │          │ a / s                   open / save an attachment      │          │
 │          │                                                        │          │
-│          │ Links                                                  │          │
-│          │ o                       label the links in the Preview │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

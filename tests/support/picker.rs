@@ -4,14 +4,24 @@ use termlens::{Key, Screen, Terminal};
 /// corners of the box titled `Folders`. Empty until the whole box is drawn,
 /// since a snapshot can land between the bytes of one frame.
 pub fn picker(screen: &Screen) -> Vec<String> {
+    titled(screen, "Folders")
+}
+
+/// As `picker`, while it picks the Folder to move Messages to.
+pub fn mover(screen: &Screen) -> Vec<String> {
+    titled(screen, "Move to")
+}
+
+fn titled(screen: &Screen, title: &str) -> Vec<String> {
+    let title = format!("┌ {title}");
     let chars = |row: u16| screen.row_text(row).chars().collect::<Vec<_>>();
-    let Some(top) = (0..screen.rows()).find(|&r| screen.row_text(r).contains("┌ Folders")) else {
+    let Some(top) = (0..screen.rows()).find(|&r| screen.row_text(r).contains(&title)) else {
         return Vec::new();
     };
 
     let corners = chars(top);
     // The Preview's title row starts with a corner of its own.
-    let title: Vec<char> = "┌ Folders".chars().collect();
+    let title: Vec<char> = title.chars().collect();
     let left = corners
         .windows(title.len())
         .position(|w| w == title)
@@ -41,7 +51,16 @@ pub fn picker(screen: &Screen) -> Vec<String> {
 /// The picker's Folder rows, each its label and its Unread count if shown.
 /// The first two rows are the Query and the rule under it.
 pub fn picked(screen: &Screen) -> Vec<String> {
-    picker(screen)
+    rows(picker(screen))
+}
+
+/// As `picked`, while the picker picks the Folder to move Messages to.
+pub fn move_rows(screen: &Screen) -> Vec<String> {
+    rows(mover(screen))
+}
+
+fn rows(popup: Vec<String>) -> Vec<String> {
+    popup
         .into_iter()
         .skip(2)
         .filter(|row| !row.is_empty())

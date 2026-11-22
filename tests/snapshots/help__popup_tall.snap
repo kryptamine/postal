@@ -16,15 +16,17 @@ size: 80x38  cursor: hidden
 │          │ E                       open the Message in $EDITOR    │          │
 │          │ U                       mark the Message Unread        │          │
 │          │ Backspace               delete: move to Trash          │          │
-│          │ u                       undo a delete or discard       │          │
-│          │ c                       compose a new Message          │          │
-└──────────│ r                       reply to the sender            │──────────┘
-┌ Inbox · 1│ R                       reply to all                   │──────────┐
-│ From    B│ a / s                   open / save an attachment      │024 09:00 │
-│ To       │                                                        │          │
-│ Subject N│ Links                                                  │          │
-├──────────│ o                       label the links in the Preview │──────────┤
-│ Newer bod│                                                        │          │
+│          │ e                       archive                        │          │
+│          │ m                       move to a Folder               │          │
+└──────────│ u                       undo a move or discard         │──────────┘
+┌ Inbox · 1│ c                       compose a new Message          │──────────┐
+│ From    B│ r                       reply to the sender            │024 09:00 │
+│ To       │ R                       reply to all                   │          │
+│ Subject N│ a / s                   open / save an attachment      │          │
+├──────────│                                                        │──────────┤
+│ Newer bod│ Links                                                  │          │
+│          │ o                       label the links in the Preview │          │
+│          │                                                        │          │
 │          │ View                                                   │          │
 │          │ v                       rendered / text view of HTML   │          │
 │          │ z                       show / hide the Quote          │          │
@@ -36,8 +38,6 @@ size: 80x38  cursor: hidden
 │          │                                                        │          │
 │          │ Search                                                 │          │
 │          │ /                       search, or edit the Query      │          │
-│          │ ^j / ^k    ↓ / ↑        move, while typing the Query   │          │
-│          │ Enter                   keep the Query                 │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

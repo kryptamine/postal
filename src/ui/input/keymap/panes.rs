@@ -66,7 +66,7 @@ const MOVE: &[Action] = &[Action::Move(Move::Down), Action::Move(Move::Up)];
 
 /// The panes' keymap and the keys every layer shares, as the hint line and
 /// the `?` popup show them and `action` reads them.
-const PANES: [PaneKeys; 34] = [
+const PANES: [PaneKeys; 36] = [
     listed(
         Binding {
             group: "Navigate",
@@ -286,9 +286,33 @@ const PANES: [PaneKeys; 34] = [
             group: "Message",
             modes: BOTH,
             signed_out: false,
+            keys: &[Key::Char("e")],
+            aliases: &[],
+            description: "archive",
+            hint: None,
+        },
+        &[Action::Archive],
+    ),
+    listed(
+        Binding {
+            group: "Message",
+            modes: BOTH,
+            signed_out: false,
+            keys: &[Key::Char("m")],
+            aliases: &[],
+            description: "move to a Folder",
+            hint: None,
+        },
+        &[Action::MoveTo],
+    ),
+    listed(
+        Binding {
+            group: "Message",
+            modes: BOTH,
+            signed_out: false,
             keys: &[Key::Char("u")],
             aliases: &[],
-            description: "undo a delete or discard",
+            description: "undo a move or discard",
             hint: None,
         },
         &[Action::Undo],

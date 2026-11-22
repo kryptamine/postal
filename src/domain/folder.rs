@@ -14,17 +14,19 @@ pub enum Role {
     Starred,
     Sent,
     Drafts,
+    Archive,
     All,
     Spam,
     Trash,
 }
 
 impl Role {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 8] = [
         Self::Inbox,
         Self::Starred,
         Self::Sent,
         Self::Drafts,
+        Self::Archive,
         Self::All,
         Self::Spam,
         Self::Trash,
@@ -37,6 +39,7 @@ impl Role {
             Self::Starred => "Starred",
             Self::Sent => "Sent",
             Self::Drafts => "Drafts",
+            Self::Archive => "Archive",
             Self::All => "All Mail",
             Self::Spam => "Spam",
             Self::Trash => "Trash",

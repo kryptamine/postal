@@ -12,11 +12,11 @@ use imap_next::{
     server::Server,
 };
 
-use super::{FakeMessage, Inbox, Opened, announce, code, fetch::fetched, mailbox_name};
+use super::{FakeMessage, Folder, Inbox, Opened, announce, code, fetch::fetched, mailbox_name};
 
-/// Answers a `UID MOVE`, a `UID COPY` or a `UID EXPUNGE` in the Folder
-/// `opened`, with `COPYUID` as UIDPLUS sends it, and announces the
-/// expunges to `view`. Into Gmail's Trash a Message loses every label.
+/// Answers a `UID MOVE`, `UID COPY` or `UID EXPUNGE` in `opened`, with
+/// `COPYUID` as UIDPLUS sends it, announcing the expunges to `view`. On
+/// Gmail, Trash drops every label and All Mail keeps a Message's UID.
 pub(super) fn transfer(
     server: &mut Server,
     command: Command<'static>,
@@ -103,6 +103,7 @@ fn copy_into(
     let target = inbox.folder(to).unwrap();
 
     let (into_trash, mirrored) = (target.trash(), !target.apart());
+    let inbox_gmail = inbox.gmail;
     let mut pairs = Vec::new();
     for (uid, msgid, message, _) in picked {
         if inbox.gmail && into_trash {
@@ -111,12 +112,21 @@ fn copy_into(
                 folder.messages.retain(|m| m.msgid != *msgid);
             }
         } else if inbox.gmail && mirrored {
-            for all in inbox.folders.iter_mut().filter(|f| f.mirrors) {
+            let held = |f: &Folder| f.messages.iter().any(|m| m.msgid == *msgid);
+            for all in inbox.folders.iter_mut().filter(|f| f.mirrors && !held(f)) {
                 all.push(*msgid, message.clone());
             }
         }
 
-        pairs.push((*uid, inbox.folder_mut(to).push(*msgid, message.clone())));
+        // A label a Gmail Message has already is its UID there.
+        let target = inbox.folder_mut(to);
+        let held = target
+            .messages
+            .iter()
+            .find(|m| inbox_gmail && m.msgid == *msgid)
+            .map(|m| m.uid);
+        let there = held.unwrap_or_else(|| target.push(*msgid, message.clone()));
+        pairs.push((*uid, there));
     }
 
     let uid_validity = NonZeroU32::new(inbox.folder(to).unwrap().uid_validity).unwrap();

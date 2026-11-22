@@ -65,7 +65,9 @@ pub fn apply(
             ui.screen.backfill = None;
             paged(&mut ui.view, caches, account, folder, nothing_below)?;
         }
-        Update::NoTrash => ui.screen.toast = Some(Toast::error("no Trash Folder")),
+        Update::NoFolder(role) => {
+            ui.screen.toast = Some(Toast::error(format!("no {} Folder", role.label())));
+        }
         Update::Unrestored => ui.screen.toast = Some(Toast::error("nothing to undo")),
         Update::Sent => {
             relist_local(&mut ui.screen, outbox);

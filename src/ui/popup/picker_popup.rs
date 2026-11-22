@@ -13,12 +13,13 @@ use crate::{
     domain::shown::Shown,
     render::stack_str::StackStr,
     ui::frame::theme::Theme,
-    ui::popup::folder_picker::{FolderPicker, Row},
+    ui::popup::folder_picker::{FolderPicker, Purpose, Row},
     ui::widgets::centred::centred,
     ui::widgets::truncate,
 };
 
 const TITLE: &str = " Folders ";
+const MOVING: &str = " Move to ";
 const PROMPT: &str = "> ";
 const WIDTH: u16 = 48;
 /// The border, the Query row and the rule under it.
@@ -42,7 +43,8 @@ impl Widget for PickerPopup<'_> {
             .border_style(self.theme.border)
             .render(popup, buf);
         let room = usize::from(popup.width.saturating_sub(2));
-        buf.set_stringn(popup.x + 1, popup.y, TITLE, room, self.theme.title);
+        let title = title(self.picker);
+        buf.set_stringn(popup.x + 1, popup.y, title, room, self.theme.title);
 
         let inner = inner(popup);
         let (x, _) = buf.set_stringn(inner.x, inner.y, PROMPT, inner.width.into(), self.theme.key);
@@ -146,6 +148,13 @@ fn after_icon(buf: &mut Buffer, label: Rect, icon: &str, style: Style) -> Rect {
         x,
         width: label.right() - x,
         ..label
+    }
+}
+
+const fn title(picker: &FolderPicker) -> &'static str {
+    match picker.purpose() {
+        Purpose::Show => TITLE,
+        Purpose::MoveTo(_) => MOVING,
     }
 }
 

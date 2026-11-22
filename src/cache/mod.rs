@@ -29,7 +29,7 @@ pub use correspondence::SentPass;
 pub use envelope_pass::EnvelopePass;
 pub use error::Error;
 pub use forget::forget;
-pub use moves::{Destination, PendingMove};
+pub use moves::{Destination, Goal, PendingMove};
 pub use reader::{Reader, Seen, ThreadMessage};
 pub use schema::delete;
 pub use scope::Scope;

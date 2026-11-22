@@ -78,6 +78,9 @@ pub trait MailServer {
     /// returns each move the server named.
     async fn move_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error>;
 
+    /// As `move_to`, leaving `uids` where they are: on Gmail, a label added.
+    async fn copy_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error>;
+
     /// Saves `message` to the Folder named `folder`, flagged `\Seen`.
     async fn append(&mut self, folder: &FolderName, message: &[u8]) -> Result<(), Error>;
 
@@ -387,6 +390,15 @@ impl MailServer for ImapSession {
         Ok(moved)
     }
 
+    async fn copy_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
+        let command = format!("UID COPY {} {}", uid_set(uids), quoted(to.as_str()));
+        let earlier = self.pushed();
+        self.pending = earlier;
+        let copied = moved_uids::run(&mut self.session, command, &mut self.pending).await?;
+        tracing::info!("copied {} Messages", uids.len());
+        Ok(copied)
+    }
+
     async fn append(&mut self, folder: &FolderName, message: &[u8]) -> Result<(), Error> {
         self.session
             .append(folder, Some("(\\Seen)"), None, message)
@@ -675,6 +687,7 @@ fn role(attributes: &[NameAttribute<'_>]) -> Option<Role> {
         NameAttribute::Flagged => Some(Role::Starred),
         NameAttribute::Sent => Some(Role::Sent),
         NameAttribute::Drafts => Some(Role::Drafts),
+        NameAttribute::Archive => Some(Role::Archive),
         NameAttribute::All => Some(Role::All),
         NameAttribute::Junk => Some(Role::Spam),
         NameAttribute::Trash => Some(Role::Trash),

@@ -425,7 +425,7 @@ fn without_a_trash_folder_the_delete_is_taken_back() {
 fn moved(home: &Home) -> Vec<&'static str> {
     let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
     let mut statement = cache
-        .prepare("SELECT want_trash, at_trash, at_uid IS uid FROM moved ORDER BY id")
+        .prepare("SELECT want_away, at_away, at_uid IS uid FROM moved ORDER BY id")
         .unwrap();
     let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)));
     rows.unwrap()
