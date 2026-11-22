@@ -5,13 +5,14 @@ use crate::{
     domain::message::Message, render::header_date, ui::theme::Theme, ui::widgets::truncate,
 };
 
-/// The labels, padded so the values line up.
+/// The labels, padded so the values line up; the Subject last, which a
+/// stack leaves out for its border's.
 const LABELS: [&str; 3] = ["From    ", "To      ", "Subject "];
 /// The header rows over a body in the Preview, with the rule under them.
 pub const ROWS: usize = LABELS.len() + 1;
-/// A stack's, which leave out the Subject for the border's and end in a
-/// blank row.
-pub const STACK_ROWS: usize = ROWS - 1;
+const STACKED: usize = LABELS.len() - 1;
+/// A stack's header rows, ending in a blank one.
+pub const STACK_ROWS: usize = STACKED + 1;
 const LABEL_WIDTH: u16 = 8;
 /// Columns between the `From` value and the date at the row's right.
 const DATE_GAP: u16 = 2;
@@ -57,4 +58,11 @@ pub fn draw(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field
     };
 
     truncate::draw(buf, value_area, value, style);
+}
+
+/// Draws row `field` of `message`'s header in a stack, which has no Subject.
+pub fn draw_stacked(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field: usize) {
+    if field < STACKED {
+        draw(theme, buf, row, message, field);
+    }
 }

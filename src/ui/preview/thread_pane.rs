@@ -130,12 +130,7 @@ impl ThreadPane<'_> {
         };
 
         let Some(index) = offset.checked_sub(HEADER) else {
-            // The last row of the header is blank.
-            if offset + 1 < HEADER {
-                message_header::draw(self.theme, buf, row, placed.message, offset);
-            }
-
-            return;
+            return message_header::draw_stacked(self.theme, buf, row, placed.message, offset);
         };
 
         match body {
