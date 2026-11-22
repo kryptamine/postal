@@ -241,11 +241,47 @@ fn with_nothing_unread_only_the_newest_is_unfolded_and_has_the_cursor() {
 
     let screen = t
         .snapshot_after(|s| {
-            s.contains("│▎From    Dee") && folded(s, "Bob", "Bob answers", "2024-03-02")
+            s.contains("│▎From    Dee") && folded(s, "Ada", "Ada asks", "2024-03-01")
         })
         .unwrap();
     assert!(screen.contains(" 4/4 "), "{screen}");
     assert!(!screen.contains("From    Bob"), "{screen}");
+    quit(t);
+}
+
+// The read middle of a Thread takes one line, so the newest is not a
+// screen of old ones away; Enter puts each of them on its own line.
+#[test]
+fn the_folded_middle_of_a_thread_is_one_line_until_opened() {
+    let server = FakeImap::start(conversation(false));
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    read_thread(&mut t);
+
+    let screen = t
+        .snapshot_after(|s| s.contains("│▎From    Dee") && s.contains("2 earlier messages"))
+        .unwrap();
+    assert!(!screen.contains("Bob answers"), "{screen}");
+    assert!(!screen.contains("Cid agrees"), "{screen}");
+    let rows = ["Ada asks", "2 earlier messages", "From    Dee"].map(|t| row_of(&screen, t));
+    assert!(rows.is_sorted(), "{rows:?}: {screen}");
+
+    t.send(Key::Char('p')).unwrap();
+    t.wait_until(|s| s.contains("│▎··· 2 earlier messages") && s.contains(" 2/4 "))
+        .unwrap();
+    t.send(Key::Enter).unwrap();
+    let screen = t
+        .snapshot_after(|s| {
+            folded(s, "Bob", "Bob answers", "2024-03-02")
+                && folded(s, "Cid", "Cid agrees", "2024-03-03")
+        })
+        .unwrap();
+    assert!(screen.contains("│▎Bob"), "{screen}");
+    assert!(!screen.contains("earlier messages"), "{screen}");
+    t.send(Key::Char('n')).unwrap();
+    t.wait_until(|s| s.contains("│▎Cid") && s.contains(" 3/4 "))
+        .unwrap();
     quit(t);
 }
 

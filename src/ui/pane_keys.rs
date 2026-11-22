@@ -117,7 +117,7 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
             return Step::Steer(Steer::Read(gmail));
         }
         (Action::Step(direction), Some(reading)) => reading.step(direction, view.stack()),
-        (Action::Fold, Some(reading)) => reading.fold(),
+        (Action::Fold, Some(reading)) => reading.fold(view.stack()),
         _ => {}
     }
 

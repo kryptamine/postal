@@ -87,6 +87,12 @@ impl StatefulWidget for ThreadPane<'_> {
 impl ThreadPane<'_> {
     /// Row `offset` of the Message `placed`, from its top.
     fn row(&self, buf: &mut Buffer, row: Rect, placed: &Placed<'_>, offset: usize) {
+        if placed.count > 1 {
+            let mut earlier = StackStr::<32>::new();
+            write!(earlier, "··· {} earlier messages", placed.count).ok();
+            return truncate::draw(buf, row, earlier.as_str(), self.theme.muted);
+        }
+
         let Some(body) = &placed.body else {
             return self.folded(buf, row, placed);
         };

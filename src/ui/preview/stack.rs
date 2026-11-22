@@ -13,7 +13,10 @@ const GAP: usize = 1;
 pub struct Placed<'a> {
     /// Its place in the stack, from the top.
     pub index: usize,
+    /// The first of the Messages it stands for.
     pub message: &'a Message,
+    /// More than one on the line standing for a folded run.
+    pub count: usize,
     /// `None` while folded to one line.
     pub body: Option<Body<'a>>,
     pub top: usize,
@@ -58,10 +61,9 @@ pub fn placed<'a>(
     reading: &'a Reading,
     width: u16,
 ) -> impl Iterator<Item = Placed<'a>> {
-    let mut top = 0;
-    view.stack().enumerate().map(move |(index, message)| {
-        let body = reading
-            .unfolded(message.body_key)
+    let (mut top, mut index) = (0, 0);
+    reading.lines(view.stack()).map(move |(message, count)| {
+        let body = (count == 1 && reading.unfolded(message.body_key))
             .then(|| previews.body(view, message, width));
         let height = match &body {
             None => 1,
@@ -73,12 +75,14 @@ pub fn placed<'a>(
         let placed = Placed {
             index,
             message,
+            count,
             body,
             top,
             height,
         };
 
         top += height + GAP;
+        index += count;
         placed
     })
 }

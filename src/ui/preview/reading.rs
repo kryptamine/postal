@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, iter};
 
 use crate::{
     domain::body_key::BodyKey,
@@ -10,6 +10,8 @@ use crate::{
 /// folded to a line or unfolded to its header and body.
 pub struct Reading {
     unfolded: HashSet<BodyKey>,
+    /// Every Message on a line of its own, from the first fold on.
+    whole: bool,
     /// The body key of the Message at the cursor, which tells apart Messages
     /// of different Folders; one gone from the Thread falls back to the
     /// newest as the stack is laid out.
@@ -35,6 +37,7 @@ impl Reading {
         Some(Self {
             cursor: oldest.unwrap_or(newest).body_key,
             unfolded: unread.chain([newest]).map(|m| m.body_key).collect(),
+            whole: false,
             scroll: 0,
             reveal: true,
             top: None,
@@ -46,33 +49,75 @@ impl Reading {
         self.unfolded.contains(&key)
     }
 
-    /// Moves the cursor to the next or the previous Message of `stack`.
-    pub fn step<'a>(&mut self, direction: Direction, mut stack: impl Iterator<Item = &'a Message>) {
-        let mut before = None;
-        while let Some(message) = stack.next() {
-            if message.body_key == self.cursor {
-                let target = match direction {
-                    Direction::Down => stack.next(),
-                    Direction::Up => before,
-                };
+    /// Each line of `stack`, with how many Messages it stands for: until the
+    /// first fold, a run of two or more folded between the oldest and the
+    /// newest is one line.
+    pub fn lines<'a, I>(&self, stack: I) -> impl Iterator<Item = (&'a Message, usize)>
+    where
+        I: Iterator<Item = &'a Message> + Clone,
+    {
+        let last = stack.clone().count().saturating_sub(1);
+        let middle = move |(index, message): &(usize, &Message)| {
+            !self.whole && (1..last).contains(index) && !self.unfolded(message.body_key)
+        };
 
-                if let Some(target) = target {
-                    self.cursor = target.body_key;
-                }
+        let mut rest = stack.enumerate();
+        iter::from_fn(move || {
+            let line = rest.next()?;
+            let run = if middle(&line) {
+                1 + rest.clone().take_while(&middle).count()
+            } else {
+                1
+            };
 
-                break;
+            if run < 2 {
+                return Some((line.1, 1));
             }
 
-            before = Some(message);
+            rest.nth(run - 2);
+            Some((line.1, run))
+        })
+    }
+
+    /// Moves the cursor to the next or the previous line of `stack`.
+    pub fn step<'a>(
+        &mut self,
+        direction: Direction,
+        stack: impl Iterator<Item = &'a Message> + Clone,
+    ) {
+        let target = {
+            let mut lines = self.lines(stack).map(|(message, _)| message.body_key);
+            let mut before = None;
+            loop {
+                let Some(key) = lines.next() else { break None };
+                if key == self.cursor {
+                    break match direction {
+                        Direction::Down => lines.next(),
+                        Direction::Up => before,
+                    };
+                }
+
+                before = Some(key);
+            }
+        };
+
+        if let Some(target) = target {
+            self.cursor = target;
         }
 
         self.reveal = true;
     }
 
-    /// Folds the Message at the cursor, or unfolds it.
-    pub fn fold(&mut self) {
-        if !self.unfolded.remove(&self.cursor) {
-            self.unfolded.insert(self.cursor);
+    /// Folds the Message at the cursor, or unfolds it; on a line standing
+    /// for several, puts each on its own line instead.
+    pub fn fold<'a>(&mut self, stack: impl Iterator<Item = &'a Message> + Clone) {
+        let cursor = self.cursor;
+        let several = self
+            .lines(stack)
+            .any(|(message, count)| count > 1 && message.body_key == cursor);
+        self.whole = true;
+        if !several && !self.unfolded.remove(&cursor) {
+            self.unfolded.insert(cursor);
         }
 
         self.reveal = true;
