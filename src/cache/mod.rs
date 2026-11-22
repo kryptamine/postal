@@ -10,6 +10,7 @@ mod folder_key;
 mod folders;
 mod forget;
 mod list;
+mod migrations;
 mod moves;
 mod reader;
 mod schema;

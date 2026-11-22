@@ -1,6 +1,6 @@
 use std::{io, path::PathBuf};
 
-use super::schema::VERSION;
+use super::migrations::VERSION;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

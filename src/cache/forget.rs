@@ -2,7 +2,8 @@ use std::path::Path;
 
 use super::{Error, schema};
 
-/// Every table of `schema::TABLES`, each naming its Account in `account`.
+/// The tables of an Account's Folders, Messages and moves, each naming it
+/// in `account`.
 const TABLES: [&str; 6] = [
     "mailbox",
     "message",

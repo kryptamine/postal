@@ -291,18 +291,18 @@ fn a_corrupt_cache_is_rebuilt() {
 }
 
 #[test]
-fn an_older_schema_is_rebuilt() {
+fn a_schema_from_before_migrations_is_rebuilt() {
     let server = FakeImap::start(four_messages());
     let home = Home::for_server(&server);
     fs::create_dir_all(home.cache_path().parent().unwrap()).unwrap();
     let old = rusqlite::Connection::open(home.cache_path()).unwrap();
-    old.execute_batch("CREATE TABLE rows (x); PRAGMA user_version = 0;")
+    old.execute_batch("CREATE TABLE rows (x); PRAGMA user_version = 17;")
         .unwrap();
     drop(old);
     first_run(&home, &server);
 
     let log = fs::read_to_string(home.log_path()).unwrap();
-    assert!(log.contains("cache rebuilt: schema 0"), "{log}");
+    assert!(log.contains("cache rebuilt: schema 17"), "{log}");
 }
 
 #[test]
@@ -329,7 +329,7 @@ fn a_newer_schema_exits_before_the_tui_and_is_left_alone() {
     let stderr = String::from_utf8(output.stderr).unwrap();
     let dir = home.xdg_cache_home().join("postal");
     let expected = format!(
-        "Cache was written by a newer Postal (schema 99 > 17). Upgrade Postal or delete {}.",
+        "Cache was written by a newer Postal (schema 99 > 18). Upgrade Postal or delete {}.",
         dir.display()
     );
     assert!(stderr.contains(&expected), "{stderr}");
