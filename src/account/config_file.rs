@@ -3,11 +3,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use toml_edit::{ArrayOfTables, DocumentMut, Item, RawString, Table, TableLike, Value, value};
+use toml_edit::{
+    ArrayOfTables, DocumentMut, InlineTable, Item, RawString, Table, TableLike, Value, value,
+};
 
 use crate::{
     account::atomic_file,
-    account::config::{Error, IconChoice, NotifyChoice, SecretStore},
+    account::config::{Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp},
     account::provider::Provider,
 };
 
@@ -46,17 +48,34 @@ impl ConfigFile {
         atomic_file::write(&self.path, self.document.to_string().as_bytes(), 0o644)
     }
 
-    /// Adds the Account, or replaces its Provider when the address is
-    /// written already. The first goes at the top level, where its tables
-    /// would be every Account's; each other in an `[[account]]`.
+    /// Adds the Account, or replaces its Provider. The first goes at the top
+    /// level, whose tables are every Account's; the others, and any with
+    /// servers of its own, in an `[[account]]`.
     pub fn set_account(&mut self, email: &str, provider: Provider) {
         let root = self.document.as_table_mut();
         tabled(root);
-        if names(root, email) {
+        if names(root, email) && provider == Provider::Other {
+            let mut account = Table::new();
+            for key in ["email", "signature", "signature-file"] {
+                if let Some(item) = root.remove(key) {
+                    account.insert(key, item);
+                }
+            }
+
+            root.remove("provider");
+            set_provider(&mut account, provider);
+            account.decor_mut().set_prefix("\n");
+            if let Some(accounts) = accounts_mut(root) {
+                accounts.push(account);
+            }
+        } else if names(root, email) {
             set_provider(root, provider);
         } else if let Some(account) = account_mut(root, email) {
             set_provider(account, provider);
-        } else if root.contains_key("email") || root.contains_key("account") {
+        } else if provider == Provider::Other
+            || root.contains_key("email")
+            || root.contains_key("account")
+        {
             let mut account = Table::new();
             account.insert("email", value(email));
             set_provider(&mut account, provider);
@@ -74,6 +93,36 @@ impl ConfigFile {
             // The address leads the file, ahead of what was written before it.
             root.sort_values_by(|a, _, b, _| rank(a.get()).cmp(&rank(b.get())));
         }
+    }
+
+    /// Writes the servers into the `[[account]]` of `email`, each as an inline
+    /// table with every key but an unset username; nothing without one.
+    pub fn set_servers(&mut self, email: &str, imap: &Imap, smtp: &Smtp) {
+        let root = self.document.as_table_mut();
+        tabled(root);
+        let Some(account) = account_mut(root, email) else {
+            return;
+        };
+
+        let mut table = InlineTable::new();
+        table.insert("host", imap.host.as_str().into());
+        table.insert("port", i64::from(imap.port).into());
+        table.insert("tls", imap.tls.into());
+        if let Some(username) = &imap.username {
+            table.insert("username", username.as_str().into());
+        }
+
+        set(account, "imap", Value::InlineTable(table));
+        let mut table = InlineTable::new();
+        table.insert("host", smtp.host.as_str().into());
+        table.insert("port", i64::from(smtp.port).into());
+        table.insert("tls", smtp.tls.into());
+        table.insert("starttls", smtp.starttls.into());
+        if let Some(username) = &smtp.username {
+            table.insert("username", username.as_str().into());
+        }
+
+        set(account, "smtp", Value::InlineTable(table));
     }
 
     pub fn remove_account(&mut self, email: &str) {

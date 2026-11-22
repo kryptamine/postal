@@ -25,6 +25,18 @@ IMAP server before anything is written. It lives in the secret store where a
 refresh token would, and SMTP signs in with it too. A Provider that has OAuth,
 as Google does, is never offered a password.
 
+## Amendment: any IMAP/SMTP server by password
+
+The generic Provider, `other`, signs in by password to any server: Onboarding
+asks for the address, then the IMAP and SMTP servers, guessed from the domain
+(`imap.<domain>` on 993, `smtp.<domain>` on 465), then the password, checked by
+`LOGIN` before anything is written. The servers are written to the Account's
+own `[[account]]` table, never the top level, whose tables every Account
+shares. SMTP may take a username and a password of its own; that password is
+kept in the secret store under `smtp:<address>`; left blank, it is the IMAP one,
+or the one stored while SMTP keeps a username. IMAP takes implicit TLS only:
+STARTTLS on IMAP waits for a server that needs it.
+
 ## Considered options
 
 - **App password only.** No Google project to run, but the user must enable

@@ -1,9 +1,10 @@
 //! The Onboarding on its own screen: the Provider, then its sign-in, in the
-//! browser or by an app-specific password, checked on the IMAP server before
-//! anything is written.
+//! browser or by a password, at the servers typed for a generic Provider,
+//! checked on the IMAP server before anything is written.
 
 pub mod field;
 mod page;
+mod server_form;
 mod step;
 
 use std::{convert::Infallible, error::Error, io, path::Path, pin::Pin, pin::pin};
@@ -11,7 +12,12 @@ use std::{convert::Infallible, error::Error, io, path::Path, pin::Pin, pin::pin}
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::Terminal;
 
-use self::{field::Edit, page::Page, step::Step};
+use self::{
+    field::Edit,
+    page::Page,
+    server_form::{Keyed, ServerForm},
+    step::Step,
+};
 use crate::{
     account::config::Config,
     account::credential::Credential,
@@ -27,13 +33,7 @@ pub enum Start<'a> {
     /// From the Provider list.
     Choose,
     /// Straight to the sign-in of this Account at its Provider.
-    Again(&'a str, Provider),
-}
-
-impl<'a> Start<'a> {
-    pub fn again(config: &'a Config) -> Self {
-        Self::Again(&config.email, config.provider)
-    }
+    Again(&'a Config),
 }
 
 pub enum Outcome {
@@ -86,11 +86,16 @@ enum Waited<T> {
     Key(KeyEvent),
 }
 
-/// A text field of the iCloud sign-in.
+/// A text field of a sign-in by password at `provider`.
 #[derive(Clone, Copy)]
 enum Field<'h> {
-    Address,
-    Password { heading: &'h str },
+    Address {
+        provider: Provider,
+    },
+    Password {
+        heading: &'h str,
+        provider: Provider,
+    },
 }
 
 impl<'h> Field<'h> {
@@ -99,17 +104,18 @@ impl<'h> Field<'h> {
         'h: 'v,
     {
         match self {
-            Self::Address => Step::Address { value },
-            Self::Password { heading } => Step::Password {
+            Self::Address { provider } => Step::Address { value, provider },
+            Self::Password { heading, provider } => Step::Password {
                 heading,
                 length: value.chars().count(),
+                provider,
             },
         }
     }
 
     fn accepts(self, value: &str) -> bool {
         match self {
-            Self::Address => value.contains('@'),
+            Self::Address { .. } => value.contains('@'),
             Self::Password { .. } => !value.is_empty(),
         }
     }
@@ -230,6 +236,20 @@ impl Screen<'_> {
         }
     }
 
+    /// Edits `form` until it is entered with servers it accepts, or left.
+    async fn servers(&mut self, form: &mut ServerForm, heading: &str) -> io::Result<Typed> {
+        form.problem = None;
+        loop {
+            let event = self.event(&Step::Servers { heading, form }).await?;
+            match form.key(event) {
+                Keyed::Submit => return Ok(Typed::Entered),
+                Keyed::Back => return Ok(Typed::Back),
+                Keyed::Cancel => return Ok(Typed::Cancelled),
+                Keyed::Stay => {}
+            }
+        }
+    }
+
     /// Whether the user agrees to `question`: `y` does, `n`, `Enter` or `Esc` declines.
     async fn replaces(&mut self, question: &str) -> io::Result<bool> {
         loop {
@@ -271,11 +291,16 @@ pub async fn run(
 
     let (choosing, hint, again) = match start {
         Start::Choose => (true, None, Provider::default()),
-        Start::Again(email, provider) => (false, Some(email), provider),
+        Start::Again(config) => (false, Some(config.email.as_str()), config.provider),
     };
 
-    // Kept across tries, so a refused password need not be typed with it again.
+    // Kept across tries, so a refused password need not be typed with them again.
     let mut address = hint.unwrap_or_default().to_owned();
+    let mut form = match start {
+        Start::Again(config) => Some(ServerForm::of(&config.email, &config.imap, &config.smtp)),
+        Start::Choose => None,
+    };
+
     let mut failure: Option<Box<dyn Error>> = None;
     loop {
         if let Some(error) = &failure {
@@ -298,6 +323,7 @@ pub async fn run(
         let attempt = match provider {
             Provider::Google => browser(&mut screen, dir, hint, choosing).await?,
             Provider::ICloud => password(&mut screen, dir, &mut address, choosing).await?,
+            Provider::Other => other(&mut screen, dir, &mut address, &mut form, choosing).await?,
         };
 
         match attempt {
@@ -344,7 +370,11 @@ async fn password(
     let mut password = String::new();
     loop {
         if choosing {
-            match screen.field(address, Field::Address).await? {
+            let field = Field::Address {
+                provider: Provider::ICloud,
+            };
+
+            match screen.field(address, field).await? {
                 Typed::Entered => {}
                 Typed::Back => return Ok(Attempt::Back),
                 Typed::Cancelled => return Ok(Attempt::Cancelled),
@@ -353,17 +383,91 @@ async fn password(
 
         let email = address.trim().to_owned();
         let heading = format!("Sign in to iCloud as {email}");
-        let field = Field::Password { heading: &heading };
+        let field = Field::Password {
+            heading: &heading,
+            provider: Provider::ICloud,
+        };
+
         match screen.field(&mut password, field).await? {
             Typed::Entered => {
                 let secret = Credential::new(password.trim().to_owned());
-                let checking = login::check_password(dir, Provider::ICloud, email, secret);
+                let checking = login::check_password(dir, Provider::ICloud, email, secret, None);
                 return settle(screen, dir, pin!(checking)).await;
             }
             Typed::Back if choosing => password.clear(),
             Typed::Back => return Ok(Attempt::Back),
             Typed::Cancelled => return Ok(Attempt::Cancelled),
         }
+    }
+}
+
+/// Where a sign-in at a generic Provider is.
+enum Stage {
+    Address,
+    Servers,
+    Password,
+}
+
+/// One sign-in at a generic Provider as `address`, at the servers of `form`,
+/// guessed from the domain when there is none for the address yet.
+async fn other(
+    screen: &mut Screen<'_>,
+    dir: &Path,
+    address: &mut String,
+    form: &mut Option<ServerForm>,
+    choosing: bool,
+) -> io::Result<Attempt> {
+    let provider = Provider::Other;
+    let mut password = String::new();
+    let mut stage = if choosing {
+        Stage::Address
+    } else {
+        Stage::Servers
+    };
+
+    loop {
+        let email = address.trim().to_owned();
+        let typed = match stage {
+            Stage::Address => screen.field(address, Field::Address { provider }).await?,
+            Stage::Servers => {
+                let form = match form {
+                    Some(form) if form.is_for(&email) => form,
+                    _ => form.insert(ServerForm::guess(&email)),
+                };
+
+                let heading = format!("Servers for {email}");
+                screen.servers(form, &heading).await?
+            }
+            Stage::Password => {
+                let heading = format!("Sign in as {email}");
+                let field = Field::Password {
+                    heading: &heading,
+                    provider,
+                };
+
+                screen.field(&mut password, field).await?
+            }
+        };
+
+        stage = match (stage, typed) {
+            (_, Typed::Cancelled) => return Ok(Attempt::Cancelled),
+            (Stage::Address, Typed::Back) => return Ok(Attempt::Back),
+            (Stage::Servers, Typed::Back) if !choosing => return Ok(Attempt::Back),
+            (Stage::Servers, Typed::Back) => Stage::Address,
+            (Stage::Address, Typed::Entered) | (Stage::Password, Typed::Back) => Stage::Servers,
+            (Stage::Servers, Typed::Entered) => Stage::Password,
+            (Stage::Password, Typed::Entered) => {
+                let servers = form.as_ref().map(ServerForm::servers);
+                let Some(Ok(servers)) = servers else {
+                    stage = Stage::Servers;
+                    continue;
+                };
+
+                let secret = Credential::new(password.trim().to_owned());
+                let checking = login::check_password(dir, provider, email, secret, Some(servers));
+                return settle(screen, dir, pin!(checking)).await;
+            }
+        };
     }
 }
 

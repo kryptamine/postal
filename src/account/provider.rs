@@ -8,15 +8,18 @@ pub enum Provider {
     Google,
     #[serde(rename = "icloud")]
     ICloud,
+    /// Any IMAP/SMTP server, its hosts written in the Account's tables.
+    Other,
 }
 
 impl Provider {
-    pub const ALL: [Self; 2] = [Self::Google, Self::ICloud];
+    pub const ALL: [Self; 3] = [Self::Google, Self::ICloud, Self::Other];
 
     pub const fn label(self) -> &'static str {
         match self {
             Self::Google => "Google (Gmail)",
             Self::ICloud => "iCloud",
+            Self::Other => "Other (IMAP)",
         }
     }
 
@@ -25,6 +28,7 @@ impl Provider {
         match self {
             Self::Google => "Google",
             Self::ICloud => "iCloud",
+            Self::Other => "IMAP",
         }
     }
 
@@ -33,6 +37,7 @@ impl Provider {
         match self {
             Self::Google => "google",
             Self::ICloud => "icloud",
+            Self::Other => "other",
         }
     }
 }

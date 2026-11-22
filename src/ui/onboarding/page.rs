@@ -6,7 +6,10 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::step::Step;
+use super::{
+    server_form::{SLOTS, ServerForm, Shown},
+    step::Step,
+};
 use crate::{account::provider::Provider, render::wrap, ui::frame::theme::Theme};
 
 const TITLE: &str = " Postal ";
@@ -37,6 +40,15 @@ enum Row<'a> {
     /// A field of this many characters, each drawn as a dot.
     Masked(usize),
     Hints(&'a [(&'a str, &'a str)]),
+    Entry(Entry<'a>),
+}
+
+/// A labelled row of the server form; `blank` stands in for empty text.
+struct Entry<'a> {
+    label: &'a str,
+    shown: Shown<'a>,
+    blank: &'a str,
+    focused: bool,
 }
 
 impl Row<'_> {
@@ -44,7 +56,12 @@ impl Row<'_> {
         let lines = match self {
             Self::Text(text, _) => wrap::wrap(text, width.into()).len(),
             Self::Url(url) => url.width().div_ceil(usize::from(width.max(1))),
-            Self::Blank | Self::Choice(..) | Self::Field(_) | Self::Masked(_) | Self::Hints(_) => 1,
+            Self::Blank
+            | Self::Choice(..)
+            | Self::Field(_)
+            | Self::Masked(_)
+            | Self::Hints(_)
+            | Self::Entry(_) => 1,
         };
 
         u16::try_from(lines).unwrap_or(u16::MAX)
@@ -133,6 +150,10 @@ fn draw(theme: &Theme, row: &Row<'_>, area: Rect, buf: &mut Buffer) -> u16 {
             field(theme, &DOT.repeat(length), Rect { y, ..area }, buf);
             y += 1;
         }
+        Row::Entry(ref row) => {
+            entry(theme, row, Rect { y, ..area }, buf);
+            y += 1;
+        }
         Row::Hints(hints) => {
             let mut x = area.x;
             for &(key, action) in hints {
@@ -152,28 +173,129 @@ fn draw(theme: &Theme, row: &Row<'_>, area: Rect, buf: &mut Buffer) -> u16 {
     y
 }
 
-/// The steps of a sign-in by an app-specific password; empty for the rest.
+/// The steps of a sign-in by password; empty for the rest.
 fn password_rows<'a>(theme: &Theme, step: &'a Step<'a>) -> Vec<Row<'a>> {
+    let icloud = |provider| provider == Provider::ICloud;
     match *step {
-        Step::Address { value } => vec![
-            Row::Text("Sign in to iCloud", theme.title),
+        Step::Address { value, provider } => vec![
+            Row::Text(
+                if icloud(provider) {
+                    "Sign in to iCloud"
+                } else {
+                    "Sign in to your mail server"
+                },
+                theme.title,
+            ),
             Row::Blank,
-            Row::Text("Your iCloud address:", theme.muted),
+            Row::Text(
+                if icloud(provider) {
+                    "Your iCloud address:"
+                } else {
+                    "Your address:"
+                },
+                theme.muted,
+            ),
             Row::Field(value),
             Row::Blank,
             Row::Hints(&[("Enter", "next"), ("Esc", "back"), ("Ctrl-C", "cancel")]),
         ],
-        Step::Password { heading, length } => vec![
-            Row::Text(heading, theme.title),
-            Row::Blank,
-            Row::Text(PASSWORD_HELP, theme.muted),
-            Row::Blank,
-            Row::Text("App-specific password:", theme.muted),
-            Row::Masked(length),
-            Row::Blank,
-            Row::Hints(&[("Enter", "sign in"), ("Esc", "back"), ("Ctrl-C", "cancel")]),
-        ],
+        Step::Password {
+            heading,
+            length,
+            provider,
+        } => {
+            let mut rows = vec![Row::Text(heading, theme.title), Row::Blank];
+            if icloud(provider) {
+                rows.extend([Row::Text(PASSWORD_HELP, theme.muted), Row::Blank]);
+            }
+
+            let label = if icloud(provider) {
+                "App-specific password:"
+            } else {
+                "Password:"
+            };
+
+            rows.extend([
+                Row::Text(label, theme.muted),
+                Row::Masked(length),
+                Row::Blank,
+                Row::Hints(&[("Enter", "sign in"), ("Esc", "back"), ("Ctrl-C", "cancel")]),
+            ]);
+            rows
+        }
+        Step::Servers { heading, form } => server_rows(theme, heading, form),
         _ => Vec::new(),
+    }
+}
+
+fn server_rows<'a>(theme: &Theme, heading: &'a str, form: &'a ServerForm) -> Vec<Row<'a>> {
+    let mut rows = vec![Row::Text(heading, theme.title), Row::Blank];
+    rows.extend(SLOTS.iter().enumerate().map(|(at, &slot)| {
+        Row::Entry(Entry {
+            label: slot.label(),
+            shown: form.shown(slot),
+            blank: slot.blank(),
+            focused: at == form.focus,
+        })
+    }));
+
+    rows.push(Row::Blank);
+    if let Some(problem) = form.problem {
+        rows.extend([Row::Text(problem, theme.error), Row::Blank]);
+    }
+
+    rows.push(Row::Hints(&[
+        ("Tab", "field"),
+        ("←→", "change"),
+        ("Enter", "next"),
+        ("Esc", "back"),
+    ]));
+    rows
+}
+
+/// Columns of a form row's label, before its value.
+const LABEL: u16 = 16;
+
+/// A form row: its label, then its value, the cursor after the focused one.
+fn entry(theme: &Theme, row: &Entry<'_>, area: Rect, buf: &mut Buffer) {
+    let &Entry {
+        label,
+        ref shown,
+        blank,
+        focused,
+    } = row;
+
+    let label_style = if focused { theme.key } else { theme.muted };
+    buf.set_stringn(area.x, area.y, label, usize::from(LABEL), label_style);
+    let value = Rect {
+        x: area.x.saturating_add(LABEL),
+        width: area.width.saturating_sub(LABEL),
+        height: 1,
+        ..area
+    };
+
+    match *shown {
+        Shown::Choice(security) if focused => {
+            let text = format!("‹ {} ›", security.label());
+            buf.set_stringn(value.x, value.y, text, value.width.into(), theme.key);
+        }
+        Shown::Choice(security) => {
+            let room = value.width.into();
+            buf.set_stringn(value.x + 2, value.y, security.label(), room, Style::new());
+        }
+        Shown::Text("") | Shown::Dots(0) if !focused => {
+            let room = value.width.into();
+            buf.set_stringn(value.x, value.y, format!("({blank})"), room, theme.muted);
+        }
+        Shown::Text(text) if focused => field(theme, text, value, buf),
+        Shown::Dots(length) if focused => field(theme, &DOT.repeat(length), value, buf),
+        Shown::Text(text) => {
+            buf.set_stringn(value.x, value.y, text, value.width.into(), Style::new());
+        }
+        Shown::Dots(length) => {
+            let room = value.width.into();
+            buf.set_stringn(value.x, value.y, DOT.repeat(length), room, Style::new());
+        }
     }
 }
 
@@ -226,7 +348,9 @@ fn rows<'a>(theme: &Theme, step: &'a Step<'a>) -> Vec<Row<'a>> {
                 Row::Hints(hints),
             ]
         }
-        Step::Address { .. } | Step::Password { .. } => password_rows(theme, step),
+        Step::Address { .. } | Step::Password { .. } | Step::Servers { .. } => {
+            password_rows(theme, step)
+        }
         Step::Checking => vec![
             Row::Text("Signing in to the mail server…", theme.title),
             Row::Blank,

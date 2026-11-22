@@ -43,7 +43,7 @@ pub async fn sign_in_again(
 ) -> Result<Option<&'static str>, Box<dyn Error>> {
     let (terminal, background) = slot.take()?;
     let theme = onboarding_theme(dir, background)?;
-    let failed = match onboarding::run(terminal, &theme, dir, Start::again(config)).await? {
+    let failed = match onboarding::run(terminal, &theme, dir, Start::Again(config)).await? {
         Outcome::SignedIn(_) => {
             *sign_in = read_sign_in(config, dir)?;
             sign_in.is_none()

@@ -165,7 +165,7 @@ The Messages sent but not yet accepted by the server, retried on each sync (ADR 
 _Avoid_: queue, pending, spool
 
 **Onboarding**:
-The screen that signs an Account in: on a first run, and after `postal login` or Add account in Settings to add one, from the Provider list, then in the browser for Google or by an app-specific password for iCloud, checked on the server before anything is written. Signing in an address again replaces its secret. `L` and a lost secret skip the Provider list; for a lost secret it shows before the run, once per Account, and `Esc` runs without that Account. A failure is shown there and can be tried again.
+The screen that signs an Account in: on a first run, and after `postal login` or Add account in Settings to add one, from the Provider list, then in the browser for Google, by an app-specific password for iCloud, or by the servers and a password for any other, checked on the server before anything is written. Signing in an address again replaces its secret. `L` and a lost secret skip the Provider list; for a lost secret it shows before the run, once per Account, and `Esc` runs without that Account. A failure is shown there and can be tried again.
 _Avoid_: setup wizard, registration
 
 **Settings**:
@@ -177,7 +177,7 @@ Taking an Account out of Postal from Settings: out of `config.toml`, its secret 
 _Avoid_: remove, sign out, log out
 
 **Provider**:
-The mail service an Account lives at, which decides how it signs in. Google, signed in through the browser, or iCloud, by an app-specific password.
+The mail service an Account lives at, which decides how it signs in. Google, signed in through the browser; iCloud, by an app-specific password; or Other, any IMAP/SMTP server, by the servers typed and a password.
 _Avoid_: service, host, backend
 
 **All Inboxes**:

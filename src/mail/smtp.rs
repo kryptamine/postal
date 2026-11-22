@@ -36,7 +36,8 @@ impl Error {
 }
 
 /// Hands `message` to the `[smtp]` server for `envelope`, signed in as the
-/// Account: by `XOAUTH2`, or by its password and full address.
+/// Account: by `XOAUTH2`, or by its password and username, which is the
+/// full address unless the config names another.
 pub async fn send(
     config: &Config,
     sign_in: &SignIn,
@@ -48,13 +49,15 @@ pub async fn send(
             let access = tokens.access().await?;
             (access.expose().to_owned(), vec![Mechanism::Xoauth2])
         }
-        SignIn::Password(password) => (
-            password.expose().to_owned(),
+        SignIn::Password { password, smtp } => (
+            smtp.as_ref().unwrap_or(password).expose().to_owned(),
             vec![Mechanism::Plain, Mechanism::Login],
         ),
     };
 
     let server = &config.smtp;
+    let username = server.username.as_ref().or(config.imap.username.as_ref());
+    let username = username.unwrap_or(&config.email).clone();
     // Plaintext is allowed only on loopback, by the config.
     let tls = if !server.tls {
         Tls::None
@@ -67,7 +70,7 @@ pub async fn send(
     AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&server.host)
         .port(server.port)
         .tls(tls)
-        .credentials(Credentials::new(config.email.clone(), secret))
+        .credentials(Credentials::new(username, secret))
         .authentication(mechanisms)
         .build()
         .send_raw(envelope, message)

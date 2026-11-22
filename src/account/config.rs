@@ -31,19 +31,24 @@ pub struct Imap {
     pub host: String,
     pub port: u16,
     pub tls: bool,
+    /// What `LOGIN` names in place of the address.
+    pub username: Option<String>,
 }
 
 impl Imap {
-    pub fn of(provider: Provider) -> Self {
+    /// The Provider's server; for `Other`, guessed from the domain of `email`.
+    pub fn of(provider: Provider, email: &str) -> Self {
         let host = match provider {
-            Provider::Google => "imap.gmail.com",
-            Provider::ICloud => "imap.mail.me.com",
+            Provider::Google => "imap.gmail.com".to_owned(),
+            Provider::ICloud => "imap.mail.me.com".to_owned(),
+            Provider::Other => format!("imap.{}", domain(email)),
         };
 
         Self {
-            host: host.to_owned(),
+            host,
             port: 993,
             tls: true,
+            username: None,
         }
     }
 }
@@ -56,26 +61,33 @@ pub struct Smtp {
     pub port: u16,
     pub tls: bool,
     pub starttls: bool,
+    /// What `AUTH` names, else the IMAP username, else the address.
+    pub username: Option<String>,
 }
 
 impl Smtp {
     /// iCloud's SMTP takes STARTTLS on 587 alone (support.apple.com/102525).
-    pub fn of(provider: Provider) -> Self {
-        match provider {
-            Provider::Google => Self {
-                host: "smtp.gmail.com".to_owned(),
-                port: 465,
-                tls: true,
-                starttls: false,
-            },
-            Provider::ICloud => Self {
-                host: "smtp.mail.me.com".to_owned(),
-                port: 587,
-                tls: true,
-                starttls: true,
-            },
+    pub fn of(provider: Provider, email: &str) -> Self {
+        let (host, port, starttls) = match provider {
+            Provider::Google => ("smtp.gmail.com".to_owned(), 465, false),
+            Provider::ICloud => ("smtp.mail.me.com".to_owned(), 587, true),
+            Provider::Other => (format!("smtp.{}", domain(email)), 465, false),
+        };
+
+        Self {
+            host,
+            port,
+            tls: true,
+            starttls,
+            username: None,
         }
     }
+}
+
+/// What follows the last `@`, without case.
+fn domain(email: &str) -> String {
+    let domain = email.rsplit_once('@').map_or(email, |(_, domain)| domain);
+    domain.trim().to_lowercase()
 }
 
 /// Whether to draw Nerd Font icons: `auto` guesses from the terminal.

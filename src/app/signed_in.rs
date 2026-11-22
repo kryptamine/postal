@@ -4,7 +4,7 @@ use crate::{
     account::config::Config,
     account::oauth::Tokens,
     account::provider::Provider,
-    account::sign_in::SignIn,
+    account::sign_in::{SignIn, smtp_key},
     app::onboard::{onboard, onboarding_theme},
     domain::per_account::PerAccount,
     mail::login,
@@ -49,7 +49,7 @@ async fn signed_in(
 
             let (terminal, background) = slot.take()?;
             let theme = onboarding_theme(dir, background)?;
-            match onboarding::run(terminal, &theme, dir, Start::again(&config)).await? {
+            match onboarding::run(terminal, &theme, dir, Start::Again(&config)).await? {
                 Outcome::SignedIn(_) => {}
                 Outcome::Quit(error) => {
                     tracing::info!("running without {}", config.email);
@@ -74,7 +74,10 @@ pub fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<d
     };
 
     Ok(Some(match config.provider {
-        Provider::ICloud => SignIn::Password(secret),
+        Provider::ICloud | Provider::Other => SignIn::Password {
+            password: secret,
+            smtp: config.secrets.read(dir, &smtp_key(&config.email))?,
+        },
         Provider::Google => match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
             Ok(tokens) => SignIn::OAuth(tokens),
             Err(error) if error.signed_out() => {

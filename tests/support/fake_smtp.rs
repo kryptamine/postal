@@ -13,6 +13,10 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 
 use super::fake_imap::{APP_PASSWORD, xoauth2};
 
+/// The password `AUTH PLAIN` takes beside `APP_PASSWORD`, for an SMTP sign-in
+/// of its own.
+pub const SMTP_PASSWORD: &str = "relay-secret";
+
 /// One Message as the server took it.
 #[derive(Clone, Debug)]
 pub struct Received {
@@ -192,7 +196,9 @@ fn auth(command: &str, state: &Mutex<State>) -> String {
         .unwrap_or_default();
     let ok = match mechanism.as_str() {
         "XOAUTH2" => response == xoauth2(),
-        "PLAIN" => response.ends_with(&format!("\0{APP_PASSWORD}")),
+        "PLAIN" => [APP_PASSWORD, SMTP_PASSWORD]
+            .iter()
+            .any(|password| response.ends_with(&format!("\0{password}"))),
         _ => false,
     };
 

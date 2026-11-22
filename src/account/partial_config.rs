@@ -89,6 +89,7 @@ struct RawImap {
     host: Option<String>,
     port: Option<u16>,
     tls: Option<Spanned<bool>>,
+    username: Option<String>,
 }
 
 #[derive(Deserialize, Default, Clone)]
@@ -98,12 +99,13 @@ struct RawSmtp {
     port: Option<u16>,
     tls: Option<Spanned<bool>>,
     starttls: Option<bool>,
+    username: Option<String>,
 }
 
 impl RawImap {
-    /// This table over `base`, at `provider`.
-    fn at(&self, base: &Self, provider: Provider) -> Imap {
-        let default = Imap::of(provider);
+    /// This table over `base`, at `provider`, for `email`.
+    fn at(&self, base: &Self, provider: Provider, email: &str) -> Imap {
+        let default = Imap::of(provider, email);
         let tls = self.tls.as_ref().or(base.tls.as_ref());
         Imap {
             host: self
@@ -113,13 +115,14 @@ impl RawImap {
                 .unwrap_or(default.host),
             port: self.port.or(base.port).unwrap_or(default.port),
             tls: tls.map_or(default.tls, |tls| *tls.get_ref()),
+            username: self.username.clone().or_else(|| base.username.clone()),
         }
     }
 }
 
 impl RawSmtp {
-    fn at(&self, base: &Self, provider: Provider) -> Smtp {
-        let default = Smtp::of(provider);
+    fn at(&self, base: &Self, provider: Provider, email: &str) -> Smtp {
+        let default = Smtp::of(provider, email);
         let tls = self.tls.as_ref().or(base.tls.as_ref());
         Smtp {
             host: self
@@ -130,6 +133,7 @@ impl RawSmtp {
             port: self.port.or(base.port).unwrap_or(default.port),
             tls: tls.map_or(default.tls, |tls| *tls.get_ref()),
             starttls: self.starttls.or(base.starttls).unwrap_or(default.starttls),
+            username: self.username.clone().or_else(|| base.username.clone()),
         }
     }
 }
@@ -293,12 +297,12 @@ impl PartialConfig {
 
     fn config(&self, account: &RawAccount, email: String, provider: Provider) -> Config {
         Config {
+            imap: account.imap.at(&self.imap, provider, &email),
+            smtp: account.smtp.at(&self.smtp, provider, &email),
             email,
             provider,
             name: account.name.clone().or_else(|| self.name.clone()),
             signature: self.signature(account),
-            imap: account.imap.at(&self.imap, provider),
-            smtp: account.smtp.at(&self.smtp, provider),
             secrets: self.secrets,
             oauth: self.oauth.clone(),
             icons: self.icons,
@@ -317,7 +321,7 @@ fn signed_twice(raw: &RawConfig) -> Option<Range<usize>> {
         .find_map(|(_, file)| file.as_ref().map(Spanned::span))
 }
 
-fn is_loopback(host: &str) -> bool {
+pub fn is_loopback(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost")
         || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
 }

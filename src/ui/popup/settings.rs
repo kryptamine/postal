@@ -10,6 +10,7 @@ use crate::{
     account::config_file::ConfigFile,
     account::partial_config::PartialConfig,
     account::provider::Provider,
+    account::sign_in::smtp_key,
     ui::onboarding::field::{self, Edit},
 };
 
@@ -219,9 +220,14 @@ impl Settings {
     fn switch_store(&mut self) -> Result<(), Box<dyn Error>> {
         let (from, to) = (self.secrets, self.secrets.other());
         let dir = &self.dir;
-        let copied = self.accounts.iter().try_for_each(|(email, _)| {
-            from.read(dir, email)?
-                .map_or(Ok(()), |secret| to.write(dir, email, &secret))
+        let keys: Vec<_> = self
+            .accounts
+            .iter()
+            .flat_map(|(email, _)| [email.clone(), smtp_key(email)])
+            .collect();
+        let copied = keys.iter().try_for_each(|key| {
+            from.read(dir, key)?
+                .map_or(Ok(()), |secret| to.write(dir, key, &secret))
         });
 
         let written = copied.and_then(|()| self.write(|config| config.set_secrets(to)));
@@ -230,9 +236,9 @@ impl Settings {
         } else {
             (from, to)
         };
-        for (email, _) in &self.accounts {
-            if let Err(error) = dropped.delete(&self.dir, email) {
-                tracing::warn!("{email}: {error}");
+        for key in &keys {
+            if let Err(error) = dropped.delete(&self.dir, key) {
+                tracing::warn!("{key}: {error}");
             }
         }
 

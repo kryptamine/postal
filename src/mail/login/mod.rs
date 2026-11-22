@@ -4,7 +4,11 @@ mod password;
 
 use std::{io, time::Duration};
 
-pub use self::{consent::Consent, granted::Granted, password::check_password};
+pub use self::{
+    consent::Consent,
+    granted::Granted,
+    password::{Servers, check_password},
+};
 use crate::{
     account::config::Config,
     account::partial_config::PartialConfig,
@@ -37,8 +41,18 @@ pub enum Error {
     #[error("Google did not grant access to Gmail; leave the Gmail permission ticked")]
     NoMailScope,
     /// The IMAP server refused the address or the password.
-    #[error("{} refused the address or the app-specific password", .0.service())]
+    #[error("{}", refused(*.0))]
     PasswordRefused(Provider),
+}
+
+fn refused(provider: Provider) -> String {
+    match provider {
+        Provider::Other => "the mail server refused the address or the password".to_owned(),
+        Provider::Google | Provider::ICloud => format!(
+            "{} refused the address or the app-specific password",
+            provider.service()
+        ),
+    }
 }
 
 /// What a login writes besides the secret.

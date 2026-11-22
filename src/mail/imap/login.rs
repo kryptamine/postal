@@ -1,11 +1,11 @@
 use async_imap::{Client, Session};
 
 use super::{Error, connect::Transport, xoauth2::XOAuth2};
-use crate::{account::config::Config, account::sign_in::SignIn};
+use crate::{account::config::Config, account::provider::Provider, account::sign_in::SignIn};
 
-/// Signs in as the Account: by `XOAUTH2`, or by `LOGIN` with the name part of
-/// the address, then the whole address once that is refused, as iCloud wants
-/// the one for its own domains and the other for a custom domain.
+/// Signs in as the Account: by `XOAUTH2`, or by `LOGIN` with the username
+/// the config names, else the whole address. iCloud tries the name part
+/// first: it wants that for its own domains, the address for a custom one.
 pub async fn sign_in(
     client: Client<Box<dyn Transport>>,
     config: &Config,
@@ -25,11 +25,16 @@ pub async fn sign_in(
                 .await
                 .map_err(|(e, _)| e)?);
         }
-        SignIn::Password(password) => password.expose(),
+        SignIn::Password { password, .. } => password.expose(),
     };
 
     let email = config.email.as_str();
-    let Some((name, _)) = email.split_once('@') else {
+    if let Some(username) = &config.imap.username {
+        return Ok(client.login(username, password).await.map_err(|(e, _)| e)?);
+    }
+
+    let name = email.split_once('@').map(|(name, _)| name);
+    let Some(name) = name.filter(|_| config.provider == Provider::ICloud) else {
         return Ok(client.login(email, password).await.map_err(|(e, _)| e)?);
     };
 

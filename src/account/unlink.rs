@@ -1,7 +1,8 @@
 use std::{error::Error, path::Path};
 
 use crate::{
-    account::config_file::ConfigFile, account::partial_config::PartialConfig, account::xdg, cache,
+    account::config_file::ConfigFile, account::partial_config::PartialConfig,
+    account::sign_in::smtp_key, account::xdg, cache,
 };
 
 /// Takes the Account of `email` out of `config.toml` in `dir`, then deletes
@@ -14,6 +15,7 @@ pub fn unlink(dir: &Path, email: &str) -> Result<(), Box<dyn Error>> {
     file.remove_account(email);
     file.save()?;
     cache::forget(&xdg::cache_dir()?, email)?;
+    config.secrets.delete(dir, &smtp_key(email))?;
     config.secrets.delete(dir, email)?;
     tracing::info!("unlinked {email}");
     Ok(())
