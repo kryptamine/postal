@@ -41,7 +41,9 @@ CREATE TABLE message (
     text_html INTEGER,
     PRIMARY KEY (account, mailbox, uid)
 );
-CREATE INDEX message_by_arrival ON message (account, mailbox, received DESC, uid DESC);
+CREATE INDEX message_by_arrival
+    ON message (account, mailbox, received DESC, uid DESC, thread, body_key);
+CREATE INDEX message_by_thread ON message (account, mailbox, thread);
 -- A Thread's Messages as `[Gmail]/All Mail` held them when it was last read;
 -- see docs/adr/0009-threads-from-gmail-thread-id.md.
 CREATE TABLE thread_message (
