@@ -1,8 +1,7 @@
-use async_imap::imap_proto::{
-    BodyContentCommon, BodyContentSinglePart, BodyStructure, ContentEncoding,
-};
+use async_imap::imap_proto::{BodyContentCommon, BodyContentSinglePart, BodyStructure};
 
-use crate::{domain::text_part::TextPart, domain::transfer_encoding::TransferEncoding};
+use super::encoding;
+use crate::domain::text_part::TextPart;
 
 /// The first inline `text/plain` part, else the first inline `text/html`;
 /// `None` when the Message has neither. Attached Messages are not entered.
@@ -67,18 +66,9 @@ fn text(
         .find(|(key, _)| key.eq_ignore_ascii_case("charset"))
         .map(|(_, value)| value.to_string())
         .unwrap_or_default();
-    let encoding = match &other.transfer_encoding {
-        ContentEncoding::QuotedPrintable => TransferEncoding::QuotedPrintable,
-        ContentEncoding::Base64 => TransferEncoding::Base64,
-        ContentEncoding::Other(label) => TransferEncoding::from_label(label),
-        ContentEncoding::SevenBit | ContentEncoding::EightBit | ContentEncoding::Binary => {
-            TransferEncoding::Identity
-        }
-    };
-
     Some(TextPart {
         section: section.to_owned(),
-        encoding,
+        encoding: encoding::of(&other.transfer_encoding),
         charset,
         html,
     })

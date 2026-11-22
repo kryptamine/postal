@@ -5,6 +5,7 @@ mod attachments;
 mod bodies;
 mod body_plan;
 mod connect;
+mod encoding;
 mod error;
 mod file_name;
 mod login;
