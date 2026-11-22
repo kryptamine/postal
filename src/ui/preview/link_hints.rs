@@ -1,20 +1,19 @@
-use std::{fmt::Write, ops::Range, sync::Arc};
+use std::{ops::Range, sync::Arc};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 
-use crate::{account::browser, render::stack_str::StackStr, render::styled_line::StyledLine};
-
-/// The home row, so typing a label needs no reach.
-const ALPHABET: [char; 9] = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
-/// Every two-letter label; links past this many get none.
-const MOST: usize = ALPHABET.len() * ALPHABET.len();
+use crate::{
+    account::browser,
+    render::stack_str::StackStr,
+    render::styled_line::StyledLine,
+    ui::preview::hint_keys::{self, HintKeys},
+};
 
 /// Hint mode: each distinct URL in the bodies on screen, in reading order,
-/// labelled before the first run of it shown. Labels are all one length.
+/// labelled before the first run of it shown.
 pub struct LinkHints {
     targets: Vec<Target>,
-    /// The letter typed so far of a two-letter label.
-    first: Option<usize>,
+    keys: HintKeys,
 }
 
 struct Target {
@@ -50,7 +49,7 @@ impl LinkHints {
                     continue;
                 };
 
-                if targets.len() < MOST && targets.iter().all(|t| t.url != *url) {
+                if targets.len() < hint_keys::MOST && targets.iter().all(|t| t.url != *url) {
                     targets.push(Target {
                         part,
                         line,
@@ -61,9 +60,9 @@ impl LinkHints {
             }
         }
 
-        (!targets.is_empty()).then_some(Self {
+        (!targets.is_empty()).then(|| Self {
+            keys: HintKeys::new(targets.len()),
             targets,
-            first: None,
         })
     }
 
@@ -73,46 +72,14 @@ impl LinkHints {
             .targets
             .iter()
             .position(|t| t.part == part && t.line == line && t.run == run)?;
-        let mut label = StackStr::new();
-        if self.two_letters() {
-            label.write_char(ALPHABET[index / ALPHABET.len()]).ok();
-        }
-
-        label.write_char(ALPHABET[index % ALPHABET.len()]).ok();
-        Some(label)
+        self.keys.label(index)
     }
 
     pub fn key(&mut self, key: KeyEvent) -> Typed {
-        let letter = match key.code {
-            KeyCode::Char(c) if (key.modifiers - KeyModifiers::SHIFT).is_empty() => {
-                ALPHABET.iter().position(|&a| a == c)
-            }
-            _ => None,
-        };
-
-        let Some(letter) = letter else {
-            return Typed::Cancel;
-        };
-
-        let index = match self.first {
-            None if self.two_letters() => {
-                if letter * ALPHABET.len() >= self.targets.len() {
-                    return Typed::Cancel;
-                }
-
-                self.first = Some(letter);
-                return Typed::Partial;
-            }
-            None => letter,
-            Some(first) => first * ALPHABET.len() + letter,
-        };
-
-        self.targets
-            .get(index)
-            .map_or(Typed::Cancel, |t| Typed::Open(Arc::clone(&t.url)))
-    }
-
-    const fn two_letters(&self) -> bool {
-        self.targets.len() > ALPHABET.len()
+        match self.keys.key(key) {
+            hint_keys::Typed::Partial => Typed::Partial,
+            hint_keys::Typed::Picked(index) => Typed::Open(Arc::clone(&self.targets[index].url)),
+            hint_keys::Typed::Cancel => Typed::Cancel,
+        }
     }
 }

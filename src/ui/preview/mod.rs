@@ -1,4 +1,5 @@
 pub mod attachment_line;
+pub mod hint_keys;
 pub mod link_hints;
 pub mod link_labels;
 pub mod message_header;
