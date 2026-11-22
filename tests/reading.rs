@@ -503,9 +503,8 @@ fn the_accounts_own_messages_are_muted() {
             folded(s, "me", "I answer", "2024-03-02") && folded(s, "Ada", "Ada asks", "2024-03-01")
         })
         .unwrap();
-    let sender = |s: &Screen, text: &str| *s.cell(row_of(s, text), 2).unwrap().style();
-    assert!(sender(&screen, "I answer").dim, "{screen}");
-    assert!(!sender(&screen, "Ada asks").dim, "{screen}");
+    assert!(style_after(&screen, "I answer", "│ ").dim, "{screen}");
+    assert!(!style_after(&screen, "Ada asks", "│ ").dim, "{screen}");
 
     t.send(Key::Char('p')).unwrap();
     t.send(Key::Char(' ')).unwrap();
@@ -516,7 +515,19 @@ fn the_accounts_own_messages_are_muted() {
                 && !folded(s, "me", "I answer", "2024-03-02")
         })
         .unwrap();
-    let from = row_of(&screen, "│▎From    ");
-    assert!(screen.cell(from, 10).unwrap().style().dim, "{screen}");
+    let from = "│▎From    ";
+    assert!(style_after(&screen, from, from).dim, "{screen}");
     quit(t);
+}
+
+/// The style of the cell right after `before` on the first row showing `text`.
+fn style_after(screen: &Screen, text: &str, before: &str) -> termlens::Style {
+    let row = row_of(screen, text);
+    let line = screen.row_text(row);
+    let (head, _) = line.split_once(before).unwrap();
+    let col = head.chars().count() + before.chars().count();
+    *screen
+        .cell(row, u16::try_from(col).unwrap())
+        .unwrap()
+        .style()
 }
