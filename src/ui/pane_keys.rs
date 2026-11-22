@@ -50,8 +50,8 @@ pub fn act(
         Some(Action::Search) => Step::Steer(Steer::Search),
         Some(Action::Type(c)) => Step::Steer(Steer::Type(c)),
         Some(Action::Erase) => Step::Steer(Steer::Erase),
-        Some(Action::EndSearch { restore }) => {
-            view.end_search(restore);
+        Some(Action::EndSearch) => {
+            view.end_search(matches!(screen.showing, Showing::Query));
             screen.list();
             Step::Stay
         }

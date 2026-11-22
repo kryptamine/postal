@@ -7,7 +7,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    ui::keymap::{self, Binding},
+    ui::keymap::{self, Binding, Key},
     ui::mode::Mode,
     ui::theme::Theme,
 };
@@ -28,9 +28,9 @@ pub struct HelpPopup<'a> {
 impl Widget for HelpPopup<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let bindings = keymap::bindings(self.mode, self.signed_out);
-        let keys = column(bindings.clone(), |b| b.keys);
-        let aliases = column(bindings.clone(), |b| b.aliases);
-        let descriptions = column(bindings.clone(), |b| b.description);
+        let keys = column(bindings.clone(), |b| spelled(b.keys));
+        let aliases = column(bindings.clone(), |b| spelled(b.aliases));
+        let descriptions = column(bindings.clone(), |b| b.description.width());
         let width = keys + GAP + aliases + GAP + descriptions + FRAME;
         let popup = centre(area, width, rows(bindings.clone()) + FRAME);
         Clear.render(popup, buf);
@@ -61,20 +61,18 @@ impl Widget for HelpPopup<'_> {
             }
 
             let Some(y) = lines.next() else { return };
-            let cells = [
-                (0, binding.keys, self.theme.key),
-                (keys + GAP, binding.aliases, self.theme.key),
-                (
-                    keys + GAP + aliases + GAP,
-                    binding.description,
-                    self.theme.muted,
-                ),
-            ];
-
-            for (offset, text, style) in cells {
-                let x = inner.x.saturating_add(offset);
-                cell(buf, (x, y), inner.right(), text, style);
-            }
+            let (right, key) = (inner.right(), self.theme.key);
+            let at = |offset| (inner.x.saturating_add(offset), y);
+            key_cell(buf, at(0), right, binding.keys, key);
+            key_cell(buf, at(keys + GAP), right, binding.aliases, key);
+            let description = at(keys + GAP + aliases + GAP);
+            cell(
+                buf,
+                description,
+                right,
+                binding.description,
+                self.theme.muted,
+            );
         }
     }
 }
@@ -82,10 +80,10 @@ impl Widget for HelpPopup<'_> {
 /// The widest of one column over `bindings`.
 fn column<'a>(
     bindings: impl Iterator<Item = &'a Binding>,
-    text: impl Fn(&Binding) -> &'static str,
+    width: impl Fn(&Binding) -> usize,
 ) -> u16 {
     bindings
-        .map(|b| u16::try_from(text(b).width()).unwrap_or(u16::MAX))
+        .map(|b| u16::try_from(width(b)).unwrap_or(u16::MAX))
         .max()
         .unwrap_or(0)
 }
@@ -110,6 +108,19 @@ fn centre(area: Rect, width: u16, height: u16) -> Rect {
         width,
         height,
     }
+}
+
+fn spelled(keys: &[Key]) -> usize {
+    let mut width = 0;
+    Key::spell(keys, |part| width += part.width());
+    width
+}
+
+fn key_cell(buf: &mut Buffer, (mut x, y): (u16, u16), right: u16, keys: &[Key], style: Style) {
+    Key::spell(keys, |part| {
+        cell(buf, (x, y), right, part, style);
+        x = x.saturating_add(u16::try_from(part.width()).unwrap_or(u16::MAX));
+    });
 }
 
 fn cell(buf: &mut Buffer, (x, y): (u16, u16), right: u16, text: &str, style: Style) {

@@ -3,7 +3,7 @@ use ratatui::{Frame, layout::Rect};
 
 use crate::{
     ui::exit::Exit,
-    ui::keymap::{Binding, Hint},
+    ui::keymap::{Binding, Hint, Key},
     ui::mode::Mode,
     ui::popup::layer_act::Act,
     ui::popup::settings::{self, Settings},
@@ -20,8 +20,8 @@ pub const HELP: &[Binding] = &[
         group: "Settings",
         modes: SETTINGS,
         signed_out: false,
-        keys: "j / k",
-        aliases: "↓ / ↑",
+        keys: &[Key::Char("j"), Key::Char("k")],
+        aliases: &[Key::Down, Key::Up],
         description: "next / previous",
         hint: Some(Hint {
             keys: "j/k",
@@ -32,8 +32,8 @@ pub const HELP: &[Binding] = &[
         group: "Settings",
         modes: SETTINGS,
         signed_out: false,
-        keys: "Enter",
-        aliases: "",
+        keys: &[Key::Enter],
+        aliases: &[],
         description: "change the setting, or add an Account",
         hint: Some(Hint {
             keys: "Enter",
@@ -44,8 +44,8 @@ pub const HELP: &[Binding] = &[
         group: "Settings",
         modes: SETTINGS,
         signed_out: false,
-        keys: "d",
-        aliases: "Backspace",
+        keys: &[Key::Char("d")],
+        aliases: &[Key::Backspace],
         description: "unlink the Account",
         hint: Some(Hint {
             keys: "d",
@@ -56,8 +56,8 @@ pub const HELP: &[Binding] = &[
         group: "Settings",
         modes: SETTINGS,
         signed_out: false,
-        keys: "q",
-        aliases: "Esc / ,",
+        keys: &[Key::Char("q")],
+        aliases: &[Key::Esc, Key::Char(",")],
         description: "back to the Message List",
         hint: Some(Hint {
             keys: "q",
