@@ -81,7 +81,7 @@ How the Preview shows HTML mail after `v`: its text in reading order, wrapped to
 _Avoid_: plain mode, raw view
 
 **Attachment**:
-A file a Message carries beside its text: a part sent as an attachment, or a non-text part with a file name; an image the HTML shows by `cid:` is none, and an attached Message counts as one. A row of the Message List whose Thread has one is marked left of its subject, and the Preview, Reading, `$PAGER` and the editor `E` opens name each with its size under the header.
+A file a Message carries beside its text: a part sent as an attachment, or a non-text part with a file name; an image the HTML shows by `cid:` is none, and an attached Message counts as one. A row of the Message List whose Thread has one is marked left of its subject, and the Preview, Reading, `$PAGER` and the editor `E` opens name each with its size under the header. `a` opens one in the program the desktop picks for it, `s` saves one to the download directory; either fetches it from the server each time, as it is never cached.
 _Avoid_: file, enclosure
 
 **Snippet**:
@@ -105,7 +105,7 @@ The connection state in the right slot of the hint line, silent while live: sync
 _Avoid_: indicator, banner, connection bar
 
 **Hint mode**:
-Entered with `o`: each distinct URL the Preview window shows, or every unfolded body on screen in Reading, gets a label of home-row letters, and typing one opens it.
+Entered with `o`: each distinct URL the Preview window shows, or every unfolded body on screen in Reading, gets a label of home-row letters, and typing one opens it. `a` and `s` label the attachments of the selected Message, in Reading of the one at the cursor, the same way.
 _Avoid_: link mode, follow mode, footnotes
 
 **Reading**:

@@ -27,6 +27,7 @@ use crate::{
     ui::list::folder_show::show,
     ui::list::message_list,
     ui::list::older_pages::OlderPages,
+    ui::outside::wanted_attachments::WantedAttachments,
     ui::preview::preview_pane,
     ui::preview::previews::Previews,
     ui::react::apply,
@@ -50,15 +51,16 @@ pub enum Error {
     Sync(#[from] sync::Error),
 }
 
-/// The network work behind the screen, what it reports as it goes, the
-/// pages of older Messages and the bodies Replies wait on asked of it, what
-/// the sync connection is asked, and where a Send leaves from.
+/// The network work behind the screen and what it reports; what is asked of
+/// it (older pages, a Reply's bodies, attachments) and of the sync
+/// connection; and where a Send leaves from.
 pub struct Background<'a, W, U> {
     pub work: W,
     /// Each tells the Account it is of.
     pub updates: U,
     pub older: OlderPages,
     pub replies: ReplyFetch,
+    pub attachments: WantedAttachments,
     pub asks: Routes<Ask>,
     pub accounts: Accounts<'a>,
     pub outbox: &'a Outbox,
@@ -80,6 +82,7 @@ pub struct Model<'a> {
     pub world: World<'a>,
     older: OlderPages,
     pub replies: ReplyFetch,
+    pub attachments: WantedAttachments,
 }
 
 /// The one event loop: input, and each `Update` from the background work,
@@ -116,6 +119,7 @@ pub async fn run(
         world,
         older: background.older,
         replies: background.replies,
+        attachments: background.attachments,
     };
 
     let mut work = std::pin::pin!(background.work.fuse());
@@ -203,6 +207,10 @@ impl Model<'_> {
     fn arrive(&mut self, account: AccountId, update: Update) -> Result<(), Error> {
         let replying = self.ui.screen.replying.as_mut();
         let arrived = self.replies.notice(account, &update, replying);
+        if let Some(toast) = self.attachments.notice(account, &update) {
+            self.ui.screen.toast = Some(toast);
+        }
+
         let (account, update) = self.older.notice((account, update));
         apply::apply(account, update, &mut self.ui, self.world, self.previews)?;
         if let Some(result) = arrived {

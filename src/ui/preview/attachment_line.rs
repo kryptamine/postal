@@ -8,20 +8,29 @@ use crate::{
     render::file_size,
     render::stack_str::StackStr,
     ui::frame::theme::Theme,
+    ui::preview::hint_keys::HintKeys,
     ui::widgets::truncate,
 };
 
 const SEPARATOR: &str = " · ";
 
 /// Draws `attachments` in `area`, `name size` each, as many as fit with a
-/// count of the rest.
-pub fn draw(theme: &Theme, buf: &mut Buffer, area: Rect, attachments: &Attachments) {
+/// count of the rest; in hint mode, each after its label in `labels`.
+pub fn draw(
+    theme: &Theme,
+    buf: &mut Buffer,
+    area: Rect,
+    attachments: &Attachments,
+    labels: Option<&HintKeys>,
+) {
+    let label = |index| labels.and_then(|labels| labels.label(index));
     let total = attachments.iter().count();
     let room = usize::from(area.width);
     let mut fitting = 0;
     let mut used = 0;
     for (index, attachment) in attachments.iter().enumerate() {
-        used += if index == 0 { 0 } else { SEPARATOR.width() } + width(&attachment);
+        let labelled = label(index).map_or(0, |label| label.as_str().width() + 1);
+        used += if index == 0 { 0 } else { SEPARATOR.width() } + labelled + width(&attachment);
         let shown = index + 1;
         let rest = if shown == total {
             0
@@ -68,6 +77,11 @@ pub fn draw(theme: &Theme, buf: &mut Buffer, area: Rect, attachments: &Attachmen
     for (index, attachment) in attachments.iter().take(fitting).enumerate() {
         if index > 0 {
             put(SEPARATOR, theme.muted);
+        }
+
+        if let Some(label) = label(index) {
+            put(label.as_str(), theme.label);
+            put(" ", theme.muted);
         }
 
         put(attachment.name, theme.sender);

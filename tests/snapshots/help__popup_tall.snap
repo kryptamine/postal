@@ -2,7 +2,7 @@
 source: tests/help.rs
 expression: screen
 ---
-size: 80x37  cursor: hidden
+size: 80x38  cursor: hidden
 ┌─ 2024 ───┌ Help ──────────────────────────────────────────────────┐──────────┐
 │   Bob    │                                                        │024-11-18 │
 │   Newer  │ Navigate                                               │          │
@@ -20,11 +20,12 @@ size: 80x37  cursor: hidden
 │          │ c                       compose a new Message          │          │
 └──────────│ r                       reply to the sender            │──────────┘
 ┌ Inbox · 1│ R                       reply to all                   │──────────┐
-│ From    B│                                                        │024 09:00 │
-│ To       │ Links                                                  │          │
-│ Subject N│ o                       label the links in the Preview │          │
-├──────────│                                                        │──────────┤
-│ Newer bod│ View                                                   │          │
+│ From    B│ a / s                   open / save an attachment      │024 09:00 │
+│ To       │                                                        │          │
+│ Subject N│ Links                                                  │          │
+├──────────│ o                       label the links in the Preview │──────────┤
+│ Newer bod│                                                        │          │
+│          │ View                                                   │          │
 │          │ v                       rendered / text view of HTML   │          │
 │          │ z                       show / hide the Quote          │          │
 │          │                                                        │          │

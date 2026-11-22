@@ -1,7 +1,7 @@
 use crate::{
     compose::local_drafts::LocalDrafts, ui::drafts::draft_preview::DraftPreview,
     ui::popup::folder_picker::FolderPicker, ui::popup::layer::Layer, ui::popup::settings::Settings,
-    ui::preview::link_hints::LinkHints,
+    ui::preview::attachment_hints::AttachmentHints, ui::preview::link_hints::LinkHints,
 };
 
 /// A type one variant of `Layer` holds.
@@ -50,4 +50,5 @@ kinds!(
     LocalDrafts(LocalDrafts),
     Picker(FolderPicker),
     Hints(LinkHints),
+    AttachmentHints(AttachmentHints),
 );

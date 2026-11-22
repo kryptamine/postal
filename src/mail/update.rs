@@ -1,6 +1,7 @@
 use crate::{
-    domain::folder_name::FolderName, mail::backfill::Backfill, mail::body_fetch::Fetched,
-    mail::status::Status, render::preview::Preview, render::rendered_previews::PreviewKey,
+    domain::folder_name::FolderName, mail::attachment_fetch::AttachmentFetched,
+    mail::backfill::Backfill, mail::body_fetch::Fetched, mail::status::Status,
+    render::preview::Preview, render::rendered_previews::PreviewKey,
 };
 
 /// Work done away from the event loop that changes what the screen shows.
@@ -12,6 +13,7 @@ pub enum Update {
     /// The server no longer has this Folder; the sync went back to the Inbox.
     FolderGone(FolderName),
     Bodies(FolderName, Fetched),
+    Attachment(AttachmentFetched),
     BodyLink(BodyLink),
     Rendered(PreviewKey, Preview),
     Status(Status),

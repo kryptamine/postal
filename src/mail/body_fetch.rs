@@ -7,6 +7,7 @@ use crate::{
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::uid::Uid,
+    mail::attachment_fetch::{self, AttachmentRequest},
     mail::backfill,
     mail::imap::{MailServer, Mode},
     mail::spare_work::SpareWork,
@@ -22,6 +23,8 @@ pub enum Request {
     /// The bodies of these UIDs, each in its Folder, which a Reply waits
     /// on: served first, and never passed over for a later request.
     Reply(Vec<MessageRef>),
+    /// Served after a Reply's bodies, each in turn.
+    Attachment(AttachmentRequest),
 }
 
 /// The requests received and not yet served.
@@ -30,11 +33,20 @@ struct Pending {
     bodies: Option<BodyRequest>,
     older: Option<FolderName>,
     reply: Option<Vec<MessageRef>>,
+    attachments: Vec<AttachmentRequest>,
 }
 
 impl Pending {
     const fn is_empty(&self) -> bool {
-        self.bodies.is_none() && self.older.is_none() && self.reply.is_none()
+        self.bodies.is_none()
+            && self.older.is_none()
+            && self.reply.is_none()
+            && self.attachments.is_empty()
+    }
+
+    /// Whether a request that goes before bodies waits.
+    const fn urgent(&self) -> bool {
+        self.reply.is_some() || !self.attachments.is_empty()
     }
 
     fn take(&mut self, request: Request) {
@@ -42,6 +54,7 @@ impl Pending {
             Request::Bodies(bodies) => self.bodies = Some(bodies),
             Request::Backfill(folder) => self.older = Some(folder),
             Request::Reply(bodies) => self.reply = Some(bodies),
+            Request::Attachment(attachment) => self.attachments.push(attachment),
         }
     }
 
@@ -78,9 +91,8 @@ impl Fetched {
 }
 
 /// Serves `requests` until the channel closes, telling `send` how each went:
-/// a Reply's body, bodies, then a page of older Messages, each in its own
-/// Folder, and `SpareWork` while none waits. Only a failure other than a
-/// refusal ends the serving.
+/// a Reply's bodies, attachments, bodies, a page of older Messages, then
+/// `SpareWork` while none waits. Only a failure but a refusal ends it.
 pub async fn serve(
     server: &mut impl MailServer,
     cache: &Cache,
@@ -105,6 +117,10 @@ pub async fn serve(
             fetch_reply(server, cache, reply, &send).await?;
         }
 
+        for attachment in std::mem::take(&mut pending.attachments) {
+            attachment_fetch::fetch(server, attachment, &send).await?;
+        }
+
         while let Some(request) = pending.bodies.take() {
             if !open(server, &request.folder).await? {
                 continue;
@@ -126,12 +142,12 @@ pub async fn serve(
             }
 
             pending.receive(requests);
-            if pending.reply.is_some() {
+            if pending.urgent() {
                 break;
             }
         }
 
-        if pending.reply.is_some() {
+        if pending.urgent() {
             continue;
         }
 

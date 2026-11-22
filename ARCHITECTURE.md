@@ -40,7 +40,8 @@ Lowest first:
   Preview, the Thread, link hints), `drafts/` (composing, the Draft and
   Local Drafts panes), `popup/` (the layers over the screen: help, the
   Folder Picker, Settings), `widgets/` (small drawing pieces), `outside/`
-  (the pager, opening a Message elsewhere, the clipboard), `onboarding/`
+  (the pager, opening a Message elsewhere, attachments opened or saved, the
+  clipboard), `onboarding/`
   and `logging/`.
 - `cli/`: the commands beside the TUI: the arguments, `correspondent list`,
   `thread show`.

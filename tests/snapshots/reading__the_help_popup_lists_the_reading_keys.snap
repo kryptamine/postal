@@ -22,8 +22,8 @@ size: 80x24  cursor: hidden
 │ Line 13  │ c                       compose a new Message          │          │
 │ Line 14  │ r                       reply to the sender            │          │
 │ Line 15  │ R                       reply to all                   │          │
-│ Line 16  │                                                        │          │
-│ Line 17  │ Links                                                  │          │
+│ Line 16  │ a / s                   open / save an attachment      │          │
+│ Line 17  │                                                        │          │
 │ Line 18  │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

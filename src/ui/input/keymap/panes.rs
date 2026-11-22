@@ -4,6 +4,7 @@ use crate::{
     compose::recipients::Recipients,
     ui::input::keymap::{Action, Binding, By, Direction, Hint, Key, Move, Scroll, pressed},
     ui::outside::open_outside::Outside,
+    ui::outside::wanted_attachments::Purpose,
     ui::popup::layer,
     ui::state::mode::Mode,
 };
@@ -65,7 +66,7 @@ const MOVE: &[Action] = &[Action::Move(Move::Down), Action::Move(Move::Up)];
 
 /// The panes' keymap and the keys every layer shares, as the hint line and
 /// the `?` popup show them and `action` reads them.
-const PANES: [PaneKeys; 33] = [
+const PANES: [PaneKeys; 34] = [
     listed(
         Binding {
             group: "Navigate",
@@ -327,6 +328,21 @@ const PANES: [PaneKeys; 33] = [
             hint: None,
         },
         &[Action::Reply(Recipients::All)],
+    ),
+    listed(
+        Binding {
+            group: "Message",
+            modes: BOTH,
+            signed_out: false,
+            keys: &[Key::Char("a"), Key::Char("s")],
+            aliases: &[],
+            description: "open / save an attachment",
+            hint: None,
+        },
+        &[
+            Action::Attachments(Purpose::Open),
+            Action::Attachments(Purpose::Save),
+        ],
     ),
     listed(
         Binding {

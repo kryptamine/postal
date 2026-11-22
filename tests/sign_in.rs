@@ -25,8 +25,9 @@ use support::{
 use termlens::{Key, Terminal};
 
 fn spawn(home: &Home, browser: &Browser, args: &[&str]) -> Terminal {
+    // Tall enough for the `?` popup to reach the App group, which lists `L`.
     Terminal::builder()
-        .size(100, 30)
+        .size(100, 36)
         .env_clear()
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())

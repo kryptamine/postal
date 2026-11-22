@@ -26,6 +26,19 @@ fn main_screen(screen: &Screen) -> bool {
     screen.alternate_screen() && screen.contains(" 1/1 ") && screen.contains("Weekly notes")
 }
 
+// The header and the Snippet show before the body is cached; only text
+// under the Preview's rule says `E` will find it.
+fn previewed(screen: &Screen) -> bool {
+    let rule = (0..screen.rows()).find(|&row| screen.row_text(row).contains('├'));
+    main_screen(screen)
+        && rule.is_some_and(|row| {
+            !screen
+                .row_text(row + 1)
+                .trim_matches(|c| c == '│' || c == ' ')
+                .is_empty()
+        })
+}
+
 /// What a recording `$EDITOR` was handed after `keys`, and whether it could
 /// write the file; the Message's file is checked gone once the TUI is back.
 fn opened(body: FakeBody, keys: &[Key]) -> (String, bool) {
@@ -51,7 +64,7 @@ fn opened(body: FakeBody, keys: &[Key]) -> (String, bool) {
         .env("EDITOR", Path::new(&editor))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
-    t.wait_until(main_screen).unwrap();
+    t.wait_until(previewed).unwrap();
 
     for key in keys {
         t.send(*key).unwrap();

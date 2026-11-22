@@ -1,5 +1,7 @@
 use std::{
+    ffi::OsStr,
     io,
+    os::unix::process::CommandExt,
     process::{Command, Stdio},
 };
 
@@ -9,11 +11,13 @@ const OPENER: &str = if cfg!(target_os = "macos") {
     "xdg-open"
 };
 
-/// Hands `url` to the desktop's opener and returns at once; a thread waits
-/// for it. Its output would draw over the screen, so it has none.
-pub fn open(url: &str) -> io::Result<()> {
+/// Hands `target`, a URL or a file, to the desktop's opener and returns at
+/// once; a thread waits for it. Its output would draw over the screen, so it
+/// has none, and its own process group keeps it out of the terminal's.
+pub fn open(target: impl AsRef<OsStr>) -> io::Result<()> {
     let mut child = Command::new(OPENER)
-        .arg(url)
+        .arg(target)
+        .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

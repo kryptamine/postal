@@ -18,5 +18,6 @@ mod world;
 
 pub use frame::theme;
 pub use list::older_pages;
+pub use outside::{attachment_file, wanted_attachments};
 pub use preview::previews;
 pub use terminal::{panic_hook, terminal_slot};

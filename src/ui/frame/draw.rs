@@ -8,6 +8,7 @@ use crate::{
     ui::list::message_list::MessageList,
     ui::list::search::Search,
     ui::popup::help_popup::HelpPopup,
+    ui::preview::attachment_hints::AttachmentHints,
     ui::preview::link_hints::LinkHints,
     ui::preview::preview_pane::{self, PreviewPane},
     ui::preview::previews::Previews,
@@ -36,19 +37,23 @@ pub fn draw(
             }
 
             if let (Some(pane), Some(reading)) = (panes.preview, screen.showing.reading_mut()) {
-                let hints = screen.over.get::<LinkHints>();
                 let widget = ThreadPane {
                     theme,
                     view,
                     previews,
-                    hints,
+                    hints: screen.over.get::<LinkHints>(),
+                    attachment_hints: screen.over.get::<AttachmentHints>(),
                 };
 
                 frame.render_stateful_widget(widget, pane, reading);
             } else if let Some(pane) = panes.preview {
                 let body = previews.selected(view, preview_pane::text_area(pane).width);
-                let hints = screen.over.get::<LinkHints>();
-                let widget = PreviewPane { theme, body, hints };
+                let widget = PreviewPane {
+                    theme,
+                    body,
+                    hints: screen.over.get::<LinkHints>(),
+                    attachment_hints: screen.over.get::<AttachmentHints>(),
+                };
 
                 frame.render_stateful_widget(widget, pane, view);
             }

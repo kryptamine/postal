@@ -9,7 +9,7 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, Moved, bodies,
+    Error, Moved, attachments, bodies, body_plan,
     connect::Transport,
     login, moved_uids, named_roles, new_messages,
     opening::{Mode, Opening},
@@ -156,6 +156,10 @@ pub trait MailServer {
     /// Each of `uids` as the Preview needs it, its header and text parts in
     /// MIME; a UID the server did not answer for is left out.
     async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
+
+    /// The attachment at `index` of `uid`, in the order the Message's
+    /// attachments are listed, decoded; `None` when there is none.
+    async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error>;
 
     /// What the server announced during earlier commands, in order.
     fn pushed(&mut self) -> Vec<Pushed>;
@@ -561,6 +565,26 @@ impl MailServer for ImapSession {
 
     async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
         bodies::fetch(&mut self.session, &uid_set(uids)).await
+    }
+
+    async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error> {
+        let of = |fetches: &[Fetch]| fetches.iter().position(|f| f.uid == Some(uid.get()));
+        let fetches = self
+            .uid_fetch(uid.to_string(), "(UID BODYSTRUCTURE)")
+            .await?;
+        let part = of(&fetches)
+            .and_then(|at| fetches[at].bodystructure())
+            .and_then(|structure| attachments::part(structure, index));
+        let Some((path, encoding)) = part else {
+            return Ok(None);
+        };
+
+        let items = format!("(UID BODY.PEEK[{}])", body_plan::section(&path));
+        let path = SectionPath::Part(path, None);
+        let fetches = self.uid_fetch(uid.to_string(), &items).await?;
+        let raw = of(&fetches).and_then(|at| fetches[at].section(&path));
+        tracing::info!("fetched attachment {index} of {uid}");
+        Ok(raw.map(|raw| encoding.decode(raw)))
     }
 
     fn pushed(&mut self) -> Vec<Pushed> {

@@ -3,7 +3,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     domain::message::Message, render::header_date, ui::frame::theme::Theme,
-    ui::preview::attachment_line, ui::widgets::truncate,
+    ui::preview::attachment_line, ui::preview::hint_keys::HintKeys, ui::widgets::truncate,
 };
 
 /// The labels, padded so the values line up; the Subject last, which a
@@ -40,10 +40,17 @@ pub fn fields<'a>(theme: &Theme, message: &'a Message) -> [(&'static str, &'a st
 }
 
 /// Draws header row `field` of `message` in `row`, the date at the right
-/// of the first. A row too narrow for both leaves the date out.
-pub fn draw(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field: usize) {
+/// of the first. A row too narrow for both leaves the date out. `labels`
+/// go on the attachment line in hint mode.
+pub fn draw(
+    theme: &Theme,
+    buf: &mut Buffer,
+    row: Rect,
+    (message, field): (&Message, usize),
+    labels: Option<&HintKeys>,
+) {
     let Some(&(label, value, style)) = fields(theme, message).get(field) else {
-        return attachments(theme, buf, row, message);
+        return attachments(theme, buf, row, message, labels);
     };
 
     let mut row = row;
@@ -68,7 +75,13 @@ pub fn draw(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field
 }
 
 /// The icon in the label column, and the attachments where values go.
-fn attachments(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message) {
+fn attachments(
+    theme: &Theme,
+    buf: &mut Buffer,
+    row: Rect,
+    message: &Message,
+    labels: Option<&HintKeys>,
+) {
     if message.attachments.is_empty() || row.is_empty() {
         return;
     }
@@ -80,14 +93,20 @@ fn attachments(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message) {
         ..row
     };
 
-    attachment_line::draw(theme, buf, value_area, &message.attachments);
+    attachment_line::draw(theme, buf, value_area, &message.attachments, labels);
 }
 
 /// Draws row `field` of `message`'s header in a stack, which has no Subject.
-pub fn draw_stacked(theme: &Theme, buf: &mut Buffer, row: Rect, message: &Message, field: usize) {
+pub fn draw_stacked(
+    theme: &Theme,
+    buf: &mut Buffer,
+    row: Rect,
+    (message, field): (&Message, usize),
+    labels: Option<&HintKeys>,
+) {
     if field < STACKED {
-        draw(theme, buf, row, message, field);
+        draw(theme, buf, row, (message, field), None);
     } else if field == STACKED {
-        attachments(theme, buf, row, message);
+        attachments(theme, buf, row, message, labels);
     }
 }

@@ -1,4 +1,7 @@
-use crate::{compose::recipients::Recipients, ui::outside::open_outside::Outside};
+use crate::{
+    compose::recipients::Recipients, ui::outside::open_outside::Outside,
+    ui::outside::wanted_attachments::Purpose,
+};
 
 #[derive(Clone, Copy)]
 pub enum Action {
@@ -29,6 +32,9 @@ pub enum Action {
     Reply(Recipients),
     /// Hint mode on the links in the Preview window.
     Links,
+    /// Hint mode on the attachments of the selected Message, or in Reading
+    /// of the one at the cursor.
+    Attachments(Purpose),
     /// The other View of HTML mail: rendered or text.
     SwitchView,
     /// Shows the Quote of the selected Message, or in Reading of the one

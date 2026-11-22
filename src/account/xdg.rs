@@ -26,12 +26,21 @@ pub fn data_dir() -> Result<PathBuf, NoHome> {
     postal_dir("XDG_DATA_HOME", ".local/share")
 }
 
-/// A relative XDG variable is ignored, as the XDG spec requires.
+/// `$XDG_DOWNLOAD_DIR`, falling back to `~/Downloads`: the user's, not
+/// Postal's own.
+pub fn download_dir() -> Result<PathBuf, NoHome> {
+    base_dir("XDG_DOWNLOAD_DIR", "Downloads")
+}
+
 fn postal_dir(variable: &'static str, under_home: &str) -> Result<PathBuf, NoHome> {
-    let base = std::env::var_os(variable)
+    Ok(base_dir(variable, under_home)?.join("postal"))
+}
+
+/// A relative XDG variable is ignored, as the XDG spec requires.
+fn base_dir(variable: &'static str, under_home: &str) -> Result<PathBuf, NoHome> {
+    std::env::var_os(variable)
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
         .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(under_home)))
-        .ok_or(NoHome { variable })?;
-    Ok(base.join("postal"))
+        .ok_or(NoHome { variable })
 }

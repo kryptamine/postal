@@ -1,3 +1,4 @@
+pub mod attachment_hints;
 pub mod attachment_line;
 pub mod hint_keys;
 pub mod link_hints;

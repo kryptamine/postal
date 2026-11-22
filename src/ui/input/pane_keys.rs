@@ -38,6 +38,7 @@ pub fn act(
             .map_or(Step::Stay, |account| Step::Exit(Exit::SignIn(account))),
         Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
+        Some(Action::Attachments(purpose)) => Step::Attachments(purpose),
         Some(Action::Folders) => Step::Steer(Steer::Folders),
         Some(action @ (Action::SwitchView | Action::SwitchQuoted)) => {
             reshow(action, view, screen);

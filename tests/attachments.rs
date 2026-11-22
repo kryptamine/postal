@@ -1,6 +1,6 @@
 //! A Message's attachments, from its `BODYSTRUCTURE`: a marker on its card,
 //! and a line naming each under the header of the Preview, the Thread, the
-//! pager and the editor's file.
+//! pager and the editor's file; each fetched on demand, to open or save.
 
 #![allow(
     clippy::unwrap_used,
@@ -13,14 +13,15 @@ mod support;
 
 use std::{
     fs,
-    path::Path,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
     thread,
     time::{Duration, Instant},
 };
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FakeImap, FakeMessage},
+    fake_imap::{FakeImap, FakeMessage, Outage},
     home::Home,
 };
 use termlens::{Key, Screen, Terminal};
@@ -75,6 +76,13 @@ fn marker(screen: &Screen, sender: &str) -> Option<String> {
 
 fn shown(screen: &Screen, text: &str) -> bool {
     screen.contains(text) && screen.contains("See the files.")
+}
+
+/// Whether the Preview shows the body, which the Snippet in the list
+/// comes before.
+fn body_shown(screen: &Screen) -> bool {
+    let rule = (0..screen.rows()).find(|&row| screen.row_text(row).contains('├'));
+    rule.is_some_and(|row| screen.row_text(row + 1).contains("See the files."))
 }
 
 #[test]
@@ -184,6 +192,7 @@ fn handed_out() -> (String, String) {
         .env("EDITOR", Path::new(&editor))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
+    t.wait_until(body_shown).unwrap();
     for key in ['|', 'E'] {
         t.wait_until(|s| s.alternate_screen() && shown(s, "report.pdf"))
             .unwrap();
@@ -268,4 +277,140 @@ fn the_preview_fetches_the_text_and_never_the_attachments() {
         "{commands:#?}"
     );
     assert!(cached_sizes(&home)[0] < 1000, "{:?}", cached_sizes(&home));
+}
+
+/// The contract's photo as sent, `AAECAwQF`, decoded.
+const PHOTO: [u8; 6] = [0, 1, 2, 3, 4, 5];
+
+// Save writes the picked part decoded, and never over a file the download
+// directory has: the taken name gets a number.
+#[test]
+fn save_writes_the_picked_attachment_beside_a_file_of_its_name() {
+    let server = FakeImap::start(vec![message("Ada", "Contract", 18, contract())]);
+    let home = Home::for_server(&server);
+    let downloads = tempfile::tempdir().unwrap();
+    fs::write(downloads.path().join("photo.jpg"), "older").unwrap();
+    let mut t = home
+        .terminal()
+        .size(120, 30)
+        .env("XDG_DOWNLOAD_DIR", downloads.path())
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(|s| shown(s, "report.pdf")).unwrap();
+    t.send(Key::Char('s')).unwrap();
+    t.wait_until(|s| s.contains("a report.pdf 56 KB · s photo.jpg 6 B"))
+        .unwrap();
+    t.send(Key::Char('s')).unwrap();
+    t.wait_until(|s| s.contains("saved to") && !s.contains("s photo.jpg"))
+        .unwrap();
+    quit(t);
+
+    let saved = fs::read(downloads.path().join("photo (1).jpg")).unwrap();
+    assert_eq!(saved, PHOTO);
+    let older = fs::read_to_string(downloads.path().join("photo.jpg")).unwrap();
+    assert_eq!(older, "older");
+    let commands = server.commands();
+    assert!(
+        commands.iter().any(|c| c.ends_with("(UID BODY.PEEK[3])")),
+        "{commands:#?}"
+    );
+}
+
+// Open writes the part where the cache keeps opened ones and hands it to
+// the desktop's opener, here a stub on `PATH`; what an earlier run opened
+// is gone once the TUI starts.
+#[test]
+fn open_hands_the_attachment_at_the_cursor_to_the_opener() {
+    let server = FakeImap::start(vec![message("Ada", "Contract", 18, contract())]);
+    let home = Home::for_server(&server);
+    let opened = home.xdg_cache_home().join("postal/attachments");
+    fs::create_dir_all(&opened).unwrap();
+    fs::write(opened.join("earlier.txt"), "earlier").unwrap();
+    let stubs = tempfile::tempdir().unwrap();
+    let record = stubs.path().join("handed");
+    let script = format!("#!/bin/sh\nprintf '%s' \"$1\" > '{}'\n", record.display());
+    for opener in ["open", "xdg-open"] {
+        let path = stubs.path().join(opener);
+        fs::write(&path, &script).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let mut path = stubs.path().as_os_str().to_owned();
+    path.push(":");
+    path.push(std::env::var_os("PATH").unwrap());
+    let mut t = home
+        .terminal()
+        .size(120, 30)
+        .env("PATH", &path)
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(|s| shown(s, "report.pdf")).unwrap();
+    assert!(!opened.join("earlier.txt").exists());
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| shown(s, "report.pdf") && s.contains(" 1/1 "))
+        .unwrap();
+    t.send(Key::Char('a')).unwrap();
+    t.wait_until(|s| s.contains("a report.pdf")).unwrap();
+    t.send(Key::Char('a')).unwrap();
+    t.wait_until(|s| s.contains("opened report.pdf")).unwrap();
+    wait_for(|| record.exists());
+    quit(t);
+
+    let handed = PathBuf::from(fs::read_to_string(&record).unwrap());
+    assert_eq!(handed, opened.join("report.pdf"));
+    // A thousand lines of `A`s, 57 zero octets each.
+    assert_eq!(fs::read(&handed).unwrap(), vec![0; 57_000]);
+}
+
+// Offline, an attachment cannot come: it says so at once.
+#[test]
+fn an_attachment_picked_offline_says_so() {
+    let server = FakeImap::start(vec![message("Ada", "Contract", 18, contract())]);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| shown(s, "report.pdf")).unwrap();
+    quit(t);
+
+    server.fail(Outage::Offline);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| shown(s, "report.pdf")).unwrap();
+    t.send(Key::Char('s')).unwrap();
+    t.wait_until(|s| s.contains("a report.pdf")).unwrap();
+    t.send(Key::Char('a')).unwrap();
+    t.wait_until(|s| s.contains("offline · not downloaded"))
+        .unwrap();
+    quit(t);
+}
+
+// Mail names the file: one naming a path outside the download directory
+// lands inside it all the same.
+#[test]
+fn a_saved_name_never_leaves_the_download_directory() {
+    let body = mixed(vec![
+        FakeBody::file("application", "pdf").disposition_param("filename", "../../evil.pdf"),
+    ]);
+    let server = FakeImap::start(vec![message("Ada", "Evil", 18, body)]);
+    let home = Home::for_server(&server);
+    let root = tempfile::tempdir().unwrap();
+    let downloads = root.path().join("a/b");
+    fs::create_dir_all(&downloads).unwrap();
+    let mut t = home
+        .terminal()
+        .size(120, 30)
+        .env("XDG_DOWNLOAD_DIR", &downloads)
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(|s| shown(s, "evil.pdf")).unwrap();
+    t.send(Key::Char('s')).unwrap();
+    t.wait_until(|s| s.contains("a ../../evil.pdf")).unwrap();
+    t.send(Key::Char('a')).unwrap();
+    t.wait_until(|s| s.contains("saved to")).unwrap();
+    quit(t);
+
+    let saved: Vec<_> = fs::read_dir(&downloads)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(saved, ["_.._evil.pdf"]);
+    assert!(!root.path().join("evil.pdf").exists());
 }

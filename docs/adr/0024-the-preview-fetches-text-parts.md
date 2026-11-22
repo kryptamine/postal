@@ -20,8 +20,9 @@ So the raw body in the Cache holds the text parts only, and an attachment
 is never cached: opening it fetches its part on demand, and opening it
 twice fetches it twice.
 
-A text part sent as an attachment, any part that is not text, and an
-attached Message are left out. A multipart that lists no boundary cannot
+A text part sent as an attachment, any part that is not text, and a
+Message inside one, attached or forwarded inline, are left out: none of the
+readers above enters an inner Message. A multipart that lists no boundary cannot
 be put back, so a Message with one is fetched whole as before.
 
 ## Considered options

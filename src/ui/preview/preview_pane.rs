@@ -8,7 +8,8 @@ use ratatui::{
 
 use crate::{
     render::body::Body, render::stack_str::StackStr, ui::frame::layout::PADDING,
-    ui::frame::theme::Theme, ui::list::inbox_view::InboxView, ui::preview::link_hints::LinkHints,
+    ui::frame::theme::Theme, ui::list::inbox_view::InboxView,
+    ui::preview::attachment_hints::AttachmentHints, ui::preview::link_hints::LinkHints,
     ui::preview::message_header, ui::preview::preview_lines::PreviewLines, ui::widgets::border,
     ui::widgets::centred::centred,
 };
@@ -41,13 +42,14 @@ pub fn body_lines(scroll: usize, text: Rect, header: usize) -> Range<usize> {
     scroll..scroll.saturating_add(usize::from(body_area(text, header).height))
 }
 
-/// The selected Message's Preview inside a border titled with the Folder
-/// and `i/N`: the header and a rule, then the body from the scroll position
-/// on, or a placeholder in its place. In hint mode, `hints` labels its links.
+/// The selected Message's Preview in a border titled with the Folder and
+/// `i/N`: the header, a rule, the body from the scroll position or a
+/// placeholder. In hint mode, the hints label its links or attachments.
 pub struct PreviewPane<'a> {
     pub theme: &'a Theme,
     pub body: Body<'a>,
     pub hints: Option<&'a LinkHints>,
+    pub attachment_hints: Option<&'a AttachmentHints>,
 }
 
 impl StatefulWidget for PreviewPane<'_> {
@@ -78,10 +80,11 @@ impl StatefulWidget for PreviewPane<'_> {
         let header = message_header::rows(view.selected_message());
         // From the row, so the header shows while the body loads.
         if let Some(message) = view.selected_message() {
+            let labels = self.attachment_hints.and_then(|h| h.labels(message));
             let rows = (text.y..text.bottom()).zip(0..header - 1);
             for (y, field) in rows {
                 let row = Rect::new(text.x, y, text.width, 1);
-                message_header::draw(self.theme, buf, row, message, field);
+                message_header::draw(self.theme, buf, row, (message, field), labels);
             }
         }
 

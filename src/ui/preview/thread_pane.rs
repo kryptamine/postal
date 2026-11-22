@@ -15,6 +15,7 @@ use crate::{
     ui::frame::theme::Theme,
     ui::list::date_label::DateLabel,
     ui::list::inbox_view::InboxView,
+    ui::preview::attachment_hints::AttachmentHints,
     ui::preview::link_hints::LinkHints,
     ui::preview::message_header,
     ui::preview::preview_lines::PreviewLines,
@@ -33,12 +34,14 @@ const GAP: u16 = 2;
 const CURSOR: &str = "▎";
 
 /// Reading: the selected Thread's stack inside a border titled with the
-/// cursor's place in it. In hint mode, `hints` labels the links.
+/// cursor's place in it. In hint mode, `hints` labels the links, and
+/// `attachment_hints` the attachments.
 pub struct ThreadPane<'a> {
     pub theme: &'a Theme,
     pub view: &'a InboxView,
     pub previews: &'a Previews,
     pub hints: Option<&'a LinkHints>,
+    pub attachment_hints: Option<&'a AttachmentHints>,
 }
 
 impl StatefulWidget for ThreadPane<'_> {
@@ -125,7 +128,9 @@ impl ThreadPane<'_> {
         };
 
         let Some(index) = offset.checked_sub(placed.header()) else {
-            return message_header::draw_stacked(self.theme, buf, row, placed.message, offset);
+            let message = placed.message;
+            let labels = self.attachment_hints.and_then(|h| h.labels(message));
+            return message_header::draw_stacked(self.theme, buf, row, (message, offset), labels);
         };
 
         match body {

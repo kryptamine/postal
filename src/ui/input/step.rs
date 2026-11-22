@@ -1,9 +1,14 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    account::config::IconChoice, compose::recipients::Recipients, domain::per_account::AccountId,
-    domain::shown::Shown, domain::thread_id::ThreadId, ui::exit::Exit,
+    account::config::IconChoice,
+    compose::recipients::Recipients,
+    domain::per_account::AccountId,
+    domain::shown::Shown,
+    domain::thread_id::ThreadId,
+    ui::exit::Exit,
     ui::outside::open_outside::Outside,
+    ui::outside::wanted_attachments::{Purpose, Wanted},
 };
 
 /// What the event loop does after one input event.
@@ -14,6 +19,9 @@ pub enum Step {
     Draft(Drafting),
     Reply(Recipients),
     Browse(Arc<str>),
+    /// Hint mode on the attachment line, to pick one for this.
+    Attachments(Purpose),
+    Attachment(Wanted),
     Open(Outside),
     LocalDrafts,
     Settings,

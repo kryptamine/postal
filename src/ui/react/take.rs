@@ -8,6 +8,7 @@ use crate::{
     ui::input::step::Step,
     ui::outside::open_outside,
     ui::popup::settings::Settings,
+    ui::preview::attachment_hints::label_attachments,
     ui::preview::link_labels::{browse, label_links},
     ui::react::steer::steer,
     ui::run::{Error, Model},
@@ -22,6 +23,8 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         Step::Links => label_links(ui, model.previews, text),
         Step::Steer(to) => steer(to, ui, world)?,
         Step::Browse(url) => ui.screen.toast = browse(&url),
+        Step::Attachments(purpose) => label_attachments(ui, purpose),
+        Step::Attachment(wanted) => ui.screen.toast = Some(model.attachments.ask(wanted)),
         Step::Open(to) => {
             let tty = &mut model.tty;
             ui.screen.toast = open_outside::open(to, tty, model.theme, world.caches, ui)?;

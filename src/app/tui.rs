@@ -7,6 +7,7 @@ use crate::{
     app::onboard,
     app::session::session,
     app::signed_in::opened,
+    ui::attachment_file,
     ui::exit::Exit,
     ui::onboarding::{self, Outcome, Start},
 };
@@ -15,6 +16,7 @@ use crate::{
 /// again after it; after Settings, with the Accounts the config names now.
 pub fn run() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
+    attachment_file::clear();
     on_screen(async |slot| {
         let (mut configs, mut sign_ins) = opened(slot, &dir).await?;
         let mut failure = None;

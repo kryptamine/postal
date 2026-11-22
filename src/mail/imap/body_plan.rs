@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fmt::Write};
 
-use async_imap::imap_proto::{BodyContentCommon, BodyStructure, MessageSection, SectionPath};
+use async_imap::imap_proto::{BodyStructure, MessageSection, SectionPath};
+
+use super::attachments::attached;
 
 /// What of a Message the Preview fetches: its header and its inline text
 /// parts, with the MIME headers of the multiparts around them, put back
@@ -68,11 +70,11 @@ impl Plan {
 
 /// The section a fetch answered, as `Plan` names it; `None` for one it
 /// never asks for.
-pub fn key(section: Option<&SectionPath>) -> Option<String> {
-    match section {
+pub fn key(answered: Option<&SectionPath>) -> Option<String> {
+    match answered {
         None => Some(WHOLE.to_owned()),
         Some(SectionPath::Full(MessageSection::Header)) => Some(HEADER.to_owned()),
-        Some(SectionPath::Part(path, None)) => Some(part(path)),
+        Some(SectionPath::Part(path, None)) => Some(section(path)),
         Some(SectionPath::Part(path, Some(MessageSection::Mime))) => Some(mime(path)),
         Some(_) => None,
     }
@@ -106,17 +108,10 @@ fn node(structure: &BodyStructure<'_>, path: &[u32]) -> Result<Option<Node>, ()>
     }
 }
 
-fn attached(common: &BodyContentCommon<'_>) -> bool {
-    common
-        .disposition
-        .as_ref()
-        .is_some_and(|d| d.ty.eq_ignore_ascii_case("attachment"))
-}
-
 fn push_items(items: &mut String, node: &Node, path: &[u32]) {
     match node {
         // Writing to a String cannot fail.
-        Node::Text => write!(items, " BODY.PEEK[{}]", part(path)).unwrap_or_default(),
+        Node::Text => write!(items, " BODY.PEEK[{}]", section(path)).unwrap_or_default(),
         Node::Multipart { children, .. } => {
             for (child, node) in children {
                 write!(items, " BODY.PEEK[{}]", mime(child)).unwrap_or_default();
@@ -128,7 +123,7 @@ fn push_items(items: &mut String, node: &Node, path: &[u32]) {
 
 fn body<'a>(out: &mut Vec<u8>, node: &Node, path: &[u32], get: &impl Fn(&str) -> &'a [u8]) {
     match node {
-        Node::Text => out.extend_from_slice(get(&part(path))),
+        Node::Text => out.extend_from_slice(get(&section(path))),
         Node::Multipart { boundary, children } => {
             for (child, node) in children {
                 out.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
@@ -159,7 +154,7 @@ fn header(out: &mut Vec<u8>, fetched: &[u8]) {
 
 /// A part number as a section names it; the top of a Message that is not
 /// multipart is part 1 all the same.
-fn part(path: &[u32]) -> String {
+pub fn section(path: &[u32]) -> String {
     if path.is_empty() {
         return "1".to_owned();
     }
@@ -171,5 +166,5 @@ fn part(path: &[u32]) -> String {
 }
 
 fn mime(path: &[u32]) -> String {
-    format!("{}.MIME", part(path))
+    format!("{}.MIME", section(path))
 }

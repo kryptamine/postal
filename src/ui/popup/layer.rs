@@ -8,7 +8,8 @@ use crate::{
     ui::drafts::draft_preview::DraftPreview, ui::drafts::local_drafts_layer,
     ui::frame::theme::Theme, ui::input::keymap::Binding, ui::popup::folder_picker::FolderPicker,
     ui::popup::hints_layer, ui::popup::layer_act::Act, ui::popup::picker_layer,
-    ui::popup::settings::Settings, ui::popup::settings_layer, ui::preview::link_hints::LinkHints,
+    ui::popup::settings::Settings, ui::popup::settings_layer,
+    ui::preview::attachment_hints::AttachmentHints, ui::preview::link_hints::LinkHints,
     ui::state::mode::Mode,
 };
 
@@ -20,6 +21,7 @@ pub enum Layer {
     LocalDrafts(LocalDrafts),
     Picker(FolderPicker),
     Hints(LinkHints),
+    AttachmentHints(AttachmentHints),
 }
 
 impl Layer {
@@ -30,6 +32,7 @@ impl Layer {
             Self::LocalDrafts(local) => local_drafts_layer::key(local, key),
             Self::Picker(picker) => picker_layer::key(picker, key),
             Self::Hints(hints) => hints_layer::key(hints, key),
+            Self::AttachmentHints(hints) => hints_layer::attachment_key(hints, key),
         }
     }
 
@@ -42,7 +45,7 @@ impl Layer {
             }
             Self::Picker(picker) => picker_layer::draw(picker, frame, theme, body),
             // The panes draw their own labels.
-            Self::Hints(_) => {}
+            Self::Hints(_) | Self::AttachmentHints(_) => {}
         }
     }
 
@@ -53,7 +56,7 @@ impl Layer {
             Self::Settings(_) => Some(Mode::Settings),
             Self::Draft(preview) => Some(draft_layer::mode(preview)),
             Self::LocalDrafts(_) => Some(Mode::LocalDrafts),
-            Self::Picker(_) | Self::Hints(_) => None,
+            Self::Picker(_) | Self::Hints(_) | Self::AttachmentHints(_) => None,
         }
     }
 
@@ -65,7 +68,7 @@ impl Layer {
     /// Where the layer sits: a higher one takes the keys and draws over.
     pub(super) const fn rank(&self) -> u8 {
         match self {
-            Self::Hints(_) => 0,
+            Self::Hints(_) | Self::AttachmentHints(_) => 0,
             Self::Picker(_) => 1,
             Self::LocalDrafts(_) => 2,
             Self::Draft(_) => 3,

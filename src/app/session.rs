@@ -23,6 +23,7 @@ use crate::{
     ui::run::{self, Background},
     ui::terminal_slot::TerminalSlot,
     ui::theme::Theme,
+    ui::wanted_attachments::WantedAttachments,
 };
 
 /// The TUI until it exits, each Account of `configs` signed out without
@@ -70,6 +71,7 @@ pub async fn session(
     let requests = Routes::new(requests.into_iter().collect());
     let older = OlderPages::new(requests.clone(), configs.map(|_| false));
     let replies = ReplyFetch::new(requests.clone(), configs.map(|_| false));
+    let attachments = WantedAttachments::new(requests.clone(), configs.map(|_| false));
     let (terminal, background) = slot.take()?;
     let icons = configs
         .values()
@@ -82,6 +84,7 @@ pub async fn session(
         updates,
         older,
         replies,
+        attachments,
         asks: Routes::new(asks.into_iter().collect()),
         accounts: Accounts(configs),
         outbox: &outbox,

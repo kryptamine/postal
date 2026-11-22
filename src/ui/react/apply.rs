@@ -12,6 +12,7 @@ use crate::{
     ui::drafts::local_list::relist_local,
     ui::list::folder_show::{relist, show, switch},
     ui::list::inbox_view::InboxView,
+    ui::preview::attachment_hints::AttachmentHints,
     ui::preview::link_hints::LinkHints,
     ui::preview::previews::Previews,
     ui::run::Error,
@@ -45,6 +46,8 @@ pub fn apply(
             relist(ui, caches)?;
         }
         Update::Bodies(folder, fetched) => previews.fetched(account, &folder, fetched),
+        // The attachments asked for take it before the screen does.
+        Update::Attachment(_) => {}
         Update::BodyLink(link) => {
             previews.link(account, link);
             ui.screen.backfill = None;
@@ -94,9 +97,11 @@ fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     if screen.showing.reading().is_none() {
         if view.selected_body() != selected {
             screen.over.close::<LinkHints>();
+            screen.over.close::<AttachmentHints>();
         }
     } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
         screen.over.close::<LinkHints>();
+        screen.over.close::<AttachmentHints>();
         if let Some(reading) = screen.showing.reading_mut() {
             reading.hold = true;
         }

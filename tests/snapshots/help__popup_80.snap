@@ -20,10 +20,10 @@ size: 80x24  cursor: hidden
 ├──────────│ c                       compose a new Message          │──────────┤
 │ Newer bod│ r                       reply to the sender            │          │
 │          │ R                       reply to all                   │          │
+│          │ a / s                   open / save an attachment      │          │
 │          │                                                        │          │
 │          │ Links                                                  │          │
 │          │ o                       label the links in the Preview │          │
-│          │                                                        │          │
 │          │                                                        │          │
 └──────────└────────────────────────────────────────────────────────┘──────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help
