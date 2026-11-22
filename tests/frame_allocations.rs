@@ -22,6 +22,8 @@ use support::{
 };
 use termlens::{Key, Screen, Terminal};
 
+// More than the window of cards read around the selection at 20 rows
+// (ADR 0022), so scrolling crosses it.
 const MESSAGES: i64 = 60;
 
 fn postal(home: &Home) -> Terminal {

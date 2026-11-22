@@ -14,32 +14,39 @@ use crate::{
 };
 
 /// Reads the shown Folder from the Cache into `view`, at most `limit`
-/// Messages, and the Search under way anew.
+/// Threads, and the Search under way anew.
 pub fn show(
     view: &mut InboxView,
     caches: &PerAccount<Cache>,
     limit: Option<usize>,
 ) -> Result<(), Error> {
-    let inbox = match &view.folder {
+    let mut rows = view.take_rows();
+    let rows = match &view.folder {
         Shown::AllInboxes { .. } => {
-            let read = all_inboxes::read(caches, view, limit)?;
-            read.map(|(inbox, edge)| {
-                view.edge = edge;
-                inbox
+            let read = all_inboxes::read(caches, view, limit, rows)?;
+            read.map(|inboxes| {
+                view.edge = inboxes.edge.map(|(_, account)| account);
+                (inboxes.rows, inboxes.edge.map(|(at, _)| at))
             })
         }
         Shown::Folder(folder) => {
             let (account, cache) = (folder.account, &caches[folder.account]);
-            let bottomed = view.bottomed(cache, account, &folder.name);
-            view.edge = (!bottomed?).then_some(account);
-            cache.inbox(&folder.name, limit)?
+            let read = cache.thread_rows(&folder.name, limit, &mut rows)?;
+            match read {
+                Some(held) => {
+                    let bottomed = view.bottomed(cache, account, (&folder.name, held))?;
+                    view.edge = (!bottomed).then_some(account);
+                    Some((rows, None))
+                }
+                None => None,
+            }
         }
         // Local Drafts opens over the Message List and never shows in it.
         Shown::LocalDrafts => None,
     };
 
-    if let Some(inbox) = inbox {
-        view.show(inbox);
+    if let Some((rows, since)) = rows {
+        view.show(rows, since, caches)?;
     }
 
     if view.search.is_some() {

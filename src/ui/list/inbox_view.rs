@@ -13,10 +13,12 @@ use crate::{
     domain::per_account::{AccountId, PerAccount},
     domain::shown::Shown,
     domain::thread::{Key, Thread},
+    domain::thread_row::ThreadRow,
     domain::uid::Uid,
     render::rendered_previews::PreviewKey,
     render::view::View,
     ui::keymap::{By, Direction, Move, Scroll},
+    ui::list::folder_list::FolderList,
     ui::list::matched::Matched,
     ui::list::search::Search,
 };
@@ -36,7 +38,7 @@ pub struct InboxView {
     /// `None` once the server has nothing older.
     pub edge: Option<AccountId>,
     /// The shown Folder's rows; `None` until the Cache or the server has some.
-    pub list: Option<Listing>,
+    pub list: Option<FolderList>,
     /// Shows its own rows, from every Folder; `selected` and `offset` index those.
     pub search: Option<Search>,
     pub selected: usize,
@@ -52,10 +54,15 @@ pub struct InboxView {
     /// The local offset as of the last `show`: chrono's `Local` rereads the
     /// time zone every second, and that allocates inside a frame.
     zone: FixedOffset,
+    /// How many cards the list showed at most when last drawn.
+    screen: usize,
+    /// The Thread and Message selected when `take_rows` emptied the rows.
+    kept: Option<(Option<Key>, Option<BodyKey>)>,
 }
 
 impl InboxView {
-    pub fn loading(accounts: PerAccount<Arc<str>>) -> Self {
+    /// `screen` is how many cards the first frame shows at most.
+    pub fn loading(accounts: PerAccount<Arc<str>>, screen: usize) -> Self {
         Self {
             folder: match accounts.first() {
                 Some(first) if accounts.len() == 1 => Shown::Folder(Folder::inbox(first)),
@@ -72,20 +79,55 @@ impl InboxView {
             html: View::default(),
             quoted: HashSet::new(),
             zone: Utc.fix(),
+            screen,
+            kept: None,
         }
     }
 
-    /// Shows the Folder's Messages, already ordered newest first. The
-    /// selection stays on the same Thread, or on the same row when that
-    /// Thread is gone.
-    pub fn show(&mut self, inbox: Inbox) {
-        let (selected, body) = (self.selected_key(), self.selected_body());
-        self.list = Some(Listing::new(inbox));
+    /// Shows the Folder's Thread `rows`, newest first, and reads the cards
+    /// around the selection; `since` is All Inboxes' edge. The selection
+    /// stays on the same Thread, or on the same row when that Thread is gone.
+    pub fn show(
+        &mut self,
+        rows: Vec<ThreadRow>,
+        since: Option<i64>,
+        caches: &PerAccount<Cache>,
+    ) -> Result<(), cache::Error> {
+        let (selected, body) = self.kept.take().unwrap_or((None, None));
+        match &mut self.list {
+            Some(list) => list.reset(rows, since),
+            None => self.list = Some(FolderList::new(rows, since)),
+        }
+
         if self.search.is_none() {
-            self.keep(selected, body);
+            self.keep_row(selected);
+            self.fill(caches, self.screen)?;
+            self.scroll_back((selected, body));
         }
 
         self.zone = Local::now().offset().fix();
+        Ok(())
+    }
+
+    /// The rows' buffer, emptied, for the Cache to read the rows into anew;
+    /// the selection is kept for `show`.
+    pub fn take_rows(&mut self) -> Vec<ThreadRow> {
+        self.kept = Some((self.selected_key(), self.selected_body()));
+        self.list
+            .as_mut()
+            .map_or_else(Vec::new, FolderList::take_rows)
+    }
+
+    /// Reads the cards around the selection unless the window holds them,
+    /// for a list `screen` cards tall. A Search shows its own.
+    pub fn fill(&mut self, caches: &PerAccount<Cache>, screen: usize) -> Result<(), cache::Error> {
+        self.screen = screen;
+        match &mut self.list {
+            Some(list) if self.search.is_none() => {
+                list.fill(caches, &self.folder, self.selected, screen)
+            }
+            _ => Ok(()),
+        }
     }
 
     /// Matches the Search under way, if any, over `everywhere` anew.
@@ -99,25 +141,35 @@ impl InboxView {
 
     /// Selects the Thread `key`, else the same row clamped to the rows shown.
     fn keep(&mut self, key: Option<Key>, body: Option<BodyKey>) {
+        self.keep_row(key);
+        self.scroll_back((key, body));
+    }
+
+    fn keep_row(&mut self, key: Option<Key>) {
         let last = self.rows().saturating_sub(1);
         self.selected = key
             .and_then(|key| self.position(key))
             .unwrap_or_else(|| self.selected.min(last));
-        if self.selected_body() != body {
+    }
+
+    /// The Preview back to its top unless the selection still shows the
+    /// Thread and the Message `before` names; a Thread outside the window,
+    /// its cards not read yet, is taken to show the same one.
+    fn scroll_back(&mut self, before: (Option<Key>, Option<BodyKey>)) {
+        let body = self.selected_body();
+        if self.selected_key() != before.0 || body.is_some() && body != before.1 {
             self.preview_scroll = 0;
         }
     }
 
     /// Selects the Thread `key` when it is shown.
     pub fn select(&mut self, key: Key) {
-        let body = self.selected_body();
+        let before = (self.selected_key(), self.selected_body());
         if let Some(row) = self.position(key) {
             self.selected = row;
         }
 
-        if self.selected_body() != body {
-            self.preview_scroll = 0;
-        }
+        self.scroll_back(before);
     }
 
     /// Shows `folder` in place of the one shown, without its rows until
@@ -185,20 +237,19 @@ impl InboxView {
         let before = || search.before.and_then(|key| self.position(key));
         self.selected = found.or_else(before).unwrap_or(0);
         self.offset = 0;
-        if self.selected_body() != body {
-            self.preview_scroll = 0;
-        }
+        self.scroll_back((selected, body));
     }
 
-    /// Whether the server has nothing older than what `cache`, of `account`,
-    /// holds of `folder`: as the last resync counted it, or a Backfill found.
+    /// Whether the server has nothing older than the `cached` Messages
+    /// `cache`, of `account`, holds of `folder`: as the last resync counted
+    /// it, or a Backfill found.
     pub fn bottomed(
         &self,
         cache: &Cache,
         account: AccountId,
-        folder: &FolderName,
+        (folder, cached): (&FolderName, usize),
     ) -> Result<bool, cache::Error> {
-        if cache.whole(folder)? {
+        if cache.whole(folder, cached)? {
             return Ok(true);
         }
 
@@ -279,14 +330,18 @@ impl InboxView {
     }
 
     pub fn selected_key(&self) -> Option<Key> {
-        self.thread_at(self.selected).map(|t| t.key)
+        match &self.search {
+            Some(_) => self.thread_at(self.selected).map(|t| t.key),
+            None => self.list.as_ref()?.key(self.selected),
+        }
     }
 
-    /// The rows shown: the Search's, else the shown Folder's.
-    pub fn listing(&self) -> Option<&Listing> {
-        self.search
-            .as_ref()
-            .map_or(self.list.as_ref(), |search| Some(search.listing()))
+    /// The cards shown: the Search's, else the shown Folder's window.
+    fn listing(&self) -> Option<&Listing> {
+        self.search.as_ref().map_or_else(
+            || self.list.as_ref().map(FolderList::listing),
+            |search| Some(search.listing()),
+        )
     }
 
     /// The selected Thread's Messages, those found in other Folders too:
@@ -300,7 +355,7 @@ impl InboxView {
 
     /// How many rows are shown: all, or those a Search narrowed them to.
     pub fn rows(&self) -> usize {
-        let all = || self.list.as_ref().map_or(0, |list| list.threads.len());
+        let all = || self.list.as_ref().map_or(0, FolderList::rows);
         self.search.as_ref().map_or_else(all, Search::rows)
     }
 
@@ -318,14 +373,14 @@ impl InboxView {
         }
 
         let list = self.list.as_ref()?;
-        Some((&list.messages, list.threads.get(row)?, None))
+        Some((list.listing().messages(), list.thread(row)?, None))
     }
 
     /// The Thread shown at `row`.
     fn thread_at(&self, row: usize) -> Option<&Thread> {
         match &self.search {
-            Some(search) => search.listing().threads.get(search.row(row)?),
-            None => self.list.as_ref()?.threads.get(row),
+            Some(search) => search.listing().threads().get(search.row(row)?),
+            None => self.list.as_ref()?.thread(row),
         }
     }
 

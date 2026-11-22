@@ -18,7 +18,7 @@ pub fn opening(
     let list = tty.panes(Mode::List)?.list;
     let rows = message_list::capacity(list.map_or(0, |list| list.height));
     let emails = world.accounts.0.map(|config| config.email.as_str().into());
-    let mut view = InboxView::loading(emails);
+    let mut view = InboxView::loading(emails, rows);
     show(&mut view, world.caches, Some(rows))?;
     let rebuilt = world.caches.values().any(Cache::rebuilt);
     let mut screen = Screen::opening(rebuilt, statuses, failure);

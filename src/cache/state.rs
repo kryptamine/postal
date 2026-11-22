@@ -45,9 +45,10 @@ impl Cache {
         Ok(uids)
     }
 
-    /// Whether the Cache held every Message of `folder` when the server last
-    /// counted them: then the server has nothing older than the Cache.
-    pub fn whole(&self, folder: &FolderName) -> Result<bool, Error> {
+    /// Whether the Cache, holding `cached` Messages of `folder`, held every
+    /// one when the server last counted them: then the server has nothing
+    /// older than the Cache.
+    pub fn whole(&self, folder: &FolderName, cached: usize) -> Result<bool, Error> {
         let exists: Option<usize> = self
             .connection()
             .prepare_cached("SELECT exists_count FROM mailbox WHERE account = ?2 AND name = ?1")?
@@ -58,7 +59,7 @@ impl Cache {
             return Ok(false);
         };
 
-        Ok(self.uids(folder)?.len() >= exists)
+        Ok(cached >= exists)
     }
 
     pub fn oldest_uid(&self, folder: &FolderName) -> Result<Option<Uid>, Error> {

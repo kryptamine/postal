@@ -1,8 +1,8 @@
 use crate::domain::message::Message;
 
-/// What the server holds for the Message List.
+/// The Messages a Search reads from the Cache.
 pub struct Inbox {
-    /// The newest Messages, in server order.
+    /// Newest first.
     pub messages: Vec<Message>,
     /// Messages of their Threads found in other Folders, oldest first.
     pub elsewhere: Vec<Message>,

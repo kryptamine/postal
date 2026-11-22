@@ -47,3 +47,25 @@ impl<A> Message<A> {
         })
     }
 }
+
+impl Message {
+    /// A slot for a Message of `account` to be read into.
+    pub fn blank(account: AccountId) -> Self {
+        Self {
+            uid: Uid::new(0),
+            body_key: BodyKey::from_stored(0),
+            received: DateTime::default(),
+            unread: false,
+            answered: false,
+            sender: String::new(),
+            from: String::new(),
+            to: String::new(),
+            subject: String::new(),
+            snippet: String::new(),
+            thread: None,
+            from_me: false,
+            folder: None,
+            account,
+        }
+    }
+}

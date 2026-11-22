@@ -69,7 +69,7 @@ impl StatefulWidget for MessageList<'_> {
             return centred(loading, inner, buf);
         };
 
-        if list.messages.is_empty() && view.search.is_none() {
+        if list.rows() == 0 && view.search.is_none() {
             let empty = write!(text, "{label} is empty").map_or("empty", |()| text.as_str());
             return centred(empty, inner, buf);
         }

@@ -2,7 +2,7 @@ use std::{cmp::Reverse, collections::HashMap};
 
 use crate::{
     domain::body_key::BodyKey, domain::message::Message, domain::per_account::AccountId,
-    domain::thread_id::ThreadId,
+    domain::pool::Pool, domain::thread_id::ThreadId,
 };
 
 /// What tells one Thread from another across reloads of the Message List.
@@ -67,26 +67,21 @@ pub fn sender(message: &Message) -> &str {
     }
 }
 
-/// Groups `messages`, newest first, into Threads ordered by their newest
-/// arrival; each of `elsewhere` joins the stack of its Thread, if shown.
-pub fn threads(messages: &[Message], elsewhere: &[Message]) -> Vec<Thread> {
-    let mut threads: Vec<Thread> = Vec::new();
-    let mut by_key = HashMap::new();
+/// Groups `messages`, each Thread's newest first, into `threads` in order
+/// of their first Message, each found by its key in `by_key`; each of `elsewhere`
+/// joins the stack of its Thread, if shown. Reuses the buffers it is given.
+pub fn group(
+    threads: &mut Pool<Thread>,
+    by_key: &mut HashMap<Key, usize>,
+    messages: &[Message],
+    elsewhere: &[Message],
+) {
+    threads.clear();
+    by_key.clear();
     for (index, message) in messages.iter().enumerate() {
         let key = Key::of(message);
-        let at = *by_key.entry(key).or_insert_with(|| {
-            threads.push(Thread {
-                key,
-                messages: Vec::new(),
-                stack: Vec::new(),
-                senders: Vec::new(),
-                unread: false,
-                answered: false,
-            });
-            threads.len() - 1
-        });
-
-        let thread = &mut threads[at];
+        let at = *by_key.entry(key).or_insert_with(|| open(threads, key));
+        let thread = &mut threads.as_mut_slice()[at];
         thread.messages.push(index);
         thread.unread |= message.unread;
         thread.answered |= message.answered;
@@ -94,23 +89,28 @@ pub fn threads(messages: &[Message], elsewhere: &[Message]) -> Vec<Thread> {
 
     for (index, message) in elsewhere.iter().enumerate() {
         if let Some(&at) = by_key.get(&Key::of(message)) {
-            threads[at].stack.push(Place::Elsewhere(index));
-            threads[at].answered |= message.answered;
+            let thread = &mut threads.as_mut_slice()[at];
+            thread.stack.push(Place::Elsewhere(index));
+            thread.answered |= message.answered;
         }
     }
 
-    let received = |place: &Place| match *place {
-        Place::Here(i) => messages[i].received,
-        Place::Elsewhere(i) => elsewhere[i].received,
+    // Of one date, the shown Folder's go first, its older first, then
+    // those elsewhere as given; unstable sorts by it never allocate.
+    let order = |place: &Place| match *place {
+        Place::Here(i) => (messages[i].received, 0, Reverse(i), 0),
+        Place::Elsewhere(i) => (elsewhere[i].received, 1, Reverse(0), i),
     };
 
-    for thread in &mut threads {
+    for thread in threads.as_mut_slice() {
         let here = thread.messages.iter().rev().map(|&i| Place::Here(i));
         thread.stack.splice(0..0, here);
-        // Stable: of one date, the shown Folder's go first.
-        thread.stack.sort_by_key(received);
+        thread.stack.sort_unstable_by_key(order);
         if let Some((_, replies)) = thread.stack.split_first_mut() {
-            replies.sort_by_key(|place| Reverse(received(place)));
+            replies.sort_unstable_by_key(|place| {
+                let (received, side, here, there) = order(place);
+                (Reverse(received), side, here, there)
+            });
         }
 
         for &index in thread.messages.iter().rev() {
@@ -120,6 +120,25 @@ pub fn threads(messages: &[Message], elsewhere: &[Message]) -> Vec<Thread> {
             }
         }
     }
+}
 
-    threads
+/// A Thread `key` with nothing in it yet, in the next slot of `threads`;
+/// where it is.
+fn open(threads: &mut Pool<Thread>, key: Key) -> usize {
+    let thread = threads.next(|| Thread {
+        key,
+        messages: Vec::new(),
+        stack: Vec::new(),
+        senders: Vec::new(),
+        unread: false,
+        answered: false,
+    });
+
+    thread.key = key;
+    thread.messages.clear();
+    thread.stack.clear();
+    thread.senders.clear();
+    thread.unread = false;
+    thread.answered = false;
+    threads.as_slice().len() - 1
 }

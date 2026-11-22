@@ -31,21 +31,25 @@ budget. Postal targets any user's mailbox, not the maintainer's.
 
 ## The design
 
-- **Rows.** `Listing` becomes one row per Thread, newest first: its `Key`
-  and its newest Message's arrival and body key, a few dozen bytes. They
-  come from one `GROUP BY` over the shown Folder's `message` rows, on an
-  index that serves it; in All Inboxes over every Account's Inbox at once,
-  as the Accounts share one database (ADR 0014's edge stays).
-- **Cards.** The window is the rows on screen with a margin of a few
-  screens either side. Its cards are read in one query by Thread key and
-  aggregated in Rust. A card is answered when any Message of its Thread
-  is, in the shown Folder or another, so the query reads that flag from
-  the Thread's Messages elsewhere too. Scrolling inside the margin touches no Cache;
-  crossing it reads the next window into the same slots, reusing their
-  buffers, so the scroll hot path stays free of allocations (ADR 0001).
-- **The open Thread.** Its stack, with the Messages found in other
-  Folders, is read when the Preview or Reading shows it, not for every
-  Thread on every Update.
+- **Rows.** The Message List holds one `ThreadRow` per Thread, newest
+  first: its `Key` and its newest Message's arrival and UID, 40 bytes. They
+  come from one scan of the shown Folder by arrival, on an index that
+  covers it, keeping each Thread's first Message; in All Inboxes each
+  Account's rows are merged by arrival (ADR 0014's edge stays). The same
+  scan counts the Folder's Messages for its cache edge.
+- **Cards.** The window is the rows on screen with a margin of three
+  screens either side. Its Threads' Messages, in the shown Folder and
+  those elsewhere, are read by the arrival range of its rows in two
+  queries and grouped in Rust as before, into the same `Listing`. A card
+  is answered when any Message of its Thread is, here or elsewhere.
+  Scrolling inside the margin touches no Cache; crossing it reads the
+  next window into the same slots, reusing their buffers, so the scroll
+  hot path stays free of allocations (ADR 0001): the statements are
+  prepared uncached, and `SQLite` gives each date its local offset.
+- **The open Thread.** The selection is always inside the window, so its
+  stack, with the Messages found in other Folders, comes with the window
+  rather than for every Thread on every Update, and Reading needs no read
+  of its own.
 - **Positions.** The rows are positional, so the selection, `keep` across
   an Update, the scroll offset and "n of total" work as they do now. A
   Thread is found again by a scan of the keys, which costs well under a

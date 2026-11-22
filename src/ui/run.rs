@@ -27,6 +27,7 @@ use crate::{
     ui::exit::Exit,
     ui::handle,
     ui::list::folder_show::show,
+    ui::list::message_list,
     ui::list::older_pages::OlderPages,
     ui::main_screen::Ui,
     ui::opening::opening,
@@ -171,14 +172,17 @@ impl Model<'_> {
         Ok(start)
     }
 
-    /// Readies the Previews and older pages the screen wants, then draws it;
-    /// returns where the Preview's text goes.
+    /// Reads the cards around the selection, readies the Previews and older
+    /// pages the screen wants, then draws it; returns where the Preview's
+    /// text goes.
     fn frame(&mut self) -> Result<Option<Rect>, Error> {
-        let text = self
-            .tty
-            .panes(self.ui.screen.showing.mode())?
-            .preview
-            .map(preview_pane::text_area);
+        let panes = self.tty.panes(self.ui.screen.showing.mode())?;
+        if let Some(list) = panes.list {
+            let screen = message_list::capacity(list.height);
+            self.ui.view.fill(self.world.caches, screen)?;
+        }
+
+        let text = panes.preview.map(preview_pane::text_area);
         if let Some(text) = text {
             let (view, reading) = (&self.ui.view, self.ui.screen.showing.reading());
             let caches = self.world.caches;

@@ -115,9 +115,9 @@ impl Search {
     pub fn card(&mut self, row: usize) -> Option<(&[Message], &Thread, Matched<'_>)> {
         let index = self.row(row)?;
         let ascii = self.highlight(index)?;
-        let thread = self.listing.threads.get(index)?;
+        let thread = self.listing.threads().get(index)?;
         let matched = Matched::new(&self.units, ascii);
-        Some((&self.listing.messages, thread, matched))
+        Some((self.listing.messages(), thread, matched))
     }
 
     /// Fills `units` for Thread `index`'s card; whether that card is ASCII.
@@ -144,9 +144,7 @@ impl Search {
     }
 
     fn index(&mut self) {
-        let Listing {
-            messages, threads, ..
-        } = &self.listing;
+        let (messages, threads) = (self.listing.messages(), self.listing.threads());
         self.haystacks = messages.iter().map(haystack).collect();
         self.thread_of = vec![0; messages.len()];
         for (index, thread) in threads.iter().enumerate() {

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, FixedOffset, Offset, Utc};
-use rusqlite::{OptionalExtension, Row, params};
+use rusqlite::{Row, params};
 
 use super::{Cache, Error, threads::THREAD_ROW};
 use crate::{
@@ -14,58 +14,10 @@ const MESSAGE_ROW: &str = "uid, body_key, received, received_offset, unread, sen
     coalesce(snippet, ''), thread, from_me, answered, from_line, to_line";
 
 impl Cache {
-    /// The newest `limit` rows of `folder`, all of them when `None`; `None`
-    /// before its first resync has written it.
-    pub fn inbox(&self, folder: &FolderName, limit: Option<usize>) -> Result<Option<Inbox>, Error> {
-        let connection = self.connection();
-        let synced = connection
-            .prepare_cached(
-                "SELECT 1 FROM mailbox WHERE account = ?2 AND name = ?1
-                   AND uid_validity IS NOT NULL",
-            )?
-            .query_row(params![folder, self.email()], |_| Ok(()))
-            .optional()?;
-        if synced.is_none() {
-            return Ok(None);
-        }
-
-        // SQLite reads a negative LIMIT as no limit.
-        let limit = limit.map_or(-1, |n| i64::try_from(n).unwrap_or(i64::MAX));
-        let mut statement = connection.prepare_cached(&format!(
-            "SELECT {MESSAGE_ROW}
-             FROM message WHERE account = ?3 AND mailbox = ?1
-             ORDER BY received DESC, uid DESC LIMIT ?2"
-        ))?;
-        let messages = statement
-            .query_map(params![folder, limit, self.email()], |row| {
-                Ok(Message {
-                    folder: Some(folder.clone()),
-                    ..self.message(row)?
-                })
-            })?
-            .collect::<Result<_, _>>()?;
-        // Only those whose body is cached: that body comes with the Thread alone.
-        let mut statement = connection.prepare_cached(&format!(
-            "SELECT {THREAD_ROW}
-             FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
-             WHERE t.account = ?2
-               AND t.thread IN (SELECT thread FROM message WHERE account = ?2 AND mailbox = ?1)
-               AND t.key NOT IN
-                   (SELECT body_key FROM message WHERE account = ?2 AND mailbox = ?1)
-             ORDER BY t.received, t.key"
-        ))?;
-        let elsewhere = statement
-            .query_map(params![folder, self.email()], |row| self.message(row))?
-            .collect::<Result<_, _>>()?;
-        Ok(Some(Inbox {
-            messages,
-            elsewhere,
-        }))
-    }
-
     /// Every cached Folder's Messages but Trash's and Spam's, newest first,
     /// each once: the copy in `shown` wins, else the first in Folder order.
-    /// Their Threads' Messages found elsewhere come as in `inbox`.
+    /// With them, their Threads' Messages found only elsewhere whose body is
+    /// cached.
     pub fn everywhere(&self, shown: Option<&FolderName>) -> Result<Inbox, Error> {
         let mut folders = self.folders()?;
         folders.retain(|f| !matches!(f.role, Some(Role::Trash | Role::Spam)));

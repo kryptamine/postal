@@ -19,7 +19,9 @@ mod snippets;
 mod sql_values;
 mod state;
 mod store;
+mod thread_rows;
 mod threads;
+mod window;
 
 pub use changes::Changes;
 pub use correspondence::SentPass;
@@ -30,3 +32,4 @@ pub use moves::{Destination, PendingMove};
 pub use reader::{Reader, Seen, ThreadMessage};
 pub use schema::delete;
 pub use store::Cache;
+pub use window::Arrivals;
