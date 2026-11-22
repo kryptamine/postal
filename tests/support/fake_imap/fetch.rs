@@ -5,7 +5,7 @@ use std::num::{NonZeroU32, NonZeroU64};
 use imap_next::{
     imap_types::{
         command::{CommandBody, FetchModifier},
-        core::{IString, NString, Tag, Vec1},
+        core::{IString, Literal, NString, Tag, Vec1},
         datetime::DateTime,
         envelope::{Address, Envelope},
         fetch::{MacroOrMessageDataItemNames, MessageDataItem, MessageDataItemName, Part, Section},
@@ -15,7 +15,6 @@ use imap_next::{
     server::Server,
 };
 
-use super::super::fake_body::FakeBody;
 use super::{Folder, Inbox, Stored, flags, message::FakeMessage};
 
 /// Enqueues what a `FETCH` asks for and returns its tagged status.
@@ -38,13 +37,13 @@ pub(super) fn answer_fetch(
 
     let asked = Asked {
         from_header: header_fields(&macro_or_item_names),
-        part: body_part(&macro_or_item_names),
+        parts: body_parts(&macro_or_item_names),
         whole: whole_body(&macro_or_item_names),
     };
 
     let refused = fetched(folder, &sequence_set, uid, None)
         .any(|(_, stored)| inbox.refused.contains(&stored.uid));
-    if asked.whole && refused {
+    if (asked.whole || asked.parts.iter().any(|p| p.section == Asking::Header)) && refused {
         let text = "Some messages could not be FETCHed (Failure)";
         return Status::no(tag, None, text).unwrap();
     }
@@ -113,16 +112,26 @@ pub(super) fn header_fields(
     })
 }
 
-/// A body part number the client asked for, and the octets it asked for.
+/// A section of the body the client asked for, and the octets it asked for.
 pub(super) struct PartAsked {
-    path: Vec1<NonZeroU32>,
+    pub(super) section: Asking,
     partial: Option<(u32, NonZeroU32)>,
+}
+
+#[derive(PartialEq, Eq)]
+pub(super) enum Asking {
+    /// `BODY[HEADER]`, the whole Message's header.
+    Header,
+    /// `BODY[1.2]`.
+    Part(Vec1<NonZeroU32>),
+    /// `BODY[1.2.MIME]`.
+    Mime(Vec1<NonZeroU32>),
 }
 
 /// The items of a `FETCH` the fake answers only when asked.
 pub(super) struct Asked {
     from_header: Option<Section<'static>>,
-    part: Option<PartAsked>,
+    parts: Vec<PartAsked>,
     /// `BODY[]`, the whole Message.
     whole: bool,
 }
@@ -144,27 +153,56 @@ pub(super) fn whole_body(items: &MacroOrMessageDataItemNames<'static>) -> bool {
     })
 }
 
-pub(super) fn body_part(items: &MacroOrMessageDataItemNames<'static>) -> Option<PartAsked> {
+pub(super) fn body_parts(items: &MacroOrMessageDataItemNames<'static>) -> Vec<PartAsked> {
     let MacroOrMessageDataItemNames::MessageDataItemNames(names) = items else {
-        return None;
+        return Vec::new();
     };
 
-    names.iter().find_map(|name| match name {
-        MessageDataItemName::BodyExt {
-            section: Some(Section::Part(Part(path))),
-            partial,
-            ..
-        } => Some(PartAsked {
-            path: path.clone(),
-            partial: *partial,
-        }),
-        _ => None,
-    })
+    names
+        .iter()
+        .filter_map(|name| {
+            let MessageDataItemName::BodyExt {
+                section: Some(section),
+                partial,
+                ..
+            } = name
+            else {
+                return None;
+            };
+
+            let section = match section {
+                Section::Part(Part(path)) => Asking::Part(path.clone()),
+                Section::Mime(Part(path)) => Asking::Mime(path.clone()),
+                Section::Header(None) => Asking::Header,
+                _ => return None,
+            };
+
+            Some(PartAsked {
+                section,
+                partial: *partial,
+            })
+        })
+        .collect()
 }
 
 /// The octets asked for, empty for a part the body does not have.
-pub(super) fn body_part_item(body: &FakeBody, asked: &PartAsked) -> MessageDataItem<'static> {
-    let content = body.part(asked.path.as_ref()).unwrap_or_default();
+pub(super) fn body_part_item(message: &FakeMessage, asked: &PartAsked) -> MessageDataItem<'static> {
+    let body = &message.body;
+    let (content, section) = match &asked.section {
+        Asking::Header => (
+            body.header(&message.whole_headers()).into_bytes(),
+            Section::Header(None),
+        ),
+        Asking::Part(path) => (
+            body.part(path.as_ref()).unwrap_or_default(),
+            Section::Part(Part(path.clone())),
+        ),
+        Asking::Mime(path) => (
+            body.mime(path.as_ref()).unwrap_or_default().into_bytes(),
+            Section::Mime(Part(path.clone())),
+        ),
+    };
+
     let (start, len) = asked.partial.map_or((0, content.len()), |(start, len)| {
         (
             usize::try_from(start).unwrap(),
@@ -174,21 +212,24 @@ pub(super) fn body_part_item(body: &FakeBody, asked: &PartAsked) -> MessageDataI
     let served = content.get(start..).unwrap_or_default();
     let served = &served[..len.min(served.len())];
     MessageDataItem::BodyExt {
-        section: Some(Section::Part(Part(asked.path.clone()))),
+        section: Some(section),
         origin: asked.partial.map(|(start, _)| start),
-        // A short part goes quoted, as a server may send it.
-        data: NString(Some(IString::try_from(served.to_vec()).unwrap())),
+        data: NString(Some(body_string(served))),
+    }
+}
+
+/// A short part goes quoted, as a server may send it, unless it holds a
+/// `"` or `\`: imap-proto reads a quoted string with its escapes left in.
+fn body_string(served: &[u8]) -> IString<'static> {
+    if served.iter().any(|b| matches!(b, b'"' | b'\\')) {
+        IString::Literal(Literal::try_from(served.to_vec()).unwrap())
+    } else {
+        IString::try_from(served.to_vec()).unwrap()
     }
 }
 
 pub(super) fn whole_body_item(message: &FakeMessage) -> MessageDataItem<'static> {
-    let headers = format!(
-        "From: {}\r\nSubject: {}\r\n{}",
-        message.sender_header(),
-        message.subject,
-        message.headers
-    );
-    let whole = IString::try_from(message.body.message(&headers)).unwrap();
+    let whole = IString::try_from(message.body.message(&message.whole_headers())).unwrap();
     MessageDataItem::BodyExt {
         section: None,
         origin: None,
@@ -253,8 +294,8 @@ pub(super) fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
         MessageDataItem::ModSeq(NonZeroU64::new(stored.modseq).unwrap()),
         MessageDataItem::BodyStructure(message.body.structure()),
     ];
-    if let Some(asked) = &asked.part {
-        items.push(body_part_item(&message.body, asked));
+    for part in &asked.parts {
+        items.push(body_part_item(message, part));
     }
 
     if asked.whole {

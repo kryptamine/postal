@@ -100,6 +100,16 @@ impl FakeMessage {
         self
     }
 
+    /// The header lines before the body's own MIME ones, each ending in CRLF.
+    pub(super) fn whole_headers(&self) -> String {
+        format!(
+            "From: {}\r\nSubject: {}\r\n{}",
+            self.sender_header(),
+            self.subject,
+            self.headers
+        )
+    }
+
     /// The `From` header's value as the Message carries it.
     pub(super) fn sender_header(&self) -> String {
         match (self.unparsable_from, self.from_name) {

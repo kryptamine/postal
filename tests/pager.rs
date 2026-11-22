@@ -41,10 +41,21 @@ fn server_with(html: &str) -> FakeImap {
     FakeImap::start(vec![message.body(body)])
 }
 
-// The list's snippet shows the text before the body is cached; the Preview's
-// header comes with the body, and only then does `|` find it.
 fn main_screen(screen: &Screen) -> bool {
     screen.alternate_screen() && screen.contains(" 1/1 ") && screen.contains("Weekly notes")
+}
+
+// The header and the Snippet show before the body is cached; only text
+// under the Preview's rule says `|` will find it.
+fn previewed(screen: &Screen) -> bool {
+    let rule = (0..screen.rows()).find(|&row| screen.row_text(row).starts_with('├'));
+    main_screen(screen)
+        && rule.is_some_and(|row| {
+            !screen
+                .row_text(row + 1)
+                .trim_matches(|c| c == '│' || c == ' ')
+                .is_empty()
+        })
 }
 
 /// The escape character made visible, so a snapshot shows the styling.
@@ -74,7 +85,7 @@ fn paged(html: &str, keys: &[Key], no_color: bool) -> String {
         &[("PAGER", Path::new(&pager)), ("TMPDIR", &tmp)],
         no_color,
     );
-    t.wait_until(main_screen).unwrap();
+    t.wait_until(previewed).unwrap();
 
     for key in keys {
         t.send(*key).unwrap();
@@ -144,7 +155,7 @@ fn the_default_pager_waits_though_less_would_quit_on_one_screen() {
         .env("LESS", "-FR")
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
-    t.wait_until(main_screen).unwrap();
+    t.wait_until(previewed).unwrap();
     t.send(Key::Char('v')).unwrap();
     t.send(Key::Char('|')).unwrap();
     // `-F` would quit before showing the prompt.

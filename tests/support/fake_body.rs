@@ -5,7 +5,8 @@ use std::{fmt::Write, num::NonZeroU32};
 
 use imap_next::imap_types::{
     body::{
-        BasicFields, Body, BodyStructure, Disposition, SinglePartExtensionData, SpecificFields,
+        BasicFields, Body, BodyStructure, Disposition, MultiPartExtensionData,
+        SinglePartExtensionData, SpecificFields,
     },
     core::{IString, NString, Vec1},
 };
@@ -182,92 +183,116 @@ impl FakeBody {
     }
 
     pub fn structure(&self) -> BodyStructure<'static> {
+        self.structure_at("1")
+    }
+
+    /// The structure of this part, `id` naming its boundary as `content` does.
+    fn structure_at(&self, id: &str) -> BodyStructure<'static> {
         let string = |s: &str| IString::try_from(s.to_owned()).unwrap();
         match self {
-            Self::Part {
-                media_type,
-                subtype,
-                charset,
-                encoding,
-                content,
-                disposition,
-                params,
-                id,
-            } => {
-                let basic = BasicFields {
-                    parameter_list: charset
-                        .iter()
-                        .map(|c| (string("charset"), string(c)))
-                        .chain(params.iter().map(|(k, v)| (string(k), string(v))))
-                        .collect(),
-                    id: NString(id.map(|id| string(&format!("<{id}>")))),
-                    description: NString(None),
-                    content_transfer_encoding: string(encoding),
-                    size: u32::try_from(content.len()).unwrap(),
-                };
-
-                let specific = if *media_type == "text" {
-                    SpecificFields::Text {
-                        subtype: string(subtype),
-                        number_of_lines: u32::try_from(content.split(|&b| b == b'\n').count())
-                            .unwrap(),
-                    }
-                } else {
-                    SpecificFields::Basic {
-                        r#type: string(media_type),
-                        subtype: string(subtype),
-                    }
-                };
-
-                let extension_data =
-                    disposition
-                        .as_ref()
-                        .map(|(kind, params)| SinglePartExtensionData {
-                            md5: NString(None),
-                            tail: Some(Disposition {
-                                disposition: Some((
-                                    string(kind),
-                                    params.iter().map(|(k, v)| (string(k), string(v))).collect(),
-                                )),
-                                tail: None,
-                            }),
-                        });
-
-                BodyStructure::Single {
-                    body: Body { basic, specific },
-                    extension_data,
-                }
-            }
+            Self::Part { .. } => self.single_structure(),
             Self::Multipart { subtype, parts } => BodyStructure::Multi {
-                bodies: Vec1::try_from(parts.iter().map(Self::structure).collect::<Vec<_>>())
-                    .unwrap(),
+                bodies: Vec1::try_from(
+                    (1..)
+                        .zip(parts)
+                        .map(|(index, part)| part.structure_at(&format!("{id}.{index}")))
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap(),
                 subtype: string(subtype),
-                extension_data: None,
+                extension_data: Some(MultiPartExtensionData {
+                    parameter_list: vec![(string("boundary"), string(&boundary(id)))],
+                    tail: None,
+                }),
             },
+        }
+    }
+
+    /// The structure of a part that is not multipart.
+    fn single_structure(&self) -> BodyStructure<'static> {
+        let string = |s: &str| IString::try_from(s.to_owned()).unwrap();
+        let Self::Part {
+            media_type,
+            subtype,
+            charset,
+            encoding,
+            content,
+            disposition,
+            params,
+            id,
+        } = self
+        else {
+            panic!("a multipart has a structure of its own")
+        };
+        let basic = BasicFields {
+            parameter_list: charset
+                .iter()
+                .map(|c| (string("charset"), string(c)))
+                .chain(params.iter().map(|(k, v)| (string(k), string(v))))
+                .collect(),
+            id: NString(id.map(|id| string(&format!("<{id}>")))),
+            description: NString(None),
+            content_transfer_encoding: string(encoding),
+            size: u32::try_from(content.len()).unwrap(),
+        };
+
+        let specific = if *media_type == "text" {
+            SpecificFields::Text {
+                subtype: string(subtype),
+                number_of_lines: u32::try_from(content.split(|&b| b == b'\n').count()).unwrap(),
+            }
+        } else {
+            SpecificFields::Basic {
+                r#type: string(media_type),
+                subtype: string(subtype),
+            }
+        };
+
+        let extension_data = disposition
+            .as_ref()
+            .map(|(kind, params)| SinglePartExtensionData {
+                md5: NString(None),
+                tail: Some(Disposition {
+                    disposition: Some((
+                        string(kind),
+                        params.iter().map(|(k, v)| (string(k), string(v))).collect(),
+                    )),
+                    tail: None,
+                }),
+            });
+
+        BodyStructure::Single {
+            body: Body { basic, specific },
+            extension_data,
         }
     }
 
     /// The Message as `BODY[]` serves it: `headers`, each ending in CRLF,
     /// then this body in MIME.
     pub fn message(&self, headers: &str) -> Vec<u8> {
-        let mut message = format!("{headers}MIME-Version: 1.0\r\n").into_bytes();
-        self.entity(&mut message, "1");
+        let mut message = self.header(headers).into_bytes();
+        self.content(&mut message, "1");
         message
     }
 
-    /// Appends this part's own headers, a blank line, and its content;
-    /// `id` keeps the boundaries of nested multiparts apart.
-    fn entity(&self, out: &mut Vec<u8>, id: &str) {
+    /// The Message's header as `BODY[HEADER]` serves it, the blank line
+    /// after it included.
+    pub fn header(&self, headers: &str) -> String {
+        format!("{headers}MIME-Version: 1.0\r\n{}\r\n", self.headers("1"))
+    }
+
+    /// This part's own headers, each ending in CRLF.
+    fn headers(&self, id: &str) -> String {
         match self {
             Self::Part {
                 media_type,
                 subtype,
                 charset,
                 encoding,
-                content,
                 disposition,
                 params,
                 id,
+                ..
             } => {
                 let charset = charset
                     .map(|c| format!("; charset={c}"))
@@ -285,22 +310,29 @@ impl FakeBody {
                     write!(headers, "Content-ID: <{id}>\r\n").unwrap();
                 }
 
-                out.extend_from_slice(headers.as_bytes());
-                out.extend_from_slice(b"\r\n");
-                out.extend_from_slice(content);
+                headers
             }
-            Self::Multipart { subtype, parts } => {
-                let boundary = format!("=_boundary_{id}");
-                out.extend_from_slice(
-                    format!(
-                        "Content-Type: multipart/{subtype};\r\n boundary=\"{boundary}\"\r\n\r\n"
-                    )
-                    .as_bytes(),
-                );
+            Self::Multipart { subtype, .. } => format!(
+                "Content-Type: multipart/{subtype};\r\n boundary=\"{}\"\r\n",
+                boundary(id)
+            ),
+        }
+    }
+
+    /// Appends this part's content after its headers; `id` keeps the
+    /// boundaries of nested multiparts apart.
+    fn content(&self, out: &mut Vec<u8>, id: &str) {
+        match self {
+            Self::Part { content, .. } => out.extend_from_slice(content),
+            Self::Multipart { parts, .. } => {
+                let boundary = boundary(id);
                 out.extend_from_slice(b"This is a multi-part message in MIME format.\r\n");
                 for (index, part) in (1..).zip(parts) {
+                    let id = format!("{id}.{index}");
                     out.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
-                    part.entity(out, &format!("{id}.{index}"));
+                    out.extend_from_slice(part.headers(&id).as_bytes());
+                    out.extend_from_slice(b"\r\n");
+                    part.content(out, &id);
                     out.extend_from_slice(b"\r\n");
                 }
 
@@ -309,21 +341,44 @@ impl FakeBody {
         }
     }
 
-    /// The octets of part `path`, as in `BODY[1.2]`.
-    pub fn part(&self, path: &[NonZeroU32]) -> Option<&[u8]> {
-        match (self, path) {
-            (Self::Part { content, .. }, [one]) if one.get() == 1 => Some(content),
-            (Self::Multipart { parts, .. }, [first, rest @ ..]) => {
-                let part = parts.get(usize::try_from(first.get() - 1).unwrap())?;
-                match (part, rest) {
-                    (Self::Part { content, .. }, []) => Some(content),
-                    (Self::Multipart { .. }, [_, ..]) => part.part(rest),
-                    _ => None,
-                }
-            }
-            _ => None,
+    /// The part at `path` and the id its boundary is named by; a Message
+    /// that is not multipart is its own part 1.
+    fn node(&self, path: &[NonZeroU32]) -> Option<(&Self, String)> {
+        let mut node = (self, "1".to_owned());
+        if let (Self::Part { .. }, [one]) = (self, path) {
+            return (one.get() == 1).then_some(node);
         }
+
+        for number in path {
+            let Self::Multipart { parts, .. } = node.0 else {
+                return None;
+            };
+
+            let part = parts.get(usize::try_from(number.get() - 1).unwrap())?;
+            node = (part, format!("{}.{number}", node.1));
+        }
+
+        Some(node)
     }
+
+    /// The octets of part `path`, as in `BODY[1.2]`.
+    pub fn part(&self, path: &[NonZeroU32]) -> Option<Vec<u8>> {
+        let (node, id) = self.node(path)?;
+        let mut content = Vec::new();
+        node.content(&mut content, &id);
+        Some(content)
+    }
+
+    /// The headers of part `path`, as in `BODY[1.2.MIME]`, the blank line
+    /// after them included.
+    pub fn mime(&self, path: &[NonZeroU32]) -> Option<String> {
+        let (node, id) = self.node(path)?;
+        Some(format!("{}\r\n", node.headers(&id)))
+    }
+}
+
+fn boundary(id: &str) -> String {
+    format!("=_boundary_{id}")
 }
 
 /// `params` as a header writes them, each after `; `; an RFC 2231 value

@@ -127,7 +127,7 @@ fn a_reply_in_sent_joins_the_stack_and_the_count() {
     assert!(!screen.contains("Bob (2)"), "{screen}");
 
     // Held until Reading shows Bob alone.
-    server.stall(Stall::Whole);
+    server.stall(Stall::Body);
     t.send(Key::Enter).unwrap();
     let before = t.snapshot_after(reading).unwrap();
     assert!(before.row_text(0).contains(" 1/1 "), "{before}");

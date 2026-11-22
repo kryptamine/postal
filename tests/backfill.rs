@@ -232,7 +232,7 @@ fn a_preview_does_not_wait_for_a_pages_snippets() {
     let body = format!("UID FETCH {FIRST_UID} ");
     let body = commands
         .iter()
-        .position(|c| c.starts_with(&body) && c.contains("BODY.PEEK[]"));
+        .position(|c| c.starts_with(&body) && c.contains("BODY.PEEK[HEADER]"));
     let last_snippet = commands.iter().rposition(|c| c.contains("BODY.PEEK[1]<"));
     assert!(body.is_some() && body < last_snippet, "{commands:#?}");
 }

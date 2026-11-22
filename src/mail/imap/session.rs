@@ -9,7 +9,7 @@ use async_imap::{
 use futures::TryStreamExt;
 
 use super::{
-    Error, Moved,
+    Error, Moved, bodies,
     connect::Transport,
     login, moved_uids, named_roles, new_messages,
     opening::{Mode, Opening},
@@ -17,7 +17,7 @@ use super::{
     pushed::Pushed,
     tagged,
     traced::Traced,
-    whole_bodies, wire_trace,
+    wire_trace,
 };
 use crate::{
     account::config::Config,
@@ -153,8 +153,8 @@ pub trait MailServer {
         section: &str,
     ) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
 
-    /// Each of `uids` whole, as `BODY[]`; a UID the server did not answer
-    /// for is left out.
+    /// Each of `uids` as the Preview needs it, its header and text parts in
+    /// MIME; a UID the server did not answer for is left out.
     async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
 
     /// What the server announced during earlier commands, in order.
@@ -560,7 +560,7 @@ impl MailServer for ImapSession {
     }
 
     async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
-        whole_bodies::fetch(&mut self.session, &uid_set(uids)).await
+        bodies::fetch(&mut self.session, &uid_set(uids)).await
     }
 
     fn pushed(&mut self) -> Vec<Pushed> {

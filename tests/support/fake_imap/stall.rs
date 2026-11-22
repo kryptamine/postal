@@ -6,7 +6,7 @@ use imap_next::imap_types::{command::CommandBody, fetch::MacroOrMessageDataItemN
 
 use super::{
     Inbox,
-    fetch::{body_part, whole_body},
+    fetch::{Asking, body_parts, whole_body},
 };
 
 /// Where the server stops answering until `FakeImap::release`.
@@ -16,10 +16,11 @@ pub enum Stall {
     Greeting,
     /// After a `FETCH` or `UID FETCH` is recorded, before its answer.
     Fetch,
-    /// As `Fetch`, but only for a fetch of a body part.
+    /// As `Fetch`, but only for a fetch of body parts alone, as a Snippet's.
     Part,
-    /// As `Fetch`, but only for a fetch of a whole Message, `BODY[]`.
-    Whole,
+    /// As `Fetch`, but only for a fetch of a Message's body: `BODY[]`, or
+    /// the header asked with its text parts.
+    Body,
     /// As `Fetch`, but only for a `FETCH` by sequence number, as the first
     /// fetch and a page of older Messages send.
     Sequence,
@@ -59,11 +60,14 @@ pub(super) async fn wait_unless_fetch_stalled(
         wait_unless_stalled(inbox, Stall::Sequence).await;
     }
 
-    if body_part(items).is_some() {
+    // A body fetch asks for parts too, along with the header.
+    let parts = body_parts(items);
+    let header = parts.iter().any(|p| p.section == Asking::Header);
+    if !parts.is_empty() && !header {
         wait_unless_stalled(inbox, Stall::Part).await;
     }
 
-    if whole_body(items) {
-        wait_unless_stalled(inbox, Stall::Whole).await;
+    if whole_body(items) || header {
+        wait_unless_stalled(inbox, Stall::Body).await;
     }
 }

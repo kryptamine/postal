@@ -16,7 +16,8 @@ use support::{
 };
 use termlens::{Key, Screen, Terminal};
 
-const WHOLE: &str = "(UID BODY.PEEK[])";
+/// What a plain Message's body is fetched by: its header and its one part.
+const BODY: &str = "(UID BODY.PEEK[HEADER] BODY.PEEK[1])";
 
 fn postal(home: &Home, cols: u16) -> Terminal {
     Terminal::builder()
@@ -151,7 +152,7 @@ fn bodies(home: &Home) -> i64 {
 }
 
 fn uid_fetch(uids: &str) -> String {
-    format!("UID FETCH {uids} {WHOLE}")
+    format!("UID FETCH {uids} {BODY}")
 }
 
 #[test]
@@ -167,9 +168,9 @@ fn selecting_a_row_fetches_it_and_its_neighbours() {
 
     // The selection is fetched alone, so it never waits on its neighbours.
     let commands = server.commands();
-    let wholes: Vec<_> = commands.iter().filter(|c| c.contains(WHOLE)).collect();
+    let fetches: Vec<_> = commands.iter().filter(|c| c.contains(BODY)).collect();
     assert_eq!(
-        wholes,
+        fetches,
         [
             &uid_fetch("106"),
             &uid_fetch("104,105"),
@@ -201,7 +202,7 @@ fn selecting_a_row_fetches_it_and_its_neighbours() {
     quit(t);
     let commands = server.commands();
     assert!(
-        !commands.iter().any(|c| c.contains("BODY.PEEK[]")),
+        !commands.iter().any(|c| c.contains("BODY.PEEK[HEADER]")),
         "{commands:#?}"
     );
 }
@@ -233,7 +234,7 @@ fn a_server_without_gmail_extensions_keys_bodies_by_uid() {
 #[test]
 fn a_preview_not_yet_fetched_shows_a_placeholder_and_never_blocks() {
     let server = FakeImap::start(six());
-    server.stall(Stall::Whole);
+    server.stall(Stall::Body);
     let home = Home::for_server(&server);
     let mut t = postal(&home, 120);
     t.wait_until(|s| s.contains("Loading…") && s.contains(" 1/6 "))
@@ -255,7 +256,7 @@ fn a_preview_not_yet_fetched_shows_a_placeholder_and_never_blocks() {
 #[test]
 fn scrolling_past_unfetched_rows_fetches_only_where_it_stops() {
     let server = FakeImap::start(numbered(30));
-    server.stall(Stall::Whole);
+    server.stall(Stall::Body);
     let home = Home::for_server(&server);
     let mut t = postal(&home, 120);
     t.wait_until(|s| s.contains("Loading…") && s.contains(" 1/30 "))
@@ -275,14 +276,14 @@ fn scrolling_past_unfetched_rows_fetches_only_where_it_stops() {
     quit(t);
 
     let commands = server.commands();
-    let wholes: Vec<_> = commands.iter().filter(|c| c.contains(WHOLE)).collect();
+    let fetches: Vec<_> = commands.iter().filter(|c| c.contains(BODY)).collect();
     assert_eq!(
-        wholes[..2],
+        fetches[..2],
         [&uid_fetch("130"), &uid_fetch("125")],
         "{commands:#?}"
     );
     assert!(
-        !wholes
+        !fetches
             .iter()
             .any(|c| c.contains("128") || c.contains("129")),
         "{commands:#?}"

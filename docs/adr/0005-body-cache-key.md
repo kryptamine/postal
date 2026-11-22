@@ -1,9 +1,9 @@
 # Bodies are cached by X-GM-MSGID, else by UIDVALIDITY and UID
 
-A Message's raw body (`BODY.PEEK[]`) is fetched once and kept in the Cache, so
-a Preview shows from disk on every later run. The key must outlive what a
-Folder's rows do not: a UIDVALIDITY change drops every row of that Folder and
-refetches them, and the bodies should stay. On Gmail the same Message sits in
+A Message's raw body (its header and text parts, ADR 0024) is fetched once
+and kept in the Cache, so a Preview shows from disk on every later run. The
+key must outlive what a Folder's rows do not: a UIDVALIDITY change drops
+every row of that Folder and refetches them, and the bodies should stay. On Gmail the same Message sits in
 several Folders, and its body is fetched once for all of them.
 
 Gmail gives each Message an `X-GM-MSGID` that never changes, whatever the

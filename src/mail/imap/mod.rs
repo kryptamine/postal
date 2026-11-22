@@ -2,6 +2,8 @@
 //! Delete and Undo; bodies are fetched with `BODY.PEEK`.
 
 mod attachments;
+mod bodies;
+mod body_plan;
 mod connect;
 mod error;
 mod file_name;
@@ -17,7 +19,6 @@ mod session;
 mod tagged;
 mod text_part;
 mod traced;
-mod whole_bodies;
 mod wire_trace;
 mod xoauth2;
 

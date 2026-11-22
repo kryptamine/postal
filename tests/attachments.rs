@@ -11,7 +11,12 @@
 
 mod support;
 
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::Path,
+    thread,
+    time::{Duration, Instant},
+};
 
 use support::{
     fake_body::FakeBody,
@@ -208,4 +213,59 @@ fn the_pager_and_the_editor_list_the_attachments_after_the_header() {
     assert!(paged.contains(&header), "{paged}");
     let header = format!("Subject: Contract\nAttachments: {listed}\n\n");
     assert!(edited.contains(&header), "{edited}");
+}
+
+fn wait_for(mut condition: impl FnMut() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !condition() {
+        assert!(Instant::now() < deadline, "timed out");
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn cached_sizes(home: &Home) -> Vec<i64> {
+    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
+    let mut statement = cache.prepare("SELECT length(raw) FROM body").unwrap();
+    statement
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+// A large attachment would slow the Preview and push bodies out of the
+// Cache's LRU: only the header and the text come, nested as sent.
+#[test]
+fn the_preview_fetches_the_text_and_never_the_attachments() {
+    let alternative = FakeBody::multipart(
+        "alternative",
+        vec![
+            FakeBody::plain("See the files."),
+            FakeBody::text("html", "7bit", "<p>See the <b>files</b>.</p>"),
+        ],
+    );
+    let body = FakeBody::multipart(
+        "mixed",
+        vec![
+            alternative,
+            FakeBody::file("application", "pdf")
+                .lines(1000)
+                .disposition_param("filename", "report.pdf"),
+        ],
+    );
+    let server = FakeImap::start(vec![message("Ada", "Contract", 18, body)]);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| shown(s, "report.pdf")).unwrap();
+    wait_for(|| !cached_sizes(&home).is_empty());
+    quit(t);
+
+    let commands = server.commands();
+    assert!(
+        !commands
+            .iter()
+            .any(|c| c.contains("BODY.PEEK[]") || c.contains("BODY.PEEK[2]")),
+        "{commands:#?}"
+    );
+    assert!(cached_sizes(&home)[0] < 1000, "{:?}", cached_sizes(&home));
 }

@@ -182,11 +182,15 @@ fn shows_a_snippet_for_each_kind_of_text_part() {
     for command in &parts {
         assert!(!command.contains("BODY["), "{command}");
         assert!(!command.contains("RFC822"), "{command}");
+        // The Preview's body asks for whole parts.
+        if command.contains("BODY.PEEK[HEADER]") {
+            continue;
+        }
+
         let peeks = command.matches("BODY.PEEK[").count();
         let partial = command.matches("]<0.2048>").count();
         let header = command.matches("BODY.PEEK[HEADER.FIELDS").count();
-        let whole = command.matches("BODY.PEEK[]").count();
-        assert_eq!(peeks, partial + header + whole, "{command}");
+        assert_eq!(peeks, partial + header, "{command}");
     }
 }
 

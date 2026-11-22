@@ -159,7 +159,7 @@ fn q_and_esc_close_the_popup_without_quitting_and_other_keys_are_ignored() {
 #[test]
 fn a_toast_takes_the_right_slot_for_three_seconds() {
     let server = FakeImap::start(two_messages());
-    server.stall(Stall::Whole);
+    server.stall(Stall::Body);
     let home = Home::for_server(&server);
     let mut t = postal(&home, (80, 12));
     t.wait_until(|s| loaded(s) && s.contains("Loading…"))

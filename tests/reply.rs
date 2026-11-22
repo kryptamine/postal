@@ -349,14 +349,15 @@ fn a_reply_to_a_message_whose_body_was_evicted_fetches_it_first() {
     t.wait_until(|s| listed(s) && s.contains("My answer"))
         .unwrap();
     imap.clear_commands();
-    imap.stall(Stall::Whole);
+    imap.stall(Stall::Body);
     t.send(Key::Char('r')).unwrap();
     t.wait_until(|s| s.contains("fetching the Message…"))
         .unwrap();
     assert!(!previewed(&t.screen()));
     wait_for(|| {
         imap.commands()
-            .contains(&format!("UID FETCH {FIRST_UID} (UID BODY.PEEK[])"))
+            .iter()
+            .any(|c| c.starts_with(&format!("UID FETCH {FIRST_UID} (UID BODY.PEEK[HEADER]")))
     });
 
     imap.release();

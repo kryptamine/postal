@@ -21,7 +21,7 @@ const QUOTE_CUT: &str = "… quoted text hidden (z)";
 /// What rendering one Preview needs, sent to the thread that renders it.
 pub struct Job {
     pub key: PreviewKey,
-    /// `BODY[]`: the header and every part, still MIME-encoded.
+    /// The raw body: the header and the text parts, still MIME-encoded.
     pub body: Vec<u8>,
     pub look: MailLook,
 }
