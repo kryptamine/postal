@@ -70,9 +70,9 @@ void fill_from_border(const element::ptr& el)
 // shape too: a cell of `height: 50px` stood as a slab round the label.
 void collapse_shell(const element::ptr& button, const Contents& contents)
 {
-    const web_color& fill = button->css().get_bg().m_color;
     // A page-light button gives way to the terminal: its frame is its shape.
     if(!filled(button)) return;
+    const web_color& fill = button->css().get_bg().m_color;
     const std::string label = contents.of(button.get()).words();
     for(auto box = button->parent(); box; box = box->parent())
     {
