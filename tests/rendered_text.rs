@@ -264,6 +264,30 @@ fn the_small_print_under_the_body_is_muted() {
     assert!(!dim(&screen, "The third"), "{}", screen.text());
 }
 
+// Mobile styles reorder stacked cells as table groups; litehtml drew the
+// words of such a cell over each other, and a section of the mail was lost.
+#[test]
+fn a_cell_shown_as_a_table_group_keeps_its_words() {
+    let body = html(
+        "<style>.last{display:table-footer-group !important}</style>\
+         <table width=\"100%\"><tr><td class=\"last\"><h6>Supercharge your skills</h6>\
+         <p>Achieve your goals with tailored trainings.</p></td>\
+         <td width=\"155\">Side</td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "Side");
+    let rows = pane(&screen);
+    for words in [
+        "Supercharge your skills",
+        "Achieve your goals with tailored trainings.",
+    ] {
+        assert!(
+            rows.iter().any(|r| r.contains(words)),
+            "{}",
+            rows.join("\n")
+        );
+    }
+}
+
 // Two cells of words side by side are set apart: in 600 px the table
 // spread them, in the pane `Support` met `Unsubscribe`.
 #[test]

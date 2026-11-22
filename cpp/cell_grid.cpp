@@ -16,6 +16,7 @@
 #include "image_labels.h"
 #include "loosen.h"
 #include "picture_boxes.h"
+#include "regrouped_cells.h"
 #include "snap.h"
 #include "stacking.h"
 #include "superscripts.h"
@@ -500,6 +501,7 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
     }
     left_align_spread(doc->root());
     unfloat_cells(doc->root());
+    block_regrouped_cells(doc->root());
     // Before the digits are raised: a cell of raised digits keeps no gap.
     gap_cells(doc->root());
     raise_digits(doc->root());
