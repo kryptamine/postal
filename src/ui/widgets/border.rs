@@ -22,7 +22,13 @@ pub fn rule(buf: &mut Buffer, pane: Rect, y: u16, style: Style) {
 
 /// Writes `parts` in turn over a border row of `pane` from column `x`, stopping
 /// short of its right side. A Block title would allocate on every frame.
-pub fn label(buf: &mut Buffer, pane: Rect, (x, y): (u16, u16), parts: &[&str], style: Style) {
+pub fn label<'a>(
+    buf: &mut Buffer,
+    pane: Rect,
+    (x, y): (u16, u16),
+    parts: impl IntoIterator<Item = &'a str>,
+    style: Style,
+) {
     let mut x = x;
     for part in parts {
         let room = usize::from(pane.right().saturating_sub(x + 1));

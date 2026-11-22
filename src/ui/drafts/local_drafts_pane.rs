@@ -35,7 +35,7 @@ impl Widget for LocalDraftsPane<'_> {
             buf,
             area,
             (area.x + 1, area.y),
-            &[" Local Drafts "],
+            [" Local Drafts "],
             self.theme.title,
         );
         let list = Rect {

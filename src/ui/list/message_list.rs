@@ -152,7 +152,7 @@ fn draw_rows(
 fn name_group(theme: &Theme, buf: &mut Buffer, pane: Rect, y: u16, group: DateGroup) {
     let label = group.label();
     let parts = [" ", label.as_str(), " "];
-    border::label(buf, pane, (pane.x + 2, y), &parts, theme.title);
+    border::label(buf, pane, (pane.x + 2, y), parts, theme.title);
 }
 
 /// The Date Group of the Thread at `row`; `None` while undated, as a

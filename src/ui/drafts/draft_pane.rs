@@ -32,7 +32,7 @@ impl Widget for DraftPane<'_> {
             " Draft "
         };
 
-        border::label(buf, area, (area.x + 1, area.y), &[title], self.theme.title);
+        border::label(buf, area, (area.x + 1, area.y), [title], self.theme.title);
         let text = Rect {
             x: area.x.saturating_add(1 + PADDING),
             y: area.y.saturating_add(1),

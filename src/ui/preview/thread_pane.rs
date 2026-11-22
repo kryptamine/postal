@@ -90,7 +90,7 @@ impl ThreadPane<'_> {
     fn title(&self, buf: &mut Buffer, area: Rect, place: &str) {
         let place_width = u16::try_from(place.width()).unwrap_or(u16::MAX);
         let place_x = area.right().saturating_sub(1 + place_width).max(area.x + 1);
-        border::label(buf, area, (place_x, area.y), &[place], self.theme.title);
+        border::label(buf, area, (place_x, area.y), [place], self.theme.title);
 
         let stack = self.view.stack();
         let subject = stack.clone().next().map_or("", |m| m.subject.as_str());
@@ -102,19 +102,14 @@ impl ThreadPane<'_> {
         let names = stack.clone().enumerate().filter(first).enumerate();
         let names =
             names.flat_map(|(n, (_, m))| [if n == 0 { "" } else { ", " }, thread::sender(m)]);
-        let mut x = area.x + 1;
-        for part in [" ", subject, " · "].into_iter().chain(names).chain([" "]) {
-            // One border cell before `place`.
-            let room = Rect::new(x, area.y, place_x.saturating_sub(x + 1), 1);
-            if room.is_empty() {
-                break;
-            }
+        let parts = [" ", subject, " · "].into_iter().chain(names).chain([" "]);
+        // Short of `place`: the label stops one cell before its pane's right.
+        let left = Rect {
+            width: place_x - area.x,
+            ..area
+        };
 
-            truncate::draw(buf, room, part, self.theme.title);
-            x += u16::try_from(part.width())
-                .unwrap_or(u16::MAX)
-                .min(room.width);
-        }
+        border::label(buf, left, (area.x + 1, area.y), parts, self.theme.title);
     }
 
     /// Row `offset` of the Message `placed`, from its top.
