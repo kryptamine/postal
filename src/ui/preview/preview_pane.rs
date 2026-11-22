@@ -75,17 +75,18 @@ impl StatefulWidget for PreviewPane<'_> {
         }
 
         let text = text_area(area);
+        let header = message_header::rows(view.selected_message());
         // From the row, so the header shows while the body loads.
         if let Some(message) = view.selected_message() {
-            let rows = (text.y..text.bottom()).zip(0..message_header::ROWS - 1);
+            let rows = (text.y..text.bottom()).zip(0..header - 1);
             for (y, field) in rows {
                 let row = Rect::new(text.x, y, text.width, 1);
                 message_header::draw(self.theme, buf, row, message, field);
             }
         }
 
-        let body = body_area(text, message_header::ROWS);
-        if usize::from(text.height) >= message_header::ROWS {
+        let body = body_area(text, header);
+        if usize::from(text.height) >= header {
             border::rule(buf, area, body.y - 1, self.theme.border);
         }
 

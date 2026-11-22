@@ -39,6 +39,8 @@ CREATE TABLE message (
     text_encoding TEXT,
     text_charset TEXT,
     text_html INTEGER,
+    -- One `size\tname` line per attachment; empty with none.
+    attachments TEXT NOT NULL,
     PRIMARY KEY (account, mailbox, uid)
 );
 CREATE INDEX message_by_arrival
@@ -93,6 +95,7 @@ CREATE TABLE thread_message (
     subject TEXT NOT NULL,
     from_me INTEGER NOT NULL,
     snippet TEXT NOT NULL,
+    attachments TEXT NOT NULL,
     PRIMARY KEY (account, key)
 );
 CREATE INDEX thread_message_by_thread ON thread_message (account, thread);
@@ -149,7 +152,8 @@ CREATE TABLE moved (
     text_section TEXT,
     text_encoding TEXT,
     text_charset TEXT,
-    text_html INTEGER
+    text_html INTEGER,
+    attachments TEXT NOT NULL
 );
 -- What the server holds in `mailbox` that the Message List leaves out.
 -- An address a Message names, once per Message whichever Folders hold it;

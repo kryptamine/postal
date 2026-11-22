@@ -2,6 +2,7 @@ mod attribution;
 pub mod body;
 pub mod body_text;
 mod cell_grid;
+pub mod file_size;
 mod footer;
 mod frame_glyphs;
 mod frame_padding;

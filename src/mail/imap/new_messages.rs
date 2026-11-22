@@ -4,7 +4,7 @@ use async_imap::{
 };
 use chrono::DateTime;
 
-use super::{Error, Pushed, connect::Transport, origin::Origin, tagged, text_part};
+use super::{Error, Pushed, attachments, connect::Transport, origin::Origin, tagged, text_part};
 use crate::{
     domain::body_key::BodyKey,
     domain::correspondence::{self, Correspondence, Person},
@@ -89,6 +89,10 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
     );
 
     let envelope = envelope(attributes);
+    let structure = attributes.iter().find_map(|a| match a {
+        AttributeValue::BodyStructure(structure) => Some(structure),
+        _ => None,
+    });
     let row = Message {
         uid: Uid::new(uid),
         body_key: BodyKey::new(gmail_id, origin.uid_validity, uid),
@@ -102,16 +106,13 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
         to: envelope.map_or_else(String::new, |e| shown(e.to.iter().chain(&e.cc).flatten())),
         subject: subject(envelope),
         snippet: String::new(),
+        attachments: structure.map(attachments::find).unwrap_or_default(),
         thread,
         from_me: envelope.is_some_and(|e| from(e, origin.email)),
         folder: None,
         account: (),
     };
 
-    let structure = attributes.iter().find_map(|a| match a {
-        AttributeValue::BodyStructure(structure) => Some(structure),
-        _ => None,
-    });
     Some(NewMessage {
         correspondence: correspondence(envelope, &row),
         row,

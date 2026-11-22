@@ -5,13 +5,13 @@ expression: screen
 size: 80x30  cursor: hidden
 ┌─ 2024 ───────────────────────────────────────────────────────────────────────┐
 │   Ada Lovelace                                                    2024-11-17 │
-│   Weekly notes                                                               │
+│ + Weekly notes                                                               │
 │   Hi all, Here are this week's notes. The analytical engine prototype now r… │
 │   Newsletter                                                      2024-11-16 │
 │   Html only                                                                  │
 │   Only markup here                                                           │
 │   Charles                                                         2024-11-15 │
-│   Only attachments                                                           │
+│ + Only attachments                                                           │
 │                                                                              │
 │                                                                              │
 │                                                                              │
@@ -20,6 +20,7 @@ size: 80x30  cursor: hidden
 │ From    Ada Lovelace <someone@example.com>            Sun, 17 Nov 2024 09:00 │
 │ To      Charles Babbage <charles@example.com>, Mary Somerville <mary@exampl… │
 │ Subject Weekly notes                                                         │
+│ +       application/pdf 6 B                                                  │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ Hi all,                                                                      │
 │                                                                              │
@@ -30,6 +31,5 @@ size: 80x30  cursor: hidden
 │ > > printed copy would save a great deal of copying by hand.                 │
 │ > Yes: the printer arrived on Tuesday.                                       │
 │                                                                              │
-│ Thanks,                                                                      │
 └──────────────────────────────────────────────────────────────────────────────┘
  j/k move  ^d/^u scroll  enter read  o links  q quit  / search  ?: help

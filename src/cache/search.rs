@@ -29,7 +29,7 @@ macro_rules! message_row {
     () => {
         "uid, body_key, received,
          unixepoch(received, 'unixepoch', 'localtime') - received, unread, sender, subject,
-         coalesce(snippet, ''), thread, from_me, answered, from_line, to_line"
+         coalesce(snippet, ''), thread, from_me, answered, from_line, to_line, attachments"
     };
 }
 
@@ -48,7 +48,8 @@ const HERE: &str = concat!(
 /// The Messages of the Gmail Threads `?2` whose body is cached, by key.
 const ELSEWHERE: &str = "SELECT 0, t.key, t.received,
     unixepoch(t.received, 'unixepoch', 'localtime') - t.received, t.unread, t.sender,
-    t.subject, t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line
+    t.subject, t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line,
+    t.attachments
     FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
     WHERE t.account = ?1 AND t.thread IN (SELECT value FROM json_each(?2))";
 
@@ -211,7 +212,7 @@ impl Cache {
         let mut statement = connection.prepare(HERE)?;
         let mut rows = statement.query(params![scope.lone, self.email(), scope.threads])?;
         while let Some(row) = rows.next()? {
-            let Some(rank) = scope::rank(folders, text(row, 13)?) else {
+            let Some(rank) = scope::rank(folders, text(row, 14)?) else {
                 continue;
             };
 

@@ -544,9 +544,9 @@ fn a_query_matching_more_than_a_search_reads_says_so() {
             .execute(
                 "INSERT INTO message (account, mailbox, uid, body_key, received,
                    received_offset, unread, answered, sender, from_line, to_line, subject,
-                   from_me, snippet)
+                   from_me, snippet, attachments)
                  VALUES (?1, 'Lists', ?2, ?2, 1600000000 + ?2, 0, 0, 0, 'List', '', '',
-                   'Daily digest', 0, '')",
+                   'Daily digest', 0, '', '')",
                 rusqlite::params![EMAIL.to_lowercase(), uid],
             )
             .unwrap();

@@ -24,7 +24,8 @@ pub fn label_links(ui: &mut Ui, previews: &Previews, text: Option<Rect>) {
         }
 
         let preview = previews.get(view, text.width)?;
-        let lines = preview_pane::body_lines(view.preview_scroll, text, message_header::ROWS);
+        let header = message_header::rows(view.selected_message());
+        let lines = preview_pane::body_lines(view.preview_scroll, text, header);
         LinkHints::find([(0, &preview.body[..], lines)])
     });
 

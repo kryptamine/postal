@@ -1,7 +1,7 @@
 //! A Message body as the fake IMAP server serves it: its `BODYSTRUCTURE`,
 //! and the octets of one part by part number.
 
-use std::num::NonZeroU32;
+use std::{fmt::Write, num::NonZeroU32};
 
 use imap_next::imap_types::{
     body::{
@@ -21,7 +21,12 @@ pub enum FakeBody {
         encoding: &'static str,
         /// The part as sent, already in its transfer encoding.
         content: Vec<u8>,
-        attachment: bool,
+        /// `Content-Disposition`, with its parameters as sent.
+        disposition: Option<(&'static str, Vec<(String, String)>)>,
+        /// `Content-Type` parameters beside the charset, as sent.
+        params: Vec<(String, String)>,
+        /// The `Content-ID`.
+        id: Option<&'static str>,
     },
     Multipart {
         subtype: &'static str,
@@ -42,7 +47,9 @@ impl FakeBody {
             charset: Some("utf-8"),
             encoding,
             content: content.into(),
-            attachment: false,
+            disposition: None,
+            params: Vec::new(),
+            id: None,
         }
     }
 
@@ -58,9 +65,60 @@ impl FakeBody {
         self
     }
 
-    pub const fn attached(mut self) -> Self {
-        if let Self::Part { attachment, .. } = &mut self {
-            *attachment = true;
+    pub fn attached(mut self) -> Self {
+        if let Self::Part { disposition, .. } = &mut self {
+            *disposition = Some(("attachment", Vec::new()));
+        }
+
+        self
+    }
+
+    /// Adds `key=value` to the `Content-Disposition`, as sent: `filename*`
+    /// and its continuations carry RFC 2231 values.
+    pub fn disposition_param(mut self, key: &str, value: &str) -> Self {
+        if let Self::Part { disposition, .. } = &mut self {
+            let (_, params) = disposition.get_or_insert(("attachment", Vec::new()));
+            params.push((key.to_owned(), value.to_owned()));
+        }
+
+        self
+    }
+
+    /// Adds `key=value` to the `Content-Type`, as sent.
+    pub fn type_param(mut self, key: &str, value: &str) -> Self {
+        if let Self::Part { params, .. } = &mut self {
+            params.push((key.to_owned(), value.to_owned()));
+        }
+
+        self
+    }
+
+    /// Without a disposition, or `inline`, and with `Content-ID: <cid>`.
+    pub fn inline(mut self, cid: &'static str) -> Self {
+        if let Self::Part {
+            disposition, id, ..
+        } = &mut self
+        {
+            *disposition = disposition.take().map(|(_, params)| ("inline", params));
+            *id = Some(cid);
+        }
+
+        self
+    }
+
+    /// Without any `Content-Disposition`.
+    pub fn undisposed(mut self) -> Self {
+        if let Self::Part { disposition, .. } = &mut self {
+            *disposition = None;
+        }
+
+        self
+    }
+
+    /// Base64 content of `lines` full lines of 76 digits, 57 octets each.
+    pub fn lines(mut self, lines: usize) -> Self {
+        if let Self::Part { content, .. } = &mut self {
+            *content = [&b"A".repeat(76)[..], b"\r\n"].concat().repeat(lines);
         }
 
         self
@@ -73,7 +131,9 @@ impl FakeBody {
             charset: None,
             encoding: "base64",
             content: b"AAECAwQF".to_vec(),
-            attachment: true,
+            disposition: Some(("attachment", Vec::new())),
+            params: Vec::new(),
+            id: None,
         }
     }
 
@@ -112,9 +172,12 @@ impl FakeBody {
             charset: content_type.and_then(|t| t.attribute("charset")).map(leak),
             encoding: part.content_transfer_encoding().map_or("7bit", leak),
             content: content.to_vec(),
-            attachment: part
+            disposition: part
                 .content_disposition()
-                .is_some_and(ContentType::is_attachment),
+                .is_some_and(ContentType::is_attachment)
+                .then(|| ("attachment", Vec::new())),
+            params: Vec::new(),
+            id: None,
         }
     }
 
@@ -127,14 +190,17 @@ impl FakeBody {
                 charset,
                 encoding,
                 content,
-                attachment,
+                disposition,
+                params,
+                id,
             } => {
                 let basic = BasicFields {
                     parameter_list: charset
                         .iter()
                         .map(|c| (string("charset"), string(c)))
+                        .chain(params.iter().map(|(k, v)| (string(k), string(v))))
                         .collect(),
-                    id: NString(None),
+                    id: NString(id.map(|id| string(&format!("<{id}>")))),
                     description: NString(None),
                     content_transfer_encoding: string(encoding),
                     size: u32::try_from(content.len()).unwrap(),
@@ -153,13 +219,19 @@ impl FakeBody {
                     }
                 };
 
-                let extension_data = attachment.then(|| SinglePartExtensionData {
-                    md5: NString(None),
-                    tail: Some(Disposition {
-                        disposition: Some((string("attachment"), vec![])),
-                        tail: None,
-                    }),
-                });
+                let extension_data =
+                    disposition
+                        .as_ref()
+                        .map(|(kind, params)| SinglePartExtensionData {
+                            md5: NString(None),
+                            tail: Some(Disposition {
+                                disposition: Some((
+                                    string(kind),
+                                    params.iter().map(|(k, v)| (string(k), string(v))).collect(),
+                                )),
+                                tail: None,
+                            }),
+                        });
 
                 BodyStructure::Single {
                     body: Body { basic, specific },
@@ -193,16 +265,24 @@ impl FakeBody {
                 charset,
                 encoding,
                 content,
-                attachment,
+                disposition,
+                params,
+                id,
             } => {
                 let charset = charset
                     .map(|c| format!("; charset={c}"))
                     .unwrap_or_default();
                 let mut headers = format!(
-                    "Content-Type: {media_type}/{subtype}{charset}\r\nContent-Transfer-Encoding: {encoding}\r\n"
+                    "Content-Type: {media_type}/{subtype}{charset}{}\r\nContent-Transfer-Encoding: {encoding}\r\n",
+                    parameters(params)
                 );
-                if *attachment {
-                    headers.push_str("Content-Disposition: attachment\r\n");
+                if let Some((kind, params)) = disposition {
+                    let params = parameters(params);
+                    write!(headers, "Content-Disposition: {kind}{params}\r\n").unwrap();
+                }
+
+                if let Some(id) = id {
+                    write!(headers, "Content-ID: <{id}>\r\n").unwrap();
                 }
 
                 out.extend_from_slice(headers.as_bytes());
@@ -244,4 +324,19 @@ impl FakeBody {
             _ => None,
         }
     }
+}
+
+/// `params` as a header writes them, each after `; `; an RFC 2231 value
+/// goes unquoted.
+fn parameters(params: &[(String, String)]) -> String {
+    params
+        .iter()
+        .map(|(key, value)| {
+            if key.ends_with('*') {
+                format!("; {key}={value}")
+            } else {
+                format!("; {key}=\"{value}\"")
+            }
+        })
+        .collect()
 }

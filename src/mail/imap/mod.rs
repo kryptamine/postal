@@ -1,8 +1,10 @@
 //! The IMAP boundary. Postal writes only `\Seen`, `\Answered` and the moves of
 //! Delete and Undo; bodies are fetched with `BODY.PEEK`.
 
+mod attachments;
 mod connect;
 mod error;
+mod file_name;
 mod login;
 mod moved;
 mod moved_uids;

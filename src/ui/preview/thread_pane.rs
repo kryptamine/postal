@@ -16,7 +16,7 @@ use crate::{
     ui::list::date_label::DateLabel,
     ui::list::inbox_view::InboxView,
     ui::preview::link_hints::LinkHints,
-    ui::preview::message_header::{self, STACK_ROWS as HEADER},
+    ui::preview::message_header,
     ui::preview::preview_lines::PreviewLines,
     ui::preview::preview_pane,
     ui::preview::previews::Previews,
@@ -124,7 +124,7 @@ impl ThreadPane<'_> {
             Shape::Unfolded(body) => body,
         };
 
-        let Some(index) = offset.checked_sub(HEADER) else {
+        let Some(index) = offset.checked_sub(placed.header()) else {
             return message_header::draw_stacked(self.theme, buf, row, placed.message, offset);
         };
 
@@ -148,11 +148,12 @@ impl ThreadPane<'_> {
     /// the text of `pane`, the last of them a rule across it as in the Preview.
     fn pin(&self, buf: &mut Buffer, pane: Rect, placed: &Placed<'_>, rows: usize) {
         let text = preview_pane::text_area(pane);
-        let first = HEADER - rows;
-        for (y, offset) in (text.y..text.bottom()).zip(first..HEADER) {
+        let header = placed.header();
+        let first = header - rows;
+        for (y, offset) in (text.y..text.bottom()).zip(first..header) {
             let line = Rect::new(text.x, y, text.width, 1);
             Clear.render(line, buf);
-            if offset + 1 == HEADER {
+            if offset + 1 == header {
                 border::rule(buf, pane, y, self.theme.border);
             } else {
                 self.row(buf, line, placed, offset);

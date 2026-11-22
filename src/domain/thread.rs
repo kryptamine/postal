@@ -46,6 +46,8 @@ pub struct Thread {
     pub unread: bool,
     /// Any Message of it has `\\Answered`, here or elsewhere.
     pub answered: bool,
+    /// Any Message of it has an attachment, here or elsewhere.
+    pub attachments: bool,
 }
 
 impl Thread {
@@ -85,6 +87,7 @@ pub fn group(
         thread.messages.push(index);
         thread.unread |= message.unread;
         thread.answered |= message.answered;
+        thread.attachments |= !message.attachments.is_empty();
     }
 
     for (index, message) in elsewhere.iter().enumerate() {
@@ -92,6 +95,7 @@ pub fn group(
             let thread = &mut threads.as_mut_slice()[at];
             thread.stack.push(Place::Elsewhere(index));
             thread.answered |= message.answered;
+            thread.attachments |= !message.attachments.is_empty();
         }
     }
 
@@ -126,6 +130,7 @@ fn open(threads: &mut Pool<Thread>, key: Key) -> usize {
         senders: Vec::new(),
         unread: false,
         answered: false,
+        attachments: false,
     });
 
     thread.key = key;
@@ -134,5 +139,6 @@ fn open(threads: &mut Pool<Thread>, key: Key) -> usize {
     thread.senders.clear();
     thread.unread = false;
     thread.answered = false;
+    thread.attachments = false;
     threads.as_slice().len() - 1
 }

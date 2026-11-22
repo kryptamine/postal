@@ -1,8 +1,9 @@
 use chrono::{DateTime, FixedOffset};
 
 use crate::{
-    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::message_ref::MessageRef,
-    domain::per_account::AccountId, domain::thread_id::ThreadId, domain::uid::Uid,
+    domain::attachment::Attachments, domain::body_key::BodyKey, domain::folder_name::FolderName,
+    domain::message_ref::MessageRef, domain::per_account::AccountId, domain::thread_id::ThreadId,
+    domain::uid::Uid,
 };
 
 /// One Message as the Message List knows it.
@@ -24,6 +25,7 @@ pub struct Message<A = AccountId> {
     /// Empty until the second fetch phase reaches the Message, and for good
     /// when it has no text part.
     pub snippet: String,
+    pub attachments: Attachments,
     /// Gmail's `X-GM-THRID`; `None` elsewhere, where the Message is a Thread
     /// of its own.
     pub thread: Option<ThreadId>,
@@ -62,6 +64,7 @@ impl Message {
             to: String::new(),
             subject: String::new(),
             snippet: String::new(),
+            attachments: Attachments::default(),
             thread: None,
             from_me: false,
             folder: None,

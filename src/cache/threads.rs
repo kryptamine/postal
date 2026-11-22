@@ -31,8 +31,8 @@ impl Cache {
             let mut insert = transaction.prepare_cached(
                 "INSERT OR REPLACE INTO thread_message
                  (key, thread, received, received_offset, unread, sender, subject, from_me,
-                  snippet, answered, account, from_line, to_line)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                  snippet, answered, account, from_line, to_line, attachments)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             )?;
             for m in messages {
                 insert.execute(params![
@@ -49,6 +49,7 @@ impl Cache {
                     self.email(),
                     m.from,
                     m.to,
+                    m.attachments.stored(),
                 ])?;
             }
 

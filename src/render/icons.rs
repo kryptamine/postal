@@ -44,6 +44,14 @@ impl Icons {
         }
     }
 
+    /// Marks a Thread or a Message with an attachment.
+    pub const fn attachment(self) -> &'static str {
+        match self {
+            Self::Nerd => "\u{f03e2}",
+            Self::Plain => "+",
+        }
+    }
+
     /// Before a Folder's name; `None` in the plain look.
     pub const fn folder(self, shown: &Shown) -> Option<&'static str> {
         if matches!(self, Self::Plain) {

@@ -1,10 +1,13 @@
 use std::io::{self, Write};
 
+use unicode_width::UnicodeWidthStr;
+
 use ratatui::style::Style;
 
 use crate::{
     account::browser, domain::message::Message, render::header_date, render::preview::Preview,
-    ui::frame::theme::Theme, ui::preview::message_header, ui::terminal::ansi,
+    ui::frame::theme::Theme, ui::preview::attachment_line, ui::preview::message_header,
+    ui::terminal::ansi,
 };
 
 /// `preview` of `message` as the bytes piped to the pager: the header
@@ -29,6 +32,16 @@ fn write(out: &mut Vec<u8>, message: &Message, preview: &Preview, theme: &Theme)
     for row in rest {
         out.write_all(b"\n")?;
         field(out, row, theme)?;
+    }
+
+    if !message.attachments.is_empty() {
+        let mut listed = String::new();
+        attachment_line::write(&mut listed, &message.attachments);
+        let icon = theme.icons.attachment();
+        let pad = usize::from(message_header::LABEL_WIDTH).saturating_sub(icon.width());
+        let label = format!("{icon}{}", " ".repeat(pad));
+        out.write_all(b"\n")?;
+        field(out, (&label, &listed, theme.sender), theme)?;
     }
 
     out.write_all(b"\n")?;

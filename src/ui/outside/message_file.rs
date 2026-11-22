@@ -11,6 +11,7 @@ use crate::{
     render::body_text::{self, WIDTH},
     render::header_date,
     render::html_preview::Links,
+    ui::preview::attachment_line,
 };
 
 /// A Message as a read-only file for the editor in
@@ -28,8 +29,15 @@ impl MessageFile {
             .parse(raw)
             .map(|parsed| body_text::plain(&parsed, WIDTH, Links::Footnotes))
             .unwrap_or_default();
+        let mut attachments = String::new();
+        if !message.attachments.is_empty() {
+            attachments.push_str("Attachments: ");
+            attachment_line::write(&mut attachments, &message.attachments);
+            attachments.push('\n');
+        }
+
         let text = format!(
-            "From: {}\nTo: {}\nDate: {}\nSubject: {}\n\n{}\n",
+            "From: {}\nTo: {}\nDate: {}\nSubject: {}\n{attachments}\n{}\n",
             message.from,
             message.to,
             header_date::date(&message.received).as_str(),

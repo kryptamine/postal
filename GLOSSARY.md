@@ -80,6 +80,10 @@ _Avoid_: HTML mode, rich view, browser view
 How the Preview shows HTML mail after `v`: its text in reading order, wrapped to the pane, styled only by Postal's Theme.
 _Avoid_: plain mode, raw view
 
+**Attachment**:
+A file a Message carries beside its text: a part sent as an attachment, or a non-text part with a file name; an image the HTML shows by `cid:` is none, and an attached Message counts as one. A row of the Message List whose Thread has one is marked left of its subject, and the Preview, Reading, `$PAGER` and the editor `E` opens name each with its size under the header.
+_Avoid_: file, enclosure
+
 **Snippet**:
 The first words of a Message's body, shown under its subject in the Message List.
 _Avoid_: preview, excerpt, summary

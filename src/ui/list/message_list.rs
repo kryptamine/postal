@@ -249,6 +249,11 @@ impl Cards<'_> {
         }
 
         let [senders, subject, snippet] = self.fields(card);
+        if thread.attachments && !subject.is_empty() {
+            let icon = self.theme.icons.attachment();
+            buf.set_string(text.x, subject.y, icon, tone(self.theme.muted));
+        }
+
         let count = count(thread);
         let style = strong.patch(tone(self.theme.sender));
         let end = place(shown, names(senders, &count), |area, name, gap| {

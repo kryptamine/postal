@@ -44,7 +44,7 @@ macro_rules! threads {
 const HERE: &str = concat!(
     "SELECT uid, body_key, ",
     columns!(""),
-    "coalesce(snippet, ''), thread, from_me, answered, from_line, to_line
+    "coalesce(snippet, ''), thread, from_me, answered, from_line, to_line, attachments
      FROM message INDEXED BY message_by_thread
      WHERE account = ?1 AND mailbox = ?2 AND +received >= ?5 AND thread IN (",
     threads!(),
@@ -52,7 +52,7 @@ const HERE: &str = concat!(
      UNION ALL
      SELECT uid, body_key, ",
     columns!(""),
-    "coalesce(snippet, ''), thread, from_me, answered, from_line, to_line FROM message
+    "coalesce(snippet, ''), thread, from_me, answered, from_line, to_line, attachments FROM message
      WHERE account = ?1 AND mailbox = ?2 AND thread IS NULL
        AND received BETWEEN ?3 AND ?4 AND +received >= ?5
      ORDER BY received DESC, uid DESC"
@@ -61,7 +61,7 @@ const HERE: &str = concat!(
 const ELSEWHERE: &str = concat!(
     "SELECT 0, t.key, ",
     columns!("t."),
-    "t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line
+    "t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line, t.attachments
      FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
      WHERE t.account = ?1 AND t.thread IN (",
     threads!(),
@@ -147,7 +147,8 @@ pub(super) fn read(row: &Row<'_>, message: &mut Message) -> rusqlite::Result<()>
     message.from_me = row.get(9)?;
     message.answered = row.get(10)?;
     text(row, 11, &mut message.from)?;
-    text(row, 12, &mut message.to)
+    text(row, 12, &mut message.to)?;
+    text(row, 13, message.attachments.stored_mut())
 }
 
 fn text(row: &Row<'_>, index: usize, into: &mut String) -> rusqlite::Result<()> {

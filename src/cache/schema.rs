@@ -13,7 +13,7 @@ const FILE: &str = "cache.sqlite3";
 /// keeps too; `open` checks both tables against it in a debug build.
 pub const MOVED_ROW: &str = "account, body_key, received, received_offset, unread, answered,
     sender, from_line, to_line, subject, thread, from_me, snippet, text_section, text_encoding,
-    text_charset, text_html";
+    text_charset, text_html, attachments";
 
 /// Why an existing Cache file cannot be used as it is.
 enum Unusable {

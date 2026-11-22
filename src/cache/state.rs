@@ -189,9 +189,9 @@ fn insert(
         "INSERT OR REPLACE INTO message
          (uid, body_key, received, received_offset, unread, sender, subject, snippet,
           text_section, text_encoding, text_charset, text_html, mailbox, thread, from_me,
-          answered, account, from_line, to_line)
+          answered, account, from_line, to_line, attachments)
          SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                ?18, ?19
+                ?18, ?19, ?20
          WHERE NOT EXISTS (SELECT 1 FROM deleted WHERE account = ?17 AND mailbox = ?13
                              AND uid = ?1)",
     )?;
@@ -217,6 +217,7 @@ fn insert(
             account,
             m.from,
             m.to,
+            m.attachments.stored(),
         ])?;
     }
 

@@ -2,8 +2,8 @@ use std::ops::Range;
 
 use crate::{
     domain::message::Message, render::body::Body, ui::list::inbox_view::InboxView,
-    ui::preview::message_header::STACK_ROWS as HEADER, ui::preview::previews::Previews,
-    ui::preview::reading::Reading, ui::preview::stack_line::StackLine,
+    ui::preview::message_header, ui::preview::previews::Previews, ui::preview::reading::Reading,
+    ui::preview::stack_line::StackLine,
 };
 
 /// Rows between two Messages of the stack.
@@ -32,6 +32,10 @@ impl Placed<'_> {
         self.top + self.height
     }
 
+    pub fn header(&self) -> usize {
+        message_header::stack_rows(self.message)
+    }
+
     /// Whether any of its rows falls in `rows`.
     pub const fn shown(&self, rows: &Range<usize>) -> bool {
         self.top < rows.end && rows.start < self.bottom()
@@ -39,19 +43,18 @@ impl Placed<'_> {
 
     /// The top rows of `window` its header covers, pinned there while the
     /// rest of it is scrolled into view; the next Message pushes it up.
-    pub const fn pinned(&self, window: &Range<usize>) -> usize {
+    pub fn pinned(&self, window: &Range<usize>) -> usize {
         let scrolled = self.top < window.start && window.start < self.bottom();
         if !matches!(self.shape, Shape::Unfolded(_)) || !scrolled {
             return 0;
         }
 
-        let left = self.bottom() - window.start;
-        if left < HEADER { left } else { HEADER }
+        (self.bottom() - window.start).min(self.header())
     }
 
     /// The lines of its rendered body that `rows` of the stack show.
     pub fn body_lines(&self, rows: &Range<usize>) -> Range<usize> {
-        let start = self.top + HEADER;
+        let start = self.top + self.header();
         let lines = |row: usize| row.clamp(start, self.bottom().max(start)) - start;
         lines(rows.start)..lines(rows.end)
     }
@@ -72,11 +75,13 @@ pub fn placed<'a>(
             StackLine::Folded => Shape::Folded,
             StackLine::Unfolded => Shape::Unfolded(previews.body(view, message, width)),
         };
+
+        let header = message_header::stack_rows(message);
         let height = match &shape {
             Shape::Run(_) | Shape::Folded => 1,
-            Shape::Unfolded(Body::Rendered(preview)) => HEADER + preview.body.len(),
+            Shape::Unfolded(Body::Rendered(preview)) => header + preview.body.len(),
             // One row for the placeholder.
-            Shape::Unfolded(Body::Loading | Body::Unavailable(_)) => HEADER + 1,
+            Shape::Unfolded(Body::Loading | Body::Unavailable(_)) => header + 1,
         };
 
         let placed = Placed {
