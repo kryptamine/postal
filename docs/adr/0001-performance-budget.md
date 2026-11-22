@@ -24,6 +24,9 @@ times the first-run fetch).
 - A Folder of 100,000 Messages keeps an `Update::Inbox` within a frame and
   the Message List within 5 MB: its Threads are rows, and only the cards
   around the selection are read (ADR 0022, where the numbers are).
+- A Search over 500,000 cached Messages answers a keypress in its Query in
+  6 ms on average and holds under 1 MB: an FTS5 index finds at most 500
+  candidates, and only the cards around the selection are read (ADR 0023).
 - A Preview not yet rendered shows a placeholder; it never blocks a frame.
 - Rendered Previews live in a byte-bounded LRU of about 8 MB. The converter's
   transient peak (up to ~14 MB on a 395 KB outlier) is outside the RSS budget
