@@ -4,6 +4,8 @@
 #include "dom.h"
 #include "geometry.h"
 
+#include <algorithm>
+
 using namespace litehtml;
 
 namespace cg
@@ -67,6 +69,16 @@ void one_cell_thick(css_borders& b, bool rule)
         if(shown(b.top)) b.bottom.width = 0;
         b.left.width = b.right.width = 0;
     }
+}
+
+// A row is as high as the highest of its cells asks: litehtml reads only
+// the row's own height, and a spacer cell of `height="32"` took no room.
+void as_high_as_cells(const element::ptr& row)
+{
+    float high = px_or(row->css().get_height(), 0);
+    for(auto& cell : row->children())
+        if(cell->css().get_display() == display_table_cell) high = std::max(high, px_or(cell->css().get_height(), 0));
+    if(high > 0) row->css().set_height(css_length(high, css_units_px));
 }
 
 // `fill` is the background the nearest ancestor with one is drawn in.
@@ -133,6 +145,7 @@ void snap_box(const element::ptr& el, uint32_t fill)
     }
 
     for(auto& child : el->children()) snap_box(child, fill);
+    if(css.get_display() == display_table_row) as_high_as_cells(el);
 }
 } // namespace
 

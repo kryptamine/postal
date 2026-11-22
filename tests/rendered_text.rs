@@ -297,6 +297,20 @@ fn the_words_of_two_cells_are_set_apart() {
     assert!(screen.contains("Support Unsubscribe"), "{}", screen.text());
 }
 
+// A spacer cell sets two tables apart by its height alone: litehtml read
+// only the row's own, and the lines of a receipt ran together.
+#[test]
+fn a_spacer_cell_keeps_its_row() {
+    let body = html(
+        "<table><tr><td>Total</td></tr></table>\
+         <table width=\"100%\"><tr><td height=\"32\" style=\"max-height:1px\"></td></tr></table>\
+         <table><tr><td>Paid</td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "Paid");
+    let (total, paid) = (at(&screen, "Total").0, at(&screen, "Paid").0);
+    assert_eq!(paid - total, 2, "{}", screen.text());
+}
+
 // Cents set in `<sup>` read as part of the price: `5846 €` for 58.46.
 #[test]
 fn the_digits_of_a_sup_are_raised() {
