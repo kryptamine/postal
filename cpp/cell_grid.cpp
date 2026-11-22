@@ -54,6 +54,18 @@ const float DESKTOP_PX = 1024;
 // desktop layout already.
 const float PHONE_PX = 640;
 
+// The ways a mail is laid out, tried in turn. See
+// docs/adr/0006-rendered-view-engine.md.
+enum class Try : uint8_t
+{
+    // As the pane is wide.
+    pane,
+    // Again after text spilt past the pane: long words break, fixed widths go.
+    loose,
+    // Media queries answered as on a desktop screen, for a layout set for a phone.
+    desktop,
+};
+
 bool round(pixel_t x, pixel_t y) { return float(x) >= ROUND_PX && float(y) >= ROUND_PX; }
 
 void set_glyph(cg_cell& c, const char* g, size_t n)
@@ -90,20 +102,21 @@ class grid_container : public document_container, public Grid
     bool lost_text = false;
     // A side of a box was past the pane, where its words were not.
     bool lost_border = false;
-    // Long words are parsed in pieces a line may break between.
-    bool break_words;
+    Try how;
     // The size the mail's body is set in (`body_size`).
     float body = 0;
 
-    // Media queries are answered as on a desktop screen, not by the pane.
-    bool desktop;
+    grid_container(int cols, Try how) : Grid(cols), how(how) {}
 
-    grid_container(int cols, bool break_words, bool desktop) : Grid(cols), break_words(break_words), desktop(desktop) {}
+    // Something drawn fell past the pane. Only lost text makes a layout
+    // unfit to show; a lost border is still worth a looser try.
+    [[nodiscard]] bool spilt() const { return lost_text || lost_border; }
 
     void split_text(const char* text, const std::function<void(const char*)>& on_word,
                     const std::function<void(const char*)>& on_space) override
     {
-        if(!break_words) return document_container::split_text(text, on_word, on_space);
+        // Long words are parsed in pieces a line may break between.
+        if(how != Try::loose) return document_container::split_text(text, on_word, on_space);
         auto in_pieces = [&on_word](const char* word) {
             for(auto& piece : breakable(word)) on_word(piece.c_str());
         };
@@ -396,7 +409,7 @@ class grid_container : public document_container, public Grid
     void get_media_features(media_features& m) const override
     {
         m.type = media_type_screen;
-        m.width = desktop ? DESKTOP_PX : float(cols) * CW;
+        m.width = how == Try::desktop ? DESKTOP_PX : float(cols) * CW;
         m.height = 1000 * CH;
         m.device_width = m.width;
         m.device_height = m.height;
@@ -440,7 +453,7 @@ struct cg_grid
     grid_container container;
     std::vector<std::string> hrefs;
 
-    cg_grid(int cols, bool break_words, bool desktop) : container(cols, break_words, desktop) {}
+    cg_grid(int cols, Try how) : container(cols, how) {}
 
     // Each link's id goes on the cells of its leaf boxes: its words, or the
     // box of an image inside it.
@@ -493,12 +506,10 @@ void draw(const document::ptr& doc, grid_container& container)
     container.apply_borders();
 }
 
-// `loose` is the second try at a mail that lost text past the pane: its
-// long words break, its fixed widths go, and the tables round what still
-// spills are stacked. See docs/adr/0006-rendered-view-engine.md.
-cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose, bool desktop = false)
+std::unique_ptr<cg_grid> rendered(const char* html, size_t len, int32_t cols, Try how)
 {
-    auto grid = std::make_unique<cg_grid>(cols, loose, desktop);
+    bool loose = how == Try::loose;
+    auto grid = std::make_unique<cg_grid>(cols, how);
     grid_container& container = grid->container;
     auto doc =
         document::createFromString(estring(std::string(html, len), encoding::utf_8), &container, master_css, user_css);
@@ -521,17 +532,13 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose, bool d
     container.body = body_size(doc->root());
     if(loose) loosen(doc->root());
     draw(doc, container);
-    if(loose && container.lost_text && stack_spilt_tables(doc->root(), float(cols) * CW)) draw(doc, container);
+    // The tables round what still spills are stacked.
+    if(loose && container.spilt() && stack_spilt_tables(doc->root(), float(cols) * CW)) draw(doc, container);
     shape_buttons(buttons, container);
     grid->mark_links(doc->root());
     keep_small_print(container);
-    return grid.release();
+    return grid;
 }
-} // namespace
-
-namespace
-{
-bool spilt(const cg_grid& grid) { return grid.container.lost_text || grid.container.lost_border; }
 
 // From the first column the mail shows something in to the last.
 int columns_shown(const cg_grid& grid)
@@ -541,11 +548,23 @@ int columns_shown(const cg_grid& grid)
 }
 
 // A mail's mobile styles fix widths for a phone, `width: 320px`, and in a
-// pane just under their breakpoint its words stood in a narrow column.
+// pane just under their breakpoint its words stood in a column under two
+// thirds of it.
 bool for_a_phone(const cg_grid& grid)
 {
     int shown = columns_shown(grid), cols = grid.container.cols;
     return float(cols) * CW <= PHONE_PX && shown > 0 && shown * 3 < cols * 2;
+}
+
+std::unique_ptr<cg_grid> laid_out(const char* html, size_t len, int32_t cols)
+{
+    auto grid = rendered(html, len, cols, Try::pane);
+    if(!grid) return nullptr;
+    if(grid->container.spilt()) return rendered(html, len, cols, Try::loose);
+    if(!for_a_phone(*grid)) return grid;
+    auto wide = rendered(html, len, cols, Try::desktop);
+    bool better = wide && !wide->container.spilt() && columns_shown(*wide) > columns_shown(*grid);
+    return better ? std::move(wide) : std::move(grid);
 }
 } // namespace
 
@@ -553,13 +572,7 @@ extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
 {
     try
     {
-        std::unique_ptr<cg_grid> grid(rendered(html, len, cols, false));
-        if(!grid) return nullptr;
-        if(spilt(*grid)) return rendered(html, len, cols, true);
-        if(!for_a_phone(*grid)) return grid.release();
-        std::unique_ptr<cg_grid> wide(rendered(html, len, cols, false, true));
-        bool better = wide && !spilt(*wide) && columns_shown(*wide) > columns_shown(*grid);
-        return (better ? wide : grid).release();
+        return laid_out(html, len, cols).release();
     } catch(...)
     {
         return nullptr;

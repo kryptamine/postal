@@ -222,8 +222,8 @@ past the last column is laid out a second time, from the HTML again:
   address set the least width of its column;
 - every `min-width` and every width in px goes, an image's apart, which
   cuts its label; `nowrap` wraps and `pre` becomes `pre-wrap`;
-- if text is still lost, each table round a box that ends past the pane
-  becomes blocks, one cell under another, and the layout runs once more.
+- if text or a side of a box is still lost, each table round a box that
+  ends past the pane becomes blocks, one cell under another, and the layout runs once more.
 
 A mail that loses only the side of a box past the pane, a table of 598 px
 with a border, is laid out again the same way.
