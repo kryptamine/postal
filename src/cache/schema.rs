@@ -1,4 +1,4 @@
-use std::{fs, io, path::Path};
+use std::{collections::BTreeSet, fs, io, path::Path};
 
 use rusqlite::{Connection, OpenFlags};
 
@@ -8,6 +8,12 @@ use super::Error;
 pub const VERSION: i64 = 17;
 
 const FILE: &str = "cache.sqlite3";
+
+/// The columns of a `message` row but its Folder and UID, which `moved`
+/// keeps too; `open` checks both tables against it in a debug build.
+pub const MOVED_ROW: &str = "account, body_key, received, received_offset, unread, answered,
+    sender, from_line, to_line, subject, thread, from_me, snippet, text_section, text_encoding,
+    text_charset, text_html";
 
 const TABLES: &str = "
 -- Every row names its Account by address, lowercased.
@@ -169,6 +175,15 @@ enum Unusable {
 /// a newer one is left untouched, since rebuilding it would churn the Cache
 /// on every upgrade and downgrade. Says whether it replaced one.
 pub fn open(dir: &Path) -> Result<(Connection, bool), Error> {
+    let opened = open_unchecked(dir)?;
+    debug_assert!(
+        matches!(rows_match(&opened.0), Ok(true)),
+        "`message` and `moved` disagree with MOVED_ROW"
+    );
+    Ok(opened)
+}
+
+fn open_unchecked(dir: &Path) -> Result<(Connection, bool), Error> {
     fs::create_dir_all(dir)?;
     let path = dir.join(FILE);
     let rebuilt = match existing(&path) {
@@ -195,6 +210,24 @@ pub fn open(dir: &Path) -> Result<(Connection, bool), Error> {
     connection.execute_batch(TABLES)?;
     connection.pragma_update(None, "user_version", VERSION)?;
     Ok((connection, rebuilt))
+}
+
+/// Whether `message` holds `MOVED_ROW` with its Folder and UID, and `moved`
+/// holds `MOVED_ROW` among its own columns.
+fn rows_match(connection: &Connection) -> rusqlite::Result<bool> {
+    let columns = |table: &str| -> rusqlite::Result<BTreeSet<String>> {
+        connection
+            .prepare("SELECT name FROM pragma_table_info(?1)")?
+            .query_map([table], |row| row.get(0))?
+            .collect()
+    };
+    let row: BTreeSet<String> = MOVED_ROW
+        .split(',')
+        .map(|name| name.trim().to_owned())
+        .collect();
+    let mut message = columns("message")?;
+    let folder_and_uid = message.remove("mailbox") && message.remove("uid");
+    Ok(folder_and_uid && message == row && columns("moved")?.is_superset(&row))
 }
 
 /// The Cache in `dir` for reading alone, as a TUI may have it open: never

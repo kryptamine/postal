@@ -1,15 +1,10 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Cache, Error, folder_key::FolderKey};
+use super::{Cache, Error, folder_key::FolderKey, schema::MOVED_ROW};
 use crate::{
     domain::body_key::BodyKey, domain::folder_name::FolderName, domain::message_ref::MessageRef,
     domain::thread_id::ThreadId, domain::uid::Uid,
 };
-
-/// The columns `moved` keeps of a `message` row but its Folder and UID.
-const ROW: &str = "account, body_key, received, received_offset, unread, answered, sender,
-    from_line, to_line, subject, thread, from_me, snippet, text_section, text_encoding,
-    text_charset, text_html";
 
 /// One Message the server is to move, from the Folder to select.
 pub struct PendingMove {
@@ -252,8 +247,8 @@ fn delete(
     if again == 0 {
         connection
             .prepare_cached(&format!(
-                "INSERT INTO moved (batch, want_trash, at_trash, at_uid, mailbox, uid, {ROW})
-                 SELECT ?1, 1, 0, uid, mailbox, uid, {ROW} FROM message
+                "INSERT INTO moved (batch, want_trash, at_trash, at_uid, mailbox, uid, {MOVED_ROW})
+                 SELECT ?1, 1, 0, uid, mailbox, uid, {MOVED_ROW} FROM message
                  WHERE account = ?4 AND mailbox = ?2 AND uid = ?3"
             ))?
             .execute(params![batch, folder, uid, account])?;
@@ -313,8 +308,8 @@ fn lose(connection: &Connection, id: i64) -> rusqlite::Result<()> {
 fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
     connection
         .prepare_cached(&format!(
-            "INSERT OR REPLACE INTO message (mailbox, uid, {ROW})
-             SELECT mailbox, uid, {ROW} FROM moved WHERE id = ?1"
+            "INSERT OR REPLACE INTO message (mailbox, uid, {MOVED_ROW})
+             SELECT mailbox, uid, {MOVED_ROW} FROM moved WHERE id = ?1"
         ))?
         .execute([id])?;
     connection
