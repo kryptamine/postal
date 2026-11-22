@@ -483,3 +483,40 @@ fn hint_mode_labels_links_across_two_unfolded_messages() {
     t.wait_until(|s| s.contains("See the Bob link")).unwrap();
     quit(t);
 }
+
+// The Account's own Messages are muted, so a Thread with one person reads
+// as a conversation and not as a column of From lines.
+#[test]
+fn the_accounts_own_messages_are_muted() {
+    let server = FakeImap::start(vec![
+        reply("Ada", "Ada asks", 1),
+        reply("Ada", "I answer", 2).sent_by_me(),
+        reply("Ada", "Dee settles it", 3),
+    ]);
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    read_thread(&mut t);
+
+    let screen = t
+        .snapshot_after(|s| {
+            folded(s, "me", "I answer", "2024-03-02") && folded(s, "Ada", "Ada asks", "2024-03-01")
+        })
+        .unwrap();
+    let sender = |s: &Screen, text: &str| *s.cell(row_of(s, text), 2).unwrap().style();
+    assert!(sender(&screen, "I answer").dim, "{screen}");
+    assert!(!sender(&screen, "Ada asks").dim, "{screen}");
+
+    t.send(Key::Char('p')).unwrap();
+    t.send(Key::Char(' ')).unwrap();
+    let screen = t
+        .snapshot_after(|s| {
+            s.contains("│▎From    ")
+                && s.contains("I answer")
+                && !folded(s, "me", "I answer", "2024-03-02")
+        })
+        .unwrap();
+    let from = row_of(&screen, "│▎From    ");
+    assert!(screen.cell(from, 10).unwrap().style().dim, "{screen}");
+    quit(t);
+}
