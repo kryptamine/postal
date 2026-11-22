@@ -29,7 +29,8 @@ Lowest first:
   attach, the Outbox on disk, the editor,
   the Account a Message goes out from, its signature in the editor.
 - `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
-  reconnecting, the sign-in check, one Account's two connections
+  reconnecting, the sign-in check, the servers a domain publishes
+  (autoconfig, DNS SRV), one Account's two connections
   (`mail::serve`), and what they tell the screen (`Update`, `Status`,
   `Steering`).
 - `ui/`: the TUI. At its root the event loop (`run`) and what it hands
@@ -78,7 +79,7 @@ Where a module could sit in two layers, its imports decided:
   no `ToSql` or `FromSql`: the Cache maps them, and names `rusqlite` alone.
 - `cache` never touches the network.
 - `account`, `render` and `compose` never speak IMAP or SMTP; `account`'s only
-  network is OAuth's HTTP. `compose` builds
+  network is OAuth's HTTP. Looking up servers is `mail::discover`'s. `compose` builds
   addresses and envelopes with lettre; only `mail` sends.
 - `render` reads no files and opens no sockets; its one I/O is the layout
   process `render::render_process` runs.

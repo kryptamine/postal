@@ -1,4 +1,5 @@
 pub mod atomic_file;
+pub mod autoconfig;
 pub mod browser;
 pub mod config;
 pub mod config_file;

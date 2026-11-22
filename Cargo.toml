@@ -25,6 +25,7 @@ nucleo-matcher = "0.3.1"
 quoted_printable = "0.5.2"
 ratatui = "0.30"
 rfc2047-decoder = "1.1.2"
+roxmltree = "0.21.2"
 ring = "0.17.14"
 rusqlite = { version = "0.40.2", features = ["backup", "bundled", "fallible_uint"] }
 serde = { version = "1.0.229", features = ["derive", "rc"] }

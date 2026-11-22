@@ -19,6 +19,10 @@ pub enum Step<'a> {
         value: &'a str,
         provider: Provider,
     },
+    /// The servers of a generic Provider being looked up.
+    LookingUp {
+        heading: &'a str,
+    },
     /// The servers of a generic Provider being typed.
     Servers {
         heading: &'a str,

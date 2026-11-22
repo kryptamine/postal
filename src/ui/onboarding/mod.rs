@@ -19,9 +19,12 @@ use self::{
     step::Step,
 };
 use crate::{
+    account::autoconfig::Autoconfig,
     account::config::Config,
     account::credential::Credential,
+    account::partial_config::PartialConfig,
     account::provider::Provider,
+    mail::discover::{self, Found},
     mail::login::{self, Consent, Granted},
     ui::frame::theme::Theme,
     ui::outside::clipboard,
@@ -250,6 +253,36 @@ impl Screen<'_> {
         }
     }
 
+    /// The servers published for `email`, or none once `Esc` skips the
+    /// lookup; `None` on `Ctrl-C`.
+    async fn look_up(&mut self, email: &str, dir: &Path) -> io::Result<Option<Found>> {
+        let sources = match PartialConfig::load(&dir.join("config.toml")) {
+            Ok(partial) => partial.autoconfig,
+            // The sign-in that follows reports it.
+            Err(_unread) => Autoconfig::default(),
+        };
+
+        let heading = format!("Looking up the servers for {email}…");
+        // Boxed: the lookups would make every Onboarding future too large.
+        let mut looking = Box::pin(discover::discover(email, &sources));
+        loop {
+            match self
+                .wait(&Step::LookingUp { heading: &heading }, looking.as_mut())
+                .await?
+            {
+                Waited::Done(found) => return Ok(Some(found)),
+                Waited::Key(event) => match Key::of(event) {
+                    Key::Esc => {
+                        tracing::info!("server lookup skipped");
+                        return Ok(Some(Found::default()));
+                    }
+                    Key::Cancel => return Ok(None),
+                    _ => {}
+                },
+            }
+        }
+    }
+
     /// Whether the user agrees to `question`: `y` does, `n`, `Enter` or `Esc` declines.
     async fn replaces(&mut self, question: &str) -> io::Result<bool> {
         loop {
@@ -409,7 +442,7 @@ enum Stage {
 }
 
 /// One sign-in at a generic Provider as `address`, at the servers of `form`,
-/// guessed from the domain when there is none for the address yet.
+/// looked up when there is none for the address yet.
 async fn other(
     screen: &mut Screen<'_>,
     dir: &Path,
@@ -432,7 +465,10 @@ async fn other(
             Stage::Servers => {
                 let form = match form {
                     Some(form) if form.is_for(&email) => form,
-                    _ => form.insert(ServerForm::guess(&email)),
+                    _ => match screen.look_up(&email, dir).await? {
+                        Some(found) => form.insert(ServerForm::found(&email, found)),
+                        None => return Ok(Attempt::Cancelled),
+                    },
                 };
 
                 let heading = format!("Servers for {email}");

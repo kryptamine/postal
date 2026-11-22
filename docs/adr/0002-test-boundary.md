@@ -21,6 +21,12 @@ certificate the client trusts is at hand: a test checks only that the client
 asks for it before it signs in. `$EDITOR` is a command that copies the text a
 test wrote over the Draft, as if the user had typed it.
 
+Where a domain publishes its servers is faked the same way: the domain's
+autoconfig and Thunderbird's ISPDB over plain HTTP, and a DNS server answering
+SRV queries over UDP, both on loopback. The undocumented `[autoconfig]` table
+points Postal at them; a test that needs no lookup points it at ones that
+publish nothing, so no test reaches the network.
+
 Login reads an existing `config.toml` and keeps its `name`, `[imap]`, `[smtp]`
 and `[secrets]`, so a test seeds a config without `email` that points at the
 fake server and forces the file store; the login fills in the Account.

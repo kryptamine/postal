@@ -5,6 +5,7 @@ use crate::{
     account::credential::Credential,
     account::partial_config::is_loopback,
     account::provider::Provider,
+    mail::discover::Found,
     mail::login::Servers,
 };
 
@@ -79,6 +80,25 @@ impl Slot {
     }
 }
 
+/// Where the servers a form was filled with came from.
+#[derive(Clone, Copy)]
+pub enum Source {
+    Published,
+    /// One server published, the other guessed.
+    Partly,
+    Guessed,
+}
+
+impl Source {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Published => "Published for the domain: check them.",
+            Self::Partly => "Partly published for the domain, partly guessed: check them.",
+            Self::Guessed => "Guessed from the domain: check them.",
+        }
+    }
+}
+
 pub enum Shown<'a> {
     Text(&'a str),
     /// A password, this many characters long.
@@ -93,11 +113,13 @@ pub enum Keyed {
     Cancel,
 }
 
-/// The servers of a generic Provider as typed, from a guess by the domain
-/// or the Account's config.
+/// The servers of a generic Provider as typed, from those the domain
+/// publishes, a guess by the domain, or the Account's config.
 pub struct ServerForm {
     /// The address the form was filled for.
     email: String,
+    /// `None` when filled from the Account's config.
+    pub source: Option<Source>,
     imap_host: String,
     imap_port: String,
     imap_security: Security,
@@ -113,12 +135,24 @@ pub struct ServerForm {
 }
 
 impl ServerForm {
-    pub fn guess(email: &str) -> Self {
-        let (imap, smtp) = (
-            Imap::of(Provider::Other, email),
-            Smtp::of(Provider::Other, email),
-        );
-        Self::of(email, &imap, &smtp)
+    /// The servers `found`, each guessed from the domain where none was.
+    pub fn found(email: &str, found: Found) -> Self {
+        let source = match (&found.imap, &found.smtp) {
+            (Some(_), Some(_)) => Source::Published,
+            (None, None) => Source::Guessed,
+            _ => Source::Partly,
+        };
+
+        let imap = found
+            .imap
+            .unwrap_or_else(|| Imap::of(Provider::Other, email));
+        let smtp = found
+            .smtp
+            .unwrap_or_else(|| Smtp::of(Provider::Other, email));
+        Self {
+            source: Some(source),
+            ..Self::of(email, &imap, &smtp)
+        }
     }
 
     pub fn of(email: &str, imap: &Imap, smtp: &Smtp) -> Self {
@@ -130,6 +164,7 @@ impl ServerForm {
 
         Self {
             email: email.to_owned(),
+            source: None,
             imap_host: imap.host.clone(),
             imap_port: imap.port.to_string(),
             imap_security: if imap.tls {

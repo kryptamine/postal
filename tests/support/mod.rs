@@ -1,7 +1,10 @@
 #![allow(dead_code, reason = "each test binary uses part of the harness")]
 
 pub mod browser;
+pub mod client_config;
+pub mod fake_autoconfig;
 pub mod fake_body;
+pub mod fake_dns;
 pub mod fake_imap;
 pub mod fake_oauth;
 pub mod fake_smtp;

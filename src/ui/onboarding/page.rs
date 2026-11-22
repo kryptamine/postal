@@ -224,12 +224,21 @@ fn password_rows<'a>(theme: &Theme, step: &'a Step<'a>) -> Vec<Row<'a>> {
             rows
         }
         Step::Servers { heading, form } => server_rows(theme, heading, form),
+        Step::LookingUp { heading } => vec![
+            Row::Text(heading, theme.title),
+            Row::Blank,
+            Row::Hints(&[("Esc", "skip"), ("Ctrl-C", "cancel")]),
+        ],
         _ => Vec::new(),
     }
 }
 
 fn server_rows<'a>(theme: &Theme, heading: &'a str, form: &'a ServerForm) -> Vec<Row<'a>> {
     let mut rows = vec![Row::Text(heading, theme.title), Row::Blank];
+    if let Some(source) = form.source {
+        rows.extend([Row::Text(source.label(), theme.muted), Row::Blank]);
+    }
+
     rows.extend(SLOTS.iter().enumerate().map(|(at, &slot)| {
         Row::Entry(Entry {
             label: slot.label(),
@@ -348,9 +357,10 @@ fn rows<'a>(theme: &Theme, step: &'a Step<'a>) -> Vec<Row<'a>> {
                 Row::Hints(hints),
             ]
         }
-        Step::Address { .. } | Step::Password { .. } | Step::Servers { .. } => {
-            password_rows(theme, step)
-        }
+        Step::Address { .. }
+        | Step::Password { .. }
+        | Step::Servers { .. }
+        | Step::LookingUp { .. } => password_rows(theme, step),
         Step::Checking => vec![
             Row::Text("Signing in to the mail server…", theme.title),
             Row::Blank,

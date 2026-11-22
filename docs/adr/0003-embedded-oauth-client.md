@@ -28,14 +28,23 @@ as Google does, is never offered a password.
 ## Amendment: any IMAP/SMTP server by password
 
 The generic Provider, `other`, signs in by password to any server: Onboarding
-asks for the address, then the IMAP and SMTP servers, guessed from the domain
-(`imap.<domain>` on 993, `smtp.<domain>` on 465), then the password, checked by
-`LOGIN` before anything is written. The servers are written to the Account's
-own `[[account]]` table, never the top level, whose tables every Account
-shares. SMTP may take a username and a password of its own; that password is
+asks for the address, then the IMAP and SMTP servers, as the domain publishes
+them or guessed from it (`imap.<domain>` on 993, `smtp.<domain>` on 465), then
+the password, checked by `LOGIN` before anything is written. The servers are
+written to the Account's own `[[account]]` table, never the top level, whose
+tables every Account shares. SMTP may take a username and a password of its own; that password is
 kept in the secret store under `smtp:<address>`; left blank, it is the IMAP one,
 or the one stored while SMTP keeps a username. IMAP takes implicit TLS only:
 STARTTLS on IMAP waits for a server that needs it.
+
+The servers published are looked up at once, each source within 4s: the
+domain's own `autoconfig.<domain>` document, then Thunderbird's ISPDB, then
+DNS SRV (RFC 6186); the first that names a server wins, per server. Both
+documents are fetched over HTTPS by the domain alone, never redirected to
+plain HTTP, so no address leaves the machine before sign-in. SRV records come
+unauthenticated over UDP and could name another host (RFC 6186, section 6), so
+the form shows what was found to be checked, and may be edited, before the
+password is typed. A truncated DNS answer is not asked again over TCP.
 
 ## Considered options
 

@@ -1,6 +1,6 @@
 //! An Account at any IMAP/SMTP server: Onboarding asks for the servers,
-//! guessed from the address's domain, and a password checked by `LOGIN`
-//! before anything is written. The fake lists no extension past UIDPLUS.
+//! as the domain publishes them or guessed from it, and a password checked
+//! by `LOGIN` before anything is written. The fake lists no extension past UIDPLUS.
 
 #![allow(
     clippy::unwrap_used,
@@ -18,6 +18,9 @@ use std::{
 };
 
 use support::{
+    client_config::{client_config, incoming, outgoing},
+    fake_autoconfig::{self, FakeAutoconfig},
+    fake_dns::FakeDns,
     fake_imap::{APP_PASSWORD, EMAIL, FIRST_UID, FakeImap, FakeMessage},
     fake_smtp::{FakeSmtp, SMTP_PASSWORD},
     home::Home,
@@ -42,9 +45,15 @@ fn minimal() -> FakeImap {
     server
 }
 
-/// A config with no Account yet, keeping secrets in files.
+/// A config with no Account yet, keeping secrets in files, at a domain
+/// that publishes no servers.
 fn seeded() -> Home {
-    let home = Home::new("[secrets]\nstore = \"file\"\n");
+    seeded_at(&fake_autoconfig::nothing_published())
+}
+
+/// As `seeded`, with this `[autoconfig]` table.
+fn seeded_at(autoconfig: &str) -> Home {
+    let home = Home::new(&format!("[secrets]\nstore = \"file\"\n{autoconfig}"));
     fs::remove_file(home.secret_path()).unwrap();
     home
 }
@@ -381,4 +390,173 @@ fn an_account_at_the_top_level_moves_out_for_its_own_servers() {
     assert!(account.contains(EMAIL), "{config}");
     assert!(account.contains("signature = \"Ada\""), "{config}");
     assert!(account.contains("provider = \"other\""), "{config}");
+}
+
+/// Leaves the Onboarding, signed in nowhere.
+fn leave(mut t: Terminal) {
+    t.send(Key::Ctrl('c')).unwrap();
+    t.wait_exit().unwrap();
+}
+
+/// An autoconfig and a DNS for the test's domain, publishing nothing yet.
+fn published() -> (FakeAutoconfig, FakeDns, Home) {
+    let (http, dns) = (FakeAutoconfig::start(), FakeDns::start());
+    let home = seeded_at(&http.config(&dns));
+    (http, dns, home)
+}
+
+#[test]
+fn the_domains_own_autoconfig_fills_the_form_and_signs_in() {
+    let (server, smtp) = (minimal(), FakeSmtp::start());
+    server.login_as("me");
+    let (http, _dns, home) = published();
+    let own = client_config(&[
+        // Postal has no IMAP STARTTLS: the next entry is the one it takes.
+        incoming("starttls.example.com", 143, "STARTTLS", "%EMAILADDRESS%"),
+        incoming("127.0.0.1", server.port, "plain", "%EMAILLOCALPART%"),
+        outgoing("127.0.0.1", smtp.port, "plain", "%EMAILADDRESS%"),
+    ]);
+    http.publish_own("example.com", &own);
+    let ispdb = client_config(&[incoming("imap.ispdb.test", 993, "SSL", "%EMAILADDRESS%")]);
+    http.publish_ispdb("example.com", &ispdb);
+
+    let mut t = spawn(&home, &["login"]);
+    choose_other(&mut t);
+    t.wait_until(|s| {
+        s.contains("Published for the domain")
+            && s.contains(&server.port.to_string())
+            && s.contains(&smtp.port.to_string())
+    })
+    .unwrap();
+    let screen = t.screen().to_string();
+    assert!(!screen.contains("starttls.example.com"), "{screen}");
+    assert!(!screen.contains("imap.ispdb.test"), "{screen}");
+    t.send(Key::Enter).unwrap();
+    type_password(&mut t, APP_PASSWORD);
+    t.wait_until(|s| s.contains("Signed in")).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    let config = fs::read_to_string(home.config_path()).unwrap();
+    let imap = format!(
+        "imap = {{ host = \"127.0.0.1\", port = {}, tls = false, username = \"me\" }}",
+        server.port
+    );
+    assert!(config.contains(&imap), "{config}");
+    // The address goes to no autoconfig: each is asked by the domain alone.
+    let paths = http.paths();
+    assert!(paths.iter().all(|path| !path.contains('@')), "{paths:?}");
+}
+
+#[test]
+fn the_ispdb_fills_the_form_when_the_domain_publishes_nothing() {
+    let (http, dns, home) = published();
+    let ispdb = client_config(&[
+        incoming("imap.ispdb.test", 993, "SSL", "%EMAILADDRESS%"),
+        outgoing("smtp.ispdb.test", 587, "STARTTLS", "%EMAILADDRESS%"),
+    ]);
+    http.publish_ispdb("example.com", &ispdb);
+    dns.add("_imaps._tcp.example.com", &[(0, 0, 993, "imap.srv.test")]);
+
+    let mut t = spawn(&home, &["login"]);
+    choose_other(&mut t);
+    t.wait_until(|s| {
+        s.contains("imap.ispdb.test") && s.contains("smtp.ispdb.test") && s.contains("STARTTLS")
+    })
+    .unwrap();
+    assert!(!t.screen().to_string().contains("imap.srv.test"));
+    leave(t);
+}
+
+// RFC 6186: the lowest priority wins, and implicit TLS over STARTTLS.
+#[test]
+fn srv_records_fill_the_form_without_an_autoconfig() {
+    let (_http, dns, home) = published();
+    dns.add(
+        "_imaps._tcp.example.com",
+        &[
+            (10, 0, 993, "backup.srv.test"),
+            (0, 5, 9993, "imap.srv.test"),
+        ],
+    );
+    dns.add(
+        "_submission._tcp.example.com",
+        &[(0, 0, 587, "smtp.srv.test")],
+    );
+    dns.add(
+        "_submissions._tcp.example.com",
+        &[(0, 0, 4465, "smtps.srv.test")],
+    );
+
+    let mut t = spawn(&home, &["login"]);
+    choose_other(&mut t);
+    t.wait_until(|s| {
+        s.contains("imap.srv.test") && s.contains("9993") && s.contains("smtps.srv.test")
+    })
+    .unwrap();
+    assert!(!t.screen().to_string().contains("backup.srv.test"));
+    leave(t);
+    assert!(
+        !dns.asked()
+            .iter()
+            .any(|name| name.starts_with("_imap._tcp")),
+        "{:?}",
+        dns.asked()
+    );
+}
+
+#[test]
+fn a_server_published_alone_keeps_the_guess_for_the_other() {
+    let (_http, dns, home) = published();
+    dns.add("_imaps._tcp.example.com", &[(0, 0, 993, "imap.srv.test")]);
+    // `.` says the domain has no such service.
+    dns.add("_submissions._tcp.example.com", &[(0, 0, 465, ".")]);
+
+    let mut t = spawn(&home, &["login"]);
+    choose_other(&mut t);
+    t.wait_until(|s| {
+        s.contains("Partly published")
+            && s.contains("imap.srv.test")
+            && s.contains("smtp.example.com")
+    })
+    .unwrap();
+    leave(t);
+}
+
+// A DNS server that never answers must not hold the user at the lookup.
+#[test]
+fn esc_skips_a_lookup_to_the_guess() {
+    let (_http, dns, home) = published();
+    for service in ["_imaps", "_submissions", "_submission"] {
+        dns.silence(&format!("{service}._tcp.example.com"));
+    }
+
+    let mut t = spawn(&home, &["login"]);
+    choose_other(&mut t);
+    t.wait_until(|s| s.contains(&format!("Looking up the servers for {EMAIL}")))
+        .unwrap();
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| s.contains("Guessed from the domain") && s.contains("imap.example.com"))
+        .unwrap();
+    leave(t);
+}
+
+// A DNS server that never answers costs the lookup its timeout, no more.
+#[test]
+fn a_lookup_that_times_out_falls_back_to_the_guess() {
+    let (_http, dns, home) = published();
+    dns.silence("_imaps._tcp.example.com");
+    dns.add(
+        "_submissions._tcp.example.com",
+        &[(0, 0, 465, "smtp.srv.test")],
+    );
+
+    let mut t = spawn(&home, &["login"]);
+    choose_other(&mut t);
+    t.wait_until(|s| {
+        s.contains("Partly published")
+            && s.contains("imap.example.com")
+            && s.contains("smtp.srv.test")
+    })
+    .unwrap();
+    leave(t);
 }

@@ -85,7 +85,7 @@ impl Smtp {
 }
 
 /// What follows the last `@`, without case.
-fn domain(email: &str) -> String {
+pub fn domain(email: &str) -> String {
     let domain = email.rsplit_once('@').map_or(email, |(_, domain)| domain);
     domain.trim().to_lowercase()
 }
