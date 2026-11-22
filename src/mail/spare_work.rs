@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use crate::{
     cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::body_fetch::open,
-    mail::imap::MailServer, mail::sent_pass, mail::snippets, mail::sync::Error,
-    mail::update::Update,
+    mail::envelope_pass, mail::imap::MailServer, mail::sent_pass, mail::snippets,
+    mail::sync::Error, mail::update::Update,
 };
 
-/// How long the fetch connection goes without a request before its pass
-/// over Sent, so the first Preview never waits on it.
+/// How long the fetch connection goes without a request before each pass
+/// over envelopes, so the first Preview never waits on one.
 const QUIET: Duration = Duration::from_secs(1);
 
 /// What the fetch connection does while no request waits, a step at a
@@ -17,6 +17,8 @@ pub struct SpareWork {
     snippets_below: Option<(FolderName, Uid)>,
     /// The pass over Sent, once per connection.
     sent_due: bool,
+    /// The pass over every envelope, a batch a step, after Sent's.
+    envelopes_due: bool,
 }
 
 impl SpareWork {
@@ -24,6 +26,7 @@ impl SpareWork {
         Self {
             snippets_below: None,
             sent_due: true,
+            envelopes_due: true,
         }
     }
 
@@ -32,7 +35,7 @@ impl SpareWork {
     pub const fn patience(&self) -> Option<Duration> {
         if self.snippets_below.is_some() {
             Some(Duration::ZERO)
-        } else if self.sent_due {
+        } else if self.sent_due || self.envelopes_due {
             Some(QUIET)
         } else {
             None
@@ -51,7 +54,8 @@ impl SpareWork {
         };
     }
 
-    /// One batch of Snippets, else the pass over Sent.
+    /// One batch of Snippets, else the pass over Sent, else one batch of
+    /// envelopes.
     pub async fn step(
         &mut self,
         server: &mut impl MailServer,
@@ -68,6 +72,8 @@ impl SpareWork {
         } else if self.sent_due {
             self.sent_due = false;
             sent_pass::read(server, cache, send).await?;
+        } else if self.envelopes_due {
+            self.envelopes_due = envelope_pass::step(server, cache, send).await?;
         }
 
         Ok(())

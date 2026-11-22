@@ -4,6 +4,7 @@
 mod bodies;
 mod changes;
 mod correspondence;
+mod envelope_pass;
 mod error;
 mod flags;
 mod folder_key;
@@ -22,6 +23,7 @@ mod threads;
 
 pub use changes::Changes;
 pub use correspondence::SentPass;
+pub use envelope_pass::EnvelopePass;
 pub use error::Error;
 pub use forget::forget;
 pub use moves::{Destination, PendingMove};

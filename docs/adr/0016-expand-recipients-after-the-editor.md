@@ -22,9 +22,13 @@ and Spam, those of each Message SMTP accepts from the Outbox, and once the
 fetch connection is quiet after it connects, the envelopes alone of the
 newest 1000 Messages in the Folder with the Sent role, which the Cache
 otherwise holds only once that Folder is shown, and those a Thread brings
-from All Mail when it is read. Everything in Sent counts as written by the
-Account, from whichever of its addresses, and its sender is no
-Correspondent.
+from All Mail when it is read. After Sent, the same quiet connection reads
+the envelopes alone of every Message, 500 a step, newest first: on Gmail
+in All Mail, which leaves Trash and Spam out, elsewhere in the Inbox. Both
+passes keep the last UID read, and a later connection reads only past it.
+Everything in Sent counts as written by the Account, from whichever of its
+addresses, and its sender is no Correspondent; elsewhere, so does a
+Message from the Account's own address.
 
 Every Account's Correspondents are offered, the Draft's Account's first.
 Those the user wrote to rank above those who only wrote, then by how often

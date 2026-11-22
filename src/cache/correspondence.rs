@@ -93,8 +93,9 @@ pub(super) fn record(
     seen: &Correspondence,
 ) -> rusqlite::Result<()> {
     let mut insert = connection.prepare_cached(
-        "INSERT OR IGNORE INTO correspondence (account, address, message, name, written, at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO correspondence (account, address, message, name, written, at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT DO UPDATE SET written = written OR excluded.written",
     )?;
     let from = seen.from.iter().map(|person| (person, false));
     let to = seen.to.iter().map(|person| (person, seen.sent));

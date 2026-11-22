@@ -23,7 +23,8 @@ than delete what the step could not carry.
   `tests/migrations.rs`, with a test that opens it.
 - **Pending state is always carried over**: every row of `flag_change` and
   `moved`. A step may clear derived rows (bodies, Snippets, a Folder's sync
-  state, `correspondence`, `sent_pass`) and let the sync refill them.
+  state, `correspondence`, `sent_pass`, `envelope_pass`) and let the sync
+  refill them.
 - **Rebuild is the fallback**, for a Cache that fails `quick_check` and one
   at 17 or under, from before migrations.
 - **A downgrade is refused.** An older Postal finds a Cache newer than its

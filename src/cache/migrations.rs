@@ -5,7 +5,10 @@ use rusqlite::Connection;
 
 /// Each in turn, from the first released schema. A released step never
 /// changes: a schema change appends one.
-const MIGRATIONS: &[&str] = &[include_str!("migrations/1.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("migrations/1.sql"),
+    include_str!("migrations/2.sql"),
+];
 
 /// The `user_version` of the last schema before migrations; a Cache at or
 /// under it is rebuilt.

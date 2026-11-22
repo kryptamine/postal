@@ -1,7 +1,8 @@
 //! `postal correspondent list` prints every Correspondent the Cache knows,
 //! ranked, for an editor to complete a Draft's recipients from: learnt
-//! from synced mail, the Folder with the Sent role and the Outbox. It only
-//! reads the Cache a TUI synced. See ADR 0016 and ADR 0017.
+//! from synced mail, the Folder with the Sent role, every envelope of All
+//! Mail or else the Inbox, and the Outbox. It only reads the Cache a TUI
+//! synced. See ADR 0016 and ADR 0017.
 
 #![allow(
     clippy::unwrap_used,
@@ -31,6 +32,7 @@ use tempfile::TempDir;
 use termlens::{Key, Terminal};
 
 const SENT: &str = "[Gmail]/Sent Mail";
+const ALL_MAIL: &str = "[Gmail]/All Mail";
 
 /// The second Account, at iCloud.
 const OTHER: &str = "me@icloud.example";
@@ -128,6 +130,11 @@ fn from(name: &'static str, address: &'static str, subject: &str, date: &str) ->
 
 fn log_says(home: &Home, text: &str) -> bool {
     fs::read_to_string(home.log_path()).is_ok_and(|log| log.contains(text))
+}
+
+/// Every address `postal correspondent list` answers, best first.
+fn addresses(home: &Home) -> Vec<String> {
+    listed(home, &[]).into_iter().map(|(a, _, _)| a).collect()
 }
 
 #[test]
@@ -358,6 +365,68 @@ fn reading_a_thread_learns_whom_all_mail_holds_in_it() {
     wait_for(|| log_says(&home, "holds 2 Messages in All Mail"));
     quit(t);
 
-    let addresses: Vec<String> = listed(&home, &[]).into_iter().map(|(a, _, _)| a).collect();
-    assert_eq!(addresses, ["dora@example.com", "bob@example.com"]);
+    assert_eq!(addresses(&home), ["dora@example.com", "bob@example.com"]);
+}
+
+#[test]
+fn every_message_in_all_mail_is_learnt_and_then_only_what_arrives() {
+    let imap = FakeImap::start(vec![from(
+        "Bob",
+        "bob@example.com",
+        "Trip",
+        "2024-03-03T09:00:00Z",
+    )]);
+    // Never shown: Dora's label is learnt from All Mail, and Trash, which
+    // All Mail leaves out, is not.
+    let dora = from("Dora", "dora@example.com", "Plans", "2024-03-01T09:00:00Z");
+    imap.add_folder("Work", &[], vec![dora]);
+    let tom = from("Tom", "tom@example.com", "Junk", "2024-03-02T09:00:00Z");
+    imap.add_folder("[Gmail]/Trash", &["\\Trash"], vec![tom]);
+    imap.add_all_mail(ALL_MAIL);
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let (mut t, _editor) = postal(&home, "");
+    t.wait_until(|s| s.contains("Trip")).unwrap();
+    wait_for(|| log_says(&home, &format!("read every envelope of {ALL_MAIL}")));
+    quit(t);
+    assert_eq!(addresses(&home), ["bob@example.com", "dora@example.com"]);
+
+    let erin = from("Erin", "erin@example.com", "Later", "2024-03-04T09:00:00Z");
+    imap.deliver_to("Work", erin);
+    let (mut t, _editor) = postal(&home, "");
+    t.wait_until(|s| s.contains("Trip")).unwrap();
+    // The second connection reads past the last UID the first one read.
+    wait_for(|| log_says(&home, &format!("from 1 Messages of {ALL_MAIL}")));
+    quit(t);
+    assert_eq!(
+        addresses(&home),
+        ["erin@example.com", "bob@example.com", "dora@example.com"]
+    );
+}
+
+#[test]
+fn off_gmail_the_inbox_is_learnt_past_the_cached_window() {
+    let olga = from("Olga", "olga@example.com", "Oldest", "2023-01-01T09:00:00Z");
+    let newer = (0..500).map(|day| {
+        let date = "2024-01-01T09:00:00Z"
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .unwrap()
+            + chrono::Duration::days(day);
+        FakeMessage::new("Newer", "Newer", &date.to_rfc3339())
+    });
+    let imap = FakeImap::start(std::iter::once(olga).chain(newer).collect());
+    imap.as_icloud();
+    let smtp = FakeSmtp::start();
+    let home = Home::new(&format!(
+        "email = \"{EMAIL}\"\nprovider = \"icloud\"\n\n[imap]\n{}\n[smtp]\n{}\n\
+         [secrets]\nstore = \"file\"\n",
+        server(imap.port),
+        server(smtp.port),
+    ));
+    fs::write(home.secret_path(), format!("{APP_PASSWORD}\n")).unwrap();
+    let (mut t, _editor) = postal(&home, "");
+    t.wait_until(|s| s.contains("Newer")).unwrap();
+    wait_for(|| log_says(&home, "read every envelope of INBOX"));
+    quit(t);
+    assert!(addresses(&home).contains(&"olga@example.com".to_owned()));
 }
