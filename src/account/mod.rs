@@ -4,6 +4,7 @@ pub mod config;
 pub mod config_file;
 pub mod credential;
 mod keychain;
+pub mod named_file;
 pub mod oauth;
 pub mod partial_config;
 pub mod provider;
