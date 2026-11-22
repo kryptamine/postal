@@ -132,3 +132,25 @@ fn a_link_with_a_control_character_is_no_hyperlink() {
     assert!(copy.contains("␛]8;;https://good.example/"), "{copy}");
     assert!(!copy.contains("␛]8;;https://evil.example"), "{copy}");
 }
+
+// With no `$PAGER`, `less` pages the Message even when `$LESS` says to
+// quit at once on text that fits the screen, which only flashes it.
+#[test]
+fn the_default_pager_waits_though_less_would_quit_on_one_screen() {
+    let server = server_with(HTML);
+    let home = Home::for_server(&server);
+    let mut t = home
+        .terminal()
+        .env("LESS", "-FR")
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(main_screen).unwrap();
+    t.send(Key::Char('v')).unwrap();
+    t.send(Key::Char('|')).unwrap();
+    // `-F` would quit before showing the prompt.
+    t.wait_until(|s| s.contains("(END)")).unwrap();
+    t.send(Key::Char('q')).unwrap();
+    t.wait_until(main_screen).unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}

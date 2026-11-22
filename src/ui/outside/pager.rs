@@ -3,7 +3,9 @@ use std::{
     process::{Command, Stdio},
 };
 
-const DEFAULT: &str = "less -R";
+/// `-+F` undoes a `-F` in `$LESS`: quitting on text that fits one screen
+/// would only flash the Message before the TUI takes the screen back.
+const DEFAULT: &str = "less -R -+F";
 
 /// Runs `$PAGER` through `sh`, so it may carry flags, with `text` on its
 /// stdin, and waits for it to exit. No file is written.
