@@ -84,6 +84,13 @@ std::set<const element*> redundant_links(const element::ptr& root)
     return s.followed;
 }
 
+// A link to `#` or to nothing opens no page, so its picture needs no name.
+bool leads_out(const element::ptr& link)
+{
+    const char* href = link->get_attr("href");
+    return href && *href && *href != '#';
+}
+
 bool sized_icon(const element::ptr& img)
 {
     float w = px_or(img->css().get_width(), -1), h = px_or(img->css().get_height(), -1);
@@ -185,9 +192,11 @@ std::string ImageLabels::text_for(const element::ptr& el, bool icon, const eleme
     bool decorates = !sole && (icon || file_word(alt));
     bool logo = logos.count(el.get()) && words(alt) <= NAME_WORDS;
     if(invisible(el) || decorates || logo || said_already(el, alt, mail_text)) return "";
+    // A file's name says what a link's own picture opens, and no more.
+    if(file_name(alt)) alt = sole ? file_words(alt, icon) : "";
     if(description(alt)) alt.clear();
     if(!alt.empty() || !sole || icon) return named(el, alt, icon);
-    if(labelled_links.count(link.get()) || redundant.count(link.get())) return "";
+    if(labelled_links.count(link.get()) || redundant.count(link.get()) || !leads_out(link)) return "";
     labelled_links.insert(link.get());
     return "[" + link_name(link->get_attr("href")) + "]";
 }

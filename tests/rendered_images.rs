@@ -114,6 +114,35 @@ fn a_picture_link_whose_page_the_words_open_shows_no_label() {
             "<a href=\"{href}\"><img src=\"https://cdn.example/p.png\" width=\"240\" alt=\"\"></a>"
         )
     };
+// A picture named by its file, or by whom it shows beside their name, and
+// a picture link to `#` name nothing: `github_original_white`, `[link]`.
+#[test]
+fn a_picture_that_names_nothing_shows_no_label() {
+    let image = |size: u8, alt: &str| {
+        format!(
+            "<img src=\"https://cdn.example/i.png\" width=\"{size}\" height=\"{size}\" alt=\"{alt}\">"
+        )
+    };
+
+    let body = html(&format!(
+        "<p>Above</p>{}<a href=\"#\">{}</a>\
+         <table><tr><td>{}</td><td>Ann Lee<br>Engineer</td></tr></table>\
+         <a href=\"https://social.example\">{}</a><p>End</p>",
+        image(80, "terri_avnaim_headshot"),
+        image(200, ""),
+        image(72, "Ann Lee’s Profile Picture"),
+        image(24, "github_original_white")
+    ));
+    let screen = preview(body, &DEFAULT, "End");
+    let shown: Vec<_> = pane(&screen)
+        .iter()
+        .map(|r| r.trim().to_owned())
+        .filter(|r| !r.is_empty() && !r.starts_with('─'))
+        .collect();
+    // A link's own icon keeps what its file says it shows.
+    assert_eq!(shown, ["Above", "Ann Lee", "Engineer", "github", "End"]);
+}
+
     let body = html(&format!(
         "{}<p><a href=\"https://shop.example/kettle?from=title\">Kettle</a></p>\
          {}<p><a href=\"https://t.example/2\">See more</a></p>{}<p>End</p>",
