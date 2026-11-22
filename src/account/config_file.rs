@@ -80,8 +80,11 @@ impl ConfigFile {
         let root = self.document.as_table_mut();
         tabled(root);
         if names(root, email) {
-            root.remove("email");
-            root.remove("provider");
+            // Its signature would sign for the next Account written here.
+            for key in ["email", "provider", "signature", "signature-file"] {
+                root.remove(key);
+            }
+
             return;
         }
 
@@ -105,6 +108,24 @@ impl ConfigFile {
         match name {
             Some(name) => set(root, "name", name.into()),
             None => drop(root.remove("name")),
+        }
+    }
+
+    /// The signature of the Account `email` as text, where the Account is
+    /// written; `None` writes none.
+    pub fn set_signature(&mut self, email: &str, signature: Option<&str>) {
+        let root = self.document.as_table_mut();
+        tabled(root);
+        let account = if names(root, email) {
+            Some(root)
+        } else {
+            account_mut(root, email)
+        };
+
+        match (account, signature) {
+            (Some(account), Some(signature)) => set(account, "signature", signature.into()),
+            (Some(account), None) => drop(account.remove("signature")),
+            (None, _) => {}
         }
     }
 

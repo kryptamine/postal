@@ -12,12 +12,13 @@ const QUOTE_WIDTH: usize = 76;
 
 /// The Draft a Reply to `original` opens on, from its body `raw`, and what
 /// puts it in the Thread. Reply All copies everyone else the original went
-/// to but the `account`.
+/// to but the `account`, whose `signature` goes above the quote.
 pub fn reply(
     raw: &[u8],
     original: &Message,
     account: &str,
     recipients: Recipients,
+    signature: Option<&str>,
 ) -> (String, Answering) {
     let answering = |in_reply_to, references| Answering {
         in_reply_to,
@@ -27,7 +28,7 @@ pub fn reply(
     };
 
     let Some(message) = MessageParser::default().parse(raw) else {
-        let text = draft(&[], &[], &subject(&original.subject), "");
+        let text = draft(&[], &[], &subject(&original.subject), signature, "");
         return (text, answering(None, None));
     };
 
@@ -71,18 +72,29 @@ pub fn reply(
         quote(&body_text::plain(&message, QUOTE_WIDTH, Links::Inline))
     );
     let subject = subject(message.subject().unwrap_or(&original.subject));
-    (draft(&to, &cc, &subject, &said), answering(id, references))
+    (
+        draft(&to, &cc, &subject, signature, &said),
+        answering(id, references),
+    )
 }
 
-/// The file: its headers, then a blank line to write in before `said`.
-fn draft(to: &[Mailbox], cc: &[Mailbox], subject: &str, said: &str) -> String {
+/// The file: its headers, then a blank line to write in before the
+/// `signature` and `said`.
+fn draft(
+    to: &[Mailbox],
+    cc: &[Mailbox],
+    subject: &str,
+    signature: Option<&str>,
+    said: &str,
+) -> String {
     let list = |mailboxes: &[Mailbox]| {
         let each: Vec<String> = mailboxes.iter().map(ToString::to_string).collect();
         each.join(", ")
     };
 
+    let signed = signature.map_or_else(String::new, |signature| format!("{signature}\n"));
     format!(
-        "To: {}\nCc: {}\nSubject: {subject}\n\n\n{said}",
+        "To: {}\nCc: {}\nSubject: {subject}\n\n\n{signed}{said}",
         list(to),
         list(cc)
     )

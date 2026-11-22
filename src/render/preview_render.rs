@@ -9,6 +9,7 @@ use crate::{
     render::quoted_text,
     render::rendered_previews::PreviewKey,
     render::rendered_view,
+    render::signature,
     render::styled_line::StyledLine,
     render::view::View,
     render::wrap::wrap,
@@ -74,12 +75,12 @@ fn body(job: &Job, links: Links) -> (Vec<StyledLine>, bool) {
         return (note("(this Message has no text)", width), false);
     };
 
-    let own = cutting.then(|| quoted_text::cut(text)).flatten();
-    let rows = wrap(own.unwrap_or(text), width)
-        .into_iter()
-        .map(StyledLine::plain)
-        .collect();
-    (cut(rows, own.is_some()), false)
+    // The signature ends at the Quote, shown or not.
+    let own = reply.then(|| quoted_text::cut(text)).flatten();
+    let left_out = own.filter(|_| cutting);
+    let shown = left_out.unwrap_or(text);
+    let rows = signature::rows(shown, own.unwrap_or(text), width);
+    (cut(rows, left_out.is_some()), false)
 }
 
 /// `html` laid out in the rendered View when the key asks for it and it

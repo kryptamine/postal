@@ -21,12 +21,12 @@ Lowest first:
   ids, the parts a body is cut into, one value per Account.
 - `cache/`: the `SQLite` store of Messages, bodies, flags and queued moves.
 - `account/`: `config.toml`, the Providers, OAuth, secrets and the keychain, the
-  XDG directories, unlinking an Account.
+  XDG directories, an Account's signature, unlinking an Account.
 - `render/`: an HTML part as Preview lines (html2text) or as the rendered View
-  (litehtml in its layout process, the cell grid), Quotes, wrapping, the
-  glyphs the font has, how a date reads.
+  (litehtml in its layout process, the cell grid), Quotes, signatures, wrapping,
+  the glyphs the font has, how a date reads.
 - `compose/`: Drafts and their notes, Replies, the Outbox on disk, the editor,
-  the Account a Message goes out from.
+  the Account a Message goes out from, its signature in the editor.
 - `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
   reconnecting, the sign-in check, one Account's two connections
   (`mail::serve`), and what they tell the screen (`Update`, `Status`,

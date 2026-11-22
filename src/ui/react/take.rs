@@ -8,6 +8,7 @@ use crate::{
     ui::input::step::Step,
     ui::outside::open_outside,
     ui::popup::settings::Settings,
+    ui::popup::signature_edit,
     ui::preview::attachment_hints::label_attachments,
     ui::preview::link_labels::{browse, label_links},
     ui::react::steer::steer,
@@ -36,6 +37,9 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
             Ok(settings) => ui.screen.over.open(settings),
             Err(error) => ui.screen.toast = Some(Toast::error(error.to_string())),
         },
+        Step::Signature(email) => {
+            signature_edit::open(&mut model.tty, &mut ui.screen, world.config_dir, &email)?;
+        }
         Step::Icons(choice) => {
             model.theme.icons = Icons::choose(choice);
             model.previews.set_look(model.theme.mail_look());

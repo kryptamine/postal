@@ -21,6 +21,8 @@ const CHROME: u16 = 4;
 const FIXED_ROWS: u16 = 5;
 /// Columns between the border and a row's text, each side.
 const PADDING: u16 = 1;
+/// Columns between an Account's address and its signature.
+const GAP: u16 = 2;
 /// A row's text under its heading.
 const INDENT: u16 = 2;
 
@@ -91,7 +93,8 @@ impl Widget for SettingsPopup<'_> {
 }
 
 impl SettingsPopup<'_> {
-    /// One row in `area`: its label, then its value right-aligned.
+    /// One row in `area`: its label, then its value right-aligned; an
+    /// Account's signature, its first line, muted beside its address.
     fn row(&self, buf: &mut Buffer, area: Rect, row: Row, style: Style) {
         let settings = self.settings;
         let (label, value, muted) = match row {
@@ -124,6 +127,20 @@ impl SettingsPopup<'_> {
         };
 
         truncate::draw(buf, label_area, label, style);
+        if let Row::Account(account) = row
+            && let Some(Some(signature)) = settings.signatures.get(account)
+        {
+            let taken = u16::try_from(label.width()).unwrap_or(u16::MAX);
+            let taken = taken.saturating_add(GAP).min(label_area.width);
+            let beside = Rect {
+                x: label_area.x + taken,
+                width: label_area.width - taken,
+                ..label_area
+            };
+
+            truncate::draw(buf, beside, signature, style.patch(self.theme.muted));
+        }
+
         let value_area = Rect {
             x: area.right() - width,
             width,

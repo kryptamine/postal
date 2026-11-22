@@ -12,8 +12,8 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
     let screen = &mut ui.screen;
     match drafting {
         Drafting::Compose => {
-            let from = composing_from(&ui.view).and_then(|account| world.accounts.noted(account));
-            composing::compose(tty, screen, from)?;
+            let from = composing_from(&ui.view);
+            composing::compose(tty, screen, world.accounts, from)?;
         }
         Drafting::Edit => {
             if let Some(preview) = screen.over.take::<DraftPreview>() {

@@ -26,6 +26,7 @@ pub mod render_process;
 pub mod rendered_previews;
 mod rendered_view;
 pub mod rgb;
+pub mod signature;
 pub mod stack_str;
 pub mod styled_line;
 pub mod view;

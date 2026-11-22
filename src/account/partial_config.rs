@@ -1,4 +1,10 @@
-use std::{io, net::IpAddr, ops::Range, path::Path, time::Duration};
+use std::{
+    io,
+    net::IpAddr,
+    ops::Range,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use serde::Deserialize;
 use toml::Spanned;
@@ -7,12 +13,15 @@ use crate::{
     account::config::{Config, Error, IconChoice, Imap, SecretStore, Smtp},
     account::oauth::Endpoints,
     account::provider::Provider,
+    account::signature::Signature,
 };
 
 /// `config.toml` as login reads it. The top level names the first Account
 /// and sets what every Account leaves out; each `[[account]]` adds one. A
 /// server set nowhere is the Provider's.
 pub struct PartialConfig {
+    /// Where `config.toml` is, which a relative `signature-file` is beside.
+    dir: PathBuf,
     accounts: Vec<RawAccount>,
     /// The display name of `From` every Account shares, unless it sets its own.
     pub name: Option<String>,
@@ -30,6 +39,9 @@ struct RawConfig {
     #[serde(default)]
     provider: Provider,
     name: Option<String>,
+    signature: Option<String>,
+    #[serde(rename = "signature-file")]
+    signature_file: Option<Spanned<String>>,
     #[serde(default)]
     imap: RawImap,
     #[serde(default)]
@@ -52,6 +64,9 @@ struct RawAccount {
     #[serde(default)]
     provider: Provider,
     name: Option<String>,
+    signature: Option<String>,
+    #[serde(rename = "signature-file")]
+    signature_file: Option<Spanned<String>>,
     #[serde(default)]
     imap: RawImap,
     #[serde(default)]
@@ -142,6 +157,7 @@ impl PartialConfig {
         match std::fs::read_to_string(path) {
             Ok(text) => Self::parse(path, &text),
             Err(source) if source.kind() == io::ErrorKind::NotFound => Ok(Self {
+                dir: PathBuf::new(),
                 accounts: Vec::new(),
                 name: None,
                 imap: RawImap::default(),
@@ -183,15 +199,25 @@ impl PartialConfig {
             }
         }
 
+        if let Some(twice) = signed_twice(&raw) {
+            let message = "`signature` and `signature-file` are both set: keep one";
+            return Err(invalid(twice, message));
+        }
+
+        let dir = path.parent().unwrap_or(path);
+        // The top level signs for the Account it names, and no other.
         let first = raw.email.map(|email| RawAccount {
             email,
             provider: raw.provider,
             name: None,
+            signature: raw.signature,
+            signature_file: raw.signature_file,
             imap: RawImap::default(),
             smtp: RawSmtp::default(),
         });
 
         Ok(Self {
+            dir: dir.to_owned(),
             accounts: first.into_iter().chain(raw.account).collect(),
             name: raw.name,
             imap: raw.imap,
@@ -221,6 +247,8 @@ impl PartialConfig {
             email: String::new(),
             provider,
             name: None,
+            signature: None,
+            signature_file: None,
             imap: RawImap::default(),
             smtp: RawSmtp::default(),
         };
@@ -241,6 +269,17 @@ impl PartialConfig {
             .map(|account| (account.email.as_str(), account.provider))
     }
 
+    /// The signature of the Account at this address, if it is given one.
+    pub fn signature_of(&self, email: &str) -> Option<Signature> {
+        self.signature(&self.accounts[self.find(email)?])
+    }
+
+    fn signature(&self, account: &RawAccount) -> Option<Signature> {
+        let file = account.signature_file.as_ref();
+        let file = file.map(|file| Signature::file(&self.dir, file.get_ref()));
+        file.or_else(|| account.signature.clone().map(Signature::Text))
+    }
+
     fn find(&self, email: &str) -> Option<usize> {
         self.accounts
             .iter()
@@ -252,6 +291,7 @@ impl PartialConfig {
             email,
             provider,
             name: account.name.clone().or_else(|| self.name.clone()),
+            signature: self.signature(account),
             imap: account.imap.at(&self.imap, provider),
             smtp: account.smtp.at(&self.smtp, provider),
             secrets: self.secrets,
@@ -259,6 +299,16 @@ impl PartialConfig {
             icons: self.icons,
         }
     }
+}
+
+/// Where a table sets its signature a second time, as a file.
+fn signed_twice(raw: &RawConfig) -> Option<Range<usize>> {
+    let accounts = raw.account.iter();
+    let tables = std::iter::once((&raw.signature, &raw.signature_file))
+        .chain(accounts.map(|account| (&account.signature, &account.signature_file)));
+    tables
+        .filter(|(text, _)| text.is_some())
+        .find_map(|(_, file)| file.as_ref().map(Spanned::span))
 }
 
 fn is_loopback(host: &str) -> bool {

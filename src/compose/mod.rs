@@ -12,4 +12,5 @@ pub mod outbox;
 pub mod outgoing;
 pub mod recipients;
 pub mod reply_draft;
+pub mod signature_edit;
 mod unique_id;

@@ -121,7 +121,7 @@ The text typed into a Search.
 _Avoid_: pattern, search string
 
 **Compose**:
-Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers and an empty body.
+Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers, an empty body and the Account's Signature.
 _Avoid_: new mail, write
 
 **Correspondent**:
@@ -129,8 +129,12 @@ An address an Account has mail from or has written to, with the name it goes by,
 _Avoid_: contact, address book, recipient
 
 **Reply**:
-Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft. While connected, its Draft opens once every body of its Thread the Message List knows is in the Cache, those missing fetched first, so `postal thread show` reads the whole correspondence.
+Writing a Message in answer to one with `r`, from the Account it reached, to its sender, in its Thread, with the Account's Signature above its body quoted: in the Message List the newest of the selected Thread not from the Account, in Reading the one under the cursor. **Reply All** (`R`) adds everyone else it was sent to, but the Account. Once sent, the original is flagged `\Answered`. A Reply to a Message a Draft already answers opens that Draft. While connected, its Draft opens once every body of its Thread the Message List knows is in the Cache, those missing fetched first, so `postal thread show` reads the whole correspondence.
 _Avoid_: respond, answer
+
+**Signature**:
+The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `signature` in `config.toml`, or the text file `signature-file` names, `~` the home directory and a relative path beside `config.toml`; at the top level for the Account named there, in an `[[account]]` for that one. Compose and Reply write it into the Draft, where it is the user's to change; `Enter` on an Account in Settings opens `$EDITOR` on it. In the Preview and Reading, the Signature of a plain-text Message shows muted, down to its Quote; an HTML one shows as the mail lays it out.
+_Avoid_: footer, sign-off
 
 **Draft**:
 A Message being written, kept on this machine until it is sent or discarded (ADR 0013); `d` in its preview keeps it for later. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox.
@@ -153,7 +157,7 @@ The screen that signs an Account in: on a first run, and after `postal login` or
 _Avoid_: setup wizard, registration
 
 **Settings**:
-A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once: the Accounts, each with its Provider, then Add account, and the General settings, Icons, Name and Secrets. `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name or the secret store, opens the TUI again when Settings closes.
+A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once: the Accounts, each with its Provider and the first line of its Signature, then Add account, and the General settings, Icons, Name and Secrets. `Enter` on an Account opens `$EDITOR` on its Signature; `d` unlinks it after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
 _Avoid_: preferences, options, config screen
 
 **Unlink**:

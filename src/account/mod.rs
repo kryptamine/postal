@@ -10,5 +10,6 @@ pub mod provider;
 mod secret;
 mod secret_store;
 pub mod sign_in;
+pub mod signature;
 pub mod unlink;
 pub mod xdg;

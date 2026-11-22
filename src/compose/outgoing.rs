@@ -1,8 +1,10 @@
+use std::io;
+
 use lettre::{Address, address::Envelope, message::Mailbox};
 
 use crate::{
     account::config::Config, compose::draft::Draft, compose::unique_id::unique_id,
-    domain::answering::Answering,
+    domain::answering::Answering, render::signature::SEPARATOR,
 };
 
 /// The Account a Message goes out from.
@@ -15,6 +17,18 @@ impl Outgoing<'_> {
     /// `From` as Postal adds it: `name <email>`, or the bare address.
     pub fn from(self) -> Result<Mailbox, String> {
         Ok(Mailbox::new(self.config.name.clone(), self.address()?))
+    }
+
+    /// The signature under its separator, as a new Draft
+    /// holds it; `None` for an Account that signs nothing.
+    pub fn signature(self) -> io::Result<Option<String>> {
+        let Some(signature) = &self.config.signature else {
+            return Ok(None);
+        };
+
+        Ok(signature
+            .text()?
+            .map(|text| format!("{SEPARATOR}\n{text}\n")))
     }
 
     /// `draft` as it is sent and every retry sends it again, its `Date`

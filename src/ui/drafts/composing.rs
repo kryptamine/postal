@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     compose::accounts::Accounts,
@@ -9,6 +12,7 @@ use crate::{
     compose::notes::{self, Notes},
     compose::reply_draft,
     domain::message::Message,
+    domain::per_account::AccountId,
     mail::reply_fetch::ReplyFetch,
     mail::status::Status,
     mail::steering::Ask,
@@ -23,16 +27,26 @@ use crate::{
 };
 
 /// Compose from the Account `from`: a new Draft's file in the editor,
-/// then its preview, unless it was left as the template.
-pub fn compose(tty: &mut Tty, screen: &mut Screen, from: Option<&str>) -> Result<(), Error> {
+/// holding its signature, then its preview, unless it was left as the
+/// template.
+pub fn compose(
+    tty: &mut Tty,
+    screen: &mut Screen,
+    accounts: Accounts,
+    from: Option<AccountId>,
+) -> Result<(), Error> {
     // A Reply still waiting on its body would open over this Draft.
     screen.replying = None;
-    let Some(path) = create(screen, None) else {
+    let signature = from.map_or(Ok(None), |from| accounts.outgoing(from).signature());
+    let template = draft_file::template(block(&signature));
+    let Some(path) = create(screen, &template) else {
         return Ok(());
     };
 
     let notes = DraftNotes {
-        account: from.map(str::to_owned),
+        account: from
+            .and_then(|from| accounts.noted(from))
+            .map(str::to_owned),
         answering: None,
     };
 
@@ -41,13 +55,27 @@ pub fn compose(tty: &mut Tty, screen: &mut Screen, from: Option<&str>) -> Result
     }
 
     tty.outside(|| editor::edit(&path))?;
-    if draft_file::untouched(&path) {
+    toast_unread(screen, &signature);
+    if draft_file::untouched(&path, &template) {
         drop_untouched(screen, &path);
         return Ok(());
     }
 
     preview(screen, path, notes);
     Ok(())
+}
+
+/// The signature a new Draft holds; one that did not read is left out.
+fn block(signature: &io::Result<Option<String>>) -> Option<&str> {
+    signature.as_ref().ok().and_then(Option::as_deref)
+}
+
+/// A Toast for a signature that did not read, and so is not in the Draft.
+fn toast_unread(screen: &mut Screen, signature: &io::Result<Option<String>>) {
+    if let Err(error) = signature {
+        tracing::error!("reading the signature failed: {error}");
+        screen.toast = Some(Toast::error("could not read the signature"));
+    }
 }
 
 /// Deletes a Compose left as the template: nothing is lost, so no Undo.
@@ -164,8 +192,10 @@ fn answer(
 ) -> Result<(), Error> {
     let account = awaited.message.account;
     let email = accounts.email(account);
-    let (text, answering) = reply_draft::reply(raw, &awaited.message, email, awaited.to);
-    let Some(path) = create(screen, Some(&text)) else {
+    let signature = accounts.outgoing(account).signature();
+    let (text, answering) =
+        reply_draft::reply(raw, &awaited.message, email, awaited.to, block(&signature));
+    let Some(path) = create(screen, &text) else {
         return Ok(());
     };
 
@@ -179,12 +209,16 @@ fn answer(
         tracing::error!("noting what a Draft answers failed: {error}");
     }
 
-    edit(tty, screen, path, notes)
+    tty.outside(|| editor::edit(&path))?;
+    // After the editor, where a Toast would have run out; a Draft that
+    // does not read says so over it.
+    toast_unread(screen, &signature);
+    preview(screen, path, notes);
+    Ok(())
 }
 
-/// A new Draft's file holding `text`, else the template; `None` once the
-/// failure is toasted.
-fn create(screen: &mut Screen, text: Option<&str>) -> Option<PathBuf> {
+/// A new Draft's file holding `text`; `None` once the failure is toasted.
+fn create(screen: &mut Screen, text: &str) -> Option<PathBuf> {
     let created = draft_file::dir().and_then(|dir| draft_file::create(&dir, text));
     match created {
         Ok(path) => Some(path),

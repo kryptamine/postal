@@ -11,7 +11,7 @@ use crate::{
     compose::unique_id::unique_id, domain::folder_name::FolderName, domain::uid::Uid,
 };
 
-/// What `$EDITOR` opens on Compose: the headers to fill in, then the body.
+/// The headers a Compose leaves to fill in, then the body.
 const TEMPLATE: &str = "To: \nCc: \nSubject: \n\n";
 
 /// Only the user may read their own writing.
@@ -41,8 +41,17 @@ pub fn listed(drafts: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-/// A new Draft's file in `drafts`, holding the template, or `text` when given.
-pub fn create(drafts: &Path, text: Option<&str>) -> io::Result<PathBuf> {
+/// What `$EDITOR` opens on Compose, with a line to write on above the
+/// `signature`.
+pub fn template(signature: Option<&str>) -> String {
+    signature.map_or_else(
+        || TEMPLATE.to_owned(),
+        |signature| format!("{TEMPLATE}\n{signature}"),
+    )
+}
+
+/// A new Draft's file in `drafts`, holding `text`.
+pub fn create(drafts: &Path, text: &str) -> io::Result<PathBuf> {
     std::fs::create_dir_all(drafts)?;
     let path = drafts.join(format!("{}.eml", unique_id()));
     let mut file = OpenOptions::new()
@@ -50,17 +59,17 @@ pub fn create(drafts: &Path, text: Option<&str>) -> io::Result<PathBuf> {
         .create_new(true)
         .mode(MODE)
         .open(&path)?;
-    file.write_all(text.unwrap_or(TEMPLATE).as_bytes())?;
+    file.write_all(text.as_bytes())?;
     Ok(path)
 }
 
-/// Whether the Draft at `path` is still the template, however its blank
-/// lines and spaces were left. A file that does not read is not.
-pub fn untouched(path: &Path) -> bool {
+/// Whether the Draft at `path` is still the `template` it opened on, however
+/// its blank lines and spaces were left. A file that does not read is not.
+pub fn untouched(path: &Path, template: &str) -> bool {
     std::fs::read_to_string(path).is_ok_and(|text| {
         text.lines().all(|line| {
             let line = line.trim();
-            line.is_empty() || TEMPLATE.lines().any(|header| header.trim() == line)
+            line.is_empty() || template.lines().any(|written| written.trim() == line)
         })
     })
 }

@@ -25,6 +25,8 @@ pub enum Step {
     Open(Outside),
     LocalDrafts,
     Settings,
+    /// The editor on the signature of the Account at this address.
+    Signature(String),
     Icons(IconChoice),
     Exit(Exit),
 }

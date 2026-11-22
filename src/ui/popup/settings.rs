@@ -35,6 +35,8 @@ pub enum Step {
     Help,
     AddAccount,
     Unlink(String),
+    /// The editor on the signature of the Account at this address.
+    Signature(String),
     Icons(IconChoice),
     Quit,
 }
@@ -43,6 +45,8 @@ pub enum Step {
 pub struct Settings {
     dir: PathBuf,
     pub accounts: Vec<(String, Provider)>,
+    /// The first line of each Account's signature, where it reads.
+    pub signatures: Vec<Option<String>>,
     pub icons: IconChoice,
     pub name: Option<String>,
     pub secrets: SecretStore,
@@ -62,6 +66,7 @@ impl Settings {
         let config = PartialConfig::load(&dir.join("config.toml"))?;
         Ok(Self {
             dir: dir.to_owned(),
+            signatures: signatures(&config),
             accounts: config
                 .accounts()
                 .map(|(email, provider)| (email.to_owned(), provider))
@@ -147,7 +152,12 @@ impl Settings {
 
     fn act(&mut self) -> Step {
         match self.selected() {
-            Row::Account(_) => {}
+            Row::Account(account) => {
+                if let Some((email, _)) = self.accounts.get(account) {
+                    self.failure = None;
+                    return Step::Signature(email.clone());
+                }
+            }
             Row::Add => return Step::AddAccount,
             Row::Icons => {
                 let icons = self.icons.next();
@@ -172,6 +182,17 @@ impl Settings {
             error.to_string()
         });
         self.failure.is_none()
+    }
+
+    /// What the editor left of an Account's signature: `true` when
+    /// `config.toml` changed, which the running Accounts read at start.
+    pub fn signature_edited(&mut self, edited: Result<bool, Box<dyn Error>>) {
+        self.change(|settings| {
+            settings.reload |= edited?;
+            let config = PartialConfig::load(&settings.dir.join("config.toml"))?;
+            settings.signatures = signatures(&config);
+            Ok(())
+        });
     }
 
     fn rename(&mut self, name: Option<String>) -> Result<(), Box<dyn Error>> {
@@ -216,4 +237,13 @@ impl Settings {
         config.save()?;
         Ok(())
     }
+}
+
+/// The first line of each Account's signature, in the order of the Accounts.
+fn signatures(config: &PartialConfig) -> Vec<Option<String>> {
+    let each = config.accounts().map(|(email, _)| {
+        let text = config.signature_of(email)?.text().ok()??;
+        text.lines().next().map(str::to_owned)
+    });
+    each.collect()
 }

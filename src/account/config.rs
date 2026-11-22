@@ -8,6 +8,7 @@ use serde::Deserialize;
 pub use crate::account::secret_store::SecretStore;
 use crate::{
     account::oauth::Endpoints, account::partial_config::PartialConfig, account::provider::Provider,
+    account::signature::Signature,
 };
 
 /// One Account's settings from `config.toml`, with those every Account shares.
@@ -16,6 +17,7 @@ pub struct Config {
     pub provider: Provider,
     /// The display name of `From`; without it, the bare address.
     pub name: Option<String>,
+    pub signature: Option<Signature>,
     pub imap: Imap,
     pub smtp: Smtp,
     pub secrets: SecretStore,
