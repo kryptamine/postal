@@ -14,7 +14,8 @@ Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 buffer of cells: `cell_grid.cpp` draws into the cells of `grid.cpp`,
 `snap.cpp` snaps the styles before layout, `floated_cells.cpp` keeps a
 floated cell in its row, `regrouped_cells.cpp` sets a cell shown as a
-table group as a block and `alignment.cpp` sets text left,
+table group as a block, `row_heights.cpp` makes a row as high as its
+cells ask and `alignment.cpp` sets text left,
 `image_labels.cpp` decides each image, `said_already.cpp` finds an alt the
 mail says in words, `alt_names.cpp` names it, `link_names.cpp` names a
 bare picture link, `shared_prefix.cpp` finds the words a row of icons

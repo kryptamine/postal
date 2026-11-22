@@ -4,8 +4,6 @@
 #include "dom.h"
 #include "geometry.h"
 
-#include <algorithm>
-
 using namespace litehtml;
 
 namespace cg
@@ -71,14 +69,14 @@ void one_cell_thick(css_borders& b, bool rule)
     }
 }
 
-// A row is as high as the highest of its cells asks: litehtml reads only
-// the row's own height, and a spacer cell of `height="32"` took no room.
-void as_high_as_cells(const element::ptr& row)
+// A block set as wide as its container spills by its borders: 2 px in a
+// browser, two columns here, where the right one left the pane.
+void within_borders(const element::ptr& el, css_properties& css, const css_borders& b)
 {
-    float high = px_or(row->css().get_height(), 0);
-    for(auto& cell : row->children())
-        if(cell->css().get_display() == display_table_cell) high = std::max(high, px_or(cell->css().get_height(), 0));
-    if(high > 0) row->css().set_height(css_length(high, css_units_px));
+    css_length w = css.get_width();
+    bool full = share(w) && w.val() >= 100;
+    bool block = css.get_display() == display_block && css.get_float() == float_none && !tag_is(el, "img");
+    if(full && block && (shown(b.left) || shown(b.right))) css.set_width(css_length::predef_value(sizing_auto));
 }
 
 // `fill` is the background the nearest ancestor with one is drawn in.
@@ -113,13 +111,7 @@ void snap_box(const element::ptr& el, uint32_t fill)
     css.set_padding(p);
     one_cell_thick(b, tag_is(el, "hr"));
     css.set_borders(b);
-
-    // A block set as wide as its container spills by its borders: 2 px in
-    // a browser, two columns here, where the right one left the pane.
-    css_length w = css.get_width();
-    bool full = !w.is_predefined() && w.units() == css_units_percentage && w.val() >= 100;
-    bool block = css.get_display() == display_block && css.get_float() == float_none && !tag_is(el, "img");
-    if(full && block && (shown(b.left) || shown(b.right))) css.set_width(css_length::predef_value(sizing_auto));
+    within_borders(el, css, b);
 
     // A share of the page's height has no base: a mail has no page to
     // fill, and `height: 100%` took the 1000-row viewport instead.
@@ -145,7 +137,6 @@ void snap_box(const element::ptr& el, uint32_t fill)
     }
 
     for(auto& child : el->children()) snap_box(child, fill);
-    if(css.get_display() == display_table_row) as_high_as_cells(el);
 }
 } // namespace
 

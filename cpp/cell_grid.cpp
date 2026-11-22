@@ -17,6 +17,7 @@
 #include "loosen.h"
 #include "picture_boxes.h"
 #include "regrouped_cells.h"
+#include "row_heights.h"
 #include "snap.h"
 #include "stacking.h"
 #include "superscripts.h"
@@ -529,6 +530,8 @@ std::unique_ptr<cg_grid> rendered(const char* html, size_t len, int32_t cols, Tr
     gap_cells(doc->root());
     raise_digits(doc->root());
     snap_tree(doc->root());
+    // After the snap: a cell under half a row asks for no height.
+    rows_as_high_as_cells(doc->root());
     container.body = body_size(doc->root());
     if(loose) loosen(doc->root());
     draw(doc, container);
