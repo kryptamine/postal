@@ -13,7 +13,8 @@ Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
 buffer of cells: `cell_grid.cpp` draws into the cells of `grid.cpp`,
 `snap.cpp` snaps the styles before layout, `floated_cells.cpp` keeps a
-floated cell in its row and `alignment.cpp` sets text left,
+floated cell in its row, `regrouped_cells.cpp` sets a cell shown as a
+table group as a block and `alignment.cpp` sets text left,
 `image_labels.cpp` decides each image, `said_already.cpp` finds an alt the
 mail says in words, `alt_names.cpp` names it, `link_names.cpp` names a
 bare picture link, `shared_prefix.cpp` finds the words a row of icons
@@ -49,7 +50,11 @@ element helpers.
   separate ones with no spacing: litehtml gives each cell half a collapsed
   border, which puts the rule between two rows. A height or min-height in
   per cent goes: a mail has no page height, and litehtml took the share of
-  its 1000-row viewport.
+  its 1000-row viewport. A row is as high as the highest of its cells
+  asks: litehtml read only the row's own height, and a spacer cell of
+  `height="32"` took no room, so the lines of a receipt ran together. A
+  bordered block of `width: 100%` takes its container's width: it spilt
+  by its borders, 2 px in a browser and two columns here.
 - Backgrounds fill the cells whose centre lies in the box; text rows use the
   same rule. A box's own background stops inside its border
   (`background-clip: padding-box`), as a 1px border looks; a cell thick, it
@@ -61,9 +66,9 @@ element helpers.
   in the grid (`CG_PAGE_BOX`), so a section against it still takes it as its
   shape and gets no frame of its own; with it gone, a card's light fill and
   a band at its top were framed apart, one frame cutting through the other.
-- An icon label that is all its link shows takes its whole `alt`, up to 16
-  columns, and a column after it: cut, `Insta…` named nothing. A larger
-  picture that is all its link shows, a store badge, takes up to 32. The
+- An icon label takes its whole `alt`, up to 16 columns, and a column
+  after it: cut, `Insta…` named nothing. A larger picture, a store badge
+  or a slogan under a logo, takes up to 32, in a link or not. The
   boxes round it that show no word and are narrower than its name were
   sized for the picture, a link of 32 px or a cell of 100 px, and widen to
   the name; a picture a share of such a box wide takes the name's width
@@ -81,7 +86,10 @@ element helpers.
 - An `alt` loses the noun at its end that only calls it a picture (`icon`,
   `image`, `img`, `logo`, `picture`, `photo`, `banner`): `Messaging icon`
   names `Messaging`. With nothing left but an article, as in `Some Image`
-  or `Logo`, the image has no `alt`.
+  or `Logo`, the image has no `alt`. `Ann Lee's profile picture` names
+  `Ann Lee`, which the text beside a portrait says already. One word with
+  a `_` is the file's name: it goes, and a link's own picture keeps its
+  words, an icon the first (`github_original_white` reads `github`).
 - Images are never fetched: remote ones are a tracking risk and add little to
   reading. Before layout each image either goes (`display: none`) or becomes
   a label one row high, its `alt` cut with `…` to the image's declared width.
@@ -92,7 +100,8 @@ element helpers.
     Hint mode can still open it: the words of the last path segment made of
     lowercase words (`/e/watch-party-tickets-2004` reads `[watch party
     tickets]`), or else the host's domain without its subdomain, as a
-    tracking redirect's path names nothing (`[revolut.com]`);
+    tracking redirect's path names nothing (`[revolut.com]`); a link to
+    `#` opens nothing, and its picture goes;
   - it is an icon, no side over 64 px, beside other text: it decorates that
     text, and its `alt` rarely fits its box (`GitHub` in 32 px read `GitH`);
   - its `alt` is already in the nearest text around it, within its table row
@@ -160,7 +169,10 @@ element helpers.
 - A floated `td` or `th` stays a cell, its words unwrapped, and one
   floated right is set right, a column off the cell before. A browser makes
   it a block out of its row; litehtml laid that block over the row's first
-  glyph, and `Distance` read `istance`.
+  glyph, and `Distance` read `istance`. A space is never drawn over a
+  glyph: the one between two floated tables hid the first letter of the
+  first. A cell a mobile style shows as a table group, to reorder stacked
+  cells, is a block: litehtml drew its words over each other.
 - An inline-block holding blocks is a column of a fluid layout and aligns
   to the top: on the baseline the columns' bottoms line up, which only
   images of one height kept level.
@@ -211,12 +223,29 @@ past the last column is laid out a second time, from the HTML again:
 - if text is still lost, each table round a box that ends past the pane
   becomes blocks, one cell under another, and the layout runs once more.
 
+A mail that loses only the side of a box past the pane, a table of 598 px
+with a border, is laid out again the same way.
+
 Only a mail that loses text after that shows in the text View. The clip
 given to litehtml's draw is as wide as the document: it skips a box wholly
 outside the clip, so text there was never drawn and never counted as lost.
 
 On 539 cached mails this left 4 of 73 not fitting at 74 columns, long reply
 chains quoted many levels deep, and 33 at 40 columns.
+
+### A mail set for a phone
+
+Media queries are answered with the pane's width, so a narrow pane gets
+the mail's mobile layout, which stacks its columns. A pane just under the
+breakpoint, 74 columns against 600 px, gets styles made for a phone a
+third as wide, `width: 320px !important`, and the mail stood in a column
+half the pane. In a pane of 640 px or less, a layout whose glyphs span
+under two thirds of the columns is laid out again as on a screen of 1024
+px, and that one is kept when it fits and spans more.
+
+On 267 cached mails at 74 columns, these rules, the rows as high as their
+cells and the names of pictures changed 52, left one not fitting, as
+before, and brought back the words two mails had lost.
 
 ### A process of its own
 
