@@ -16,6 +16,9 @@ You are helping the user write the email Draft open in their editor.
 - The Thread resource, when there is one, is the whole correspondence, oldest first.
 - Each prompt carries the body as it stands, the user's own edits included, then what the user asks.]],
 	tools = tools.draft,
+	-- The tool whose edit is reviewed, and what it is an edit to.
+	write = "write_draft",
+	noun = "Draft",
 	review = review.keys,
 	prepare = function(chat)
 		chat:fetch_thread()
@@ -33,6 +36,30 @@ You are helping the user write the email Draft open in their editor.
 		chat.sent = body.get(chat.mail)
 		chat.proposed = nil
 		return { chat:resource("postal-draft://" .. chat.path, chat.sent) }
+	end,
+}
+
+M.signature = {
+	rules = [[
+You are helping the user write the signature their email account ends its messages with, open in their editor.
+- Read and change it only through the postal tools `read_signature` and `write_signature`; no other tool reaches it.
+- It is plain text, a few short lines: no HTML, no images, and no `-- ` separator line, which Postal adds itself.
+- Each prompt carries the signature as it stands, the user's own edits included, then what the user asks.]],
+	tools = tools.signature,
+	write = "write_signature",
+	noun = "Signature",
+	review = review.keys,
+	prepare = function(chat)
+		-- A Signature answers no Message.
+		chat.thread = false
+	end,
+	context = function()
+		return {}
+	end,
+	turn = function(chat)
+		chat.sent = body.get(chat.mail)
+		chat.proposed = nil
+		return { chat:resource("postal-signature://" .. chat.path, chat.sent) }
 	end,
 }
 

@@ -34,7 +34,7 @@ function M.new(mail, kind, actions)
 		run = function()
 			local groups = { { "Chat", self.keys } }
 			if kind.review then
-				table.insert(groups, { "Review, in the Draft", kind.review })
+				table.insert(groups, { "Review, in the " .. kind.noun, kind.review })
 			end
 
 			help.open(vim.api.nvim_get_current_win(), groups)
@@ -174,7 +174,8 @@ function M.statusline(buf)
 		return ""
 	end
 
-	return bar.statusline(self.agent, body.header(self.mail, "Subject"))
+	local subject = body.headless(self.mail) and self.kind.noun or body.header(self.mail, "Subject")
+	return bar.statusline(self.agent, subject)
 end
 
 --- Shows the `## who` header at `row` in the look of `role`, `me` or

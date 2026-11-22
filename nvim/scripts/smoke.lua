@@ -1,6 +1,7 @@
 -- Run by `make smoke` and tests/nvim.rs: in a bare nvim, a Draft completes
 -- `Cc:` from Postal's Correspondents, `Attach:` under $HOME, its body nothing;
--- `:PostalAgent` chats with a stub ACP agent about a Draft and a Message.
+-- `:PostalAgent` chats with a stub ACP agent about a Draft, a Message and a
+-- Signature.
 local function fail(msg)
 	io.stderr:write("smoke: " .. msg .. "\n")
 	vim.cmd("cquit 1")
@@ -525,6 +526,47 @@ vim.cmd("bwipeout! " .. message_buf)
 if vim.api.nvim_buf_is_valid(message_pane) then
 	fail("the pane outlived its Message")
 end
+-- A Signature is all body: the agent's edit to it starts at its first line,
+-- for the same review as a Draft's
+local signatures = vim.fn.tempname() .. "/postal/signatures"
+vim.fn.mkdir(signatures, "p")
+vim.fn.writefile({ "Ada Lovelace", "London" }, signatures .. "/1.txt")
+home()
+vim.cmd.edit(signatures .. "/1.txt")
+local signature_buf = vim.api.nvim_get_current_buf()
+local before_signature = #prompts()
+vim.cmd("PostalAgent")
+local signature_pane = vim.api.nvim_get_current_buf()
+vim.api.nvim_buf_set_lines(0, -2, -1, false, { "shout" })
+vim.cmd.normal(vim.keycode("<CR>"))
+local function signature()
+	return vim.api.nvim_buf_get_lines(signature_buf, 0, -1, false)
+end
+
+if
+	not vim.wait(10000, function()
+		return vim.deep_equal(signature(), { "ADA LOVELACE", "LONDON" })
+			and said(signature_pane):find("Signed.", 1, true) ~= nil
+	end)
+then
+	fail("the Signature is " .. vim.inspect(signature()) .. " and its pane " .. vim.inspect(said(signature_pane)))
+end
+
+local signing = prompts()[before_signature + 1].params.prompt
+if not signing[1].text:find("write_signature", 1, true) or signing[2].resource.text ~= "Ada Lovelace\nLondon\n" then
+	fail("the Signature's prompt holds " .. vim.inspect(signing))
+end
+
+local reviewed = "✓ write_signature · the edit is in the Signature for review"
+if not said(signature_pane):find(reviewed, 1, true) then
+	fail("the pane lacks " .. vim.inspect(reviewed) .. " in " .. vim.inspect(said(signature_pane)))
+end
+
+vim.cmd("bwipeout! " .. signature_buf)
+if vim.api.nvim_buf_is_valid(signature_pane) then
+	fail("the pane outlived its Signature")
+end
+
 vim.cmd("checkhealth postal")
 local health = said(0)
 for _, want in ipairs({ "runs `postal thread show`", hint, "npx fetches postal-acp-package" }) do

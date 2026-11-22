@@ -1,6 +1,7 @@
--- A chat with an ACP agent about one mail buffer, a Draft or a Message
--- opened to read: its pane, its session, and for a Draft the one write the
--- agent is allowed, to the body, reviewed hunk by hunk (ADR 0018, 0019, 0020).
+-- A chat with an ACP agent about one mail buffer, a Draft, a Signature or a
+-- Message opened to read: its pane, its session, and the one write the agent
+-- is allowed, to a Draft's body or a Signature, reviewed hunk by hunk (ADR
+-- 0018, 0019, 0020).
 local acp = require("postal.acp")
 local body = require("postal.body")
 local kinds = require("postal.kinds")
@@ -203,11 +204,11 @@ function Chat:propose(text)
 
 	if not self.review then
 		self.pane:status()
-		self.pane:dim("ok", "write_draft · the edit changes nothing")
+		self.pane:dim("ok", self.kind.write .. " · the edit changes nothing")
 		return
 	end
 
-	self.pane:dim("ok", "write_draft · the edit is in the Draft for review, hunk by hunk")
+	self.pane:dim("ok", self.kind.write .. " · the edit is in the " .. self.kind.noun .. " for review, hunk by hunk")
 	self:reviewed(self.review:summary())
 end
 

@@ -31,6 +31,32 @@ M.draft = {
 	},
 }
 
+M.signature = {
+	read_signature = {
+		description = "The email signature as it stands.",
+		inputSchema = { type = "object" },
+		run = function(chat)
+			return chat:body()
+		end,
+	},
+	write_signature = {
+		description = "Replace the signature; the user reviews the change hunk by hunk.",
+		inputSchema = {
+			type = "object",
+			properties = { signature = { type = "string", description = "The whole new signature." } },
+			required = { "signature" },
+		},
+		run = function(chat, args)
+			if type(args.signature) ~= "string" then
+				return nil, "`signature` must be a string"
+			end
+
+			chat:propose(args.signature)
+			return "The new signature is in the editor for the user's review."
+		end,
+	},
+}
+
 M.message = {
 	read_message = {
 		description = "The email Message the user reads: its headers, then its body as text.",

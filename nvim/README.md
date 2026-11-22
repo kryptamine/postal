@@ -80,6 +80,14 @@ the pane says how. `nerd_font` draws the pane's icons from a Nerd Font,
 on by default when `vim.g.have_nerd_font` is set. A session lasts as
 long as the Draft's buffer.
 
+## Signing with an agent
+
+`Enter` on a Signature in Postal's Settings opens it in your editor, and
+`:PostalAgent` there opens the same chat pane. The agent reads and
+changes the signature alone, through the `read_signature` and
+`write_signature` tools, and its edit is reviewed hunk by hunk as a
+Draft's is. Postal takes what the file holds once the editor exits.
+
 ## Reading with an agent
 
 `E` in Postal opens the selected Message in your editor, read-only: its

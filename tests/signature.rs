@@ -46,7 +46,8 @@ impl Editor {
 
         fs::write(editor.dir.path().join("typed"), TYPED).unwrap();
         let script = format!(
-            "cd '{dir}'\ncp \"$1\" opened 2>/dev/null || : > opened\n\
+            "cd '{dir}'\nprintf '%s' \"$1\" > path\n\
+             cp \"$1\" opened 2>/dev/null || : > opened\n\
              if grep -q '^Subject:' opened; then\n\
              sed -e 's/^To: $/To: bob@example.com/' -e 's/^Subject: $/Subject: Hello/' \
              opened > \"$1\"\nelse\ncp typed \"$1\"\nfi\n",
@@ -62,6 +63,13 @@ impl Editor {
 
     fn opened_path(&self) -> PathBuf {
         self.dir.path().join("opened")
+    }
+
+    /// Where the file the editor last opened is.
+    fn path(&self) -> PathBuf {
+        fs::read_to_string(self.dir.path().join("path"))
+            .unwrap()
+            .into()
     }
 
     /// The file as the editor last opened it.
@@ -262,7 +270,8 @@ fn an_untouched_compose_with_a_signature_leaves_no_draft() {
 #[test]
 fn each_account_has_its_own_signature() {
     let (first, smtp) = (inbox(), FakeSmtp::start());
-    // The newer Message is the selection, so a Compose is from its Account.
+    // The newer Message is the top row, which `k` selects whichever came
+    // first, so a Compose is from its Account.
     let second = FakeImap::start(vec![FakeMessage::new(
         "Bob",
         "Bravo notes",
@@ -286,6 +295,7 @@ fn each_account_has_its_own_signature() {
     let mut t = postal(&home, &editor.command());
     let both = |s: &Screen| listed(s) && s.contains("Bravo notes") && !s.contains("Secrets");
     t.wait_until(both).unwrap();
+    t.send(Key::Char('k')).unwrap();
     t.send(Key::Char('c')).unwrap();
     t.wait_until(previewed).unwrap();
     assert_eq!(editor.opened(), "To: \nCc: \nSubject: \n\n");
@@ -312,6 +322,7 @@ fn each_account_has_its_own_signature() {
 
     t.send(Key::Char('q')).unwrap();
     t.wait_until(both).unwrap();
+    t.send(Key::Char('k')).unwrap();
     t.send(Key::Char('c')).unwrap();
     t.wait_until(previewed).unwrap();
     quit(t);
@@ -438,6 +449,12 @@ fn enter_on_a_signature_in_settings_edits_it() {
     t.wait_until(|s| s.contains("Zoë Example")).unwrap();
     assert_eq!(configured(&home).as_deref(), Some("Zoë Example\nPostal"));
     assert_eq!(editor.opened(), "");
+    // The plugin knows a Signature by its directory, and it is gone after.
+    let scratch = editor.path();
+    let signatures = home.xdg_cache_home().join("postal/signatures");
+    assert_eq!(scratch.parent(), Some(signatures.as_path()));
+    assert_eq!(scratch.extension().unwrap(), "txt");
+    assert!(!scratch.exists());
 
     t.send(Key::Char('q')).unwrap();
     t.wait_until(|s| listed(s) && !s.contains("Secrets"))

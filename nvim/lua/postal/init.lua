@@ -1,6 +1,7 @@
 -- Completes a Postal Draft's recipients from its Correspondents and its
 -- `Attach:` paths as they are typed (blink.cmp, else Neovim's own menu), and
--- chats with an ACP agent about a Draft or a Message through `:PostalAgent`.
+-- chats with an ACP agent about a Draft, a Signature or a Message through
+-- `:PostalAgent`.
 local agent = require("postal.agent")
 local attach = require("postal.attach")
 local colors = require("postal.colors")
@@ -11,6 +12,8 @@ local M = {}
 
 -- Where Postal keeps its Drafts, whatever `$XDG_DATA_HOME` is.
 local DRAFTS = "*/postal/drafts/*.eml"
+-- Where Postal writes a Signature Settings open, until the editor exits.
+local SIGNATURES = "*/postal/signatures/*.txt"
 -- Where Postal writes a Message `E` opens, until the editor exits.
 local MESSAGES = "*/postal/messages/*.eml"
 
@@ -86,6 +89,15 @@ function M.setup(opts)
 		end,
 	})
 
+	vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
+		group = group,
+		pattern = SIGNATURES,
+		callback = function(event)
+			vim.b[event.buf].postal_kind = "signature"
+			agent_command(event.buf, "Chat with an ACP agent about this Signature")
+		end,
+	})
+
 	vim.api.nvim_create_autocmd("BufReadPost", {
 		group = group,
 		pattern = MESSAGES,
@@ -99,7 +111,7 @@ function M.setup(opts)
 
 	vim.api.nvim_create_autocmd("BufWinEnter", {
 		group = group,
-		pattern = { DRAFTS, MESSAGES },
+		pattern = { DRAFTS, MESSAGES, SIGNATURES },
 		callback = function()
 			-- Mail is paragraphs on long lines, whatever `wrap` is globally.
 			vim.wo[0][0].wrap = true
@@ -110,7 +122,7 @@ function M.setup(opts)
 
 	vim.api.nvim_create_autocmd("BufUnload", {
 		group = group,
-		pattern = { DRAFTS, MESSAGES },
+		pattern = { DRAFTS, MESSAGES, SIGNATURES },
 		callback = function(event)
 			agent.close(event.buf)
 		end,

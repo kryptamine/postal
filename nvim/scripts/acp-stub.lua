@@ -104,9 +104,23 @@ local function read_message(session)
 	chunk(session, "It is about " .. subject .. (written.isError and "." or ", and I changed it."))
 end
 
+-- Reads the Signature and writes it back in capitals.
+local function sign(session)
+	local claude = { claudeCode = { toolName = "mcp__postal__write_signature" } }
+	local write = { toolCallId = "write", title = "postal - write_signature (MCP)", _meta = claude }
+	call("session/request_permission", { sessionId = session, toolCall = write, options = OPTIONS })
+	local read = mcp.call("tools/call", { name = "read_signature", arguments = vim.empty_dict() })
+	local text = read.content[1].text:upper()
+	mcp.call("tools/call", { name = "write_signature", arguments = { signature = text } })
+	chunk(session, "Signed.")
+end
+
 local function turn(session, prompt)
 	if mcp.message then
 		read_message(session)
+		return
+	elseif mcp.signature then
+		sign(session)
 		return
 	end
 
@@ -200,7 +214,9 @@ while true do
 		end, mcp.call("tools/list", vim.empty_dict()).tools)
 
 		mcp.message = vim.deep_equal(tools, { "read_message" })
-		assert(mcp.message or vim.deep_equal(tools, { "read_draft", "write_draft" }), vim.inspect(tools))
+		mcp.signature = vim.deep_equal(tools, { "read_signature", "write_signature" })
+		local draft = vim.deep_equal(tools, { "read_draft", "write_draft" })
+		assert(mcp.message or mcp.signature or draft, vim.inspect(tools))
 		send({ id = message.id, result = { sessionId = "stub" } })
 	elseif message.method == "session/prompt" then
 		local stopped = turn(message.params.sessionId, message.params.prompt)

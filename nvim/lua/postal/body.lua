@@ -2,9 +2,18 @@
 -- every line after the blank one that ends the headers.
 local M = {}
 
+--- Whether buffer `buf` is all body: a Signature has no headers.
+function M.headless(buf)
+	return vim.b[buf].postal_kind == "signature"
+end
+
 -- The 0-based row the body starts at, and whether the headers end in a
 -- blank line; without one, the line count.
 local function start(buf)
+	if M.headless(buf) then
+		return 0, true
+	end
+
 	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 	for n, line in ipairs(lines) do
 		if line == "" then
