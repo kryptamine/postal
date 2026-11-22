@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use rusqlite::types::{FromSql, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::folder;
@@ -54,17 +53,5 @@ impl fmt::Debug for FolderName {
 impl fmt::Display for FolderName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-impl ToSql for FolderName {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        self.0.to_sql()
-    }
-}
-
-impl FromSql for FolderName {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        String::column_result(value).map(Self::from)
     }
 }

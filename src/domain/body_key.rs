@@ -1,7 +1,5 @@
 use std::fmt;
 
-use rusqlite::types::{FromSql, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
-
 /// The key a Message's body is cached under: Gmail's `X-GM-MSGID`, which
 /// survives a UIDVALIDITY change, else the UID under its UIDVALIDITY.
 /// See docs/adr/0005-body-cache-key.md.
@@ -16,22 +14,19 @@ impl BodyKey {
                 .cast_signed(),
         )
     }
+
+    /// The key as the Cache stored it.
+    pub const fn from_stored(key: i64) -> Self {
+        Self(key)
+    }
+
+    pub const fn get(self) -> i64 {
+        self.0
+    }
 }
 
 impl fmt::Display for BodyKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-impl ToSql for BodyKey {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        self.0.to_sql()
-    }
-}
-
-impl FromSql for BodyKey {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        i64::column_result(value).map(Self)
     }
 }

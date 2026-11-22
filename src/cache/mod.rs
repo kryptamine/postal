@@ -14,6 +14,7 @@ mod moves;
 mod reader;
 mod schema;
 mod snippets;
+mod sql_values;
 mod state;
 mod store;
 mod threads;

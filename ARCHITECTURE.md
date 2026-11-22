@@ -69,7 +69,7 @@ Where a module could sit in two layers, its imports decided:
 ## Invariants
 
 - `domain` does no I/O and imports nothing else of the crate. Its ids carry
-  rusqlite's `ToSql` and `FromSql`, never a query.
+  no `ToSql` or `FromSql`: the Cache maps them, and names `rusqlite` alone.
 - `cache` never touches the network.
 - `account`, `render` and `compose` never speak IMAP or SMTP; `account`'s only
   network is OAuth's HTTP. `compose` builds

@@ -1,6 +1,5 @@
 use std::fmt;
 
-use rusqlite::types::{FromSql, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 
 /// A Message's IMAP UID, which names it in one Folder under one
@@ -34,17 +33,5 @@ impl fmt::Debug for Uid {
 impl fmt::Display for Uid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-impl ToSql for Uid {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(self.0.into())
-    }
-}
-
-impl FromSql for Uid {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        u32::column_result(value).map(Self)
     }
 }
