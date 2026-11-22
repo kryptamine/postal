@@ -273,7 +273,9 @@ and becomes the terminal's own; a grey section too close to the terminal's
 background becomes the terminal's too, or it would be moved into a grey slab,
 while a coloured one, or a box small enough to be a control, moves away from
 it, so a dark button stays visible on a dark terminal; text on a fill left
-in place moves until it reads (WCAG 4.5:1); a grey border on the terminal's
+in place moves until it reads (WCAG 4.5:1), and on the fill of a button or
+a badge it is white wherever white has 2.5:1, as brands label one button
+in black and the next in white; a grey border on the terminal's
 background is drawn dim like Postal's own.
 
 Text on the terminal's background has a role instead of the mail's colour

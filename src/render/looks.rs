@@ -8,6 +8,11 @@ use crate::{
     render::rgb::{Rgb, WHITE},
 };
 
+/// The least contrast white needs on the fill of a button or a badge to
+/// be its ink, whatever the mail set: brands label one in black, the next
+/// in white. Under it the mail's colour stays, black on a yellow button.
+const CONTROL_INK: f32 = 2.5;
+
 /// How each cell of one laid out mail is drawn: its marks, and its colours
 /// moved onto the terminal's background.
 pub struct Looks {
@@ -87,6 +92,9 @@ impl Looks {
         let plain = Marks::default();
         match (cell.fg(), bg) {
             (None, _) => (None, plain),
+            (Some(_), Some(fill)) if !cell.panel() && WHITE.contrast(fill) >= CONTROL_INK => {
+                (Some(WHITE), plain)
+            }
             (Some(fg), Some(_)) => (Some(self.colours.text(fg, bg)), plain),
             (Some(fg), None) => match self.palette.role(fg, under(cell)) {
                 // Ink set larger than the body is a heading.

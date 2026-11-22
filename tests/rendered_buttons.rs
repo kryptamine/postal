@@ -10,7 +10,7 @@
 
 mod support;
 
-use support::rendered::{DEFAULT, Run, at, bg, frames, html, pane, preview};
+use support::rendered::{DEFAULT, Run, at, bg, fg, frames, html, pane, preview};
 use termlens::Color;
 
 // litehtml split an inline around a block inside it even through an
@@ -73,6 +73,37 @@ fn a_cell_in_the_fill_of_its_button_is_cut_back_with_it() {
     for r in [row - 1, row + 1] {
         assert_eq!(bg(&screen, r, col), Color::Default, "row {r}");
     }
+}
+
+// Brands label one button in black and the next in white; white reads the
+// same on every fill it reads on at all, and a yellow one keeps its black.
+#[test]
+fn a_button_is_labelled_in_white_where_white_reads() {
+    let button = |fill: &str, label: &str| {
+        format!(
+            "<p><a href=\"https://shop.example/{label}\" style=\"display:inline-block;\
+             background:{fill};color:#000c02;padding:12px 30px\">{label}</a></p>"
+        )
+    };
+
+    let body = html(&format!(
+        "<p>x</p>{}{}",
+        button("#00a264", "Browse"),
+        button("#ffd500", "Shop")
+    ));
+    let screen = preview(body, &DEFAULT, "Shop");
+    let ink = |label: &str| {
+        let (row, col) = at(&screen, label);
+        fg(&screen, row, col)
+    };
+
+    assert_eq!(
+        ink("Browse"),
+        Color::Rgb(255, 255, 255),
+        "{}",
+        screen.text()
+    );
+    assert_ne!(ink("Shop"), Color::Rgb(255, 255, 255), "{}", screen.text());
 }
 
 // Mail draws a button as a fill, a border, a full-width slab or a tight
