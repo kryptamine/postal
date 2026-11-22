@@ -63,6 +63,23 @@ Targets, at 100,000 Messages in one Folder on the reference machine:
 an `Update::Inbox` to its frame within 16 ms, and the Message List's
 memory within 5 MB.
 
+## Measured
+
+Release build, reference machine, the Inbox seeded in the Cache beside the
+fake IMAP server, Threads of three, eight IDLE arrivals each:
+
+| What | 10,000 Messages | 100,000 Messages |
+| --- | --- | --- |
+| an `Update::Inbox` to its frame | 1.1–5.7 ms (was up to 25) | 9.8–12.0 ms |
+| of which the Thread rows | | about 10 ms |
+| of which reading the window | | 0.2–0.4 ms |
+| a key that crosses the window (`G`, `g`) | ≤ 2.5 ms | ≤ 1.3 ms |
+| the rows held | 0.4 MB | 4.0 MB |
+
+A row is 40 bytes; the window holds a few dozen Threads. The scan of the
+Folder by arrival is most of an Update at 100,000: `SQLite` steps every
+Message, about 80 ns each.
+
 ## Considered options
 
 - **Merge deltas into an in-memory list.** `mail` would send what changed

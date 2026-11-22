@@ -21,6 +21,9 @@ times the first-run fetch).
 
 - Cold start reads only the visible window of rows from Cache, never the whole
   Inbox. The network is not part of it.
+- A Folder of 100,000 Messages keeps an `Update::Inbox` within a frame and
+  the Message List within 5 MB: its Threads are rows, and only the cards
+  around the selection are read (ADR 0022, where the numbers are).
 - A Preview not yet rendered shows a placeholder; it never blocks a frame.
 - Rendered Previews live in a byte-bounded LRU of about 8 MB. The converter's
   transient peak (up to ~14 MB on a 395 KB outlier) is outside the RSS budget
