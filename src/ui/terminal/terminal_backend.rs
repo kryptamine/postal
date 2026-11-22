@@ -6,6 +6,7 @@ use ratatui::{
     buffer::Cell,
     crossterm::{
         cursor::MoveTo,
+        event::{DisableFocusChange, EnableFocusChange},
         execute, queue,
         style::{Color as CrosstermColor, Colors, Print, SetColors, SetUnderlineColor},
         terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
@@ -23,11 +24,11 @@ pub struct TerminalBackend {
     out: Stdout,
 }
 
-/// Raw mode on the alternate screen, as `ratatui::init` sets it up; the
-/// panic hook and `ratatui::restore` undo it.
+/// Raw mode on the alternate screen, as `ratatui::init` sets it up, with
+/// focus reported; `restore` undoes it.
 pub fn init() -> io::Result<Terminal<TerminalBackend>> {
     terminal::enable_raw_mode()?;
-    execute!(io::stdout(), EnterAlternateScreen)?;
+    execute!(io::stdout(), EnterAlternateScreen, EnableFocusChange)?;
     Terminal::new(TerminalBackend {
         inner: CrosstermBackend::new(io::stdout()),
         out: io::stdout(),
@@ -38,15 +39,22 @@ pub fn init() -> io::Result<Terminal<TerminalBackend>> {
 /// foreground; `resume` takes it again.
 pub fn leave(terminal: &mut Terminal<TerminalBackend>) -> io::Result<()> {
     terminal.show_cursor()?;
-    execute!(io::stdout(), LeaveAlternateScreen)?;
+    execute!(io::stdout(), DisableFocusChange, LeaveAlternateScreen)?;
     terminal::disable_raw_mode()
+}
+
+/// The terminal as Postal found it, for good; the shell would read focus
+/// reports as typed text.
+pub fn restore() {
+    execute!(io::stdout(), DisableFocusChange).ok();
+    ratatui::restore();
 }
 
 /// Raw mode on the alternate screen again, cleared so the next draw
 /// repaints every cell.
 pub fn resume(terminal: &mut Terminal<TerminalBackend>) -> io::Result<()> {
     terminal::enable_raw_mode()?;
-    execute!(io::stdout(), EnterAlternateScreen)?;
+    execute!(io::stdout(), EnterAlternateScreen, EnableFocusChange)?;
     terminal.hide_cursor()?;
     // Not `Terminal::clear`: it asks the terminal where the cursor is.
     // Swapping twice blanks both buffers, so the next draw has no diff base.

@@ -6,7 +6,7 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    account::config::{self, IconChoice, SecretStore},
+    account::config::{self, IconChoice, NotifyChoice, SecretStore},
     account::config_file::ConfigFile,
     account::partial_config::PartialConfig,
     account::provider::Provider,
@@ -22,6 +22,7 @@ pub enum Row {
     Signature(usize),
     Add,
     Icons,
+    Notify,
     Name,
     Secrets,
 }
@@ -40,6 +41,7 @@ pub enum Step {
     /// The editor on the signature of the Account at this address.
     Signature(String),
     Icons(IconChoice),
+    Notify(NotifyChoice),
     Quit,
 }
 
@@ -50,6 +52,7 @@ pub struct Settings {
     /// The first line of each Account's signature, where it reads.
     pub signatures: Vec<Option<String>>,
     pub icons: IconChoice,
+    pub notify: NotifyChoice,
     pub name: Option<String>,
     pub secrets: SecretStore,
     selected: usize,
@@ -74,6 +77,7 @@ impl Settings {
                 .map(|(email, provider)| (email.to_owned(), provider))
                 .collect(),
             icons: config.icons,
+            notify: config.notify,
             name: config.name,
             secrets: config.secrets,
             selected: 0,
@@ -88,7 +92,7 @@ impl Settings {
         let accounts = 0..self.accounts.len();
         let accounts =
             accounts.flat_map(|account| [Row::Account(account), Row::Signature(account)]);
-        accounts.chain([Row::Add, Row::Icons, Row::Name, Row::Secrets])
+        accounts.chain([Row::Add, Row::Icons, Row::Notify, Row::Name, Row::Secrets])
     }
 
     pub fn selected(&self) -> Row {
@@ -165,6 +169,13 @@ impl Settings {
                 if self.change(|settings| settings.write(|config| config.set_icons(icons))) {
                     self.icons = icons;
                     return Step::Icons(icons);
+                }
+            }
+            Row::Notify => {
+                let notify = self.notify.next();
+                if self.change(|settings| settings.write(|config| config.set_notify(notify))) {
+                    self.notify = notify;
+                    return Step::Notify(notify);
                 }
             }
             Row::Name => self.editing = Some(self.name.clone().unwrap_or_default()),

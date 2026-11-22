@@ -90,6 +90,9 @@ pub trait MailServer {
     /// Unread Messages in a Folder other than the examined one, by `STATUS`.
     async fn unread_in(&mut self, folder: &FolderName) -> Result<usize, Error>;
 
+    /// The `UIDNEXT` of a Folder other than the examined one, by `STATUS`.
+    async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error>;
+
     /// The newest `count` of the `exists` Messages, by sequence number;
     /// `progress` gets how many have come so far, now and then.
     async fn newest(
@@ -423,6 +426,11 @@ impl MailServer for ImapSession {
         Ok(status
             .unseen
             .map_or(0, |n| usize::try_from(n).unwrap_or(usize::MAX)))
+    }
+
+    async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error> {
+        let status = self.session.status(folder, "(UIDNEXT)").await?;
+        Ok(status.uid_next.map(Uid::new))
     }
 
     async fn newest(

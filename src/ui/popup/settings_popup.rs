@@ -105,6 +105,7 @@ impl SettingsPopup<'_> {
             },
             Row::Add => ("+ Add account", "", false),
             Row::Icons => ("Icons", settings.icons.key(), false),
+            Row::Notify => ("Notify", settings.notify.key(), false),
             Row::Name => match (&settings.editing, &settings.name) {
                 (Some(typed), _) => ("Name", typed.as_str(), false),
                 (None, Some(name)) => ("Name", name.as_str(), false),
@@ -143,10 +144,10 @@ impl SettingsPopup<'_> {
         let inner = inner(popup(area, self.settings));
         let accounts = u16::try_from(self.settings.accounts.len()).unwrap_or(u16::MAX);
         // Below the Accounts heading, two rows each, Add, a blank row,
-        // General and Icons.
+        // General, Icons and Notify.
         let y = inner
             .y
-            .saturating_add(accounts.saturating_mul(2).saturating_add(5));
+            .saturating_add(accounts.saturating_mul(2).saturating_add(6));
         (y < inner.bottom()).then(|| Position::new(inner.right(), y))
     }
 }

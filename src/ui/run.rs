@@ -6,6 +6,7 @@ use ratatui::{Terminal, layout::Rect};
 use tokio::time::Instant;
 
 use crate::{
+    account::config::NotifyChoice,
     cache::{self, Cache},
     compose::accounts::Accounts,
     compose::outbox::Outbox,
@@ -27,6 +28,7 @@ use crate::{
     ui::list::folder_show::show,
     ui::list::message_list,
     ui::list::older_pages::OlderPages,
+    ui::outside::notifier::Notifier,
     ui::outside::wanted_attachments::WantedAttachments,
     ui::preview::preview_pane,
     ui::preview::previews::Previews,
@@ -70,6 +72,7 @@ pub struct Background<'a, W, U> {
     pub statuses: PerAccount<Status>,
     /// What failed before the TUI opened again, toasted.
     pub failure: Option<&'static str>,
+    pub notify: NotifyChoice,
 }
 
 /// The screen, with the terminal, the look, the Previews and the network
@@ -83,6 +86,7 @@ pub struct Model<'a> {
     older: OlderPages,
     pub replies: ReplyFetch,
     pub attachments: WantedAttachments,
+    pub notifier: Notifier,
 }
 
 /// The one event loop: input, and each `Update` from the background work,
@@ -120,6 +124,7 @@ pub async fn run(
         older: background.older,
         replies: background.replies,
         attachments: background.attachments,
+        notifier: Notifier::new(background.notify),
     };
 
     let mut work = std::pin::pin!(background.work.fuse());
@@ -211,6 +216,10 @@ impl Model<'_> {
             self.ui.screen.toast = Some(toast);
         }
 
+        if let Update::Arrived(arrivals) = &update {
+            self.notifier.arrived(arrivals);
+        }
+
         let (account, update) = self.older.notice((account, update));
         apply::apply(account, update, &mut self.ui, self.world, self.previews)?;
         if let Some(result) = arrived {
@@ -229,6 +238,12 @@ impl Model<'_> {
         // A Draft opened, closed, discarded or brought back changes the list.
         let drafts = |screen: &Screen| (screen.over.is_open::<DraftPreview>(), screen.undo.len());
         let before = drafts(&self.ui.screen);
+        match event {
+            Some(Ok(Event::FocusGained)) => self.notifier.focus(true),
+            Some(Ok(Event::FocusLost)) => self.notifier.focus(false),
+            _ => {}
+        }
+
         let step = handle::handle(event, &mut self.ui, half_page(text))?;
         let exit = take(self, step, text)?;
         if exit.is_none() && before != drafts(&self.ui.screen) {

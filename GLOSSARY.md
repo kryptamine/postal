@@ -100,6 +100,10 @@ _Avoid_: pagination, load more, infinite scroll
 A short notice in the right slot of the hint line, shown for three seconds; a new one replaces the old.
 _Avoid_: notification, flash, alert
 
+**Notification**:
+The desktop's notice of new Unread mail in an Inbox while Postal runs, one per batch: its sender and subject, or how many came and from whom. None for mail the first sync or a Backfill finds, read elsewhere, or sent by the Account. `notify` says when: while the terminal has no focus (the default), always or never (ADR 0025).
+_Avoid_: alert, toast, popup
+
 **Status**:
 The connection state in the right slot of the hint line, silent while live: syncing (the first fetch or a Backfill), fetching the body a Reply waits on, connecting, or a countdown to the next reconnect. With more than one Account, it shows the worst state among them, named by its address. A Toast covers it while shown.
 _Avoid_: indicator, banner, connection bar
@@ -157,7 +161,7 @@ The screen that signs an Account in: on a first run, and after `postal login` or
 _Avoid_: setup wizard, registration
 
 **Settings**:
-A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once: the Accounts, each with its Provider and under it its Signature by its first line, then Add account, and the General settings, Icons, Name and Secrets. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
+A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once: the Accounts, each with its Provider and under it its Signature by its first line, then Add account, and the General settings, Icons, Notify, Name and Secrets. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
 _Avoid_: preferences, options, config screen
 
 **Unlink**:

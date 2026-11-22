@@ -5,6 +5,7 @@ use crate::{
     account::sign_in::SignIn,
     cache::Cache,
     domain::folder_name::FolderName,
+    mail::arrivals::Arrivals,
     mail::body_fetch::{self, Request},
     mail::idle,
     mail::imap::{ImapSession, Mode},
@@ -78,9 +79,16 @@ async fn sync(
     send: &impl Fn(Update),
     report: impl Fn(Status),
 ) -> Result<(), Error> {
+    let arrivals = Arrivals::new();
     let attempt = async |report: &dyn Fn(Status)| {
         let session = ImapSession::open(sender.outgoing.config, sender.sign_in).await?;
-        let tell = Tell { send, report };
+        let arrivals = &arrivals;
+        let tell = Tell {
+            send,
+            report,
+            arrivals,
+        };
+
         idle::listen(session, cache, &mut steering, sender, tell).await
     };
 

@@ -23,6 +23,7 @@ pub struct Config {
     pub secrets: SecretStore,
     pub oauth: Endpoints,
     pub icons: IconChoice,
+    pub notify: NotifyChoice,
 }
 
 #[derive(PartialEq, Eq)]
@@ -103,6 +104,37 @@ impl IconChoice {
             Self::Auto => Self::Nerd,
             Self::Nerd => Self::None,
             Self::None => Self::Auto,
+        }
+    }
+}
+
+/// When new mail in an Inbox raises a desktop notification.
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum NotifyChoice {
+    /// Only while the terminal does not have focus.
+    #[default]
+    Unfocused,
+    Always,
+    Never,
+}
+
+impl NotifyChoice {
+    /// The value of `notify` in `config.toml`.
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Unfocused => "unfocused",
+            Self::Always => "always",
+            Self::Never => "never",
+        }
+    }
+
+    /// The one after this, back to `unfocused` after `never`.
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Unfocused => Self::Always,
+            Self::Always => Self::Never,
+            Self::Never => Self::Unfocused,
         }
     }
 }

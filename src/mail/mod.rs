@@ -1,3 +1,5 @@
+pub mod arrival;
+mod arrivals;
 pub mod attachment_fetch;
 pub mod backfill;
 mod backoff;
@@ -8,6 +10,7 @@ mod folder_list;
 mod header;
 mod idle;
 mod imap;
+mod inbox_poll;
 pub mod login;
 mod move_changes;
 pub mod outage;

@@ -20,7 +20,7 @@ use imap_next::{
         mailbox::Mailbox,
         response::{Code, CodeOther, CommandContinuationRequest, Data, Greeting, Status},
         search::SearchKey,
-        status::StatusDataItem,
+        status::{StatusDataItem, StatusDataItemName},
     },
     server::{Event, Options, Server},
     stream::Stream,
@@ -911,7 +911,11 @@ fn answer_folders(
     body: CommandBody<'static>,
     inbox: &Inbox,
 ) -> Status<'static> {
-    let CommandBody::Status { mailbox, .. } = body else {
+    let CommandBody::Status {
+        mailbox,
+        item_names,
+    } = body
+    else {
         for folder in &inbox.folders {
             server.enqueue_data(listed(folder));
         }
@@ -924,9 +928,17 @@ fn answer_folders(
     };
 
     let unseen = folder.messages.iter().filter(|m| !m.message.seen).count();
+    let items = item_names.iter().filter_map(|name| match name {
+        StatusDataItemName::Unseen => Some(StatusDataItem::Unseen(u32::try_from(unseen).unwrap())),
+        StatusDataItemName::UidNext => Some(StatusDataItem::UidNext(
+            NonZeroU32::new(folder.uid_next).unwrap(),
+        )),
+        _ => None,
+    });
+
     server.enqueue_data(Data::Status {
         mailbox,
-        items: vec![StatusDataItem::Unseen(u32::try_from(unseen).unwrap())].into(),
+        items: items.collect::<Vec<_>>().into(),
     });
     Status::ok(tag, None, "STATUS completed").unwrap()
 }

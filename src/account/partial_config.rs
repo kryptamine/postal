@@ -10,7 +10,7 @@ use serde::Deserialize;
 use toml::Spanned;
 
 use crate::{
-    account::config::{Config, Error, IconChoice, Imap, SecretStore, Smtp},
+    account::config::{Config, Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp},
     account::oauth::Endpoints,
     account::provider::Provider,
     account::signature::Signature,
@@ -30,6 +30,7 @@ pub struct PartialConfig {
     pub secrets: SecretStore,
     pub oauth: Endpoints,
     pub icons: IconChoice,
+    pub notify: NotifyChoice,
 }
 
 #[derive(Deserialize)]
@@ -52,6 +53,8 @@ struct RawConfig {
     oauth: RawOAuth,
     #[serde(default)]
     icons: IconChoice,
+    #[serde(default)]
+    notify: NotifyChoice,
     #[serde(default)]
     account: Vec<RawAccount>,
 }
@@ -165,6 +168,7 @@ impl PartialConfig {
                 secrets: SecretStore::default(),
                 oauth: Endpoints::google(),
                 icons: IconChoice::default(),
+                notify: NotifyChoice::default(),
             }),
             Err(source) => Err(Error::Read {
                 path: path.to_owned(),
@@ -229,6 +233,7 @@ impl PartialConfig {
                 redirect_timeout: Duration::from_secs(raw.oauth.redirect_timeout),
             },
             icons: raw.icons,
+            notify: raw.notify,
         })
     }
 
@@ -297,6 +302,7 @@ impl PartialConfig {
             secrets: self.secrets,
             oauth: self.oauth.clone(),
             icons: self.icons,
+            notify: self.notify,
         }
     }
 }

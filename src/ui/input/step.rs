@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    account::config::IconChoice,
+    account::config::{IconChoice, NotifyChoice},
     compose::recipients::Recipients,
     domain::per_account::AccountId,
     domain::shown::Shown,
@@ -28,6 +28,7 @@ pub enum Step {
     /// The editor on the signature of the Account at this address.
     Signature(String),
     Icons(IconChoice),
+    Notify(NotifyChoice),
     Exit(Exit),
 }
 

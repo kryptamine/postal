@@ -44,6 +44,7 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
             model.theme.icons = Icons::choose(choice);
             model.previews.set_look(model.theme.mail_look());
         }
+        Step::Notify(choice) => model.notifier.notify = choice,
         Step::Exit(exit) => return Ok(Some(exit)),
     }
 

@@ -3,7 +3,7 @@ use std::{error::Error, path::Path};
 use futures::TryFutureExt;
 
 use crate::{
-    account::config::{Config, IconChoice},
+    account::config::{Config, IconChoice, NotifyChoice},
     account::sign_in::SignIn,
     account::xdg,
     cache::Cache,
@@ -91,6 +91,10 @@ pub async fn session(
         statuses: sign_ins.map(|sign_in| starting(sign_in.as_ref())),
         failure,
         config_dir: dir,
+        notify: configs
+            .values()
+            .next()
+            .map_or_else(NotifyChoice::default, |config| config.notify),
     };
 
     Ok(run::run(terminal, &mut theme, &caches, &mut previews, background).await?)

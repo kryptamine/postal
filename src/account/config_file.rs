@@ -7,7 +7,7 @@ use toml_edit::{ArrayOfTables, DocumentMut, Item, RawString, Table, TableLike, V
 
 use crate::{
     account::atomic_file,
-    account::config::{Error, IconChoice, SecretStore},
+    account::config::{Error, IconChoice, NotifyChoice, SecretStore},
     account::provider::Provider,
 };
 
@@ -135,6 +135,15 @@ impl ConfigFile {
             root.remove("icons");
         } else {
             set(root, "icons", icons.key().into());
+        }
+    }
+
+    pub fn set_notify(&mut self, notify: NotifyChoice) {
+        let root = self.document.as_table_mut();
+        if notify == NotifyChoice::default() {
+            root.remove("notify");
+        } else {
+            set(root, "notify", notify.key().into());
         }
     }
 

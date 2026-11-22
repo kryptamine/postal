@@ -7,6 +7,7 @@ use crate::{
     mail::flag_changes,
     mail::folder_list,
     mail::imap::{MailServer, Pushed},
+    mail::inbox_poll::InboxPoll,
     mail::move_changes,
     mail::outbox_flush::{self, Sender},
     mail::sequence_numbers::SequenceNumbers,
@@ -23,9 +24,9 @@ use crate::{
 /// connection hides a dead one.
 const PERIOD: Duration = Duration::from_secs(10 * 60);
 
-/// Resyncs the Folder `steering` follows, then keeps its Cache live from the
-/// server's announcements and sends the Outbox until the screen stops
-/// asking; IDLE gives way to each ask (ADR 0008).
+/// Resyncs the Folder `steering` follows, then keeps its Cache live and sends
+/// the Outbox until the screen stops asking; IDLE gives way to each ask (ADR
+/// 0008), and to a `STATUS` of the Inbox while another Folder shows (ADR 0025).
 pub async fn listen<S: MailServer>(
     mut server: S,
     cache: &Cache,
@@ -45,6 +46,7 @@ pub async fn listen<S: MailServer>(
     let mut sequence = shown(&mut server, cache, steering, tell).await?;
     // What came during the resync and the Snippets goes first.
     let mut pushed = server.pushed();
+    let mut poll = InboxPoll::new();
     loop {
         // Another Folder opened since: what the server announces is its own.
         asked.switched |= server.opening() != Some(sequence.opening());
@@ -84,7 +86,7 @@ pub async fn listen<S: MailServer>(
         }
 
         if pushed.is_empty() {
-            (server, pushed) = server.idle(PERIOD, steering.asking()).await?;
+            (server, pushed) = idle(server, cache, steering, &mut poll, tell).await?;
             let Some(more) = steering.take() else {
                 return Ok(());
             };
@@ -102,7 +104,7 @@ pub async fn listen<S: MailServer>(
             continue;
         }
 
-        take_in(&mut server, cache, &mut sequence, pushed, tell.send).await?;
+        take_in(&mut server, cache, &mut sequence, pushed, tell).await?;
         pushed = server.pushed();
     }
 }
@@ -151,8 +153,9 @@ async fn take_in(
     cache: &Cache,
     sequence: &mut SequenceNumbers,
     pushed: Vec<Pushed>,
-    send: &impl Fn(Update),
+    tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<(), Error> {
+    let send = tell.send;
     let Some(changes) = changes(server, cache, sequence, pushed).await? else {
         return Ok(());
     };
@@ -165,6 +168,7 @@ async fn take_in(
         changes.expunged.len(),
         changes.flags.len()
     );
+    arrived(tell, folder, &changes);
     send(Update::Inbox);
     if !changes.new.is_empty() {
         snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
@@ -189,6 +193,53 @@ async fn shown(
             resynced(server, cache, FolderName::inbox(), tell).await
         }
         result => result,
+    }
+}
+
+/// IDLEs on the shown Folder until the server announces a change or the
+/// screen asks; when the Inbox is due a look instead, gives it that and
+/// returns at once, leaving the Inbox open.
+async fn idle<S: MailServer>(
+    mut server: S,
+    cache: &Cache,
+    steering: &mut Steering,
+    poll: &mut InboxPoll,
+    tell: Tell<'_, impl Fn(Update)>,
+) -> Result<(S, Vec<Pushed>), Error> {
+    if poll.due(&steering.folder) {
+        poll_inbox(&mut server, cache, tell).await?;
+        return Ok((server, Vec::new()));
+    }
+
+    let period = poll.period(&steering.folder, PERIOD);
+    Ok(server.idle(period, steering.asking()).await?)
+}
+
+/// Resyncs the Inbox when `STATUS` says it holds mail the Cache does not.
+async fn poll_inbox(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    tell: Tell<'_, impl Fn(Update)>,
+) -> Result<(), Error> {
+    let inbox = FolderName::inbox();
+    let Some(known) = cache.state(inbox)? else {
+        return Ok(());
+    };
+
+    let next = server.uid_next_in(inbox).await?;
+    if next.is_some() && next != known.uid_next {
+        tracing::info!("the Inbox has new mail: resyncing it");
+        resynced(server, cache, inbox, tell).await?;
+    }
+
+    Ok(())
+}
+
+/// Tells the screen of the arrivals among `changes` to `folder`.
+fn arrived(tell: Tell<'_, impl Fn(Update)>, folder: &FolderName, changes: &Changes) {
+    let arrived = tell.arrivals.of(folder, changes);
+    if !arrived.is_empty() {
+        (tell.send)(Update::Arrived(arrived));
     }
 }
 
@@ -226,8 +277,9 @@ async fn resynced(
     folder: &FolderName,
     tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<SequenceNumbers, Error> {
-    let examined = sync::resync(server, cache, folder, tell.report).await?;
+    let (examined, changes) = sync::resync(server, cache, folder, tell.report).await?;
     let send = tell.send;
+    arrived(tell, folder, &changes);
     send(Update::Inbox);
     snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
     let uids = cache.uids(folder)?;

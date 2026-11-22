@@ -1,6 +1,6 @@
 use std::{backtrace::Backtrace, path::PathBuf};
 
-use crate::ui::logging;
+use crate::{ui::logging, ui::terminal::terminal_backend};
 
 /// Restores the terminal, logs the panic with its backtrace, and points at the log.
 #[expect(
@@ -9,7 +9,7 @@ use crate::ui::logging;
 )]
 pub fn install(log: PathBuf) {
     std::panic::set_hook(Box::new(move |info| {
-        ratatui::restore();
+        terminal_backend::restore();
         tracing::error!("{info}\n{}", Backtrace::force_capture());
         logging::flush();
         eprintln!("Postal crashed. Log: {}", log.display());

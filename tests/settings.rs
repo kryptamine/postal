@@ -116,7 +116,7 @@ fn the_name_is_typed_in_place() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, false);
     settings(&mut t);
-    for _ in 0..4 {
+    for _ in 0..5 {
         t.send(Key::Char('j')).unwrap();
     }
 
@@ -166,7 +166,7 @@ fn a_refused_store_switch_changes_nothing() {
     let before = config(&home);
     let mut t = postal(&home, true);
     settings(&mut t);
-    for _ in 0..5 {
+    for _ in 0..6 {
         t.send(Key::Char('j')).unwrap();
     }
 

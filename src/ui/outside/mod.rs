@@ -1,6 +1,8 @@
 pub mod attachment_file;
 pub mod clipboard;
+mod delivery;
 mod message_file;
+pub mod notifier;
 pub mod open_outside;
 mod pager;
 mod pager_text;

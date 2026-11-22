@@ -38,7 +38,7 @@ impl TerminalSlot {
 impl Drop for TerminalSlot {
     fn drop(&mut self) {
         if self.taken.is_some() {
-            ratatui::restore();
+            terminal_backend::restore();
         }
     }
 }
