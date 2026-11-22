@@ -111,10 +111,10 @@ pub trait MailServer {
     /// The Messages whose UID is at least `first`.
     async fn since_uid(&mut self, first: Uid) -> Result<Vec<NewMessage>, Error>;
 
-    /// As `newest`, with nothing but each Message's UID and addresses read.
-    async fn newest_envelopes(
+    /// As `older`, with nothing but each Message's UID and addresses read.
+    async fn envelopes_before(
         &mut self,
-        exists: u32,
+        before: u32,
         count: u32,
     ) -> Result<Vec<(Uid, Correspondence)>, Error>;
 
@@ -461,13 +461,18 @@ impl MailServer for ImapSession {
         Ok(messages)
     }
 
-    async fn newest_envelopes(
+    async fn envelopes_before(
         &mut self,
-        exists: u32,
+        before: u32,
         count: u32,
     ) -> Result<Vec<(Uid, Correspondence)>, Error> {
-        let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
-        let command = format!("FETCH {first}:* {ENVELOPE_ITEMS}");
+        let last = before.saturating_sub(1);
+        if last == 0 {
+            return Ok(Vec::new());
+        }
+
+        let first = before.saturating_sub(count).max(1);
+        let command = format!("FETCH {first}:{last} {ENVELOPE_ITEMS}");
         Ok(addressed(self.rows(command, |_| {}).await?, Uid::new(0)))
     }
 

@@ -42,7 +42,11 @@ pub async fn read(
         (Some(last), Some(next)) if next <= last.next() => Vec::new(),
         (Some(last), _) => server.envelopes_since(last.next()).await?,
         (None, _) if examined.exists == 0 => Vec::new(),
-        (None, _) => server.newest_envelopes(examined.exists, WINDOW).await?,
+        (None, _) => {
+            server
+                .envelopes_before(examined.exists.saturating_add(1), WINDOW)
+                .await?
+        }
     };
 
     // Each was sent by the Account, from whichever address: none of those
