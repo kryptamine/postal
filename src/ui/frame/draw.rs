@@ -13,9 +13,9 @@ use crate::{
     ui::preview::previews::Previews,
     ui::preview::thread_pane::ThreadPane,
     ui::run::Error,
-    ui::state::main_screen::Ui,
     ui::state::mode::Mode,
     ui::state::screen::Screen,
+    ui::state::ui::Ui,
     ui::terminal::terminal_backend::TerminalBackend,
     ui::widgets::hint_line::HintLine,
 };

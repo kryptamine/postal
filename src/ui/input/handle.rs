@@ -4,8 +4,7 @@ use crossterm::event::{Event, KeyEvent};
 
 use crate::{
     ui::exit::Exit, ui::input::keymap, ui::input::pane_keys, ui::input::step::Step,
-    ui::popup::layer_act::Act, ui::run::Error, ui::state::main_screen::Ui,
-    ui::state::screen::Screen,
+    ui::popup::layer_act::Act, ui::run::Error, ui::state::screen::Screen, ui::state::ui::Ui,
 };
 
 /// Acts on one input event, where the view alone can take it.

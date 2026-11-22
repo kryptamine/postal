@@ -5,8 +5,8 @@ use crate::{
     mail::steering::Ask,
     ui::list::folder_show::{relist, show},
     ui::run::Error,
-    ui::state::main_screen::Ui,
     ui::state::toast::Toast,
+    ui::state::ui::Ui,
     ui::world::World,
 };
 

@@ -15,10 +15,10 @@ use crate::{
     ui::preview::link_hints::LinkHints,
     ui::preview::previews::Previews,
     ui::run::Error,
-    ui::state::main_screen::Ui,
     ui::state::screen::Screen,
     ui::state::showing::Showing,
     ui::state::toast::Toast,
+    ui::state::ui::Ui,
     ui::world::World,
 };
 

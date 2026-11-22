@@ -5,7 +5,7 @@ use crate::{
     compose::local_drafts::LocalDrafts, domain::body_key::BodyKey, domain::thread::Key,
     ui::drafts::draft_preview::DraftPreview, ui::list::marking::mark_read,
     ui::popup::folder_picker::FolderPicker, ui::preview::previews::Previews, ui::run::Error,
-    ui::state::main_screen::Ui, ui::state::mode::Mode, ui::world::World,
+    ui::state::mode::Mode, ui::state::ui::Ui, ui::world::World,
 };
 
 /// Follows the Dwell, then says when the screen next changes on its own.

@@ -10,8 +10,8 @@ use crate::{
     ui::preview::previews::Previews,
     ui::preview::reading::Reading,
     ui::preview::stack::{self, Shape},
-    ui::state::main_screen::Ui,
     ui::state::toast::Toast,
+    ui::state::ui::Ui,
 };
 
 /// Enters hint mode on the links the Preview window shows, or says there

@@ -11,8 +11,8 @@ use crate::{
     ui::outside::pager,
     ui::outside::pager_text,
     ui::run::Error,
-    ui::state::main_screen::Ui,
     ui::state::toast::Toast,
+    ui::state::ui::Ui,
     ui::terminal::tty::Tty,
 };
 

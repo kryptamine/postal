@@ -2,7 +2,7 @@ use crate::{
     cache::Cache, domain::folder::Folder, domain::per_account::PerAccount, domain::shown::Shown,
     ui::list::all_inboxes, ui::list::inbox_view::InboxView, ui::list::search::Search,
     ui::popup::folder_picker::FolderPicker, ui::preview::link_hints::LinkHints, ui::run::Error,
-    ui::state::main_screen::Ui, ui::state::showing::Showing,
+    ui::state::showing::Showing, ui::state::ui::Ui,
 };
 
 /// Reads the shown Folder from the Cache into `view`, at most `limit`

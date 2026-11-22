@@ -9,7 +9,7 @@ use crate::{
     ui::outside::open_outside,
     ui::popup::settings::Settings,
     ui::preview::link_labels::{browse, label_links},
-    ui::react::steering::steer,
+    ui::react::steer::steer,
     ui::run::{Error, Model},
     ui::state::toast::Toast,
 };

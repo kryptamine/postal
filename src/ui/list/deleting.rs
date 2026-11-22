@@ -6,8 +6,8 @@ use crate::{
     ui::list::folder_show::{relist, show},
     ui::preview::link_hints::LinkHints,
     ui::run::Error,
-    ui::state::main_screen::Ui,
     ui::state::toast::Toast,
+    ui::state::ui::Ui,
     ui::state::undo::Undo,
     ui::world::World,
 };

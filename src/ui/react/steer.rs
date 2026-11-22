@@ -7,7 +7,7 @@ use crate::{
     ui::list::search::Search,
     ui::popup::folder_picker::FolderPicker,
     ui::run::Error,
-    ui::state::main_screen::Ui,
+    ui::state::ui::Ui,
     ui::world::World,
 };
 
