@@ -3,7 +3,7 @@ use std::ops::Range;
 use crate::{
     domain::message::Message, render::body::Body, ui::list::inbox_view::InboxView,
     ui::preview::message_header::STACK_ROWS as HEADER, ui::preview::previews::Previews,
-    ui::preview::reading::Reading,
+    ui::preview::reading::Reading, ui::preview::stack_line::StackLine,
 };
 
 /// Rows between two Messages of the stack.
@@ -15,12 +15,16 @@ pub struct Placed<'a> {
     pub index: usize,
     /// The first of the Messages it stands for.
     pub message: &'a Message,
-    /// More than one on the line standing for a folded run.
-    pub count: usize,
-    /// `None` while folded to one line.
-    pub body: Option<Body<'a>>,
+    pub shape: Shape<'a>,
     pub top: usize,
     pub height: usize,
+}
+
+/// A line of the stack with what the Previews have of an unfolded body.
+pub enum Shape<'a> {
+    Run(usize),
+    Folded,
+    Unfolded(Body<'a>),
 }
 
 impl Placed<'_> {
@@ -37,7 +41,7 @@ impl Placed<'_> {
     /// rest of it is scrolled into view; the next Message pushes it up.
     pub const fn pinned(&self, window: &Range<usize>) -> usize {
         let scrolled = self.top < window.start && window.start < self.bottom();
-        if self.body.is_none() || !scrolled {
+        if !matches!(self.shape, Shape::Unfolded(_)) || !scrolled {
             return 0;
         }
 
@@ -62,27 +66,29 @@ pub fn placed<'a>(
     width: u16,
 ) -> impl Iterator<Item = Placed<'a>> {
     let (mut top, mut index) = (0, 0);
-    reading.lines(view.stack()).map(move |(message, count)| {
-        let body = (count == 1 && reading.unfolded(message.body_key))
-            .then(|| previews.body(view, message, width));
-        let height = match &body {
-            None => 1,
-            Some(Body::Rendered(preview)) => HEADER + preview.body.len(),
+    reading.lines(view.stack()).map(move |(message, line)| {
+        let shape = match line {
+            StackLine::Run(count) => Shape::Run(count),
+            StackLine::Folded => Shape::Folded,
+            StackLine::Unfolded => Shape::Unfolded(previews.body(view, message, width)),
+        };
+        let height = match &shape {
+            Shape::Run(_) | Shape::Folded => 1,
+            Shape::Unfolded(Body::Rendered(preview)) => HEADER + preview.body.len(),
             // One row for the placeholder.
-            Some(Body::Loading | Body::Unavailable(_)) => HEADER + 1,
+            Shape::Unfolded(Body::Loading | Body::Unavailable(_)) => HEADER + 1,
         };
 
         let placed = Placed {
             index,
             message,
-            count,
-            body,
+            shape,
             top,
             height,
         };
 
         top += height + GAP;
-        index += count;
+        index += line.messages();
         placed
     })
 }

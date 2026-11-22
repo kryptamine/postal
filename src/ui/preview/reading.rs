@@ -4,6 +4,7 @@ use crate::{
     domain::body_key::BodyKey,
     domain::message::Message,
     ui::keymap::{By, Direction, Scroll},
+    ui::preview::stack_line::StackLine,
 };
 
 /// Reading: the selected Thread as a stack of Messages, oldest first, each
@@ -49,10 +50,9 @@ impl Reading {
         self.unfolded.contains(&key)
     }
 
-    /// Each line of `stack`, with how many Messages it stands for: until the
-    /// first fold, a run of two or more folded between the oldest and the
-    /// newest is one line.
-    pub fn lines<'a, I>(&self, stack: I) -> impl Iterator<Item = (&'a Message, usize)>
+    /// Each line of `stack`: until the first fold, a run of two or more
+    /// folded between the oldest and the newest is one line.
+    pub fn lines<'a, I>(&self, stack: I) -> impl Iterator<Item = (&'a Message, StackLine)> + Clone
     where
         I: Iterator<Item = &'a Message> + Clone,
     {
@@ -63,19 +63,23 @@ impl Reading {
 
         let mut rest = stack.enumerate();
         iter::from_fn(move || {
-            let line = rest.next()?;
-            let run = if middle(&line) {
+            let (index, message) = rest.next()?;
+            if self.unfolded(message.body_key) {
+                return Some((message, StackLine::Unfolded));
+            }
+
+            let run = if middle(&(index, message)) {
                 1 + rest.clone().take_while(&middle).count()
             } else {
                 1
             };
 
             if run < 2 {
-                return Some((line.1, 1));
+                return Some((message, StackLine::Folded));
             }
 
             rest.nth(run - 2);
-            Some((line.1, run))
+            Some((message, StackLine::Run(run)))
         })
     }
 
@@ -112,11 +116,11 @@ impl Reading {
     /// for several, puts each on its own line instead.
     pub fn fold<'a>(&mut self, stack: impl Iterator<Item = &'a Message> + Clone) {
         let cursor = self.cursor;
-        let several = self
+        let run = self
             .lines(stack)
-            .any(|(message, count)| count > 1 && message.body_key == cursor);
+            .any(|(message, line)| matches!(line, StackLine::Run(_)) && message.body_key == cursor);
         self.whole = true;
-        if !several && !self.unfolded.remove(&cursor) {
+        if !run && !self.unfolded.remove(&cursor) {
             self.unfolded.insert(cursor);
         }
 

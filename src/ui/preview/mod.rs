@@ -6,4 +6,5 @@ pub mod preview_pane;
 pub mod previews;
 pub mod reading;
 mod stack;
+mod stack_line;
 pub mod thread_pane;

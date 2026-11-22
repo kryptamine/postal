@@ -1,9 +1,16 @@
 use ratatui::layout::Rect;
 
 use crate::{
-    account::browser, render::body::Body, ui::list::inbox_view::InboxView, ui::main_screen::Ui,
-    ui::preview::link_hints::LinkHints, ui::preview::message_header, ui::preview::preview_pane,
-    ui::preview::previews::Previews, ui::preview::reading::Reading, ui::preview::stack,
+    account::browser,
+    render::body::Body,
+    ui::list::inbox_view::InboxView,
+    ui::main_screen::Ui,
+    ui::preview::link_hints::LinkHints,
+    ui::preview::message_header,
+    ui::preview::preview_pane,
+    ui::preview::previews::Previews,
+    ui::preview::reading::Reading,
+    ui::preview::stack::{self, Shape},
     ui::toast::Toast,
 };
 
@@ -36,7 +43,7 @@ fn stack_links(
 ) -> Option<LinkHints> {
     let window = reading.scroll..reading.scroll + usize::from(text.height);
     let bodies = stack::placed(view, previews, reading, text.width).filter_map(|placed| {
-        let Some(Body::Rendered(preview)) = placed.body else {
+        let Shape::Unfolded(Body::Rendered(preview)) = placed.shape else {
             return None;
         };
 
