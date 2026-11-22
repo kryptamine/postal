@@ -6,8 +6,8 @@ use crate::{
     ui::keymap::{By, Direction, Scroll},
 };
 
-/// Reading: the selected Thread as a stack of Messages, the oldest then the
-/// rest newest first, each folded to a line or unfolded to its header and body.
+/// Reading: the selected Thread as a stack of Messages, oldest first, each
+/// folded to a line or unfolded to its header and body.
 pub struct Reading {
     unfolded: HashSet<BodyKey>,
     /// The body key of the Message at the cursor, which tells apart Messages

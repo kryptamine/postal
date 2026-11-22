@@ -80,8 +80,8 @@ impl Listing {
         self.by_key.get(&key).copied()
     }
 
-    /// The Messages of `thread`, those found in other Folders too: the
-    /// oldest, then the rest newest first.
+    /// The Messages of `thread`, those found in other Folders too, oldest
+    /// first.
     pub fn stack<'a>(
         &'a self,
         thread: Option<&'a Thread>,

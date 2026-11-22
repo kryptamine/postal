@@ -109,10 +109,7 @@ pub fn settle(
             held = Some(placed.top + into);
         }
 
-        // The second from the top, else the only one.
-        if placed.index <= 1 {
-            newest = Some((key, rows));
-        }
+        newest = Some((key, rows));
     }
 
     let cursor = match (cursor, newest) {

@@ -39,7 +39,7 @@ pub struct Thread {
     /// Indices into the Folder's Messages, newest first; never empty.
     pub messages: Vec<usize>,
     /// The whole Thread as Reading shows it, these Messages and those found
-    /// in other Folders: the oldest, then the rest newest first.
+    /// in other Folders, oldest first.
     pub stack: Vec<Place>,
     /// One Message per distinct sender name, in order of first appearance.
     pub senders: Vec<usize>,
@@ -106,12 +106,6 @@ pub fn group(
         let here = thread.messages.iter().rev().map(|&i| Place::Here(i));
         thread.stack.splice(0..0, here);
         thread.stack.sort_unstable_by_key(order);
-        if let Some((_, replies)) = thread.stack.split_first_mut() {
-            replies.sort_unstable_by_key(|place| {
-                let (received, side, here, there) = order(place);
-                (Reverse(received), side, here, there)
-            });
-        }
 
         for &index in thread.messages.iter().rev() {
             let name = sender(&messages[index]);

@@ -219,14 +219,14 @@ fn reading_unfolds_the_newest_and_the_unread_and_starts_on_the_oldest_unread() {
                 && folded(s, "Cid", "Cid agrees", "2024-03-03")
         })
         .unwrap();
-    assert!(screen.contains(" 4/4 "), "{screen}");
+    assert!(screen.contains(" 2/4 "), "{screen}");
     assert!(screen.contains("│▎From    Bob"), "{screen}");
     assert!(screen.contains("│ From    Dee"), "{screen}");
     assert!(!screen.contains("From    Ada"), "{screen}");
     assert!(!screen.contains("From    Cid"), "{screen}");
-    // The Message that started the Thread stays on top, and the latest
-    // reply is right under it, not a screen of older ones away.
-    let rows = ["Ada asks", "From    Dee", "Cid agrees", "From    Bob"].map(|t| row_of(&screen, t));
+    // One order from the top down, the way the Messages came, so the top
+    // is never taken for the latest.
+    let rows = ["Ada asks", "From    Bob", "Cid agrees", "From    Dee"].map(|t| row_of(&screen, t));
     assert!(rows.is_sorted(), "{rows:?}: {screen}");
     quit(t);
 }
@@ -244,7 +244,7 @@ fn with_nothing_unread_only_the_newest_is_unfolded_and_has_the_cursor() {
             s.contains("│▎From    Dee") && folded(s, "Bob", "Bob answers", "2024-03-02")
         })
         .unwrap();
-    assert!(screen.contains(" 2/4 "), "{screen}");
+    assert!(screen.contains(" 4/4 "), "{screen}");
     assert!(!screen.contains("From    Bob"), "{screen}");
     quit(t);
 }
@@ -257,15 +257,16 @@ fn n_and_p_move_the_cursor_through_the_thread() {
     let browser = Browser::new();
     let mut t = tall(&home, &browser);
     read_thread(&mut t);
-    t.wait_until(|s| s.contains(" 4/4 ")).unwrap();
+    t.wait_until(|s| s.contains(" 2/4 ")).unwrap();
 
     for (key, title) in [
-        ('n', " 4/4 "),
-        ('p', " 3/4 "),
-        ('p', " 2/4 "),
         ('p', " 1/4 "),
         ('p', " 1/4 "),
         ('n', " 2/4 "),
+        ('n', " 3/4 "),
+        ('n', " 4/4 "),
+        ('n', " 4/4 "),
+        ('p', " 3/4 "),
     ] {
         t.send(Key::Char(key)).unwrap();
         t.wait_until(|s| s.contains(title)).unwrap();
@@ -291,7 +292,7 @@ fn enter_and_space_fold_and_unfold_the_message_at_the_cursor() {
     t.send(Key::Char(' ')).unwrap();
     t.wait_until(|s| s.contains("│▎From    Bob")).unwrap();
 
-    t.send(Key::Char('p')).unwrap();
+    t.send(Key::Char('n')).unwrap();
     t.send(Key::Char(' ')).unwrap();
     let screen = t.snapshot_after(|s| s.contains("│▎Cid agrees")).unwrap();
     assert!(screen.contains("│▎From    Cid"), "{screen}");
