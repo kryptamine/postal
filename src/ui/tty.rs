@@ -1,9 +1,11 @@
 use std::io;
 
-use ratatui::Terminal;
+use ratatui::{Terminal, layout::Rect};
 
 use crate::{
     ui::input::Input,
+    ui::layout::{self, Panes},
+    ui::mode::Mode,
     ui::run::Error,
     ui::terminal_backend::{self, TerminalBackend},
 };
@@ -20,6 +22,15 @@ impl<'a> Tty<'a> {
             terminal,
             events: Input::new(),
         }
+    }
+
+    /// Where the main screen's parts go in `mode` at the terminal's size.
+    pub fn panes(&self, mode: Mode) -> Result<Panes, Error> {
+        let size = self.terminal.size().map_err(Error::Terminal)?;
+        Ok(layout::split(
+            Rect::new(0, 0, size.width, size.height),
+            mode,
+        ))
     }
 
     /// Runs `program` in the foreground with the terminal handed back, then

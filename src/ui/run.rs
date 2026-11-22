@@ -8,46 +8,39 @@ use tokio::time::Instant;
 use crate::{
     cache::{self, Cache},
     compose::accounts::Accounts,
-    compose::local_drafts::LocalDrafts,
     compose::outbox::Outbox,
-    domain::body_key::BodyKey,
     domain::per_account::{AccountId, PerAccount},
-    domain::thread::Key,
     mail::reply_fetch::ReplyFetch,
     mail::routes::Routes,
     mail::status::Status,
     mail::steering::Ask,
     mail::sync,
-    mail::update::{BodyLink, Update},
+    mail::update::Update,
     render::icons::Icons,
     ui::alloc_count,
     ui::apply,
     ui::composing,
-    ui::deleting,
     ui::draft_preview::DraftPreview,
     ui::drafting,
     ui::draw,
     ui::exit::Exit,
-    ui::folder_picker::FolderPicker,
-    ui::folder_show::{folders, show, start_search, switch},
+    ui::folder_show::show,
     ui::handle,
-    ui::inbox_view::InboxView,
-    ui::layout,
     ui::link_labels::{browse, label_links},
     ui::local_list::{open_local, relist_local},
     ui::main_screen::Ui,
-    ui::marking::{mark_read, mark_unread},
-    ui::message_list,
-    ui::mode::Mode,
     ui::older_pages::OlderPages,
     ui::open_outside,
+    ui::opening::opening,
     ui::preview_pane,
     ui::previews::Previews,
     ui::screen::Screen,
     ui::settings::Settings,
-    ui::step::{Steer, Step},
+    ui::steering::steer,
+    ui::step::Step,
     ui::terminal_backend::TerminalBackend,
     ui::theme::Theme,
+    ui::timed::{expire, next_change},
     ui::toast::Toast,
     ui::tty::Tty,
     ui::world::World,
@@ -120,13 +113,7 @@ pub async fn run(
     };
 
     let (statuses, failure) = (background.statuses, background.failure);
-    let ui = opening(
-        world,
-        first_rows(tty.terminal)?,
-        statuses,
-        failure,
-        previews,
-    )?;
+    let ui = opening(world, &tty, statuses, failure, previews)?;
     let mut model = Model {
         tty,
         theme,
@@ -187,10 +174,17 @@ impl Model<'_> {
     /// Readies the Previews and older pages the screen wants, then draws it;
     /// returns where the Preview's text goes.
     fn frame(&mut self) -> Result<Option<Rect>, Error> {
-        let text = panes(self.tty.terminal, self.ui.screen.showing.mode())?
+        let text = self
+            .tty
+            .panes(self.ui.screen.showing.mode())?
             .preview
             .map(preview_pane::text_area);
-        want(self.previews, self.world.caches, &self.ui, text)?;
+        if let Some(text) = text {
+            let (view, reading) = (&self.ui.view, self.ui.screen.showing.reading());
+            let caches = self.world.caches;
+            self.previews.want(caches, view, reading, text.width)?;
+        }
+
         self.older.want(&self.ui.view);
         self.draw()?;
         Ok(text)
@@ -244,7 +238,7 @@ impl Model<'_> {
         match step {
             Step::Stay => {}
             Step::Links => label_links(ui, self.previews, text),
-            Step::Steer(steer) => steering(steer, ui, world)?,
+            Step::Steer(to) => steer(to, ui, world)?,
             Step::Browse(url) => ui.screen.toast = browse(&url),
             Step::Open(to) => {
                 let tty = &mut self.tty;
@@ -268,62 +262,6 @@ impl Model<'_> {
     }
 }
 
-/// The screen as the TUI opens: the first `rows` of the list from the
-/// Cache, each Account's Status and what failed before it opened.
-fn opening(
-    world: World,
-    rows: usize,
-    statuses: PerAccount<Status>,
-    failure: Option<&'static str>,
-    previews: &mut Previews,
-) -> Result<Ui, Error> {
-    let emails = world.accounts.0.map(|config| config.email.as_str().into());
-    let mut view = InboxView::loading(emails);
-    show(&mut view, world.caches, Some(rows))?;
-    let rebuilt = world.caches.values().any(Cache::rebuilt);
-    let mut screen = Screen::opening(rebuilt, statuses, failure);
-    screen.outbox = world.outbox.count();
-    for (account, &status) in screen.statuses.iter() {
-        (status == Status::SignedOut).then(|| previews.link(account, BodyLink::Down));
-    }
-
-    Ok(Ui { view, screen })
-}
-
-/// Follows the Dwell, then says when the screen next changes on its own.
-fn next_change(ui: &mut Ui, previews: &Previews, text: Option<Rect>) -> Option<Instant> {
-    let target = dwelling(ui, previews, text);
-    let Ui { view, screen } = ui;
-    screen
-        .dwell
-        .follow(view.selected_key(), target, Instant::now());
-    screen.changes_at(Instant::now())
-}
-
-/// The selected Thread and its newest body key, while a Dwell may run on
-/// it: listed, Unread, and its body shown in the Preview `text`.
-fn dwelling(ui: &Ui, previews: &Previews, text: Option<Rect>) -> Option<(Key, BodyKey)> {
-    let Ui { view, screen } = ui;
-    let listed = matches!(screen.showing.mode(), Mode::List | Mode::Query)
-        && !screen.over.is_open::<FolderPicker>()
-        && !screen.over.is_open::<LocalDrafts>()
-        && !screen.over.is_open::<DraftPreview>();
-    let text = text.filter(|_| listed && !screen.help && view.selected_unread())?;
-    previews.get(view, text.width)?;
-    Some((view.selected_key()?, view.selected_body()?))
-}
-
-/// Drops the Toast and ends the Dwell when their time is up.
-fn expire(ui: &mut Ui, world: World) -> Result<(), Error> {
-    let now = Instant::now();
-    ui.screen.expire(now);
-    if ui.screen.dwell.ended(now) {
-        mark_read(ui, world)?;
-    }
-
-    Ok(())
-}
-
 /// Rows a half-page scroll moves the Preview `text` by.
 fn half_page(text: Option<Rect>) -> usize {
     text.map_or(1, |t| usize::from(t.height / 2).max(1))
@@ -338,79 +276,4 @@ fn finished(result: Result<(), sync::Error>) -> Result<(), Error> {
         }
         result => Ok(result?),
     }
-}
-
-/// Readies the Previews around the selection, or those unfolded while
-/// reading, once `text` is laid out.
-fn want(
-    previews: &mut Previews,
-    caches: &PerAccount<Cache>,
-    ui: &Ui,
-    text: Option<Rect>,
-) -> Result<(), Error> {
-    let Some(text) = text else {
-        return Ok(());
-    };
-
-    let view = &ui.view;
-    match ui.screen.showing.reading() {
-        Some(reading) => previews.want_stack(caches, view, reading, text.width),
-        None => previews.want(caches, view, text.width),
-    }?;
-
-    Ok(())
-}
-
-/// How many cards the list shows on the first frame.
-fn first_rows(terminal: &Terminal<TerminalBackend>) -> Result<usize, Error> {
-    let list = panes(terminal, Mode::List)?.list;
-    Ok(message_list::capacity(list.map_or(0, |list| list.height)))
-}
-
-fn panes(terminal: &Terminal<TerminalBackend>, mode: Mode) -> Result<layout::Panes, Error> {
-    let size = terminal.size().map_err(Error::Terminal)?;
-    Ok(layout::split(
-        Rect::new(0, 0, size.width, size.height),
-        mode,
-    ))
-}
-
-/// Opens the Folder Picker as the Cache last saw the Folders, starts a
-/// Search, shows the Folder picked, or marks, deletes or restores Messages,
-/// asking the sync connection to follow.
-fn steering(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
-    let (caches, asks) = (world.caches, world.asks);
-    // Signed out, nothing syncs and the ask is dropped.
-    match steer {
-        Steer::Folders => {
-            let folders = folders(caches)?;
-            let view = &ui.view;
-            let picker = FolderPicker::new(folders, &view.folder, &view.accounts);
-            ui.screen.over.open(picker);
-            for account in caches.ids() {
-                asks.send(account, Ask::ListFolders);
-            }
-        }
-        Steer::Show(folder) => {
-            if switch(ui, caches, folder)? {
-                for account in caches.ids() {
-                    if let Some(shown) = ui.view.folder.of(account) {
-                        asks.send(account, Ask::Show(shown.clone()));
-                    }
-                }
-            }
-        }
-        Steer::Read(thread) => {
-            mark_read(ui, world)?;
-            if let Some((account, id)) = thread {
-                asks.send(account, Ask::Thread(id));
-            }
-        }
-        Steer::MarkUnread => mark_unread(ui, world)?,
-        Steer::Delete => deleting::delete(ui, world)?,
-        Steer::Undo => deleting::undo(ui, world)?,
-        Steer::Search => start_search(ui, caches)?,
-    }
-
-    Ok(())
 }

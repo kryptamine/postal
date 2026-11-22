@@ -137,9 +137,23 @@ impl Previews {
             .map_or(Body::Loading, |message| self.body(view, message, width))
     }
 
-    /// Readies the Previews of the selection and its neighbours at `width`.
-    /// When all are rendered already this does not allocate.
+    /// Readies the Previews of the Messages `reading` unfolds, or else of the
+    /// selection and its neighbours, at `width`.
     pub fn want(
+        &mut self,
+        caches: &PerAccount<Cache>,
+        view: &InboxView,
+        reading: Option<&Reading>,
+        width: u16,
+    ) -> Result<(), cache::Error> {
+        match reading {
+            Some(reading) => self.want_stack(caches, view, reading, width),
+            None => self.want_around(caches, view, width),
+        }
+    }
+
+    /// When all are rendered already this does not allocate.
+    fn want_around(
         &mut self,
         caches: &PerAccount<Cache>,
         view: &InboxView,
@@ -157,9 +171,8 @@ impl Previews {
         Ok(())
     }
 
-    /// Readies the Previews of the selected Thread's Messages `reading` unfolds
-    /// at `width`, the one at its cursor asked for first.
-    pub fn want_stack(
+    /// The one at the cursor is asked for first.
+    fn want_stack(
         &mut self,
         caches: &PerAccount<Cache>,
         view: &InboxView,
