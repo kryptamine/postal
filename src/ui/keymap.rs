@@ -1,7 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::{
-    compose::recipients::Recipients, ui::layer, ui::mode::Mode, ui::open_outside::Outside,
+    compose::recipients::Recipients, ui::mode::Mode, ui::outside::open_outside::Outside,
+    ui::popup::layer,
 };
 
 #[derive(Clone, Copy)]

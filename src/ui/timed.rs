@@ -3,9 +3,9 @@ use tokio::time::Instant;
 
 use crate::{
     compose::local_drafts::LocalDrafts, domain::body_key::BodyKey, domain::thread::Key,
-    ui::draft_preview::DraftPreview, ui::folder_picker::FolderPicker, ui::main_screen::Ui,
-    ui::marking::mark_read, ui::mode::Mode, ui::previews::Previews, ui::run::Error,
-    ui::world::World,
+    ui::drafts::draft_preview::DraftPreview, ui::list::marking::mark_read, ui::main_screen::Ui,
+    ui::mode::Mode, ui::popup::folder_picker::FolderPicker, ui::preview::previews::Previews,
+    ui::run::Error, ui::world::World,
 };
 
 /// Follows the Dwell, then says when the screen next changes on its own.

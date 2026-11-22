@@ -8,6 +8,11 @@ private: `mod`, not `pub mod`, so the compiler keeps the others out of it.
 `cache` is the one layer that is a single module: its `mod.rs` re-exports
 `Cache` and the few items callers use.
 
+`ui` is large enough to group its modules by feature, one directory each:
+`crate::ui::<group>::<module>`. A group's module another group names is
+`pub mod`; the few other layers name are re-exported from `ui/mod.rs`, so
+their paths stay `crate::ui::<module>`.
+
 ## Codemap
 
 Lowest first:
@@ -26,8 +31,14 @@ Lowest first:
   reconnecting, the sign-in check, one Account's two connections
   (`mail::serve`), and what they tell the screen (`Update`, `Status`,
   `Steering`).
-- `ui/`: the TUI: the event loop, panes, popups, the Theme, the
-  keymap, the Onboarding and Settings, the log file.
+- `ui/`: the TUI. At its root the event loop, the Screen, the keymap, the
+  layout and the Theme; then `terminal/` (the backend, input, the tty),
+  `list/` (the Message List, Search, marking and deleting), `preview/` (the
+  Preview, the Thread, link hints), `drafts/` (composing, the Draft and
+  Local Drafts panes), `popup/` (the layers over the screen: help, the
+  Folder Picker, Settings), `widgets/` (small drawing pieces), `outside/`
+  (the pager, opening a Message elsewhere, the clipboard), `onboarding/`
+  and `logging/`.
 - `cli/`: the commands beside the TUI: the arguments, `correspondent list`,
   `thread show`.
 - `app/`: the TUI's run and `postal login`: the Accounts signed in, the

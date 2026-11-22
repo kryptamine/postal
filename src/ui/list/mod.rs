@@ -1,0 +1,12 @@
+mod all_inboxes;
+mod date_group;
+pub mod date_label;
+pub mod deleting;
+pub mod folder_show;
+pub mod inbox_view;
+pub mod marking;
+mod matched;
+pub mod message_list;
+pub mod older_pages;
+pub mod search;
+mod senders;

@@ -2,7 +2,8 @@ use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     account::config::IconChoice, compose::recipients::Recipients, domain::per_account::AccountId,
-    domain::shown::Shown, domain::thread_id::ThreadId, ui::exit::Exit, ui::open_outside::Outside,
+    domain::shown::Shown, domain::thread_id::ThreadId, ui::exit::Exit,
+    ui::outside::open_outside::Outside,
 };
 
 /// What the event loop does after one input event.

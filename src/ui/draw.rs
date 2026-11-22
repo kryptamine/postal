@@ -3,21 +3,21 @@ use tokio::time::Instant;
 
 use crate::{
     compose::accounts::Accounts,
-    ui::help_popup::HelpPopup,
-    ui::hint_line::HintLine,
     ui::layout,
-    ui::link_hints::LinkHints,
+    ui::list::message_list::MessageList,
+    ui::list::search::Search,
     ui::main_screen::Ui,
-    ui::message_list::MessageList,
     ui::mode::Mode,
-    ui::preview_pane::{self, PreviewPane},
-    ui::previews::Previews,
+    ui::popup::help_popup::HelpPopup,
+    ui::preview::link_hints::LinkHints,
+    ui::preview::preview_pane::{self, PreviewPane},
+    ui::preview::previews::Previews,
+    ui::preview::thread_pane::ThreadPane,
     ui::run::Error,
     ui::screen::Screen,
-    ui::search::Search,
-    ui::terminal_backend::TerminalBackend,
+    ui::terminal::terminal_backend::TerminalBackend,
     ui::theme::Theme,
-    ui::thread_pane::ThreadPane,
+    ui::widgets::hint_line::HintLine,
 };
 
 pub fn draw(

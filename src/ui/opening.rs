@@ -1,8 +1,8 @@
 use crate::{
     cache::Cache, domain::per_account::PerAccount, mail::status::Status, mail::update::BodyLink,
-    ui::folder_show::show, ui::inbox_view::InboxView, ui::main_screen::Ui, ui::message_list,
-    ui::mode::Mode, ui::previews::Previews, ui::run::Error, ui::screen::Screen, ui::tty::Tty,
-    ui::world::World,
+    ui::list::folder_show::show, ui::list::inbox_view::InboxView, ui::list::message_list,
+    ui::main_screen::Ui, ui::mode::Mode, ui::preview::previews::Previews, ui::run::Error,
+    ui::screen::Screen, ui::terminal::tty::Tty, ui::world::World,
 };
 
 /// The screen as the TUI opens: as many rows of the list from the Cache as
