@@ -9,99 +9,28 @@
 
 mod support;
 
-use std::path::Path;
-
 use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    pager::{main_screen, previewed},
 };
-use termlens::{Key, Screen, Terminal};
+use termlens::Key;
 
 const HTML: &str = "<p>Read <a href=\"https://example.com/notes\">the notes</a> \
     and <a href=\"https://example.com/agenda\"><b>the agenda</b></a>.</p>\
     <p>See you <i>soon</i>.</p>";
 
-fn postal(home: &Home, envs: &[(&str, &Path)], no_color: bool) -> Terminal {
-    let mut builder = home.terminal();
-    for (key, value) in envs {
-        builder = builder.env(key, value);
-    }
-
-    if no_color {
-        builder = builder.env("NO_COLOR", "1");
-    }
-
-    builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
-}
-
-fn server_with(html: &str) -> FakeImap {
+fn message(html: &str) -> FakeMessage {
     let body = FakeBody::text("html", "7bit", html);
-    let message = FakeMessage::new("Ada Lovelace", "Weekly notes", "2024-11-18T09:00:00Z");
-    FakeImap::start(vec![message.body(body)])
+    FakeMessage::new("Ada Lovelace", "Weekly notes", "2024-11-18T09:00:00Z").body(body)
 }
 
-fn main_screen(screen: &Screen) -> bool {
-    screen.alternate_screen() && screen.contains(" 1/1 ") && screen.contains("Weekly notes")
-}
-
-// The header and the Snippet show before the body is cached; only text
-// under the Preview's rule says `|` will find it.
-fn previewed(screen: &Screen) -> bool {
-    let rule = (0..screen.rows()).find(|&row| screen.row_text(row).starts_with('├'));
-    main_screen(screen)
-        && rule.is_some_and(|row| {
-            !screen
-                .row_text(row + 1)
-                .trim_matches(|c| c == '│' || c == ' ')
-                .is_empty()
-        })
-}
-
-/// The escape character made visible, so a snapshot shows the styling.
-fn visible(bytes: &[u8]) -> String {
-    String::from_utf8(bytes.to_vec())
-        .unwrap()
-        .replace('\x1b', "␛")
-}
-
-/// What a recording `$PAGER` read of `html` after `keys`, once the TUI
-/// took the screen back.
+/// What `$PAGER` read of `html` after `keys`, the escape character made
+/// visible, so a snapshot shows the styling.
 fn paged(html: &str, keys: &[Key], no_color: bool) -> String {
-    let server = server_with(html);
-    let home = Home::for_server(&server);
-    let dir = tempfile::tempdir().unwrap();
-    let tmp = dir.path().join("tmp");
-    std::fs::create_dir(&tmp).unwrap();
-    let record = dir.path().join("paged");
-    // Holds the pager open until the test answers on the terminal, so the
-    // suspended screen can be seen.
-    let pager = format!(
-        "cat > '{}'; printf 'pager done'; read answer < /dev/tty",
-        record.display()
-    );
-    let mut t = postal(
-        &home,
-        &[("PAGER", Path::new(&pager)), ("TMPDIR", &tmp)],
-        no_color,
-    );
-    t.wait_until(previewed).unwrap();
-
-    for key in keys {
-        t.send(*key).unwrap();
-    }
-
-    t.wait_until(|s| !s.alternate_screen() && s.contains("pager done"))
-        .unwrap();
-    t.send(Key::Enter).unwrap();
-    t.wait_until(main_screen).unwrap();
-    // The TUI still takes keys after the pager.
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-
-    let written: Vec<_> = std::fs::read_dir(&tmp).unwrap().collect();
-    assert!(written.is_empty(), "{written:?}");
-    visible(&std::fs::read(&record).unwrap())
+    let copy = support::pager::paged(message(html), keys, no_color);
+    String::from_utf8(copy).unwrap().replace('\x1b', "␛")
 }
 
 const TEXT_VIEW: [Key; 2] = [Key::Char('v'), Key::Char('|')];
@@ -148,7 +77,7 @@ fn a_link_with_a_control_character_is_no_hyperlink() {
 // quit at once on text that fits the screen, which only flashes it.
 #[test]
 fn the_default_pager_waits_though_less_would_quit_on_one_screen() {
-    let server = server_with(HTML);
+    let server = FakeImap::start(vec![message(HTML)]);
     let home = Home::for_server(&server);
     let mut t = home
         .terminal()

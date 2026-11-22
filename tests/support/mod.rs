@@ -6,6 +6,7 @@ pub mod fake_imap;
 pub mod fake_oauth;
 pub mod fake_smtp;
 pub mod home;
+pub mod pager;
 pub mod picker;
 pub mod query;
 mod relay;
