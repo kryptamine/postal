@@ -1,6 +1,5 @@
 ---
 source: tests/mail_corpus.rs
-assertion_line: 56
 description: "An MJML newsletter: hidden preheaders, CSS-hidden and Outlook-only blocks stay hidden, zero font-size wrappers keep their text, and the columns stay side by side."
 input_file: tests/fixtures/mjml.eml
 ---

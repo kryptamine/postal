@@ -1,7 +1,6 @@
 ---
 source: tests/mail_corpus.rs
-assertion_line: 56
-description: A Gmail reply keeps each nested quote at its own level.
+description: "A Gmail reply keeps each nested quote at its own level, with a bar for each in the rendered View."
 input_file: tests/fixtures/gmail-reply.eml
 ---
 ── rendered ──

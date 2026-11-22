@@ -1,6 +1,5 @@
 ---
 source: tests/mail_corpus.rs
-assertion_line: 56
 description: "windows-1251 in quoted-printable, in the body and in an RFC 2047 Subject, decodes to readable text."
 input_file: tests/fixtures/cyrillic.eml
 ---

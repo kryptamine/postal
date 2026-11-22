@@ -1,6 +1,5 @@
 ---
 source: tests/mail_corpus.rs
-assertion_line: 56
 description: "Image-only mail: a linked image shows its alt, and a link whose image has an empty alt or none shows [link], so every link stays."
 input_file: tests/fixtures/image-only.eml
 ---

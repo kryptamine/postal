@@ -1,6 +1,5 @@
 ---
 source: tests/mail_corpus.rs
-assertion_line: 56
 description: "A receipt's data table keeps its columns while every cell fits, and the icon column, empty once its images go, takes no room."
 input_file: tests/fixtures/receipt.eml
 ---

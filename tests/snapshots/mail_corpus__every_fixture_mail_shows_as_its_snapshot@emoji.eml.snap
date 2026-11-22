@@ -1,6 +1,5 @@
 ---
 source: tests/mail_corpus.rs
-assertion_line: 56
 description: Emoji in the body render intact.
 input_file: tests/fixtures/emoji.eml
 ---

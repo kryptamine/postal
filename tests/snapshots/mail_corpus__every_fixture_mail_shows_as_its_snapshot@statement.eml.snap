@@ -1,6 +1,5 @@
 ---
 source: tests/mail_corpus.rs
-assertion_line: 56
 description: "A bank statement keeps every row rule of its table, and its button's label sits in the middle of its block."
 input_file: tests/fixtures/statement.eml
 ---

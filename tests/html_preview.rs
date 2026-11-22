@@ -70,26 +70,6 @@ fn preview_in(body: FakeBody, size: (u16, u16), shown: &str, no_color: bool) -> 
     screen
 }
 
-const WIDE: (u16, u16) = (120, 40);
-
-// The HTML part wins over its plain twin. Hidden preheaders, CSS-hidden
-// blocks, a zero font-size with no size set inside, tracking pixels and
-// unlinked images vanish; MJML's zero font-size wrappers keep their text.
-#[test]
-fn an_mjml_newsletter_shows_only_what_a_mail_client_shows() {
-    let screen = preview(fixture("mjml"), WIDE, "release notes");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
-// A linked image shows its alt; with an empty alt, or none, a link with no
-// text shows `[link]`, so image-only mail keeps every link. A link with
-// nothing inside shows nothing, as in a browser.
-#[test]
-fn image_only_mail_keeps_its_links() {
-    let screen = preview(fixture("image-only"), WIDE, "[link]");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
 // A card captions its linked picture with the same title, so the picture
 // goes; a picture whose alt says something else stays.
 #[test]
@@ -110,38 +90,11 @@ fn a_card_shows_its_title_once() {
     assert!(text.contains("[Sale]"), "{text}");
 }
 
-// Columns stay while every cell fits on one line, and the icon column,
-// empty once its images go, takes no room.
-#[test]
-fn a_data_table_keeps_its_columns_where_they_fit() {
-    let screen = preview(fixture("receipt"), WIDE, "orders page");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
 // Too narrow for its columns, each row stacks as `Header: value` lines,
 // and the icon-only and empty cells are dropped.
 #[test]
 fn a_data_table_too_wide_stacks_its_rows() {
     let screen = preview(fixture("receipt"), (60, 50), "orders page");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
-#[test]
-fn a_gmail_reply_keeps_its_nested_quotes() {
-    let screen = preview(fixture("gmail-reply"), WIDE, "next week");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
-// A windows-1251 part in quoted-printable decodes to readable text.
-#[test]
-fn cyrillic_in_a_legacy_charset_renders_intact() {
-    let screen = preview(fixture("cyrillic"), WIDE, "Север");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
-#[test]
-fn emoji_render_intact() {
-    let screen = preview(fixture("emoji"), WIDE, "We are here");
     insta::assert_snapshot!(screen.with_styles());
 }
 

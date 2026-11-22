@@ -13,20 +13,6 @@ mod support;
 use support::rendered::{DEFAULT, LIGHT, Run, at, bg, fixture, html, pane, preview, quit, started};
 use termlens::{Color, Key, Screen};
 
-// Hidden preheaders and Outlook-only blocks stay hidden, MJML's zero
-// font-size wrappers keep their text, and the columns stay side by side.
-#[test]
-fn an_mjml_newsletter_keeps_its_layout() {
-    let screen = preview(fixture("mjml"), &DEFAULT, "release notes");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
-#[test]
-fn a_gmail_reply_draws_a_bar_for_each_quote() {
-    let screen = preview(fixture("gmail-reply"), &DEFAULT, "next week");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
 // Box edges snap to rows: every row separator of the table shows, and the
 // button's label sits in the middle row of its block.
 #[test]
@@ -44,18 +30,6 @@ fn a_statement_keeps_its_table_rules_and_centres_its_button() {
 fn a_statement_on_a_light_terminal() {
     let run = Run {
         background: LIGHT,
-        ..DEFAULT
-    };
-
-    let screen = preview(fixture("statement"), &run, "Never share");
-    insta::assert_snapshot!(screen.with_styles());
-}
-
-// Without colour the layout, borders and text styles stay.
-#[test]
-fn no_color_keeps_the_layout_and_drops_the_colours() {
-    let run = Run {
-        no_color: true,
         ..DEFAULT
     };
 
