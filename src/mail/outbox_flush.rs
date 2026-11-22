@@ -12,6 +12,7 @@ use crate::{
     domain::folder::Role,
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
+    domain::thread_id::ThreadId,
     mail::imap::MailServer,
     mail::role_folder,
     mail::smtp,
@@ -42,23 +43,24 @@ impl Sender<'_> {
 }
 
 /// Sends each Message in the Outbox over SMTP, then saves its copy to Sent,
-/// which Gmail does itself; true when SMTP accepted any. Only an IMAP
-/// failure is returned: SMTP's failures leave a Message or give it back.
+/// which Gmail does itself; one entry per Message SMTP accepted, naming the
+/// Gmail Thread it answers. Only an IMAP failure is returned: SMTP's
+/// failures leave a Message or give it back.
 pub async fn flush(
     server: &mut impl MailServer,
     cache: &Cache,
     sender: Sender<'_>,
     send: &impl Fn(Update),
-) -> Result<bool, Error> {
+) -> Result<Vec<Option<ThreadId>>, Error> {
     let queued = match sender.outbox.queued() {
         Ok(queued) => queued,
         Err(error) => {
             tracing::error!("reading the Outbox failed: {error}");
-            return Ok(false);
+            return Ok(Vec::new());
         }
     };
 
-    let (mut accepted, mut unreachable) = (false, false);
+    let (mut accepted, mut unreachable) = (Vec::new(), false);
     let mut sent_folder = None;
     for mut queued in queued.into_iter().filter(|queued| sender.sends(queued)) {
         if !queued.sent {
@@ -68,7 +70,7 @@ pub async fn flush(
             }
 
             match submit(cache, sender, &mut queued, send).await? {
-                Submitted::Accepted => accepted = true,
+                Submitted::Accepted(thread) => accepted.push(thread),
                 Submitted::Unreachable => {
                     unreachable = true;
                     continue;
@@ -84,7 +86,8 @@ pub async fn flush(
 }
 
 enum Submitted {
-    Accepted,
+    /// With the Gmail Thread the Message answers.
+    Accepted(Option<ThreadId>),
     /// Left in the Outbox for the next sync: a network error or a `4xx`.
     Unreachable,
     /// Given back to the Drafts.
@@ -126,8 +129,9 @@ async fn submit(
             match smtp::send(config, sender.sign_in, &envelope, &message).await {
                 Ok(()) => {
                     let written = correspondence(&draft, &message);
+                    let thread = notes.answering.as_ref().and_then(|a| a.thread);
                     return accept(cache, queued, notes, written.as_ref(), send)
-                        .map(|()| Submitted::Accepted);
+                        .map(|()| Submitted::Accepted(thread));
                 }
                 Err(error) if error.refused() => error.to_string(),
                 Err(error) => {

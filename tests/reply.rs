@@ -402,6 +402,35 @@ fn a_sent_reply_flags_the_original_answered() {
     assert_eq!(message.in_reply_to().as_text(), Some("notes-2@example.com"));
 }
 
+// Gmail files a sent Reply in Sent Mail, outside the shown Folder: without
+// the Thread read again, Reading would not show it under what it answers.
+#[test]
+fn a_sent_reply_joins_the_stack_it_answers() {
+    let imap = FakeImap::start(vec![from_ada(plain())]);
+    imap.add_folder("[Gmail]/Sent Mail", &["\\Sent"], Vec::new());
+    imap.add_all_mail("[Gmail]/All Mail");
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let mut t = postal(&home);
+    t.wait_until(listed).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("Line one")).unwrap();
+    wait_for(|| {
+        imap.commands()
+            .iter()
+            .any(|c| c.starts_with("UID SEARCH X-GM-THRID"))
+    });
+
+    send_and_wait(&mut t, &[Key::Char('r')]);
+    // The fake SMTP server files nothing: the copy Gmail keeps goes in ahead.
+    imap.deliver_to("[Gmail]/Sent Mail", mine());
+    t.send(Key::Char('y')).unwrap();
+    t.wait_until(|s| s.contains("My answer") && !s.contains(" Draft "))
+        .unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
 // `\Answered` tells other clients the Message was answered: a Reply still
 // in the Outbox has not been.
 #[test]
