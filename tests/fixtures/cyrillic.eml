@@ -2,6 +2,7 @@ From: Sever <shop@sever.example>
 To: anna@example.com
 Subject: =?windows-1251?B?x+Dq4Ocg7+Xw5eTg7SDiIOTu8fLg4urz?=
 Date: Fri, 15 Nov 2024 11:30:00 +0300
+X-Postal-Case: windows-1251 in quoted-printable, in the body and in an RFC 2047 Subject, decodes to readable text.
 MIME-Version: 1.0
 Content-Type: text/html; charset="windows-1251"
 Content-Transfer-Encoding: quoted-printable

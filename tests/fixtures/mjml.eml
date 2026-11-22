@@ -2,6 +2,7 @@ From: Acme Cloud <news@acme.example>
 To: sam@example.com
 Subject: What changed in Acme Cloud this week
 Date: Mon, 11 Nov 2024 09:00:00 +0000
+X-Postal-Case: An MJML newsletter: hidden preheaders, CSS-hidden and Outlook-only blocks stay hidden, zero font-size wrappers keep their text, and the columns stay side by side.
 MIME-Version: 1.0
 Content-Type: multipart/alternative; boundary="mjml-boundary"
 

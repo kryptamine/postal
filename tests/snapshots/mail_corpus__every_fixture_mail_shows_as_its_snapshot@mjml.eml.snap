@@ -1,0 +1,34 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 56
+description: "An MJML newsletter: hidden preheaders, CSS-hidden and Outlook-only blocks stay hidden, zero font-size wrappers keep their text, and the columns stay side by side."
+input_file: tests/fixtures/mjml.eml
+---
+── rendered ──
+From    Acme Cloud <news@acme.example>  Mon, 11 Nov 2024 09:00
+To      sam@example.com
+Subject What changed in Acme Cloud this week
+
+    Hello Sam, here is what changed this week in Acme Cloud. Run acme update
+    to get it.
+
+                                 Shop the sale
+
+    Read the release notes before you upgrade.
+
+                                 [acme.example]
+
+── text ──
+From    Acme Cloud <news@acme.example>  Mon, 11 Nov 2024 09:00
+To      sam@example.com
+Subject What changed in Acme Cloud this week
+
+Hello Sam, here is what changed this week in Acme Cloud. Run acme update to get
+it.
+[Shop the sale][1]
+Read the release notes[2] before you upgrade.
+[link][3]
+
+[1] https://acme.example/sale
+[2] https://acme.example/notes
+[3] https://acme.example/banner

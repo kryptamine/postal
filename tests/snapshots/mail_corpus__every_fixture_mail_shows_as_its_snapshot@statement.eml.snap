@@ -1,0 +1,53 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 56
+description: "A bank statement keeps every row rule of its table, and its button's label sits in the middle of its block."
+input_file: tests/fixtures/statement.eml
+---
+── rendered ──
+From    Example Bank <statements@bank.example>  Fri, 1 Nov 2024 08:00
+To      sam@example.com
+Subject Your October statement
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  Monthly statement                                                      │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+     Here is a summary of your account activity for October.
+
+     Date                Description                                Amount
+     ─────────────────────────────────────────────────────────────────────
+     Oct 02              Coffee Roasters                             -4.50
+     ─────────────────────────────────────────────────────────────────────
+     Oct 05              Salary                                  +3,200.00
+     ─────────────────────────────────────────────────────────────────────
+     Oct 11              Rent                                    -1,150.00
+     ─────────────────────────────────────────────────────────────────────
+     Oct 19              Grocery Market                             -86.12
+     ─────────────────────────────────────────────────────────────────────
+     Total                                                       +1,959.38
+
+                                 View statement
+
+  │┌────────────────────────────────────────────────────────────────────────┐
+  ││  Never share your PIN. We will never ask for it by email.              │
+  │└────────────────────────────────────────────────────────────────────────┘
+
+── text ──
+From    Example Bank <statements@bank.example>  Fri, 1 Nov 2024 08:00
+To      sam@example.com
+Subject Your October statement
+
+Monthly statement
+Here is a summary of your account activity for October.
+
+Date   Description     Amount
+Oct 02 Coffee Roasters -4.50
+Oct 05 Salary          +3,200.00
+Oct 11 Rent            -1,150.00
+Oct 19 Grocery Market  -86.12
+Total                  +1,959.38
+View statement[1]
+Never share your PIN. We will never ask for it by email.
+
+[1] https://bank.example/statement

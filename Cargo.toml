@@ -49,7 +49,7 @@ alloc-count = []
 [dev-dependencies]
 imap-codec = { version = "=2.0.0-alpha.10", features = ["ext_condstore_qresync"] }
 imap-next = "0.3.4"
-insta = "1.49.0"
+insta = { version = "1.49.0", features = ["glob"] }
 rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
 tempfile = "3.27.0"
 termlens = "0.11.10"

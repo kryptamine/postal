@@ -2,6 +2,7 @@ From: Trips <hello@trips.example>
 To: sam@example.com
 Subject: Your trip is booked
 Date: Sat, 16 Nov 2024 12:00:00 +0000
+X-Postal-Case: Emoji in the body render intact.
 MIME-Version: 1.0
 Content-Type: text/html; charset="utf-8"
 Content-Transfer-Encoding: base64

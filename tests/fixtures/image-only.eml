@@ -2,6 +2,7 @@ From: Northwind Style <hello@northwind.example>
 To: sam@example.com
 Subject: Spring is here
 Date: Thu, 14 Nov 2024 07:00:00 +0000
+X-Postal-Case: Image-only mail: a linked image shows its alt, and a link whose image has an empty alt or none shows [link], so every link stays.
 MIME-Version: 1.0
 Content-Type: text/html; charset=utf-8
 Content-Transfer-Encoding: 7bit

@@ -1,0 +1,39 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 56
+description: A Gmail reply keeps each nested quote at its own level.
+input_file: tests/fixtures/gmail-reply.eml
+---
+── rendered ──
+From    Sam Rivera <sam@example.com>  Wed, 13 Nov 2024 08:15
+To      Ada Lovelace <ada@example.com>
+Subject Re: Thursday
+
+ Sounds good, see you Thursday.
+
+ Sam
+
+ On Mon, 11 Nov 2024 at 10:02, Ada Lovelace <ada@example.com> wrote:
+  │ Shall we meet on Thursday at 3?
+  │
+  │ On Fri, 8 Nov 2024 at 17:40, Sam Rivera wrote:
+  │  │ Can we talk next week?
+
+── text ──
+From    Sam Rivera <sam@example.com>  Wed, 13 Nov 2024 08:15
+To      Ada Lovelace <ada@example.com>
+Subject Re: Thursday
+
+Sounds good, see you Thursday.
+
+Sam
+
+On Mon, 11 Nov 2024 at 10:02, Ada Lovelace <ada@example.com[1]> wrote:
+
+> Shall we meet on Thursday at 3?
+>
+> On Fri, 8 Nov 2024 at 17:40, Sam Rivera wrote:
+>
+> > Can we talk next week?
+
+[1] mailto:ada@example.com

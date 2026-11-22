@@ -2,6 +2,8 @@
 
 use std::fmt::Write;
 
+use mail_parser::{Addr, MessageParser};
+
 use super::super::fake_body::FakeBody;
 use super::EMAIL;
 
@@ -45,6 +47,27 @@ impl FakeMessage {
             cc: Vec::new(),
             message_id: None,
         }
+    }
+
+    /// The whole `.eml` `raw`, under its own From, To, Subject and Date.
+    pub fn eml(raw: &[u8]) -> Self {
+        let leak = |s: &str| -> &'static str { s.to_owned().leak() };
+        let addr = |a: &Addr<'_>| (leak(a.name().unwrap_or("")), leak(a.address().unwrap()));
+        let parsed = MessageParser::default().parse(raw).unwrap();
+        let (from_name, from_address) = addr(parsed.from().unwrap().first().unwrap());
+        let subject = parsed.header_raw("Subject").unwrap_or("");
+        let mut message = Self::new(
+            from_name,
+            subject.replace("\r\n", "").replace('\n', "").trim(),
+            &parsed.date().unwrap().to_rfc3339(),
+        )
+        .body(FakeBody::eml(raw));
+        message.from_address = from_address;
+        message.to = parsed
+            .to()
+            .map(|to| to.iter().map(addr).collect())
+            .unwrap_or_default();
+        message
     }
 
     /// Sent to `name` at `address`.

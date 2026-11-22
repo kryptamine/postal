@@ -2,6 +2,7 @@ From: Trailhead Outfitters <orders@trailhead.example>
 To: sam@example.com
 Subject: Your order #4821
 Date: Tue, 12 Nov 2024 18:20:00 +0000
+X-Postal-Case: A receipt's data table keeps its columns while every cell fits, and the icon column, empty once its images go, takes no room.
 MIME-Version: 1.0
 Content-Type: text/html; charset=utf-8
 Content-Transfer-Encoding: 8bit

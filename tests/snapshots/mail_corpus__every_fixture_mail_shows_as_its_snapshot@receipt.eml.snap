@@ -1,0 +1,35 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 56
+description: "A receipt's data table keeps its columns while every cell fits, and the icon column, empty once its images go, takes no room."
+input_file: tests/fixtures/receipt.eml
+---
+── rendered ──
+From    Trailhead Outfitters <orders@trailhead.example>  Tue, 12 Nov 2024 18:20
+To      sam@example.com
+Subject Your order #4821
+
+ Thanks for your order #4821.
+
+ Item                                                  Qty Price
+ Enamel camping mug, forest green, 350 ml, set of two  2   €24.00
+ Folding lantern                                       1   €39.50
+ Total                                                     €63.50
+
+ Track it on your orders page.
+
+── text ──
+From    Trailhead Outfitters <orders@trailhead.example>  Tue, 12 Nov 2024 18:20
+To      sam@example.com
+Subject Your order #4821
+
+Thanks for your order #4821.
+
+Item                                                 Qty Price
+Enamel camping mug, forest green, 350 ml, set of two 2   €24.00
+Folding lantern                                      1   €39.50
+Total                                                    €63.50
+
+Track it on your orders page[1].
+
+[1] https://trailhead.example/orders/4821

@@ -1,0 +1,37 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 56
+description: "windows-1251 in quoted-printable, in the body and in an RFC 2047 Subject, decodes to readable text."
+input_file: tests/fixtures/cyrillic.eml
+---
+── rendered ──
+From    Sever <shop@sever.example>  Fri, 15 Nov 2024 08:30
+To      anna@example.com
+Subject Заказ передан в доставку
+
+ Здравствуйте, Анна!
+
+ Ваш заказ № 5172 передан в службу доставки. Курьер привезёт его в четверг с
+ 10:00 до 14:00.
+
+ Отследить посылку можно на странице заказа.
+
+ С уважением,
+ команда магазина «Север»
+
+── text ──
+From    Sever <shop@sever.example>  Fri, 15 Nov 2024 08:30
+To      anna@example.com
+Subject Заказ передан в доставку
+
+Здравствуйте, Анна!
+
+Ваш заказ № 5172 передан в службу доставки. Курьер привезёт его в четверг с
+10:00 до 14:00.
+
+Отследить посылку можно на странице заказа[1].
+
+С уважением,
+команда магазина «Север»
+
+[1] https://dostavka.example/track/5172

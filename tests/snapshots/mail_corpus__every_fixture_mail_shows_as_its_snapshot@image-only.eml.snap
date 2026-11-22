@@ -1,0 +1,26 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 56
+description: "Image-only mail: a linked image shows its alt, and a link whose image has an empty alt or none shows [link], so every link stays."
+input_file: tests/fixtures/image-only.eml
+---
+── rendered ──
+From    Northwind Style <hello@northwind.example>  Thu, 14 Nov 2024 07:00
+To      sam@example.com
+Subject Spring is here
+
+   [northwind.example]
+   Spring jackets [northwind.example]
+   Northwind Style, 1 Harbour Road
+
+── text ──
+From    Northwind Style <hello@northwind.example>  Thu, 14 Nov 2024 07:00
+To      sam@example.com
+Subject Spring is here
+
+[link][1]
+[Spring jackets][2] [link][3]
+
+[1] https://northwind.example/spring
+[2] https://northwind.example/jackets
+[3] https://northwind.example/boots
