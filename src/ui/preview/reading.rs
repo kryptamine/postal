@@ -89,27 +89,29 @@ impl Reading {
         direction: Direction,
         stack: impl Iterator<Item = &'a Message> + Clone,
     ) {
-        let target = {
-            let mut lines = self.lines(stack).map(|(message, _)| message.body_key);
-            let mut before = None;
-            loop {
-                let Some(key) = lines.next() else { break None };
-                if key == self.cursor {
-                    break match direction {
-                        Direction::Down => lines.next(),
-                        Direction::Up => before,
-                    };
-                }
-
-                before = Some(key);
-            }
-        };
-
-        if let Some(target) = target {
+        if let Some(target) = self.neighbour(direction, stack) {
             self.cursor = target;
         }
 
         self.reveal = true;
+    }
+
+    /// The line of `stack` next to the cursor's, by its first Message.
+    fn neighbour<'a>(
+        &self,
+        direction: Direction,
+        stack: impl Iterator<Item = &'a Message> + Clone,
+    ) -> Option<BodyKey> {
+        let keys = self.lines(stack).map(|(message, _)| message.body_key);
+        let mut pairs = keys.clone().zip(keys.skip(1));
+        match direction {
+            Direction::Down => pairs
+                .find(|&(at, _)| at == self.cursor)
+                .map(|(_, next)| next),
+            Direction::Up => pairs
+                .find(|&(_, at)| at == self.cursor)
+                .map(|(before, _)| before),
+        }
     }
 
     /// Folds the Message at the cursor, or unfolds it; on a line standing
