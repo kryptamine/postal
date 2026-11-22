@@ -34,20 +34,29 @@ fn images_are_never_fetched_and_one_without_alt_takes_no_room() {
     assert!(listener.accept().is_err(), "an image was fetched");
 }
 
-// An alt is one row, however tall the image, and no wider than it, so the
-// layout around it keeps its shape.
+// An alt is one row, however tall the image. A name shows whole, as cut
+// to the image's width it named nothing; a longer alt is cut.
 #[test]
-fn an_alt_is_one_row_and_no_wider_than_its_image() {
-    let body = html(
-        "<p>Above</p><img src=\"https://cdn.example/banner.png\" width=\"80\" height=\"96\" \
-         alt=\"Spring collection banner\"><p>Below</p>",
-    );
+fn an_alt_is_one_row_and_a_name_shows_whole() {
+    let image = |alt: &str| {
+        format!("<img src=\"https://cdn.example/b.png\" width=\"80\" height=\"96\" alt=\"{alt}\">")
+    };
+
+    let body = html(&format!(
+        "<p>Above</p>{}<p>Below</p>{}<p>End</p>",
+        image("Spring collection banner"),
+        image("Extraordinarily comprehensive springtime collection")
+    ));
     let screen = preview(body, &DEFAULT, "Spring");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
     assert_eq!(row("Below") - row("Above"), 4, "{}", rows.join("\n"));
-    // 80px is ten columns.
-    assert_eq!(rows[row("Spring")].trim(), "Spring co…");
+    assert_eq!(rows[row("Spring")].trim(), "Spring collection");
+    // 32 columns, the most a label grows to.
+    assert_eq!(
+        rows[row("Extraordinarily")].trim(),
+        "Extraordinarily comprehensive s…"
+    );
 }
 
 // Mail reuses one image file with a different alt each time; each keeps
@@ -105,15 +114,6 @@ fn a_linked_icon_shows_its_whole_alt_where_it_fits() {
     assert!(named[1].contains("Instagram"));
 }
 
-// A product's picture and a banner over its button open what the words
-// beside them do: `[link]` on each was a column of noise in a shop's mail.
-#[test]
-fn a_picture_link_whose_page_the_words_open_shows_no_label() {
-    let picture = |href: &str| {
-        format!(
-            "<a href=\"{href}\"><img src=\"https://cdn.example/p.png\" width=\"240\" alt=\"\"></a>"
-        )
-    };
 // A picture named by its file, or by whom it shows beside their name, and
 // a picture link to `#` name nothing: `github_original_white`, `[link]`.
 #[test]
@@ -143,6 +143,15 @@ fn a_picture_that_names_nothing_shows_no_label() {
     assert_eq!(shown, ["Above", "Ann Lee", "Engineer", "github", "End"]);
 }
 
+// A product's picture and a banner over its button open what the words
+// beside them do: `[link]` on each was a column of noise in a shop's mail.
+#[test]
+fn a_picture_link_whose_page_the_words_open_shows_no_label() {
+    let picture = |href: &str| {
+        format!(
+            "<a href=\"{href}\"><img src=\"https://cdn.example/p.png\" width=\"240\" alt=\"\"></a>"
+        )
+    };
     let body = html(&format!(
         "{}<p><a href=\"https://shop.example/kettle?from=title\">Kettle</a></p>\
          {}<p><a href=\"https://t.example/2\">See more</a></p>{}<p>End</p>",

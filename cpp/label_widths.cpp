@@ -13,10 +13,10 @@ namespace cg
 {
 namespace
 {
-// An icon that is all its link shows may grow to this to show its alt.
+// An icon may grow to this to show its alt.
 const int ICON_CELLS = 16;
 
-// A link's own picture, a badge, may grow to this to show its whole alt.
+// A larger picture, as a badge, may grow to this to show its whole alt.
 const int BADGE_CELLS = 32;
 
 // The boxes round `img` that show no word and are narrower than `px` were
@@ -63,11 +63,10 @@ bool LabelWidths::fit(const element::ptr& img, int want, bool icon, bool sole)
 {
     css_properties& css = img->css();
     float w = px_or(css.get_width(), -1);
-    // An icon left is all its link shows, so its alt names the link, and
-    // cut it names nothing: it takes its whole alt, and a column after it.
-    // So does a badge, a larger picture that is all its link shows.
+    // Cut to its picture's width an alt names nothing: it shows whole, up
+    // to a limit, and an icon's takes a column after it.
     int own = w >= 0 ? int(w / CW) : cols;
-    bool grows = w >= 0 && (icon || sole);
+    bool grows = w >= 0;
     if(grows && want > own) grown.push_back({img, w});
     int shown = std::min(want, grows ? std::max(own, icon ? ICON_CELLS : BADGE_CELLS) : own);
     if(shown <= 0) return false;
