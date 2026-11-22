@@ -11,8 +11,8 @@ and cost a full resync of every Folder.
 
 The schema is the list of steps in `cache/migrations.rs`, one SQL file each
 under `cache/migrations/`, run in order from an empty file. `user_version`
-counts the steps a Cache has run, on top of 19, the last schema before
-migrations: step 1, the first released schema, reaches 20. Each step runs in
+counts the steps a Cache has run, on top of 21, the last schema before
+migrations: step 1, the first released schema, reaches 22. Each step runs in
 one transaction with the version it reaches, so a failed step leaves the
 Cache whole at the version before, and Postal exits with the error rather
 than delete what the step could not carry.
@@ -26,7 +26,7 @@ than delete what the step could not carry.
   state, `correspondence`, `sent_pass`, `envelope_pass`) and let the sync
   refill them.
 - **Rebuild is the fallback**, for a Cache that fails `quick_check` and one
-  at 19 or under, from before migrations.
+  at 21 or under, from before migrations.
 - **Until the first production release** a schema change may still edit
   the steps in place, and raises `PRE_RELEASE` past every version written
   so far: those Caches are rebuilt, and their fixtures go.
@@ -58,5 +58,5 @@ older Postal reads a newer note and drops what it does not know on save.
   that need care, the fallback and what is carried over, stay ours.
 - **`refinery`.** Built for several databases, with macros, and needs Rust
   1.92.
-- **Restart `user_version` at 1.** A Cache from before migrations, at 19 or under,
+- **Restart `user_version` at 1.** A Cache from before migrations, at 21 or under,
   would read as newer than the binary and be refused instead of rebuilt.

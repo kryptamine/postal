@@ -12,7 +12,7 @@ const MIGRATIONS: &[&str] = &[
 
 /// The `user_version` of the last schema before migrations; a Cache at or
 /// under it is rebuilt.
-pub const PRE_RELEASE: i64 = 19;
+pub const PRE_RELEASE: i64 = 21;
 
 /// The `user_version` once every step has run.
 #[expect(
