@@ -49,6 +49,20 @@ fn a_mail_wider_than_the_pane_lets_go_of_its_fixed_widths() {
     assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
 }
 
+// Mobile styles fix widths for a phone, and a pane just under their
+// breakpoint showed the mail in a column half its width.
+#[test]
+fn a_mail_set_for_a_phone_takes_its_desktop_layout() {
+    let body = html(
+        "<style>@media (max-width:600px){.main{width:240px !important}}</style>\
+         <table class=\"main\" width=\"600\"><tr><td>A line of words long enough to wrap \
+         in a column made for a phone.</td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "phone");
+    let (first, last) = (at(&screen, "A line").0, at(&screen, "phone").0);
+    assert_eq!(first, last, "{}", screen.text());
+}
+
 // An address longer than the pane has no space to wrap at: it breaks after
 // its own marks, and every piece of it shows.
 #[test]

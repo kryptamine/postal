@@ -48,6 +48,11 @@ struct Font
 
 // A corner rounded this much or more is drawn round, as `╭`.
 const float ROUND_PX = 4;
+// The screen width media queries get for a mail's desktop layout.
+const float DESKTOP_PX = 1024;
+// Mail sets its mobile breakpoint at 600 to 640 px: a wider pane gets the
+// desktop layout already.
+const float PHONE_PX = 640;
 
 bool round(pixel_t x, pixel_t y) { return float(x) >= ROUND_PX && float(y) >= ROUND_PX; }
 
@@ -90,7 +95,10 @@ class grid_container : public document_container, public Grid
     // The size the mail's body is set in (`body_size`).
     float body = 0;
 
-    grid_container(int cols, bool break_words) : Grid(cols), break_words(break_words) {}
+    // Media queries are answered as on a desktop screen, not by the pane.
+    bool desktop;
+
+    grid_container(int cols, bool break_words, bool desktop) : Grid(cols), break_words(break_words), desktop(desktop) {}
 
     void split_text(const char* text, const std::function<void(const char*)>& on_word,
                     const std::function<void(const char*)>& on_space) override
@@ -388,7 +396,7 @@ class grid_container : public document_container, public Grid
     void get_media_features(media_features& m) const override
     {
         m.type = media_type_screen;
-        m.width = float(cols) * CW;
+        m.width = desktop ? DESKTOP_PX : float(cols) * CW;
         m.height = 1000 * CH;
         m.device_width = m.width;
         m.device_height = m.height;
@@ -432,7 +440,7 @@ struct cg_grid
     grid_container container;
     std::vector<std::string> hrefs;
 
-    cg_grid(int cols, bool break_words) : container(cols, break_words) {}
+    cg_grid(int cols, bool break_words, bool desktop) : container(cols, break_words, desktop) {}
 
     // Each link's id goes on the cells of its leaf boxes: its words, or the
     // box of an image inside it.
@@ -488,9 +496,9 @@ void draw(const document::ptr& doc, grid_container& container)
 // `loose` is the second try at a mail that lost text past the pane: its
 // long words break, its fixed widths go, and the tables round what still
 // spills are stacked. See docs/adr/0006-rendered-view-engine.md.
-cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
+cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose, bool desktop = false)
 {
-    auto grid = std::make_unique<cg_grid>(cols, loose);
+    auto grid = std::make_unique<cg_grid>(cols, loose, desktop);
     grid_container& container = grid->container;
     auto doc =
         document::createFromString(estring(std::string(html, len), encoding::utf_8), &container, master_css, user_css);
@@ -521,14 +529,37 @@ cg_grid* rendered(const char* html, size_t len, int32_t cols, bool loose)
 }
 } // namespace
 
+namespace
+{
+bool spilt(const cg_grid& grid) { return grid.container.lost_text || grid.container.lost_border; }
+
+// From the first column the mail shows something in to the last.
+int columns_shown(const cg_grid& grid)
+{
+    Box box = grid.container.content_box();
+    return box.c1 < box.c0 ? 0 : box.c1 - box.c0 + 1;
+}
+
+// A mail's mobile styles fix widths for a phone, `width: 320px`, and in a
+// pane just under their breakpoint its words stood in a narrow column.
+bool for_a_phone(const cg_grid& grid)
+{
+    int shown = columns_shown(grid), cols = grid.container.cols;
+    return float(cols) * CW <= PHONE_PX && shown > 0 && shown * 3 < cols * 2;
+}
+} // namespace
+
 extern "C" cg_grid* cg_render(const char* html, size_t len, int32_t cols)
 {
     try
     {
-        cg_grid* grid = rendered(html, len, cols, false);
-        if(!grid || !(grid->container.lost_text || grid->container.lost_border)) return grid;
-        delete grid;
-        return rendered(html, len, cols, true);
+        std::unique_ptr<cg_grid> grid(rendered(html, len, cols, false));
+        if(!grid) return nullptr;
+        if(spilt(*grid)) return rendered(html, len, cols, true);
+        if(!for_a_phone(*grid)) return grid.release();
+        std::unique_ptr<cg_grid> wide(rendered(html, len, cols, false, true));
+        bool better = wide && !spilt(*wide) && columns_shown(*wide) > columns_shown(*grid);
+        return (better ? wide : grid).release();
     } catch(...)
     {
         return nullptr;
