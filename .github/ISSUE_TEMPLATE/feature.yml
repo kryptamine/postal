@@ -1,0 +1,16 @@
+name: Feature request
+description: Something Postal should do.
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and why Postal gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: The behaviour you have in mind, and any alternatives you considered.
