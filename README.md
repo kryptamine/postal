@@ -11,17 +11,26 @@
 
 ## Install
 
-Postal builds from source: Rust 1.89+ and a C++ compiler.
+On macOS or Linux, arm64 or x86_64:
+
+```sh
+curl -fsSL https://postalmail.dev/install.sh | sh
+postal
+```
+
+The script puts `postal` in `~/.local/bin` and the
+[Neovim plugin](nvim/) in `~/.local/share/postal/nvim`. On first run Postal
+asks for a mail provider and a sign-in; `?` lists every key.
+
+To build from source instead, with Rust 1.89+ and a C++ compiler:
 
 ```sh
 git clone https://github.com/kryptamine/postal && cd postal
 make install
-postal
 ```
 
-`make install` puts `postal` in `~/.cargo/bin` and a copy of the
-[Neovim plugin](nvim/) in `~/.local/share/postal/nvim`. On first run Postal
-asks for a mail provider and a sign-in; `?` lists every key.
+`make install` puts `postal` in `~/.cargo/bin` and the plugin in the same
+place.
 
 ## Development
 

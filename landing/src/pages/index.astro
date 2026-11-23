@@ -268,15 +268,13 @@ const providers = [
     <div class="intro">
       <h2 id="install-title">Install</h2>
       <p class="prose-font">
-        Postal builds from source. You need Rust 1.89 or newer and a C++ compiler.{' '}
-        <code>make install</code> puts the binary in <code>~/.cargo/bin</code> and installs the
-        Neovim plugin.
+        On macOS or Linux, arm64 or x86_64, the script puts the binary in <code>~/.local/bin</code>{' '}
+        and installs the Neovim plugin. To build from source instead, run <code>make install</code>{' '}
+        in a clone of <a href={site.repo}>the repository</a>.
       </p>
     </div>
     <div class="steps">
-      <pre><code><span class="p">$</span> git clone {site.repo}
-<span class="p">$</span> cd postal
-<span class="p">$</span> make install
+      <pre><code><span class="p">$</span> curl -fsSL {site.url}/install.sh | sh
 <span class="p">$</span> postal</code></pre>
       <p class="muted">
         On first run, Postal asks you to pick a mail provider and sign in. Press <kbd>?</kbd> to see
