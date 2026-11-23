@@ -1,10 +1,15 @@
 ---
 import { site } from '@app/site';
 import Base from '@app/layouts/Base.astro';
+import hero from '@app/assets/media/hero.png';
 import Media from '@app/components/Media.astro';
+import thread from '@app/assets/media/thread.png';
+import browser from '@app/assets/media/browser.png';
 import Airmail from '@app/components/Airmail.astro';
 import Feature from '@app/components/Feature.astro';
+import rendered from '@app/assets/media/rendered.png';
 import Postmark from '@app/components/Postmark.astro';
+import onboarding from '@app/assets/media/onboarding.png';
 
 const budget = [
   ['≤100 ms', 'Cold start to a Message List drawn from the Cache'],
@@ -57,7 +62,7 @@ const providers = [
     </div>
     <div class="shot">
       <Media
-        kind="still"
+        still={hero}
         shows="The Message List beside the Preview, with an HTML mail in the Rendered View"
       />
       <div class="cancel">
@@ -95,8 +100,8 @@ const providers = [
       </p>
     </div>
     <div class="pair">
-      <Media kind="still" shows="A newsletter as a browser shows it" ratio="4 / 3" />
-      <Media kind="still" shows="The same newsletter in Postal" ratio="4 / 3" />
+      <Media still={browser} shows="A newsletter as a browser shows it" />
+      <Media still={rendered} shows="The same newsletter in Postal" />
     </div>
     <ul class="points">
       <li>
@@ -119,7 +124,7 @@ const providers = [
     <Feature
       label="Reading"
       title="A Thread, read top to bottom"
-      kind="still"
+      still={thread}
       shows="A Thread in Reading: its Messages stacked, the read middle folded"
       keys={[
         ['Enter', 'read the Thread full screen'],
@@ -138,7 +143,7 @@ const providers = [
       flip
       label="Search"
       title="Every Folder, as you type"
-      kind="video"
+      video="search"
       shows="A Query narrowing the Message List, a keystroke at a time"
       keys={[
         ['/', 'start a Search'],
@@ -155,7 +160,7 @@ const providers = [
     <Feature
       label="Compose"
       title="Write in your own editor"
-      kind="video"
+      video="compose"
       shows="A Draft in $EDITOR: headers, recipients completing, an Attach: line"
       keys={[
         ['c', 'compose a new Message'],
@@ -178,7 +183,7 @@ const providers = [
       flip
       label="Neovim"
       title="An agent beside the Draft"
-      kind="video"
+      video="agent"
       shows="The agent pane beside a Draft, an edit reviewed hunk by hunk"
     >
       <p>
@@ -271,7 +276,7 @@ const providers = [
         The first run opens the Onboarding: pick a Provider and sign in. <kbd>?</kbd> lists every
         key.
       </p>
-      <Media kind="still" shows="The Onboarding's Provider list" ratio="16 / 9" />
+      <Media still={onboarding} shows="The Onboarding's Provider list" />
     </div>
   </section>
 </Base>

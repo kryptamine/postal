@@ -40,8 +40,9 @@ Pages use the semantic and component tokens (`--color-primary`,
   (`docs/adr/0028-the-site-lives-at-postalmail-dev.md`). `src/site.ts`
   holds the domain, the contact address and the date the policies take
   effect.
-- `src/components/Media.astro` draws a labelled slot wherever a screenshot
-  or video goes, until #115 shoots them.
+- The screenshots in `src/assets/media/` and the videos in
+  `public/media/` come from the demo mailbox: `make stills` and
+  `make media` at the root shoot them again (`demo/README.md`).
 
 ## Copy
 

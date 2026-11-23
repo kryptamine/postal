@@ -1,17 +1,18 @@
 ---
+import type { Still, Video } from '@app/media';
 // One feature: its words on one side, its screenshot or video on the other.
 import Media from '@app/components/Media.astro';
 
 type Props = {
   label: string;
   title: string;
-  kind: 'still' | 'video';
   shows: string;
   keys?: [string, string][];
   flip?: boolean;
-};
+} & (Still | Video);
 
-const { label, title, kind, shows, keys = [], flip = false } = Astro.props;
+const { label, title, shows, keys = [], flip = false } = Astro.props;
+const media = 'still' in Astro.props ? { still: Astro.props.still } : { video: Astro.props.video };
 ---
 
 <section class:list={['feature', { flip }]}>
@@ -36,7 +37,7 @@ const { label, title, kind, shows, keys = [], flip = false } = Astro.props;
       </dl>
     )}
   </div>
-  <Media kind={kind} shows={shows} />
+  <Media shows={shows} {...media} />
 </section>
 
 <style>
