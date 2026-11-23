@@ -27,6 +27,9 @@ pub async fn connect(imap: &Imap) -> Result<Box<dyn Transport>, Error> {
     let tcp = TcpStream::connect((imap.host.as_str(), imap.port))
         .await
         .map_err(connect_error)?;
+    // Nagle holds a small write until the last one is ACKed, and Linux
+    // delays that ACK 40ms: every IMAP round trip would pay it.
+    tcp.set_nodelay(true).map_err(connect_error)?;
     if !imap.tls {
         return Ok(Box::new(tcp));
     }
