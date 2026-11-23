@@ -27,7 +27,9 @@ postal
 
 The script puts `postal` in `~/.local/bin`. On first run Postal asks for a
 mail provider and a sign-in; `?` lists every key. `postal update` replaces it
-with the latest release.
+with the latest release. Each archive carries a build provenance
+attestation; `gh attestation verify postal-<target>.tar.gz -R kryptamine/postal`
+checks that the release workflow built it from this repository.
 
 To build from source instead, with Rust 1.89+ and a C++ compiler:
 
