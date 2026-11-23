@@ -16,6 +16,9 @@ pub struct Args {
     /// contains headers, not bodies or credentials
     #[arg(short, action = ArgAction::Count, global = true)]
     pub verbose: u8,
+    /// Print a command's answer as a JSON array, whose fields only grow
+    #[arg(long, global = true)]
+    pub json: bool,
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -78,8 +81,7 @@ pub enum Message {
     Search(MessageSearch),
 }
 
-// Each struct of arguments is also its MCP tool's parameters (ADR 0030);
-// `--json` is the CLI's alone, as a tool answers both ways.
+// Each struct of arguments is also its MCP tool's parameters (ADR 0030).
 #[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct ThreadShow {
     /// The Thread's ID, as a listing names it
@@ -88,21 +90,10 @@ pub struct ThreadShow {
     /// The Thread of the Message this Reply's Draft answers
     #[arg(long, value_name = "PATH")]
     pub draft: Option<PathBuf>,
-    /// Print a JSON array, whose fields only grow
-    #[arg(long)]
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub json: bool,
 }
 
 #[derive(clap::Args, Deserialize, JsonSchema)]
-pub struct FolderList {
-    /// Print a JSON array, whose fields only grow
-    #[arg(long)]
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub json: bool,
-}
+pub struct FolderList {}
 
 #[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct MessageList {
@@ -115,22 +106,12 @@ pub struct MessageList {
     /// At most this many Threads, 50 when not given
     #[arg(long, value_name = "N")]
     pub limit: Option<usize>,
-    /// Print a JSON array, whose fields only grow
-    #[arg(long)]
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub json: bool,
 }
 
 #[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct MessageShow {
     /// The Message's ID, as a listing names it
     pub id: String,
-    /// Print a JSON array, whose fields only grow
-    #[arg(long)]
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub json: bool,
 }
 
 #[derive(clap::Args, Deserialize, JsonSchema)]
@@ -141,11 +122,6 @@ pub struct MessageSearch {
     /// At most this many Threads, 50 when not given
     #[arg(long, value_name = "N")]
     pub limit: Option<usize>,
-    /// Print a JSON array, whose fields only grow
-    #[arg(long)]
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub json: bool,
 }
 
 #[derive(clap::Args, Deserialize, JsonSchema)]
@@ -156,11 +132,6 @@ pub struct CorrespondentList {
     /// Rank first this account
     #[arg(long, value_name = "EMAIL")]
     pub account: Option<String>,
-    /// Print a JSON array, whose fields only grow
-    #[arg(long)]
-    #[serde(skip)]
-    #[schemars(skip)]
-    pub json: bool,
 }
 
 /// The arguments, or exits after printing help or what is wrong with them;

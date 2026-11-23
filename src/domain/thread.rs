@@ -6,15 +6,15 @@ use crate::{
 };
 
 /// What tells one Thread from another across reloads of the Message List.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// Each names its Account first: a Thread never spans Accounts, and their
-/// IDs and body keys may repeat.
-pub enum Key {
-    Gmail(AccountId, ThreadId),
-    Root(AccountId, RootId),
+/// IDs and body keys may repeat. A command names it by address (`Key<String>`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Key<A = AccountId> {
+    Gmail(A, ThreadId),
+    Root(A, RootId),
     /// A Message with neither, a Thread of its own, by body key: UIDs
     /// repeat across Folders.
-    Lone(AccountId, BodyKey),
+    Lone(A, BodyKey),
 }
 
 impl Key {
@@ -26,10 +26,12 @@ impl Key {
             message.body_key,
         )
     }
+}
 
+impl<A> Key<A> {
     /// Gmail's Thread first, then the root of `References`, else the body.
     pub const fn new(
-        account: AccountId,
+        account: A,
         thread: Option<ThreadId>,
         root: Option<RootId>,
         body: BodyKey,
@@ -38,6 +40,12 @@ impl Key {
             (Some(id), _) => Self::Gmail(account, id),
             (None, Some(root)) => Self::Root(account, root),
             (None, None) => Self::Lone(account, body),
+        }
+    }
+
+    pub const fn account(&self) -> &A {
+        match self {
+            Self::Gmail(account, _) | Self::Root(account, _) | Self::Lone(account, _) => account,
         }
     }
 }

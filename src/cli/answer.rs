@@ -1,9 +1,15 @@
-use std::io;
+use std::{error::Error, io};
 
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::cli::command_output;
+
+/// A command that reads mail, as the CLI and its MCP tool run it alike
+/// (ADR 0030); its arguments are the tool's parameters.
+pub trait Answers {
+    fn answer(&self) -> Result<Answer, Box<dyn Error>>;
+}
 
 /// What a command answers, the same on both surfaces (ADR 0030): the
 /// `--json` array, whose fields only grow, and the text a person reads.

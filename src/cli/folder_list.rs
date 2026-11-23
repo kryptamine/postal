@@ -3,7 +3,12 @@ use std::{collections::BTreeSet, error::Error, fmt::Write};
 use serde::Serialize;
 
 use crate::{
-    account::xdg, cache::Reader, cli::accounts, cli::answer::Answer, domain::folder::Role,
+    account::xdg,
+    cache::Reader,
+    cli::accounts,
+    cli::answer::{Answer, Answers},
+    cli::args::FolderList,
+    domain::folder::Role,
 };
 
 /// One Folder of `--json`, whose fields only grow (ADR 0017).
@@ -19,22 +24,24 @@ struct Row<'a> {
 }
 
 /// `postal folder list`: every Account's Folders as the last sync left them.
-pub fn answer() -> Result<Answer, Box<dyn Error>> {
-    let emails = accounts::emails()?;
-    let mut folders = Reader::open(&xdg::cache_dir()?)?.folders()?;
-    folders.sort_by(|a, b| a.account.cmp(&b.account).then_with(|| a.order(b)));
-    let rows: Vec<Row<'_>> = folders
-        .iter()
-        // An Account unlinked may leave Folders until its rows are forgotten.
-        .filter(|folder| emails.contains(&folder.account))
-        .map(|folder| Row {
-            account: &folder.account,
-            name: &folder.path,
-            role: folder.role.map(Role::label),
-            unread: folder.unread,
-        })
-        .collect();
-    Ok(Answer::new(&rows, table(&rows))?)
+impl Answers for FolderList {
+    fn answer(&self) -> Result<Answer, Box<dyn Error>> {
+        let emails = accounts::emails()?;
+        let mut folders = Reader::open(&xdg::cache_dir()?)?.folders()?;
+        folders.sort_by(|a, b| a.account.cmp(&b.account).then_with(|| a.order(b)));
+        let rows: Vec<Row<'_>> = folders
+            .iter()
+            // An Account unlinked may leave Folders until its rows are forgotten.
+            .filter(|folder| emails.contains(&folder.account))
+            .map(|folder| Row {
+                account: &folder.account,
+                name: &folder.path,
+                role: folder.role.map(Role::label),
+                unread: folder.unread,
+            })
+            .collect();
+        Ok(Answer::new(&rows, table(&rows))?)
+    }
 }
 
 /// A line each: the name, its Unread count when any, its role when the name

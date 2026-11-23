@@ -6,7 +6,7 @@ use crate::{
     account::xdg,
     cache::{Reader, ThreadMessage},
     cli::accounts,
-    cli::answer::Answer,
+    cli::answer::{Answer, Answers},
     cli::args::ThreadShow,
     cli::ids,
     cli::plain_body::{self, MISSING},
@@ -32,55 +32,59 @@ struct Row<'a> {
 /// `postal thread show`: every Message of the Thread an ID names, or a
 /// Reply's Draft answers, oldest first, with its body as plain text; none
 /// for a Draft that answers nothing.
-pub fn answer(show: &ThreadShow) -> Result<Answer, Box<dyn Error>> {
-    let (account, thread) = match (&show.id, &show.draft) {
-        (Some(_), Some(_)) => return Err("name a Thread by its ID or by --draft, not both".into()),
-        (Some(id), None) => named(id)?,
-        (None, Some(draft)) => {
-            let notes = Notes::read(draft)?.unwrap_or_default();
-            let account = match notes.account {
-                Some(account) => account.to_lowercase(),
-                None => accounts::emails()?
-                    .into_iter()
-                    .next()
-                    .ok_or("no Account is set up")?,
-            };
+impl Answers for ThreadShow {
+    fn answer(&self) -> Result<Answer, Box<dyn Error>> {
+        let (account, thread) = match (&self.id, &self.draft) {
+            (Some(_), Some(_)) => {
+                return Err("name a Thread by its ID or by --draft, not both".into());
+            }
+            (Some(id), None) => named(id)?,
+            (None, Some(draft)) => {
+                let notes = Notes::read(draft)?.unwrap_or_default();
+                let account = match notes.account {
+                    Some(account) => account.to_lowercase(),
+                    None => accounts::emails()?
+                        .into_iter()
+                        .next()
+                        .ok_or("no Account is set up")?,
+                };
 
-            let thread = match notes.answering {
-                Some(answering) => answered(&account, &answering)?,
-                None => Vec::new(),
-            };
+                let thread = match notes.answering {
+                    Some(answering) => answered(&account, &answering)?,
+                    None => Vec::new(),
+                };
 
-            (account, thread)
-        }
-        (None, None) => return Err("name a Thread by its ID or by --draft".into()),
-    };
+                (account, thread)
+            }
+            (None, None) => return Err("name a Thread by its ID or by --draft".into()),
+        };
 
-    let rows: Vec<Row<'_>> = thread
-        .iter()
-        .map(|kept| Row {
-            message: ids::message(&account, kept.body_key),
-            from: &kept.from,
-            recipients: &kept.to,
-            subject: &kept.subject,
-            date: kept.received.to_rfc3339(),
-            body: kept.raw.as_deref().map(plain_body::plain),
-        })
-        .collect();
-    Ok(Answer::new(&rows, text(&thread, &rows))?)
+        let rows: Vec<Row<'_>> = thread
+            .iter()
+            .map(|kept| Row {
+                message: ids::message(&account, kept.body_key),
+                from: &kept.from,
+                recipients: &kept.to,
+                subject: &kept.subject,
+                date: kept.received.to_rfc3339(),
+                body: kept.raw.as_deref().map(plain_body::plain),
+            })
+            .collect();
+        Ok(Answer::new(&rows, text(&thread, &rows))?)
+    }
 }
 
 /// The Account a Thread ID names, and its Thread.
 fn named(id: &str) -> Result<(String, Vec<ThreadMessage>), Box<dyn Error>> {
     let emails = accounts::emails()?;
-    let (account, key) = ids::parse_thread(id, &emails)?;
+    let key = ids::parse_thread(id, &emails)?;
     let reader = Reader::open(&xdg::cache_dir()?)?;
-    let thread = reader.thread_of(account, key)?;
+    let thread = reader.thread_of(&key)?;
     if thread.is_empty() {
         return Err(format!("the Cache holds no Thread {id}").into());
     }
 
-    Ok((account.to_owned(), thread))
+    Ok((key.account().clone(), thread))
 }
 
 /// The Thread `answering` names in `account`.

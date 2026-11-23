@@ -11,3 +11,17 @@ pub fn emails() -> Result<Vec<String>, Box<dyn Error>> {
         .map(|c| c.email.to_lowercase())
         .collect())
 }
+
+/// The Account `account` names, else every one.
+pub fn named(account: Option<&str>) -> Result<Vec<String>, Box<dyn Error>> {
+    let emails = emails()?;
+    let Some(account) = account.map(str::to_lowercase) else {
+        return Ok(emails);
+    };
+
+    if !emails.contains(&account) {
+        return Err(format!("no Account {account} is set up").into());
+    }
+
+    Ok(vec![account])
+}

@@ -23,17 +23,17 @@ fn main() -> ExitCode {
         // A command beside the TUI leaves its log alone.
         Some(Command::Correspondent {
             verb: Correspondent::List(list),
-        }) => printed(cli::correspondent_list::answer(&list), list.json),
+        }) => printed(&list, args.json),
         Some(Command::Thread {
             verb: Thread::Show(show),
-        }) => printed(cli::thread_show::answer(&show), show.json),
+        }) => printed(&show, args.json),
         Some(Command::Folder {
             verb: Folder::List(list),
-        }) => printed(cli::folder_list::answer(), list.json),
+        }) => printed(&list, args.json),
         Some(Command::Message { verb }) => match verb {
-            Message::List(list) => printed(cli::message_list::answer(&list), list.json),
-            Message::Show(show) => printed(cli::message_show::answer(&show), show.json),
-            Message::Search(search) => printed(cli::message_search::answer(&search), search.json),
+            Message::List(list) => printed(&list, args.json),
+            Message::Show(show) => printed(&show, args.json),
+            Message::Search(search) => printed(&search, args.json),
         },
         Some(Command::Mcp) => answered(cli::mcp::run()),
         Some(Command::Update) => answered(cli::update::run()),
@@ -56,8 +56,8 @@ fn main() -> ExitCode {
 }
 
 /// A command's answer on stdout, as `--json` asks.
-fn printed(answer: Result<cli::answer::Answer, Box<dyn Error>>, json: bool) -> ExitCode {
-    answered(answer.and_then(|answer| Ok(answer.print(json)?)))
+fn printed(command: &impl cli::answer::Answers, json: bool) -> ExitCode {
+    answered(command.answer().and_then(|answer| Ok(answer.print(json)?)))
 }
 
 /// A command's end, its error on stderr.

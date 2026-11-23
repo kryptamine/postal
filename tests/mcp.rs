@@ -13,7 +13,7 @@ mod support;
 
 use std::{
     io::{BufRead, BufReader, Write},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Stdio},
 };
 
 use serde_json::{Value, json};
@@ -34,13 +34,9 @@ struct Client {
 
 impl Client {
     fn start(home: &Home) -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_postal"))
+        let mut child = home
+            .command(env!("CARGO_BIN_EXE_postal"))
             .arg("mcp")
-            .env_clear()
-            .env("XDG_CONFIG_HOME", home.xdg_config_home())
-            .env("XDG_STATE_HOME", home.xdg_state_home())
-            .env("XDG_CACHE_HOME", home.xdg_cache_home())
-            .env("TZ", "UTC")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -153,6 +149,11 @@ fn each_command_is_a_tool_with_its_arguments() {
         .collect();
     parameters.sort_unstable();
     assert_eq!(parameters, ["account", "folder", "limit"]);
+    // Its description is the command's help.
+    assert_eq!(
+        list.unwrap()["description"],
+        "The newest Threads of a Folder, by default every account's Inbox"
+    );
     client.close();
 }
 
