@@ -65,17 +65,75 @@ import Prose from '@app/layouts/Prose.astro';
 
   <h2>Google user data</h2>
   <p>
-    To read and send mail in a Google Account, Postal asks for the Gmail scope{' '}
-    <code>https://mail.google.com/</code>. It uses that access only to show, search, send and
-    organise your mail, on your machine, at your direction.
+    This section covers the data Postal receives from Google when you sign in to a Google Account.
   </p>
+
+  <h3>Data accessed</h3>
+  <p>Postal asks Google for these scopes, and for nothing else:</p>
   <ul>
-    <li>Your Google data is not sent to Postal's developer or to any third party.</li>
-    <li>It is not used for advertising, and not used to train AI models.</li>
-    <li>No person reads it: it never leaves your machine.</li>
+    <li>
+      <code>https://mail.google.com/</code>: your Gmail mail over IMAP and SMTP. Postal reads your
+      Messages (headers, bodies and attachments), the list of your folders (Gmail shows labels as
+      folders), and each Message's flags such as read or starred, and it sends mail you write.
+    </li>
+    <li>
+      <code>openid</code> and <code>email</code>: your Google Account's email address, which names
+      the Account in Postal and signs it in to IMAP and SMTP.
+    </li>
   </ul>
+  <p>Postal does not access your contacts, calendar, Drive or any other Google service.</p>
+
+  <h3>How the data is used</h3>
   <p>
-    Postal's use and transfer of information received from Google APIs to any other app will adhere
+    Postal uses Google user data only to provide the features you see in Postal, at your direction:
+    to show your mail, search it, write and send replies and new mail, and move, archive or delete
+    Messages. It is not used for advertising, for profiling, to train AI models, or for any purpose
+    other than running the mail client on your computer.
+  </p>
+
+  <h3>Data sharing</h3>
+  <p>
+    Postal's developer never receives your Google user data: Postal has no servers, and the data
+    goes only between your computer and Google. It is not sold, and not shared with or transferred
+    to any third party, with one exception you control: if you ask an AI agent you installed
+    yourself about a Message or a Draft (see "An agent you run" below), Postal hands that text to
+    your agent. Nothing goes to an agent until you ask.
+  </p>
+
+  <h3>Storage and protection</h3>
+  <ul>
+    <li>
+      Mail is stored only on your computer, in the Cache and the files listed above, under your own
+      user account, where your operating system's permissions and disk encryption protect it.
+    </li>
+    <li>
+      The Google refresh token is kept in your operating system's keychain (or a file in Postal's
+      config directory, if you choose that). Postal never sees your Google password.
+    </li>
+    <li>
+      Every connection to Google (IMAP, SMTP, sign-in) uses TLS. Tokens are never written to the
+      log.
+    </li>
+    <li>No person reads your mail: no copy of it exists outside your computer and Google.</li>
+  </ul>
+
+  <h3>Retention and deletion</h3>
+  <ul>
+    <li>
+      Your mail stays in the Cache until you unlink the Account or delete Postal's directories.
+      Unlinking a Google Account in Settings deletes its Messages from the Cache, its refresh token
+      and its entry in the config.
+    </li>
+    <li>The log keeps the current and the previous run only, each capped at 10 MB.</li>
+    <li>
+      You can revoke Postal's access to your Google Account at any time at
+      <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
+    </li>
+  </ul>
+
+  <h3>Limited Use</h3>
+  <p>
+    Postal's use and transfer to any other app of information received from Google APIs will adhere
     to the
     <a href="https://developers.google.com/terms/api-services-user-data-policy">
       Google API Services User Data Policy
