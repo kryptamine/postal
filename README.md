@@ -27,7 +27,7 @@ asks for a mail provider and a sign-in; `?` lists every key.
 
 ```sh
 make        # list the targets
-make check  # lint, tests and the Neovim check
+make check  # lint, cargo deny, tests and the Neovim check
 ```
 
 ## License

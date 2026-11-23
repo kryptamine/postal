@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run demo-build demo media stills install fmt lint test nvim sanitize brand landing landing-dev check
+.PHONY: help build run demo-build demo media stills install fmt lint deny test nvim sanitize brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -51,6 +51,9 @@ lint: ## fail on unformatted code, a clippy lint or a clang-tidy check
 	$(CLANG_FORMAT) --dry-run --Werror cpp/*
 	$(CLANG_TIDY) --quiet cpp/*.cpp
 
+deny: ## check the dependencies' advisories, licenses and sources
+	cargo deny check
+
 test: ## run every Rust test
 	cargo test
 
@@ -70,4 +73,4 @@ landing: ## lint, type-check and build the landing page
 landing-dev: ## serve the landing page at http://localhost:4321, reloading on edits
 	cd landing && pnpm install --frozen-lockfile && pnpm dev
 
-check: lint test nvim ## the gate before a commit
+check: lint deny test nvim ## the gate before a commit

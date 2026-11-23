@@ -78,6 +78,8 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   `scripts/brand.py`, then `make brand`; see `landing/README.md`.
 - **`scripts/sanitize.sh` passes after a change to `cpp/` or `vendor/`**: it
   lays out every cached HTML mail under ASan and UBSan.
+- **`cargo deny check` passes** (`deny.toml`): advisories, licenses and sources
+  of every dependency. An ignored advisory says why in its `reason`.
 - **A review finding a linter could have caught becomes a rule.** Where a lint
   checks it, turn it on in the same change and fix every place it flags.
 - A linter exception is `#[expect(..., reason = "...")]`, so it fails once
@@ -110,8 +112,8 @@ checks this.
 - The commit that finishes an issue closes it: `Closes #N` in the body, and
   the push to `main` closes the issue. A commit for part of one says `Refs #N`.
 - Tests land with the behaviour they cover.
-- `make` lists the targets: `make check` is lint, tests and the Neovim
-  check; `make install` puts a release build and the plugin where a user
+- `make` lists the targets: `make check` is lint, `cargo deny`, tests and the
+  Neovim check; `make install` puts a release build and the plugin where a user
   has them.
 - After a feature or a bug fix is committed, run `make install`, so the
   user can try the change in their own Postal and Neovim at once.
