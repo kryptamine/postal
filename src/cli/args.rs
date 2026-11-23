@@ -5,7 +5,7 @@ use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
 /// A keyboard-driven terminal mail client that reads one or more IMAP
 /// mailboxes. Without a command, the TUI.
 #[derive(Parser)]
-#[command(name = "postal")]
+#[command(name = "postal", version)]
 pub struct Args {
     /// Log debug events; -vv, trace events and the IMAP wire trace: trace
     /// contains headers, not bodies or credentials
