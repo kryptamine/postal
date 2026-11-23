@@ -10,11 +10,7 @@ pub const LIMIT: usize = 50;
 /// A keyboard-driven terminal mail client that reads one or more IMAP
 /// mailboxes. Without a command, the TUI.
 #[derive(Parser)]
-#[command(
-    name = "postal",
-    version,
-    before_help = include_str!("../../assets/brand/postal-lockup.txt")
-)]
+#[command(name = "postal", version)]
 pub struct Args {
     /// Log debug events; -vv, trace events and the IMAP wire trace: trace
     /// contains headers, not bodies or credentials
@@ -149,6 +145,9 @@ pub fn parse(log: Option<&Path>) -> Args {
         )
     });
 
-    let matches = Args::command().after_help(after).get_matches();
+    let matches = Args::command()
+        .before_help(super::lockup::lockup())
+        .after_help(after)
+        .get_matches();
     Args::from_arg_matches(&matches).unwrap_or_else(|error| error.exit())
 }
