@@ -1,67 +1,55 @@
 # postal.nvim
 
-Completes the recipients of a Postal Draft in `To:` and `Cc:` from the
-addresses your accounts have mail from or wrote to, best first, as
-`postal correspondent list` gives them. It works through
-[blink.cmp](https://github.com/saghen/blink.cmp) when installed; without
-it, Neovim's own menu opens as you type (`'autocomplete'`, Neovim 0.12),
-and `<C-x><C-o>` asks for it on an older one.
+_Write mail for [Postal](https://postalmail.dev) in Neovim: recipients completed as you type, and an agent beside the Draft._
 
-A Draft's headers are `To:`, `Cc:`, `Subject:` and `Attach:`, one file
-per `Attach:` line and as many lines as files:
-`Attach: ~/Documents/report.pdf`. A relative path is under your home
-directory, and the plugin completes it as you type.
+Postal opens a Draft, a Signature or a Message in your editor. The plugin
+completes `To:` and `Cc:` from the people your accounts wrote to or heard
+from, completes `Attach:` paths, and `:PostalAgent` opens a chat with an
+[ACP](https://agentclientprotocol.com) agent that edits the text for you to
+review hunk by hunk.
 
-Needs Neovim 0.10 or newer, and `postal` on `PATH`.
+Needs Neovim 0.10 or newer and `postal` on `PATH`. Recipients come from what
+Postal has synced: run `postal` once before.
 
-With [lazy.nvim](https://github.com/folke/lazy.nvim):
+## Installation
+
+`make install` at the repository's root copies the plugin to
+`~/.local/share/postal/nvim`.
+
+### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
-{
-  "kryptamine/postal",
-  config = function(plugin)
-    vim.opt.rtp:append(plugin.dir .. "/nvim")
-    require("postal").setup()
-  end,
-}
+{ dir = "~/.local/share/postal/nvim", main = "postal", opts = {} }
 ```
 
-While working on Postal itself, `{ dir = "~/Work/postal/nvim", config = ... }`
-picks up changes at once. `make install` at the repository's root
-instead installs the checkout as a user runs it: a release `postal` in `~/.cargo/bin`, and a
-copy of the plugin in `~/.local/share/postal/nvim` for `dir` to point at. `setup({ cmd = "/path/to/postal" })` runs a
-`postal` that is not on `PATH`, such as `target/release/postal`.
+## Usage
 
-The list is what Postal has synced: run `postal` once before.
+| in                 | does                                                         |
+| ------------------ | ------------------------------------------------------------ |
+| a Draft            | completes `To:`, `Cc:` and `Attach:`; `:PostalAgent` edits the body |
+| a Signature        | `:PostalAgent` edits the signature                           |
+| a Message (`E`)    | read-only; `:PostalAgent` answers questions about it         |
 
-## Writing with an agent
+Completion goes through [blink.cmp](https://github.com/saghen/blink.cmp)
+when installed, Neovim's own menu otherwise.
 
-`:PostalAgent` in a Draft opens a chat pane beside it with an agent that
-speaks [ACP](https://agentclientprotocol.com), the cursor in its input.
-Each message sits under `## Me` or `## <agent>`; type under the last
-`## Me` and send with `<CR>` or `<C-s>`. `q` stops the agent's turn,
-`<C-c>` ends the chat, `?` lists the keys. A spinner shows while the agent
-works, a dim line each tool call it was denied or the edit it made, and
-the winbar the keys and the hunks left to review. The agent reads the
-Thread the Draft answers, from `postal thread show`, and the body as it
-stands each turn, your own edits included. It reaches the body only
-through the `read_draft` and `write_draft` tools of an MCP server the
-plugin hands it, so the agent must take MCP servers from its client. It
-cannot see or change the headers, run commands, or send. The Draft's
-text goes to whichever provider the agent talks to, and only once you
-ask.
+In the chat pane, send with `<CR>` or `<C-s>`; `q` stops the agent's turn,
+`<C-c>` ends the chat, `?` lists the keys. The agent reaches only the text,
+through an MCP server the plugin hands it: no headers, no commands, no
+sending. Its edit lands in the buffer for review:
 
-The agent's edit lands in the buffer, never on disk, for review hunk by
-hunk: its lines highlighted, the ones they replace shown over them.
-`<leader>a` accepts the hunk under the cursor and `<leader>r`
-rejects it; `<leader>A` and `<leader>R` take or reject every
-hunk left, and the pane's top line counts them. A hunk over lines you
-changed while the agent worked is a conflict: your lines stay until you
-accept the agent's, for the whole hunk. The next instruction waits for
-the review to end.
+| key         | does                             |
+| ----------- | -------------------------------- |
+| `<leader>a` | accept the hunk under the cursor |
+| `<leader>r` | reject the hunk under the cursor |
+| `<leader>A` | accept every hunk                |
+| `<leader>R` | reject every hunk                |
+
+## Configuration
 
 ```lua
 require("postal").setup({
+  cmd = "postal",
   agents = {
     claude = { cmd = { "claude-agent-acp" }, npx = "@agentclientprotocol/claude-agent-acp" },
     gemini = { cmd = { "gemini", "--experimental-acp" } },
@@ -71,32 +59,21 @@ require("postal").setup({
 })
 ```
 
-`claude` is set up by default. When `cmd` is not on `PATH`, the `npx`
-package runs through `npx` instead, so Node.js is all it needs; the first
-start fetches it. `:checkhealth postal` says what is missing and how to
-get it. `:PostalAgent gemini` starts another agent by name. The agent
-signs in through its own CLI (`claude /login`); when it asks for that,
-the pane says how. `nerd_font` draws the pane's icons from a Nerd Font,
-on by default when `vim.g.have_nerd_font` is set. A session lasts as
-long as the Draft's buffer.
+| option      | is                                                                          |
+| ----------- | --------------------------------------------------------------------------- |
+| `cmd`       | the `postal` to run, such as `target/release/postal`                        |
+| `agents`    | ACP agents by name; `npx` runs the package when `cmd` is not on `PATH`      |
+| `agent`     | the one `:PostalAgent` starts; `:PostalAgent gemini` picks another          |
+| `nerd_font` | Nerd Font icons in the pane; on when `vim.g.have_nerd_font` is set          |
 
-## Signing with an agent
+`claude` is set up by default. The agent signs in through its own CLI
+(`claude /login`). `:checkhealth postal` says what is missing.
 
-`Enter` on a Signature in Postal's Settings opens it in your editor, and
-`:PostalAgent` there opens the same chat pane. The agent reads and
-changes the signature alone, through the `read_signature` and
-`write_signature` tools, and its edit is reviewed hunk by hunk as a
-Draft's is. Postal takes what the file holds once the editor exits.
+## Development
 
-## Reading with an agent
+`make check` formats, lints and runs the headless smoke check against stub
+`postal` and ACP agents.
 
-`E` in Postal opens the selected Message in your editor, read-only: its
-headers, then its body as text, its Quote kept and each link's URL listed
-at the end, for searching and copying. Postal removes the file once the
-editor exits. `:PostalAgent` in it opens the same chat pane, to ask about
-the Message: the agent gets it whole in the first prompt, and through the
-`read_message` tool, and can change nothing. The keys are a Draft's, with
-no review.
+## License
 
-`make check` formats, lints and runs the headless smoke check, against
-stub `postal` and ACP agents, the gate before a commit; `make` lists every target.
+[MIT](../LICENSE)
