@@ -21,9 +21,13 @@ than open a PR that can never merge.
 
 **Targets.** `aarch64` and `x86_64`, macOS and Linux. Both macOS builds run
 on an arm64 runner, the Intel one cross-compiled, for macOS 13 and later.
-Linux builds on Ubuntu 22.04, so a binary needs its glibc (2.35) and
-libstdc++, which litehtml links; an older or a musl system builds from
-source. The keychain backend on Linux is zbus, pure Rust, with no libdbus.
+Linux builds on Ubuntu 22.04, so a binary needs its glibc (2.35); an older
+or a musl system builds from source; a musl build was passed over, since
+2.35 covers every supported Ubuntu and Debian and musl's allocator is slow.
+The release links libstdc++, which litehtml needs, statically, so no matching
+compiler runtime is needed; a build from source keeps the system's shared
+one, since not every distribution ships `libstdc++.a`. The keychain backend
+on Linux is zbus, pure Rust, with no libdbus, so neither choice touches it.
 
 **Archive.** `make dist` packs `postal-<target>.tar.gz`: `postal` and the
 licenses, next to a `.sha256` file the install script checks. The Makefile

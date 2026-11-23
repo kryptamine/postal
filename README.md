@@ -17,7 +17,8 @@
 
 ## Install
 
-On macOS or Linux, arm64 or x86_64:
+On macOS 13+ or Linux with glibc 2.35+ (Ubuntu 22.04, Debian 12), arm64 or
+x86_64:
 
 ```sh
 curl -fsSL https://postalmail.dev/install.sh | sh
