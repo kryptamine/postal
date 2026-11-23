@@ -11,8 +11,7 @@ type Props = {
   flip?: boolean;
 } & (Still | Video);
 
-const { label, title, shows, keys = [], flip = false } = Astro.props;
-const media = 'still' in Astro.props ? { still: Astro.props.still } : { video: Astro.props.video };
+const { label, title, keys = [], flip = false, ...media } = Astro.props;
 ---
 
 <section class:list={['feature', { flip }]}>
@@ -37,7 +36,7 @@ const media = 'still' in Astro.props ? { still: Astro.props.still } : { video: A
       </dl>
     )}
   </div>
-  <Media shows={shows} {...media} />
+  <Media {...media} />
 </section>
 
 <style>

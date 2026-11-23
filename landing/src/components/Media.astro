@@ -9,26 +9,31 @@ type Props = (Still | Video) & {
   shows: string;
 };
 
-const { shows } = Astro.props;
-const still = 'still' in Astro.props ? Astro.props.still : undefined;
-const video = 'video' in Astro.props ? Astro.props.video : undefined;
+const props = Astro.props;
 ---
 
 <figure class="media">
   <div class="stamp">
-    {still && (
+    {'still' in props ? (
       <Image
         class="frame"
-        src={still}
-        alt={shows}
+        src={props.still}
+        alt={props.shows}
         widths={[800, 1600, 2400]}
         sizes="(min-width: 60rem) 60vw, 100vw"
       />
-    )}
-    {video && (
-      <video class="frame" aria-label={shows} autoplay muted loop playsinline preload="metadata">
-        <source src={`/media/${video}.webm`} type="video/webm" />
-        <source src={`/media/${video}.mp4`} type="video/mp4" />
+    ) : (
+      <video
+        class="frame"
+        aria-label={props.shows}
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="metadata"
+      >
+        <source src={`/media/${props.video}.webm`} type="video/webm" />
+        <source src={`/media/${props.video}.mp4`} type="video/mp4" />
       </video>
     )}
   </div>
