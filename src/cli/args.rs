@@ -29,6 +29,8 @@ pub enum Command {
         #[command(subcommand)]
         verb: Thread,
     },
+    /// Replace this postal with the latest release
+    Update,
 }
 
 #[derive(Subcommand)]

@@ -27,6 +27,10 @@ SRV queries over UDP, both on loopback. The undocumented `[autoconfig]` table
 points Postal at them; a test that needs no lookup points it at ones that
 publish nothing, so no test reaches the network.
 
+GitHub's releases page is faked the same way, for `postal update`: the
+undocumented `POSTAL_RELEASES_URL` points Postal at a server whose `latest`
+redirects to a tag and which serves that tag's archive and sha256.
+
 Login reads an existing `config.toml` and keeps its `name`, `[imap]`, `[smtp]`
 and `[secrets]`, so a test seeds a config without `email` that points at the
 fake server and forces the file store; the login fills in the Account.

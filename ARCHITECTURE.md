@@ -47,7 +47,7 @@ Lowest first:
   clipboard), `onboarding/`
   and `logging/`.
 - `cli/`: the commands beside the TUI: the arguments, `correspondent list`,
-  `thread show`.
+  `thread show`, `update` and the releases it reads from GitHub.
 - `app/`: the TUI's run and `postal login`: the Accounts signed in, the
   Onboarding when one is not, each Account's connections and the screen
   over them, opened again after Settings or a sign-in.
