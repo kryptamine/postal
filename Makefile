@@ -45,6 +45,10 @@ install: ## install a release postal in ~/.cargo/bin
 			--options runtime $(INSTALLED); \
 	fi
 	@echo "postal: $(INSTALLED)"
+	@found=$$(command -v postal); \
+	if [ -n "$$found" ] && [ "$$(realpath "$$found")" != "$$(realpath $(INSTALLED))" ]; then \
+		echo "warning: postal on PATH is $$found, not this build"; \
+	fi
 
 # install.sh reads the binary from $(DIST)/postal in this archive.
 # SIGN, when set, is run on the binary and the identifier before it is packed.
