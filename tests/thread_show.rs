@@ -15,7 +15,7 @@ mod support;
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::Output,
     time::Duration,
 };
 
@@ -82,14 +82,9 @@ fn reply(home: &Home, keys: &[(&str, Key)]) -> PathBuf {
 }
 
 fn show(home: &Home, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_postal"))
+    home.command(env!("CARGO_BIN_EXE_postal"))
         .args(["thread", "show"])
         .args(args)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
         .output()
         .unwrap()
 }

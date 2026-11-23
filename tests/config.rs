@@ -7,22 +7,12 @@
 
 mod support;
 
-use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
-    process::{Command, Output},
-};
+use std::{fs, os::unix::fs::PermissionsExt, process::Output};
 
 use support::home::Home;
 
 fn postal(home: &Home) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_postal"))
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .output()
-        .unwrap()
+    home.command(env!("CARGO_BIN_EXE_postal")).output().unwrap()
 }
 
 /// Runs Postal and returns its stderr, asserting it failed before drawing anything.
