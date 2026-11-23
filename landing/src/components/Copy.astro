@@ -1,0 +1,46 @@
+---
+type Props = {
+  text: string;
+};
+
+const { text } = Astro.props;
+---
+
+<button class="copy button secondary" type="button" data-copy={text} aria-live="polite" hidden>
+  Copy
+</button>
+
+<script>
+  const SHOWN = 2000;
+
+  // Hidden until the script runs, so a page without one shows no dead button.
+  for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-copy]')) {
+    button.hidden = false;
+    button.addEventListener('click', () => {
+      navigator.clipboard
+        .writeText(button.dataset.copy ?? '')
+        .then(
+          () => 'Copied',
+          () => 'Failed',
+        )
+        .then((label) => {
+          button.textContent = label;
+          setTimeout(() => {
+            button.textContent = 'Copy';
+          }, SHOWN);
+        });
+    });
+  }
+</script>
+
+<style>
+  .copy {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    min-height: 0;
+    padding: calc(var(--cell) * 0.5) calc(var(--cell) * 1.5);
+    background: var(--code-bg);
+    font-size: var(--text-caption);
+  }
+</style>
