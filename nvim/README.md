@@ -13,8 +13,8 @@ Postal has synced: run `postal` once before.
 
 ## Installation
 
-`make install` at the repository's root copies the plugin to
-`~/.local/share/postal/nvim`.
+Both the install script and `make install` (see the [README](../README.md))
+copy the plugin to `~/.local/share/postal/nvim`.
 
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
