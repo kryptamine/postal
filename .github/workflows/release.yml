@@ -3,8 +3,8 @@ name: Release
 on:
   push:
     branches: [main]
-  # A pull request that changes how the archives are made builds and signs
-  # them, without a release to upload to.
+  # A pull request that changes how the archives are made builds, signs and
+  # checks them, without a release to upload to.
   pull_request:
     paths:
       - .github/workflows/release.yml
@@ -38,8 +38,6 @@ jobs:
     if: >-
       !cancelled() && (needs.release-please.outputs.created == 'true' ||
       github.event.pull_request.head.repo.full_name == github.repository)
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +72,54 @@ jobs:
         env:
           CXXSTDLIB: ""
           RUSTFLAGS: -C link-arg=-Wl,-Bstatic -C link-arg=-lstdc++ -C link-arg=-Wl,-Bdynamic
-      - if: needs.release-please.outputs.created == 'true'
-        run: gh release upload "${{ needs.release-please.outputs.tag }}" "dist/$NAME.tar.gz" "dist/$NAME.tar.gz.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.NAME }}
+          path: dist/${{ env.NAME }}.tar.gz*
+          if-no-files-found: error
+
+  # Each archive runs on a runner that never built it, before it is published.
+  verify:
+    needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-apple-darwin, os: macos-26-intel }
+          # The floor the README promises: glibc 2.35, no libstdc++ needed.
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest, container: "ubuntu:22.04" }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm, container: "ubuntu:22.04" }
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    env:
+      NAME: postal-${{ matrix.target }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.NAME }}
+      - run: sha256sum -c "$NAME.tar.gz.sha256" || shasum -a 256 -c "$NAME.tar.gz.sha256"
+      - run: tar -xzf "$NAME.tar.gz"
+      - run: ./"$NAME"/postal --version
+      - if: runner.os == 'Linux'
+        run: "! ldd \"$NAME/postal\" | grep libstdc++"
+      - if: runner.os == 'macOS'
+        run: spctl --assess --type install -vvv "$NAME/postal"
+
+  publish:
+    needs: [release-please, verify]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && needs.release-please.outputs.created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - run: gh release upload "$TAG" dist/*
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-please.outputs.tag }}
