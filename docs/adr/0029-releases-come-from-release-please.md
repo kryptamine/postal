@@ -30,3 +30,14 @@ licenses, next to a `.sha256` file the install script checks. The Makefile
 owns the layout; the workflow only uploads it. The script puts the binary in
 `~/.local/bin`. The Neovim plugin is not in the archive: a plugin manager
 installs it from the repository, on the same release tag.
+
+**Signing.** The macOS binaries are signed with a Developer ID and
+notarized, by `scripts/sign-macos.sh` through `make dist SIGN=...`. The
+keychain grants an item to the signature's designated requirement, the team
+and the identifier `dev.postalmail.postal`; an unsigned binary asked
+"Allow access" again after every update. The identifier never changes, or
+every user allows access once more. `notarytool` takes a zip of the binary;
+a bare binary cannot be stapled, so Gatekeeper fetches the ticket online.
+The certificate, its password and an App Store Connect API key (role
+Developer) are repository secrets. A pull request that touches the release
+path runs the same build and signing, with nothing to upload.
