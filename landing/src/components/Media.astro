@@ -1,0 +1,73 @@
+---
+// A screenshot or video in the stamp frame. Until #115
+// shoots it, the slot shows what will be there, at the final aspect ratio.
+type Props = {
+  kind: 'still' | 'video';
+  shows: string;
+  ratio?: string;
+};
+
+const { kind, shows, ratio = '16 / 10' } = Astro.props;
+---
+
+<figure class="media">
+  <div class="stamp">
+    <div class="slot" style={`aspect-ratio: ${ratio}`}>
+      <span class="eyebrow">{kind === 'video' ? 'Video' : 'Screenshot'} to come</span>
+      <span class="shows">{shows}</span>
+    </div>
+  </div>
+</figure>
+
+<style>
+  .media {
+    min-width: 0;
+  }
+
+  /* Solid inside, perforated in a ring one hole deep round the edge. */
+  .stamp {
+    --p: var(--media-perforation);
+    padding: calc(var(--p) * 2);
+    background: var(--media-bg);
+    -webkit-mask:
+      linear-gradient(#000 0 0) center / calc(100% - var(--p) * 2) calc(100% - var(--p) * 2)
+        no-repeat,
+      radial-gradient(
+          circle at center,
+          #0000 calc(var(--p) * 0.62),
+          #000 calc(var(--p) * 0.62 + 0.5px)
+        )
+        calc(var(--p) * -1.25) calc(var(--p) * -1.25) / calc(var(--p) * 2.5) calc(var(--p) * 2.5)
+        round;
+    mask:
+      linear-gradient(#000 0 0) center / calc(100% - var(--p) * 2) calc(100% - var(--p) * 2)
+        no-repeat,
+      radial-gradient(
+          circle at center,
+          #0000 calc(var(--p) * 0.62),
+          #000 calc(var(--p) * 0.62 + 0.5px)
+        )
+        calc(var(--p) * -1.25) calc(var(--p) * -1.25) / calc(var(--p) * 2.5) calc(var(--p) * 2.5)
+        round;
+  }
+
+  .slot {
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: var(--space-1);
+    max-width: 100%;
+    padding: var(--space-3);
+    border: 1px dashed var(--color-rule);
+    border-radius: var(--media-radius);
+    background: var(--color-bg);
+    text-align: center;
+  }
+
+  .shows {
+    max-width: 36ch;
+    font: var(--weight-subheading) var(--text-h3) / 1.3 var(--font-heading);
+    letter-spacing: var(--tracking-heading);
+    text-wrap: balance;
+  }
+</style>

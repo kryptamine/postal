@@ -1,0 +1,61 @@
+---
+import { site } from '@app/site';
+import Prose from '@app/layouts/Prose.astro';
+---
+
+<Prose
+  title="Terms of service"
+  description="The terms under which Postal is offered."
+  updated={site.policyDate}
+>
+  <p>
+    Postal is software you run on your own computer. By using it you agree to these terms. If you do
+    not agree, do not use Postal.
+  </p>
+
+  <h2>The software</h2>
+  <p>
+    Postal is a mail client for the terminal. Its source is published at
+    <a href={site.repo}>{site.repo.replace('https://', '')}</a>, and the licence in that repository
+    governs how you may use, copy and change it.
+  </p>
+
+  <h2>Your accounts</h2>
+  <p>
+    Postal connects to mail accounts you sign in to. You are responsible for those accounts, for the
+    mail you send with Postal, and for following the terms of your mail Provider. Postal's developer
+    has no access to your accounts or your mail.
+  </p>
+
+  <h2>No warranty</h2>
+  <p>
+    Postal is provided as is, without warranty of any kind, express or implied, including fitness
+    for a particular purpose. Mail is important: keep it on your Provider's server, which Postal
+    does by default, and do not rely on Postal's Cache as a backup.
+  </p>
+
+  <h2>Liability</h2>
+  <p>
+    To the extent the law allows, Postal's developer is not liable for any loss or damage arising
+    from the use of Postal, including lost or undelivered mail.
+  </p>
+
+  <h2>Privacy</h2>
+  <p>
+    The <a href="/privacy/">privacy policy</a> says what Postal stores and what it connects to.
+  </p>
+
+  <h2>Changes and contact</h2>
+  <p>
+    A change to these terms is published on this page, with its date at the top. Questions go to
+    <span class="address">{site.contact}</span>.
+  </p>
+</Prose>
+
+<style>
+  .address {
+    font-family: var(--font-code);
+    font-size: 0.9em;
+    user-select: all;
+  }
+</style>

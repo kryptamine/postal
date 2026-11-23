@@ -1,0 +1,60 @@
+---
+type Props = {
+  value: string;
+  unit: string;
+  // Text round the rim; it ends in " ·" so the loop closes evenly.
+  rim: string;
+  size?: number;
+};
+
+const { value, unit, rim, size = 168 } = Astro.props;
+// One id per postmark on a page, the same in every build.
+const id = `rim-${[...rim, ...value].reduce((sum, char) => sum + (char.codePointAt(0) ?? 0), 0).toString(36)}`;
+---
+
+<svg
+  class="postmark"
+  viewBox="0 0 168 168"
+  width={size}
+  height={size}
+  role="img"
+  aria-label={`${value} ${unit}: ${rim}`}
+>
+  <defs>
+    <path id={id} d="M84,84 m-62,0 a62,62 0 1,1 124,0 a62,62 0 1,1 -124,0"></path>
+  </defs>
+  <circle cx="84" cy="84" r="78" fill="none" stroke="currentColor" stroke-width="2.5"></circle>
+  <circle cx="84" cy="84" r="50" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+  <text class="rim">
+    <textPath href={`#${id}`} textLength="386">
+      {rim}
+    </textPath>
+  </text>
+  <text class="value" x="84" y="83" text-anchor="middle">
+    {value}
+  </text>
+  <text class="rim" x="84" y="103" text-anchor="middle">
+    {unit}
+  </text>
+</svg>
+
+<style>
+  .postmark {
+    color: var(--postmark-fg);
+    flex: none;
+  }
+
+  text {
+    fill: currentColor;
+  }
+
+  .rim {
+    font: 700 11px var(--font-ui);
+    letter-spacing: 0.16em;
+  }
+
+  .value {
+    font: 800 27px var(--font-heading);
+    letter-spacing: -0.02em;
+  }
+</style>

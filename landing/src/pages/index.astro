@@ -1,0 +1,559 @@
+---
+import { site } from '@app/site';
+import Base from '@app/layouts/Base.astro';
+import Media from '@app/components/Media.astro';
+import Airmail from '@app/components/Airmail.astro';
+import Feature from '@app/components/Feature.astro';
+import Postmark from '@app/components/Postmark.astro';
+
+const budget = [
+  ['≤100 ms', 'Cold start to a Message List drawn from the Cache'],
+  ['≤16 ms', 'A keypress to its frame: scroll, select, narrow a Search'],
+  ['≤30 MB', 'Memory after scrolling the whole list'],
+  ['≤500 ms', 'A new Message on the server to its row on screen'],
+];
+
+const also = [
+  ['All Inboxes', "Every Account's Inbox in one Message List, newest first."],
+  ['Undo', 'u takes back a Delete, an Archive, a Move or a discarded Draft.'],
+  ['Archive and Move', 'e archives; m moves to a Folder you pick by typing.'],
+  ['Attachments', 'Open or save one by its hint label, without leaving the keyboard.'],
+  ['Notifications', 'A desktop notice of new mail while the terminal has no focus.'],
+  ['Starts offline', 'The Message List comes from the Cache before the server answers.'],
+  [
+    "Your terminal's colours",
+    'Postal draws in your palette, with Nerd Font icons where the font has them.',
+  ],
+  ['Signatures', 'One per Account, added to each Draft it sends.'],
+];
+
+const providers = [
+  ['Google', 'Gmail. Sign in through the browser; Postal keeps a token, never your password.'],
+  ['iCloud', 'Sign in with an app-specific password.'],
+  ['Any IMAP server', 'Type your address: Postal finds the servers your domain publishes.'],
+];
+---
+
+<Base>
+  <section class="hero wrap">
+    <div class="pitch">
+      <p class="eyebrow">A mail client for the terminal</p>
+      <h1>
+        Mail at <span>terminal speed.</span>
+      </h1>
+      <p class="lede prose-font">
+        Postal reads Gmail, iCloud and any IMAP mailbox in your terminal. It lays HTML mail out the
+        way a mail client does, opens from a local Cache in 100&nbsp;ms, and keeps everything on
+        your machine.
+      </p>
+      <div class="actions">
+        <a class="button primary" href="#install">
+          Install
+        </a>
+        <a class="button secondary" href={site.repo}>
+          Source on GitHub
+        </a>
+      </div>
+    </div>
+    <div class="shot">
+      <Media
+        kind="still"
+        shows="The Message List beside the Preview, with an HTML mail in the Rendered View"
+      />
+      <div class="cancel">
+        <Postmark value="≤100" unit="MS" rim="POSTAL · COLD START · FROM THE CACHE ·" />
+      </div>
+    </div>
+  </section>
+
+  <section class="budget wrap" aria-labelledby="budget-title">
+    <div class="intro">
+      <h2 id="budget-title">A budget, not an adjective</h2>
+      <p class="prose-font muted">
+        The targets Postal is built and checked against, on a Cache of 10,000 Messages. In a steady
+        state a frame allocates nothing.
+      </p>
+    </div>
+    <dl>
+      {budget.map(([figure, what]) => (
+        <div>
+          <dt>{figure}</dt>
+          <dd>{what}</dd>
+        </div>
+      ))}
+    </dl>
+  </section>
+
+  <section id="features" class="html wrap" aria-labelledby="html-title">
+    <div class="intro">
+      <p class="eyebrow">Rendered View</p>
+      <h2 id="html-title">HTML mail, laid out in cells</h2>
+      <p class="prose-font">
+        Postal runs an HTML and CSS layout engine and draws the result on the terminal's cell grid:
+        columns, buttons, coloured blocks and borders, in the mail's colours moved onto your
+        terminal's background.
+      </p>
+    </div>
+    <div class="pair">
+      <Media kind="still" shows="A newsletter as a browser shows it" ratio="4 / 3" />
+      <Media kind="still" shows="The same newsletter in Postal" ratio="4 / 3" />
+    </div>
+    <ul class="points">
+      <li>
+        <kbd>v</kbd> <span>switches to the Text View: the mail's text in reading order.</span>
+      </li>
+      <li>
+        <kbd>o</kbd> <span>labels every link; type a label to open it.</span>
+      </li>
+      <li>
+        <kbd>∅</kbd>
+        <span>
+          Images are never fetched. A picture shows as its name, and no sender learns you opened
+          their mail.
+        </span>
+      </li>
+    </ul>
+  </section>
+
+  <div class="features wrap">
+    <Feature
+      label="Reading"
+      title="A Thread, read top to bottom"
+      kind="still"
+      shows="A Thread in Reading: its Messages stacked, the read middle folded"
+      keys={[
+        ['Enter', 'read the Thread full screen'],
+        ['n p', 'next and previous Message'],
+        ['|', 'open the Message in $PAGER'],
+      ]}
+    >
+      <p>
+        A Thread opens as a stack of its Messages, oldest first and the newest at the bottom. The
+        read middle folds into one line each, and the Quote a Message ends in is left out.
+      </p>
+      <p>On Gmail, Postal brings in the Thread's Messages from other Folders too.</p>
+    </Feature>
+
+    <Feature
+      flip
+      label="Search"
+      title="Every Folder, as you type"
+      kind="video"
+      shows="A Query narrowing the Message List, a keystroke at a time"
+      keys={[
+        ['/', 'start a Search'],
+        ['Esc', 'end it, on the selected match'],
+      ]}
+    >
+      <p>
+        A Query narrows the Message List to the Threads that match, across every cached Folder of
+        every Account, ranked by best match.
+      </p>
+      <p>It runs on the local Cache, so it answers within a frame and works with no connection.</p>
+    </Feature>
+
+    <Feature
+      label="Compose"
+      title="Write in your own editor"
+      kind="video"
+      shows="A Draft in $EDITOR: headers, recipients completing, an Attach: line"
+      keys={[
+        ['c', 'compose a new Message'],
+        ['r', 'reply'],
+      ]}
+    >
+      <p>
+        A Draft opens in <code>$EDITOR</code>: <code>To</code>, <code>Cc</code>,{' '}
+        <code>Subject</code> and
+        <code>Attach</code> lines over the body. Recipients expand from the people you have had mail
+        from or written to.
+      </p>
+      <p>
+        Send goes through an Outbox that retries until the server accepts. A Draft you set aside
+        waits in Local Drafts.
+      </p>
+    </Feature>
+
+    <Feature
+      flip
+      label="Neovim"
+      title="An agent beside the Draft"
+      kind="video"
+      shows="The agent pane beside a Draft, an edit reviewed hunk by hunk"
+    >
+      <p>
+        The Neovim plugin completes recipients as you type and opens a chat pane with the agent you
+        run, over the Agent Client Protocol. Ask it about the Message you are reading, or let it
+        edit the Draft and review each change hunk by hunk.
+      </p>
+      <p>
+        Postal ships no agent. The one you run is yours, and it sees a Message only when you ask it
+        to.
+      </p>
+    </Feature>
+  </div>
+
+  <section class="also wrap" aria-labelledby="also-title">
+    <h2 id="also-title">Also</h2>
+    <dl>
+      {also.map(([name, what]) => (
+        <div>
+          <dt>{name}</dt>
+          <dd>{what}</dd>
+        </div>
+      ))}
+    </dl>
+  </section>
+
+  <section class="local" aria-labelledby="local-title">
+    <Airmail />
+    <div class="wrap inner">
+      <div class="intro">
+        <p class="eyebrow">Privacy</p>
+        <h2 id="local-title">Your mail stays on your machine</h2>
+        <p class="prose-font">
+          Postal has no servers of its own. Your mail travels between your machine and your
+          Provider, and nowhere else.
+        </p>
+        <p>
+          <a href="/privacy/">Read the privacy policy</a>
+        </p>
+      </div>
+      <ul>
+        <li>
+          <strong>Messages</strong> in a SQLite Cache under <code>~/.cache/postal</code>.
+        </li>
+        <li>
+          <strong>Secrets</strong> in your operating system's keychain, by default.
+        </li>
+        <li>
+          <strong>No telemetry</strong>, analytics or crash reports. The log is a file on your disk.
+        </li>
+        <li>
+          <strong>No images fetched</strong>, so no tracking pixel ever loads.
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="providers wrap" aria-labelledby="providers-title">
+    <div class="intro">
+      <h2 id="providers-title">Providers and platforms</h2>
+      <p class="prose-font muted">
+        macOS and Linux, in any modern terminal. Several Accounts in one run.
+      </p>
+    </div>
+    <ul>
+      {providers.map(([name, how]) => (
+        <li>
+          <h3>{name}</h3>
+          <p>{how}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section id="install" class="install wrap" aria-labelledby="install-title">
+    <div class="intro">
+      <h2 id="install-title">Install</h2>
+      <p class="prose-font">
+        Postal builds from source with Rust 1.88 or newer and a C++ compiler.{' '}
+        <code>make install</code> puts the binary in <code>~/.cargo/bin</code> and the Neovim plugin
+        beside it.
+      </p>
+    </div>
+    <div class="steps">
+      <pre><code><span class="p">$</span> git clone {site.repo}
+<span class="p">$</span> cd postal
+<span class="p">$</span> make install
+<span class="p">$</span> postal</code></pre>
+      <p class="muted">
+        The first run opens the Onboarding: pick a Provider and sign in. <kbd>?</kbd> lists every
+        key.
+      </p>
+      <Media kind="still" shows="The Onboarding's Provider list" ratio="16 / 9" />
+    </div>
+  </section>
+</Base>
+
+<style>
+  section {
+    scroll-margin-top: var(--space-4);
+  }
+
+  .intro {
+    display: grid;
+    gap: var(--space-2);
+    align-content: start;
+  }
+
+  /* Hero */
+  .hero {
+    display: grid;
+    gap: var(--space-6);
+    padding-block: var(--space-6) var(--space-8);
+  }
+
+  .pitch {
+    display: grid;
+    gap: var(--space-3);
+    max-width: 46rem;
+  }
+
+  .hero h1 {
+    font-size: var(--text-display);
+    font-weight: var(--weight-display);
+    line-height: var(--leading-display);
+  }
+
+  .hero h1 span {
+    color: var(--color-primary);
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .shot {
+    position: relative;
+  }
+
+  /* The postmark cancels the stamp: struck over its corner, a little askew. */
+  .cancel {
+    position: absolute;
+    top: calc(var(--space-6) * -1);
+    right: var(--space-3);
+    rotate: -11deg;
+    background: radial-gradient(circle, var(--color-bg) 68%, transparent 69%);
+    border-radius: 50%;
+  }
+
+  @media (max-width: 47.99rem) {
+    .cancel {
+      position: static;
+      rotate: -6deg;
+      width: fit-content;
+      margin: var(--space-2) auto 0;
+    }
+  }
+
+  /* Budget */
+  .budget {
+    display: grid;
+    gap: var(--space-4);
+    padding-block: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+  }
+
+  .budget dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: var(--space-4) var(--space-3);
+  }
+
+  .budget dl div {
+    display: grid;
+    gap: var(--space-half);
+    align-content: start;
+    padding-top: var(--space-2);
+    border-top: 2px solid var(--color-text);
+  }
+
+  .budget dt {
+    font: var(--weight-display) var(--text-h1) / 1.05 var(--font-heading);
+    letter-spacing: var(--tracking-heading);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .budget dd {
+    color: var(--color-text-muted);
+    font-size: var(--text-caption);
+  }
+
+  /* HTML mail */
+  .html {
+    display: grid;
+    gap: var(--space-4);
+    padding-block: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+  }
+
+  .pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-3);
+  }
+
+  .points {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: var(--space-2) var(--space-4);
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-caption);
+  }
+
+  .points li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-2);
+    align-items: baseline;
+    color: var(--color-text-muted);
+  }
+
+  .points kbd {
+    color: var(--color-text);
+  }
+
+  /* Feature rows */
+  .features {
+    display: grid;
+    gap: var(--space-12);
+    padding-block: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+  }
+
+  /* Also */
+  .also {
+    display: grid;
+    gap: var(--space-4);
+    padding-block: var(--space-8);
+    border-top: 1px solid var(--color-rule);
+  }
+
+  .also dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: var(--space-3) var(--space-4);
+  }
+
+  .also dl div {
+    display: grid;
+    gap: var(--space-half);
+    align-content: start;
+  }
+
+  .also dt {
+    font: var(--weight-subheading) 1.0625rem / 1.3 var(--font-heading);
+  }
+
+  .also dd {
+    color: var(--color-text-muted);
+    font-size: var(--text-caption);
+  }
+
+  /* Local */
+  .local {
+    background: var(--color-surface);
+  }
+
+  .local .inner {
+    display: grid;
+    gap: var(--space-4);
+    padding-block: var(--space-8);
+  }
+
+  @media (min-width: 60rem) {
+    .local .inner {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+      gap: var(--space-8);
+      align-items: center;
+    }
+  }
+
+  .local ul {
+    display: grid;
+    gap: var(--space-2);
+    padding: 0;
+    list-style: none;
+  }
+
+  .local li {
+    padding-left: var(--space-2);
+    border-left: 2px solid var(--color-primary);
+    color: var(--color-text-muted);
+  }
+
+  .local li strong {
+    color: var(--color-text);
+    font-weight: var(--weight-ui-strong);
+  }
+
+  .local code {
+    background: var(--color-bg);
+  }
+
+  /* Providers */
+  .providers {
+    display: grid;
+    gap: var(--space-4);
+    padding-block: var(--space-8);
+  }
+
+  .providers ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: var(--space-3);
+    padding: 0;
+    list-style: none;
+  }
+
+  .providers li {
+    display: grid;
+    gap: var(--space-1);
+    align-content: start;
+    padding: var(--card-padding);
+    border-radius: var(--card-radius);
+    background: var(--card-bg);
+  }
+
+  .providers li p {
+    color: var(--color-text-muted);
+    font-size: var(--text-caption);
+  }
+
+  /* Install */
+  .install {
+    display: grid;
+    gap: var(--space-4);
+    padding-block: var(--space-8) 0;
+    border-top: 1px solid var(--color-rule);
+  }
+
+  @media (min-width: 60rem) {
+    .install {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      gap: var(--space-8);
+    }
+  }
+
+  .steps {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  pre {
+    margin: 0;
+    padding: var(--space-3);
+    overflow-x: auto;
+    border: 1px solid var(--code-border);
+    border-radius: var(--card-radius);
+    background: var(--code-bg);
+    line-height: 1.8;
+  }
+
+  pre code {
+    padding: 0;
+    background: none;
+    font-size: var(--text-ui);
+  }
+
+  pre .p {
+    color: var(--color-primary);
+    user-select: none;
+  }
+</style>

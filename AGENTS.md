@@ -71,6 +71,11 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   `nvim/scripts/smoke.lua` in a bare headless Neovim against a stub `postal`
   and a stub ACP agent. `tests/nvim.rs` runs the same check with the real
   binary; both need `nvim`.
+- **`make landing` passes after a change to `landing/` or `assets/brand/`**:
+  Prettier and ESLint (`landing/eslint/`, a file to a concern), then
+  `astro check` and the build of the site, which reads the brand files
+  directly. Edit the brand in `assets/brand/tokens.json` and
+  `scripts/brand.py`, then `make brand`; see `landing/README.md`.
 - **`scripts/sanitize.sh` passes after a change to `cpp/` or `vendor/`**: it
   lays out every cached HTML mail under ASan and UBSan.
 - **A review finding a linter could have caught becomes a rule.** Where a lint

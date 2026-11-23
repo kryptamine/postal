@@ -1,0 +1,14 @@
+---
+import mono from '@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url';
+// Self-hosted, so a visit asks no third party for anything.
+import grotesk from '@fontsource-variable/schibsted-grotesk/files/schibsted-grotesk-latin-wght-normal.woff2?url';
+
+const face = (family: string, url: string, weight: string): string =>
+  `@font-face{font-family:'${family}';src:url('${url}') format('woff2');font-weight:${weight};font-style:normal;font-display:swap}`;
+
+const css = face('Schibsted Grotesk', grotesk, '400 900') + face('JetBrains Mono', mono, '100 800');
+---
+
+<link rel="preload" href={grotesk} as="font" type="font/woff2" crossorigin />
+<link rel="preload" href={mono} as="font" type="font/woff2" crossorigin />
+<style is:inline set:html={css}></style>

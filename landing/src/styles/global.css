@@ -1,0 +1,193 @@
+@import '@brand/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: var(--space-4);
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: var(--weight-body) var(--text-ui) / var(--leading-body) var(--font-ui);
+  font-optical-sizing: auto;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  letter-spacing: var(--tracking-heading);
+  line-height: var(--leading-heading);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--text-h1);
+  font-weight: var(--weight-heading);
+}
+
+h2 {
+  font-size: var(--text-h2);
+  font-weight: var(--weight-heading);
+}
+
+h3 {
+  font-size: var(--text-h3);
+  font-weight: var(--weight-subheading);
+}
+
+p,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+p {
+  max-width: var(--measure);
+  text-wrap: pretty;
+}
+
+a {
+  color: var(--link-fg);
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+a:hover {
+  color: var(--link-fg-hover);
+}
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--radius-control);
+}
+
+img,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--font-code);
+}
+
+code {
+  background: var(--code-bg);
+  border-radius: var(--code-radius);
+  padding: 0.1em 0.4em;
+  font-size: 0.94em;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.9em;
+  padding: 0 0.55em;
+  border: 1px solid var(--kbd-border);
+  border-bottom-width: 2px;
+  border-radius: var(--kbd-radius);
+  background: var(--kbd-bg);
+  font-size: 0.88em;
+  line-height: 1.55;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.wrap {
+  max-width: 70rem;
+  margin-inline: auto;
+  padding-left: max(var(--space-2), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
+}
+
+@media (min-width: 48rem) {
+  .wrap {
+    padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-4), env(safe-area-inset-right, 0px));
+  }
+}
+
+.eyebrow {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.prose-font {
+  font-family: var(--font-prose);
+  font-size: var(--text-prose);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: var(--button-padding);
+  border: 1px solid transparent;
+  border-radius: var(--button-radius);
+  font: var(--button-weight) var(--text-ui) / 1.2 var(--button-font);
+  text-decoration: none;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.button.primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+}
+
+.button.primary:hover {
+  background: var(--button-primary-bg-hover);
+  color: var(--button-primary-fg);
+}
+
+.button.secondary {
+  border-color: var(--button-secondary-border);
+  color: var(--button-secondary-fg);
+}
+
+.button.secondary:hover {
+  border-color: var(--button-secondary-border-hover);
+  color: var(--button-secondary-fg);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

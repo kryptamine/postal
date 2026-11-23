@@ -1,0 +1,97 @@
+---
+// One feature: its words on one side, its screenshot or video on the other.
+import Media from '@app/components/Media.astro';
+
+type Props = {
+  label: string;
+  title: string;
+  kind: 'still' | 'video';
+  shows: string;
+  keys?: [string, string][];
+  flip?: boolean;
+};
+
+const { label, title, kind, shows, keys = [], flip = false } = Astro.props;
+---
+
+<section class:list={['feature', { flip }]}>
+  <div class="words">
+    <p class="eyebrow">{label}</p>
+    <h2>{title}</h2>
+    <div class="body prose-font">
+      <slot />
+    </div>
+    {keys.length > 0 && (
+      <dl class="keys">
+        {keys.map(([key, does]) => (
+          <div>
+            <dt>
+              {key.split(' ').map((k) => (
+                <kbd>{k}</kbd>
+              ))}
+            </dt>
+            <dd>{does}</dd>
+          </div>
+        ))}
+      </dl>
+    )}
+  </div>
+  <Media kind={kind} shows={shows} />
+</section>
+
+<style>
+  .feature {
+    display: grid;
+    gap: var(--space-4);
+    align-items: center;
+  }
+
+  @media (min-width: 60rem) {
+    .feature {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      gap: var(--space-8);
+    }
+
+    .feature.flip {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    }
+
+    .feature.flip .words {
+      order: 2;
+    }
+  }
+
+  .words {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .body {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .keys {
+    display: grid;
+    gap: var(--space-1);
+    margin-top: var(--space-1);
+    font-size: var(--text-caption);
+  }
+
+  .keys div {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: var(--space-2);
+    align-items: baseline;
+  }
+
+  .keys dt {
+    display: flex;
+    gap: var(--space-half);
+  }
+
+  .keys dd {
+    color: var(--color-text-muted);
+  }
+</style>

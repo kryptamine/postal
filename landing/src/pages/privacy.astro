@@ -1,0 +1,130 @@
+---
+import { site } from '@app/site';
+import Prose from '@app/layouts/Prose.astro';
+---
+
+<Prose
+  title="Privacy policy"
+  description="What Postal stores, where it stores it, and the few places it connects to."
+  updated={site.policyDate}
+>
+  <p>
+    Postal is a mail client that runs on your computer. It has no servers of its own, and its
+    developer receives nothing from it: no mail, no addresses, no usage data. This page says what
+    Postal stores, where, and what it connects to.
+  </p>
+
+  <h2>What Postal stores on your machine</h2>
+  <ul>
+    <li>
+      <strong>Your mail.</strong> Messages, their bodies and flags are kept in a SQLite Cache under
+      <code>~/.cache/postal</code>, so the Message List shows before the server answers.
+    </li>
+    <li>
+      <strong>Your secrets.</strong> A Google refresh token, or the password of an iCloud or other
+      Account, is kept in your operating system's keychain, or in a file in Postal's config
+      directory if you choose that in Settings.
+    </li>
+    <li>
+      <strong>Your settings.</strong> <code>~/.config/postal/config.toml</code> holds your Accounts'
+      addresses, their servers and your preferences.
+    </li>
+    <li>
+      <strong>Unsent mail.</strong> Drafts and Messages waiting in the Outbox are files under
+      <code>~/.local/share/postal</code>.
+    </li>
+    <li>
+      <strong>A log.</strong> Errors are written to a file under <code>~/.local/state/postal</code>.
+      It never leaves your machine unless you send it to someone.
+    </li>
+  </ul>
+  <p>Each directory follows the XDG variable for it when you set one.</p>
+
+  <h2>What Postal connects to</h2>
+  <ul>
+    <li>
+      <strong>Your mail Provider</strong>, over IMAP and SMTP with TLS: to read, send, move and
+      delete your mail as you ask.
+    </li>
+    <li>
+      <strong>Google's sign-in servers</strong> (<code>accounts.google.com</code>,
+      <code>oauth2.googleapis.com</code>), when you sign in to a Google Account and when its access
+      token is renewed. You sign in in your own browser; Postal never sees your Google password.
+    </li>
+    <li>
+      <strong>A server lookup</strong>, once, when you sign in to a Provider other than Google or
+      iCloud: Postal asks your address's domain, Thunderbird's public server database (
+      <code>autoconfig.thunderbird.net</code>) and DNS which IMAP and SMTP servers the domain uses.
+      The lookup sends the domain of your address, not the address.
+    </li>
+  </ul>
+  <p>
+    Postal never fetches the images in a Message, so opening mail tells its sender nothing. A link
+    opens in your browser only when you choose it.
+  </p>
+
+  <h2>Google user data</h2>
+  <p>
+    To read and send mail in a Google Account, Postal asks for the Gmail scope{' '}
+    <code>https://mail.google.com/</code>. It uses that access only to show, search, send and
+    organise your mail, on your machine, at your direction.
+  </p>
+  <ul>
+    <li>Your Google data is not sent to Postal's developer or to any third party.</li>
+    <li>It is not used for advertising, and not used to train AI models.</li>
+    <li>No person reads it: it never leaves your machine.</li>
+  </ul>
+  <p>
+    Postal's use and transfer of information received from Google APIs to any other app will adhere
+    to the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">
+      Google API Services User Data Policy
+    </a>
+    , including the Limited Use requirements.
+  </p>
+
+  <h2>An agent you run</h2>
+  <p>
+    The Neovim plugin can open a chat with an AI agent that you install and configure yourself.
+    Postal ships no agent and starts none on its own. When you ask your agent about a Message or a
+    Draft, its text goes to that agent, and the agent's own privacy terms apply to it. Nothing is
+    shared with an agent until you ask.
+  </p>
+
+  <h2>No telemetry</h2>
+  <p>Postal sends no analytics, no usage statistics and no crash reports.</p>
+
+  <h2>Removing your data</h2>
+  <ul>
+    <li>
+      Unlink an Account in Settings (<code>,</code>): Postal removes it from the config, deletes its
+      secret and its Messages from the Cache.
+    </li>
+    <li>Delete the directories above to remove everything Postal has stored.</li>
+    <li>
+      For a Google Account, you can also revoke Postal's access at
+      <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
+    </li>
+  </ul>
+
+  <h2>This website</h2>
+  <p>
+    This site is static. It sets no cookies, runs no analytics and loads nothing from third parties;
+    its fonts are served from the site itself. It is hosted on GitHub Pages, and GitHub may log the
+    IP addresses of visitors, as its own privacy statement describes.
+  </p>
+
+  <h2>Changes and contact</h2>
+  <p>
+    A change to this policy is published on this page, with its date at the top. Questions go to
+    <span class="address">{site.contact}</span>.
+  </p>
+</Prose>
+
+<style>
+  .address {
+    font-family: var(--font-code);
+    font-size: 0.9em;
+    user-select: all;
+  }
+</style>

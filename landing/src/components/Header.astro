@@ -1,0 +1,50 @@
+---
+import { site } from '@app/site';
+import Logo from '@app/components/Logo.astro';
+---
+
+<header class="wrap">
+  <a class="home" href="/" aria-label="Postal, home">
+    <Logo height={30} />
+  </a>
+  <nav aria-label="Main">
+    <a href="/#features">Features</a>
+    <a href="/#install">Install</a>
+    <a href="/privacy/">Privacy</a>
+    <a href={site.repo}>GitHub</a>
+  </nav>
+</header>
+
+<style>
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    padding-block: var(--space-3);
+  }
+
+  .home {
+    display: block;
+    padding-block: var(--space-1);
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-half) var(--space-3);
+    font-size: var(--text-caption);
+  }
+
+  nav a {
+    padding-block: var(--space-1);
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  nav a:hover {
+    color: var(--link-fg);
+    text-decoration: underline;
+  }
+</style>

@@ -1,0 +1,73 @@
+---
+// Long-form pages: the grotesk at reading size, one column.
+import Base from '@app/layouts/Base.astro';
+
+type Props = {
+  title: string;
+  description: string;
+  updated: string;
+};
+
+const { title, description, updated } = Astro.props;
+const date = new Date(`${updated}T00:00:00Z`).toLocaleDateString('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+---
+
+<Base title={title} description={description}>
+  <article class="wrap">
+    <header>
+      <h1>{title}</h1>
+      <p class="eyebrow">
+        Last updated <time datetime={updated}>{date}</time>
+      </p>
+    </header>
+    <div class="prose">
+      <slot />
+    </div>
+  </article>
+</Base>
+
+<style>
+  article {
+    display: grid;
+    gap: var(--space-6);
+    padding-block: var(--space-6) 0;
+  }
+
+  header {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .prose {
+    display: grid;
+    gap: var(--space-2);
+    max-width: var(--measure);
+    font-family: var(--font-prose);
+    font-size: var(--text-prose);
+  }
+
+  .prose :global(h2) {
+    margin-top: var(--space-4);
+    font-size: var(--text-h3);
+    font-weight: var(--weight-heading);
+  }
+
+  .prose :global(ul) {
+    display: grid;
+    gap: var(--space-1);
+    padding-left: 1.2em;
+  }
+
+  .prose :global(li) {
+    max-width: var(--measure);
+  }
+
+  .prose :global(code) {
+    font-size: 0.86em;
+  }
+</style>

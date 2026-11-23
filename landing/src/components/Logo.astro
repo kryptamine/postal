@@ -1,0 +1,21 @@
+---
+import mark from '@brand/postal-mark.svg?raw';
+// The brand SVG, inlined with its two fills moved onto tokens so it follows the theme.
+import lockup from '@brand/postal-logo.svg?raw';
+
+type Props = {
+  variant?: 'lockup' | 'mark';
+  height?: number;
+};
+
+const { variant = 'lockup', height = 28 } = Astro.props;
+const svg = (variant === 'mark' ? mark : lockup)
+  .replace(
+    / width="[^"]+" height="[^"]+"/,
+    () => ` height="${String(height)}" role="img" aria-label="Postal"`,
+  )
+  .replaceAll('fill="#B5361F"', 'fill="var(--color-primary)"')
+  .replaceAll('fill="#1C1B19"', 'fill="var(--color-text)"');
+---
+
+<Fragment set:html={svg} />
