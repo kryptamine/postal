@@ -24,7 +24,8 @@ pull request write access on this repository, and fails without it rather
 than open a PR that can never merge.
 
 **Targets.** `aarch64` and `x86_64`, macOS and Linux. Both macOS builds run
-on an arm64 runner, the Intel one cross-compiled, for macOS 13 and later.
+on an Intel runner, the arm64 one cross-compiled, for macOS 13 and later:
+arm64 runners once ran out for hours and GitHub cancelled the queued job.
 Linux builds on Ubuntu 22.04, so a binary needs its glibc (2.35); an older
 or a musl system builds from source; a musl build was passed over, since
 2.35 covers every supported Ubuntu and Debian and musl's allocator is slow.
@@ -55,7 +56,8 @@ that did not build it and runs `postal --version`: a Linux one in an Ubuntu
 assessing the binary. Only when all four pass are they attached to the
 release. This runs only for a release, as macOS runners are scarce and
 costly: a failure is fixed and the run rerun, and the assets land on the
-same tag.
+same tag. A run that cannot be rerun, since a rerun keeps the workflow of
+its commit, is replaced by a manual run of the workflow with that tag.
 
 **Provenance.** A `.sha256` lives in the same release as its archive, so
 whoever can edit the release can replace both. The publish job therefore
