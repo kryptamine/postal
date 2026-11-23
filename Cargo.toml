@@ -2,14 +2,14 @@
 name = "postalmail"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.89"
 description = "A keyboard-driven mail client for the terminal: Gmail, iCloud and any IMAP server"
 license = "MIT"
 publish = false
 
 [dependencies]
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
-base64 = "0.22.1"
+base64 = "0.23.1"
 charset = "0.1.5"
 chrono = "0.4.45"
 clap = { version = "4.6.9", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
@@ -28,13 +28,13 @@ ratatui = "0.30"
 rfc2047-decoder = "1.1.2"
 roxmltree = "0.21.2"
 ring = "0.17.14"
-rusqlite = { version = "0.40.2", features = ["backup", "bundled", "fallible_uint"] }
+rusqlite = { version = "0.43", features = ["backup", "bundled", "fallible_uint"] }
 serde = { version = "1.0.229", features = ["derive", "rc"] }
 serde_json = "1.0.154"
 thiserror = "2"
 tokio = { version = "1.54.1", features = ["rt", "macros", "net", "time", "io-util"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
-toml = "1.2.1"
+toml = "1.2.2"
 toml_edit = "0.25"
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
@@ -57,7 +57,7 @@ alloc-count = []
 imap-codec = { version = "=2.0.0-alpha.10", features = ["ext_condstore_qresync"] }
 imap-next = "0.3.4"
 insta = { version = "1.49.0", features = ["glob"] }
-rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
+rusqlite = { version = "0.43", features = ["bundled", "fallible_uint"] }
 tempfile = "3.27.0"
 termlens = "0.11.10"
 
@@ -95,4 +95,4 @@ print_stderr = "deny"
 future_not_send = "allow"
 
 [build-dependencies]
-cc = { version = "1.11.2", features = ["parallel"] }
+cc = { version = "1.11.3", features = ["parallel"] }

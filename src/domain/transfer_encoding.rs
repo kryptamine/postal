@@ -22,7 +22,7 @@ const BASE64: GeneralPurpose = GeneralPurpose::new(
 );
 
 impl TransferEncoding {
-    pub fn from_label(label: &str) -> Self {
+    pub const fn from_label(label: &str) -> Self {
         if label.eq_ignore_ascii_case("quoted-printable") {
             Self::QuotedPrintable
         } else if label.eq_ignore_ascii_case("base64") {

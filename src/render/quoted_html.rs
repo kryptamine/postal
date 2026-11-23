@@ -17,7 +17,7 @@ struct Tag<'a> {
 }
 
 impl Tag<'_> {
-    fn is(&self, name: &str) -> bool {
+    const fn is(&self, name: &str) -> bool {
         self.name.eq_ignore_ascii_case(name)
     }
 }

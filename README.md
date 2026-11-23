@@ -11,7 +11,7 @@
 
 ## Install
 
-Postal builds from source: Rust 1.88+ and a C++ compiler.
+Postal builds from source: Rust 1.89+ and a C++ compiler.
 
 ```sh
 git clone https://github.com/kryptamine/postal && cd postal
