@@ -531,6 +531,11 @@ async fn accept(
 
         let (to_fake, accepted) = tokio::join!(TcpStream::connect(inner_address), inner.accept());
         let (to_fake, (fake_side, _)) = (to_fake.unwrap(), accepted.unwrap());
+        // Nagle's algorithm against Linux's delayed ACK stalls each reply line 40ms.
+        for stream in [&client, &to_fake, &fake_side] {
+            stream.set_nodelay(true).unwrap();
+        }
+
         tokio::spawn(serve(Stream::insecure(fake_side), Arc::clone(&inbox)));
         let commands = Arc::clone(&commands);
         let inbox = Arc::clone(&inbox);
