@@ -16,7 +16,7 @@ import Prose from '@app/layouts/Prose.astro';
   <h2>The software</h2>
   <p>
     Postal is a mail client for the terminal. Its source is published at
-    <a href={site.repo}>{site.repo.replace('https://', '')}</a>, and the licence in that repository
+    <a href={site.repo}>{site.repo.replace('https://', '')}</a>, and its licence, the MIT License,
     governs how you may use, copy and change it.
   </p>
 
@@ -25,6 +25,18 @@ import Prose from '@app/layouts/Prose.astro';
     Postal connects to mail accounts you sign in to. You are responsible for those accounts, for the
     mail you send with Postal, and for following the terms of your mail Provider. Postal's developer
     has no access to your accounts or your mail.
+  </p>
+  <p>
+    A Google Account used with Postal stays subject to the
+    <a href="https://policies.google.com/terms">Google Terms of Service</a>. You can stop Postal's
+    access to it at any time by unlinking it in Postal or by revoking it at
+    <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
+  </p>
+
+  <h2>Agents you run</h2>
+  <p>
+    The Neovim plugin can talk to an AI agent you install yourself. That agent is not part of
+    Postal, and its own terms govern what it does with the text you give it.
   </p>
 
   <h2>No warranty</h2>
