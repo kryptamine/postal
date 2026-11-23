@@ -34,10 +34,12 @@ the logo, the favicons. Change the brand there (`make brand`), never here.
 Pages use the semantic and component tokens (`--color-primary`,
 `--space-3`, `--button-primary-bg`), not raw values.
 
-## Placeholders
+## Domain and placeholders
 
-- `src/site.ts` holds the domain, the contact address and the policy date:
-  placeholders until the domain is registered (#107).
+- The site is served at `https://postalmail.dev`
+  (`docs/adr/0028-the-site-lives-at-postalmail-dev.md`). `src/site.ts`
+  holds the domain, the contact address and the date the policies take
+  effect.
 - `src/components/Media.astro` draws a labelled slot wherever a screenshot
   or video goes, until #115 shoots them.
 
