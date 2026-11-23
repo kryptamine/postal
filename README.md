@@ -51,13 +51,23 @@ Draft for you to review hunk by hunk. The plugin is optional, and calls
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
-{ "kryptamine/postal", version = "*", main = "postal", opts = {} }
+{
+  "kryptamine/postal",
+  version = "*",
+  main = "postal",
+  opts = {},
+}
 ```
 
 ### Without a plugin manager
 
 ```lua
-vim.pack.add({ { src = "https://github.com/kryptamine/postal", version = vim.version.range("*") } })
+vim.pack.add({
+  {
+    src = "https://github.com/kryptamine/postal",
+    version = vim.version.range("*"),
+  },
+})
 require("postal").setup({})
 ```
 
