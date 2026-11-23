@@ -21,5 +21,7 @@ serves anyway.
 The domain, the contact address and the date the policies take effect are
 written once, in `landing/src/site.ts`; every page reads them from there.
 
-The site is static and deploys from `landing/` once the repository is
-public, on GitHub Pages; until then it is built only by `make landing`.
+The site is static. `.github/workflows/landing.yml` builds `landing/` on
+a push to `main` that touches it and deploys it to GitHub Pages; the
+custom domain is set in the repository's Pages settings, not by a
+`CNAME` file, which a deployment from Actions ignores.
