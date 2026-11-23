@@ -5,8 +5,8 @@ import Fonts from '@app/components/Fonts.astro';
 import Footer from '@app/components/Footer.astro';
 import Header from '@app/components/Header.astro';
 import favicon32 from '@brand/favicon-32.png?url';
+import socialPreview from '@brand/social-preview.png';
 import appleTouch from '@brand/apple-touch-icon.png?url';
-import socialPreview from '@brand/social-preview.png?url';
 
 import '@app/styles/global.css';
 
@@ -21,7 +21,7 @@ const fullTitle = title
   : `${site.name}: ${site.tagline.replace(/\.$/, '')}`;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);
-const preview = new URL(socialPreview, Astro.site);
+const preview = new URL(socialPreview.src, Astro.site);
 ---
 
 <!doctype html>
@@ -44,6 +44,12 @@ const preview = new URL(socialPreview, Astro.site);
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={preview} />
+    <meta property="og:image:width" content={String(socialPreview.width)} />
+    <meta property="og:image:height" content={String(socialPreview.height)} />
+    <meta
+      property="og:image:alt"
+      content={`The ${site.name} logo, a stamp with a terminal prompt, over the line “${site.tagline}”`}
+    />
     <meta name="twitter:card" content="summary_large_image" />
     <Fonts />
   </head>
