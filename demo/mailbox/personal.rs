@@ -1,74 +1,60 @@
 //! The personal Account, at an iCloud-like server: family, the flat, a
 //! hike, and a friend who writes in Russian.
 
-use super::{ago, at, attach, mail};
-use crate::{
-    home::PERSONAL,
-    support::fake_imap::{FakeImap, FakeMessage},
-};
+use super::{Account, ago, at, attach};
+use crate::{home, support::fake_imap::FakeImap};
+
+const PERSONAL: Account = Account(home::PERSONAL);
+const MARTIN: (&str, &str) = ("Martin Hale", "martin.hale@example.net");
 
 #[expect(clippy::too_many_lines, reason = "mail text, not logic")]
 pub fn personal(server: &FakeImap) {
     server.login_as("sam");
     server.as_icloud();
-    let mail = |name, address, subject, when: &str, body| FakeMessage {
-        to: vec![("Sam Okafor", PERSONAL)],
-        ..mail(name, address, subject, when, body)
-    };
-    server.deliver(mail(
-        "Crux Climbing",
-        "hello@crux-climbing.example",
+    server.deliver(PERSONAL.mail(
+        ("Crux Climbing", "hello@crux-climbing.example"),
         "Your membership renews on 1 December",
-        &at(8, "10:00"),
+        at(8, "10:00"),
         "Hi Sam,\n\nYour yearly membership renews on 1 December. Nothing to do if \
          you're staying with us; to change your plan, visit\n\n\
          https://crux-climbing.example/membership\n\nSee you on the wall,\nCrux Climbing",
     ));
-    server.deliver(mail(
-        "Riverside Library",
-        "loans@riverside-library.example",
+    server.deliver(PERSONAL.mail(
+        ("Riverside Library", "loans@riverside-library.example"),
         "Two of your books are due on Friday",
-        &at(6, "07:00"),
+        at(6, "07:00"),
         "Hello Sam,\n\n\"The Long Way Home\" and \"A Field Guide to Clouds\" are due on Friday. \
          Renew them online:\n\nhttps://riverside-library.example/account/loans\n\n\
          Riverside Library",
     ));
-    server.deliver(mail(
-        "Martin Hale",
-        "martin.hale@example.net",
+    server.deliver(PERSONAL.mail(
+        MARTIN,
         "Flat viewing confirmed for Saturday",
-        &at(5, "13:24"),
+        at(5, "13:24"),
         "Hi Sam,\n\nSaturday at 11:00 works. The flat is on the third floor, no lift, \
          sorry. Ring 3B and I'll come down.\n\nMartin",
     ));
     server.deliver_to(
         "Sent Messages",
-        FakeMessage {
-            from_address: PERSONAL,
-            to: vec![("Martin Hale", "martin.hale@example.net")],
-            ..mail(
-                "Sam Okafor",
-                PERSONAL,
-                "Re: Flat viewing confirmed for Saturday",
-                &at(5, "14:02"),
-                "Perfect, see you at 11. Is there a bike shed?\n\nSam",
-            )
-        },
+        PERSONAL.sent(
+            MARTIN,
+            "Re: Flat viewing confirmed for Saturday",
+            at(5, "14:02"),
+            "Perfect, see you at 11. Is there a bike shed?\n\nSam",
+        ),
     );
-    server.deliver(mail(
-        "Hannah Weller",
-        "hannah.w@example.net",
+    server.deliver(PERSONAL.mail(
+        ("Hannah Weller", "hannah.w@example.net"),
         "Book club: the next pick",
-        &at(4, "20:15"),
+        at(4, "20:15"),
         "The vote is in: \"The Remains of the Day\" it is. We meet on the 12th at \
          mine, 19:30. Bring something to drink and an opinion.\n\nHannah",
     ));
     server.deliver(attach(
-        mail(
-            "Ольга Смирнова",
-            "olga.smirnova@example.ru",
+        PERSONAL.mail(
+            ("Ольга Смирнова", "olga.smirnova@example.ru"),
             "Фотографии с выходных в Карелии",
-            &at(3, "21:10"),
+            at(3, "21:10"),
             "Привет, Сэм!\n\nНаконец разобрала фотографии с озера. Лучшие прикладываю, \
              остальные пришлю ссылкой.\n\nВ следующий раз идём на два дня, а не на один: \
              до водопада так и не дошли.\n\nОбнимаю,\nОля",
@@ -79,11 +65,10 @@ pub fn personal(server: &FakeImap) {
         ],
     ));
     server.deliver(attach(
-        mail(
-            "Theo Lindqvist",
-            "theo@example.net",
+        PERSONAL.mail(
+            ("Theo Lindqvist", "theo@example.net"),
             "Pictures from the ridge walk",
-            &at(2, "19:02"),
+            at(2, "19:02"),
             "What a day. The one from the summit is my new wallpaper.\n\nSame time next month?\n\nTheo",
         ),
         &[
@@ -93,14 +78,14 @@ pub fn personal(server: &FakeImap) {
         ],
     ));
     server.deliver(
-        mail(
-            "Grace Okafor",
-            "grace.okafor@example.net",
-            "Dinner on Sunday?",
-            &ago(140),
-            "Hi love,\n\nAre you free on Sunday? Dad is making his jollof and wants an \
-             honest opinion this time 😄\n\nCome around six.\n\nMum",
-        )
-        .unread(),
+        PERSONAL
+            .mail(
+                ("Grace Okafor", "grace.okafor@example.net"),
+                "Dinner on Sunday?",
+                ago(140),
+                "Hi love,\n\nAre you free on Sunday? Dad is making his jollof and wants an \
+                 honest opinion this time 😄\n\nCome around six.\n\nMum",
+            )
+            .unread(),
     );
 }

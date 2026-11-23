@@ -5,49 +5,75 @@
 mod personal;
 mod work;
 
-use chrono::{Duration, Local, NaiveTime, SecondsFormat, TimeZone};
+use chrono::{DateTime, Duration, Local, NaiveTime, SecondsFormat, TimeZone, Timelike};
 
 pub use personal::personal;
 pub use work::work;
 
 use crate::support::{fake_body::FakeBody, fake_imap::FakeMessage};
 
-/// `days` before today at `time` ("HH:MM"), local, as RFC 3339.
-fn at(days: i64, time: &str) -> String {
+const SAM: &str = "Sam Okafor";
+
+/// One of Sam's Accounts, by its address: the mail it gets and sends.
+struct Account(&'static str);
+
+impl Account {
+    /// A plain-text Message from `name` at `address` to Sam.
+    fn mail(
+        &self,
+        (name, address): (&'static str, &'static str),
+        subject: &str,
+        when: DateTime<Local>,
+        body: &str,
+    ) -> FakeMessage {
+        FakeMessage {
+            from_address: address,
+            ..FakeMessage::new(name, subject, &rfc3339(when))
+        }
+        .to(SAM, self.0)
+        .body(FakeBody::plain(body))
+    }
+
+    /// A plain-text Message Sam sent to `name` at `address`.
+    fn sent(
+        &self,
+        (name, address): (&'static str, &'static str),
+        subject: &str,
+        when: DateTime<Local>,
+        body: &str,
+    ) -> FakeMessage {
+        FakeMessage {
+            from_address: self.0,
+            ..FakeMessage::new(SAM, subject, &rfc3339(when))
+        }
+        .to(name, address)
+        .body(FakeBody::plain(body))
+    }
+}
+
+/// `days` before today at `time` ("HH:MM"), local.
+fn at(days: i64, time: &str) -> DateTime<Local> {
     let time = NaiveTime::parse_from_str(time, "%H:%M").unwrap();
     let day = Local::now().date_naive() - Duration::days(days);
-    let when = Local.from_local_datetime(&day.and_time(time)).unwrap();
-    when.to_rfc3339()
+    Local.from_local_datetime(&day.and_time(time)).unwrap()
 }
 
-/// `minutes` before the start of the run, as RFC 3339: today's mail is
-/// never later than now, whatever the hour the demo runs at.
-fn ago(minutes: i64) -> String {
-    (Local::now() - Duration::minutes(minutes)).to_rfc3339_opts(SecondsFormat::Secs, false)
+/// `minutes` before the start of the run: today's mail is never later than
+/// now, whatever the hour the demo runs at.
+fn ago(minutes: i64) -> DateTime<Local> {
+    (Local::now() - Duration::minutes(minutes))
+        .with_nanosecond(0)
+        .unwrap()
 }
 
-/// A plain-text Message from `name` at `address`, sent to the work Account.
-fn mail(
-    name: &'static str,
-    address: &'static str,
-    subject: &str,
-    when: &str,
-    body: &str,
-) -> FakeMessage {
-    FakeMessage {
-        from_address: address,
-        ..FakeMessage::new(name, subject, when)
-    }
-    .to("Sam Okafor", crate::support::fake_imap::EMAIL)
-    .body(FakeBody::plain(body))
+/// The fake server takes whole seconds only.
+fn rfc3339(when: DateTime<Local>) -> String {
+    when.to_rfc3339_opts(SecondsFormat::Secs, false)
 }
 
 /// One of the HTML mails of `demo/mail`, dated `when`.
-fn html(raw: &str, when: &str) -> FakeMessage {
-    let date = chrono::DateTime::parse_from_rfc3339(when)
-        .unwrap()
-        .to_rfc2822();
-    FakeMessage::eml(raw.replace("@DATE@", &date).as_bytes())
+fn html(raw: &str, when: DateTime<Local>) -> FakeMessage {
+    FakeMessage::eml(raw.replace("@DATE@", &when.to_rfc2822()).as_bytes())
 }
 
 /// `message` with `files` after its text, each `(type, subtype, name, kilobytes)`.
