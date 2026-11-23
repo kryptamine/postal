@@ -87,6 +87,15 @@ impl<A> Folder<A> {
         }
     }
 
+    /// Whether `wanted` names it as people do: its path or its role's label,
+    /// in any case.
+    pub fn answers_to(&self, wanted: &str) -> bool {
+        self.path.to_lowercase() == wanted.to_lowercase()
+            || self
+                .role
+                .is_some_and(|role| role.label().eq_ignore_ascii_case(wanted))
+    }
+
     pub fn label(&self) -> &str {
         match self.role {
             Some(role) => role.label(),

@@ -43,7 +43,7 @@ unicode-segmentation = "1.13.3"
 unicode-width = "0.2.3"
 ureq = { version = "3.5.2", default-features = false, features = ["rustls"] }
 webpki-roots = "1.0.12"
-rmcp = { version = "3.11.0", features = ["server", "transport-io", "macros"] }
+rmcp = { version = "3.11.0", default-features = false, features = ["server", "transport-io"] }
 schemars = "1.2.3"
 
 # The crate name `postal` is taken on crates.io; the command stays `postal`.

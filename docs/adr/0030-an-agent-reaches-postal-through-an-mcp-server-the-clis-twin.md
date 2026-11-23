@@ -32,10 +32,12 @@ agent. A skill may sit above the tools to teach a way of working, such as
 triaging an Inbox, but never to teach the commands: their schemas do that.
 
 A command's arguments are one struct, which clap parses and the tool's
-schema is derived from, `--json` left out. A tool answers both ways: the
-text the command prints, and the `--json` array under `items` in
-`structuredContent`, which MCP wants an object. The server is `rmcp`, the
-protocol's own Rust SDK, so Postal keeps no JSON-RPC of its own.
+schema is derived from; `--json` is a flag of `postal` itself, so no tool
+takes it. One table lists the commands, and each tool's name, description
+and schema come from its command's path, help and struct. A tool answers
+both ways: the text the command prints, and the `--json` array under
+`items` in `structuredContent`, which MCP wants an object. The server is
+`rmcp`, the protocol's own Rust SDK, so Postal keeps no JSON-RPC of its own.
 
 ## How a command names mail
 

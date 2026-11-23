@@ -1,12 +1,10 @@
 use std::{collections::HashMap, collections::HashSet, fmt::Write, ops::ControlFlow};
 
-use serde::Serialize;
+use chrono::{DateTime, FixedOffset};
+use serde::{Serialize, Serializer};
 
 use crate::{
-    cache::{Listed, ThreadOf},
-    cli::ids,
-    domain::body_key::BodyKey,
-    domain::modified_utf7,
+    cache::Listed, cli::ids, domain::body_key::BodyKey, domain::modified_utf7, domain::thread::Key,
     render::header_date,
 };
 
@@ -14,33 +12,31 @@ use crate::{
 /// fields only grow (ADR 0017).
 #[derive(Serialize)]
 pub struct Row {
-    pub thread: String,
+    thread: String,
     /// Its newest Message.
-    pub message: String,
-    pub account: String,
+    message: String,
+    account: String,
     /// Its newest Message's.
-    pub folder: String,
+    folder: String,
     /// Each `From` once, in order of first appearance.
-    pub senders: Vec<String>,
+    senders: Vec<String>,
     /// Its oldest Message's.
-    pub subject: String,
+    subject: String,
     /// Its newest Message's, empty until fetched.
-    pub snippet: String,
-    /// RFC 3339, its newest Message's.
-    pub date: String,
-    pub unread: bool,
-    pub messages: usize,
-    #[serde(skip)]
-    shown_date: String,
-    #[serde(skip)]
-    keys: HashSet<BodyKey>,
+    snippet: String,
+    /// Its newest Message's, in RFC 3339 as every command writes a date.
+    #[serde(serialize_with = "rfc3339")]
+    date: DateTime<FixedOffset>,
+    unread: bool,
+    messages: usize,
 }
 
 /// The first `limit` Threads of Messages read newest first, each Message
 /// once however many Folders hold it.
 pub struct ThreadRows {
     rows: Vec<Row>,
-    at: HashMap<(String, ThreadOf), usize>,
+    at: HashMap<Key<String>, usize>,
+    seen: HashSet<(usize, BodyKey)>,
     limit: usize,
 }
 
@@ -49,41 +45,38 @@ impl ThreadRows {
         Self {
             rows: Vec::new(),
             at: HashMap::new(),
+            seen: HashSet::new(),
             limit,
         }
     }
 
     /// Never breaks: a Thread's older Messages count however late they come.
     pub fn visit(&mut self, listed: Listed) -> ControlFlow<()> {
-        let key = ThreadOf::of(listed.thread, listed.root, listed.body_key);
-        let found = self.at.get(&(listed.account.clone(), key)).copied();
-        let row = match found {
-            Some(at) => &mut self.rows[at],
+        let key = Key::new(listed.account, listed.thread, listed.root, listed.body_key);
+        let at = match self.at.get(&key) {
+            Some(&at) => at,
             None if self.rows.len() == self.limit => return ControlFlow::Continue(()),
             None => {
-                self.at
-                    .insert((listed.account.clone(), key), self.rows.len());
                 self.rows.push(Row {
-                    thread: ids::thread(&listed.account, key),
-                    message: ids::message(&listed.account, listed.body_key),
+                    thread: ids::thread(&key),
+                    message: ids::message(key.account(), listed.body_key),
+                    account: key.account().clone(),
                     folder: modified_utf7::decode(&listed.folder).into_owned(),
-                    snippet: listed.snippet.clone(),
-                    date: listed.received.to_rfc3339(),
-                    shown_date: header_date::date(&listed.received).as_str().to_owned(),
-                    account: listed.account.clone(),
                     senders: Vec::new(),
                     subject: String::new(),
+                    snippet: listed.snippet,
+                    date: listed.received,
                     unread: false,
                     messages: 0,
-                    keys: HashSet::new(),
                 });
 
-                let last = self.rows.len() - 1;
-                &mut self.rows[last]
+                self.at.insert(key, self.rows.len() - 1);
+                self.rows.len() - 1
             }
         };
 
-        if row.keys.insert(listed.body_key) {
+        if self.seen.insert((at, listed.body_key)) {
+            let row = &mut self.rows[at];
             row.messages += 1;
             row.unread |= listed.unread;
             row.subject = listed.subject;
@@ -97,6 +90,10 @@ impl ThreadRows {
     pub fn into_rows(self) -> Vec<Row> {
         self.rows
     }
+}
+
+fn rfc3339<S: Serializer>(date: &DateTime<FixedOffset>, to: S) -> Result<S::Ok, S::Error> {
+    to.serialize_str(&date.to_rfc3339())
 }
 
 /// A line each: Unread as `*`, the date, the senders, the subject with the
@@ -115,7 +112,7 @@ pub fn table(rows: &[Row]) -> String {
         writeln!(
             text,
             "{unread} {}  {}  {}{count}  {}",
-            row.shown_date,
+            header_date::date(&row.date).as_str(),
             row.senders.join(", "),
             row.subject,
             row.thread

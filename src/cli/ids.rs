@@ -2,7 +2,7 @@
 //! derived from the Cache's keys, never stored (ADR 0030).
 
 use crate::{
-    cache::ThreadOf, domain::body_key::BodyKey, domain::root_id::RootId,
+    domain::body_key::BodyKey, domain::root_id::RootId, domain::thread::Key,
     domain::thread_id::ThreadId,
 };
 
@@ -22,16 +22,16 @@ pub fn message(account: &str, key: BodyKey) -> String {
     id
 }
 
-pub fn thread(account: &str, key: ThreadOf) -> String {
-    let (kind, bits) = match key {
-        ThreadOf::Gmail(id) => ('g', id.get()),
-        ThreadOf::Root(root) => ('r', root.get()),
-        ThreadOf::Lone(body) => ('l', body.get().cast_unsigned()),
+pub fn thread(key: &Key<String>) -> String {
+    let (kind, bits) = match *key {
+        Key::Gmail(_, id) => ('g', id.get()),
+        Key::Root(_, root) => ('r', root.get()),
+        Key::Lone(_, body) => ('l', body.get().cast_unsigned()),
     };
 
     let mut id = String::from("t");
     id.push(kind);
-    push(&mut id, tag(account).into(), TAG);
+    push(&mut id, tag(key.account()).into(), TAG);
     push(&mut id, bits, KEY);
     id
 }
@@ -45,21 +45,20 @@ pub fn parse_message<'a>(id: &str, accounts: &'a [String]) -> Result<(&'a str, B
     Ok((account, BodyKey::from_stored(bits.cast_signed())))
 }
 
-/// The Account of `accounts` and the key a Thread ID names.
-pub fn parse_thread<'a>(id: &str, accounts: &'a [String]) -> Result<(&'a str, ThreadOf), String> {
+/// The Thread a Thread ID names, in one of `accounts`.
+pub fn parse_thread(id: &str, accounts: &[String]) -> Result<Key<String>, String> {
     let wrong = || format!("{id} is no Thread ID");
     let rest = id.strip_prefix('t').ok_or_else(wrong)?;
     let mut chars = rest.chars();
     let kind = chars.next().ok_or_else(wrong)?;
     let (account, bits) = parts(id, chars.as_str(), accounts)?;
-    let key = match kind {
-        'g' => ThreadOf::Gmail(ThreadId::new(bits)),
-        'r' => ThreadOf::Root(RootId::new(bits)),
-        'l' => ThreadOf::Lone(BodyKey::from_stored(bits.cast_signed())),
-        _ => return Err(wrong()),
-    };
-
-    Ok((account, key))
+    let account = account.to_owned();
+    match kind {
+        'g' => Ok(Key::Gmail(account, ThreadId::new(bits))),
+        'r' => Ok(Key::Root(account, RootId::new(bits))),
+        'l' => Ok(Key::Lone(account, BodyKey::from_stored(bits.cast_signed()))),
+        _ => Err(wrong()),
+    }
 }
 
 /// The tag and the key after an ID's kind, the tag as the Account it names.

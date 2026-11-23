@@ -3,10 +3,10 @@ use std::{collections::HashSet, path::Path};
 use chrono::{DateTime, FixedOffset, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::{Error, ThreadOf, received::received, schema};
+use super::{Error, received::received, schema};
 use crate::{
     domain::answering::Answering, domain::body_key::BodyKey, domain::folder::Role,
-    domain::message_ref::MessageRef,
+    domain::message_ref::MessageRef, domain::thread::Key,
 };
 
 /// The Cache for reading alone, beside a TUI that may be writing it: it
@@ -77,7 +77,9 @@ impl Reader {
         answering: &Answering,
     ) -> Result<Option<Vec<ThreadMessage>>, Error> {
         match (answering.thread, &answering.original) {
-            (Some(thread), _) => self.thread_of(account, ThreadOf::Gmail(thread)).map(Some),
+            (Some(thread), _) => self
+                .thread_of(&Key::Gmail(account.to_owned(), thread))
+                .map(Some),
             (None, Some(MessageRef { folder, uid })) => {
                 let mut statement = self.connection.prepare(&format!(
                     "SELECT body_key, {THREAD_ROW}
@@ -92,12 +94,13 @@ impl Reader {
         }
     }
 
-    /// The Messages of the Thread `of` in the Account `account`, oldest
-    /// first, each once, none from Trash or Spam unless it is all there.
-    pub fn thread_of(&self, account: &str, of: ThreadOf) -> Result<Vec<ThreadMessage>, Error> {
+    /// The Messages of the Thread `key` names, oldest first, each once,
+    /// none from Trash or Spam unless it is all there.
+    pub fn thread_of(&self, key: &Key<String>) -> Result<Vec<ThreadMessage>, Error> {
         let (trash, spam) = (Role::Trash.label(), Role::Spam.label());
-        let (sql, key) = match of {
-            ThreadOf::Gmail(thread) => (
+        let account = key.account();
+        let (sql, key) = match *key {
+            Key::Gmail(_, thread) => (
                 format!(
                     "SELECT body_key, {THREAD_ROW}
                      FROM message WHERE account = ?1 AND thread = ?2 AND {KEPT}
@@ -108,14 +111,14 @@ impl Reader {
                 ),
                 thread.get().cast_signed(),
             ),
-            ThreadOf::Root(root) => (
+            Key::Root(_, root) => (
                 format!(
                     "SELECT body_key, {THREAD_ROW}
                      FROM message WHERE account = ?1 AND root = ?2 AND {KEPT} ORDER BY 2, 1"
                 ),
                 root.get().cast_signed(),
             ),
-            ThreadOf::Lone(body) => (
+            Key::Lone(_, body) => (
                 format!(
                     "SELECT body_key, {THREAD_ROW}
                      FROM message WHERE account = ?1 AND body_key = ?2 AND {KEPT}"
