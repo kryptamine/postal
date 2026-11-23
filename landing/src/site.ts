@@ -3,7 +3,7 @@ export const site = {
   name: 'Postal',
   tagline: 'Mail at terminal speed.',
   description:
-    'A mail client for the terminal. Gmail, iCloud and any IMAP server, HTML mail laid out in cells, everything kept on your machine.',
+    'A mail client for the terminal. Works with Gmail, iCloud and any IMAP server, shows HTML mail with its layout, and keeps everything on your computer.',
   url: 'https://postalmail.dev',
   contact: 'privacy@postalmail.dev',
   repo: 'https://github.com/kryptamine/postal',

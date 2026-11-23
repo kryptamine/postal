@@ -12,30 +12,36 @@ import Postmark from '@app/components/Postmark.astro';
 import onboarding from '@app/assets/media/onboarding.png';
 
 const budget = [
-  ['≤100 ms', 'Cold start to a Message List drawn from the Cache'],
-  ['≤16 ms', 'A keypress to its frame: scroll, select, narrow a Search'],
-  ['≤30 MB', 'Memory after scrolling the whole list'],
-  ['≤500 ms', 'A new Message on the server to its row on screen'],
+  ['≤100 ms', 'From launch to the message list, read from the local cache'],
+  ['≤16 ms', 'From a keypress to the redrawn screen: scrolling, selecting, typing a search'],
+  ['≤30 MB', 'Memory in use after scrolling through the whole list'],
+  ['≤500 ms', 'From a new message reaching the server to its row on your screen'],
 ];
 
 const also = [
-  ['All Inboxes', "Every Account's Inbox in one Message List, newest first."],
-  ['Undo', 'u takes back a Delete, an Archive, a Move or a discarded Draft.'],
-  ['Archive and Move', 'e archives; m moves to a Folder you pick by typing.'],
-  ['Attachments', 'Open or save one by its hint label, without leaving the keyboard.'],
-  ['Notifications', 'A desktop notice of new mail while the terminal has no focus.'],
-  ['Starts offline', 'The Message List comes from the Cache before the server answers.'],
+  ['All inboxes', 'The inboxes of all your accounts in one list, newest first.'],
+  ['Undo', 'u undoes a delete, an archive, a move or a discarded draft.'],
+  ['Archive and move', 'e archives a message. m moves it to a folder you find by typing.'],
+  ['Attachments', 'Open or save an attachment by typing its label, no mouse needed.'],
+  ['Notifications', 'A desktop notification for new mail while the terminal is in the background.'],
+  ['Works offline', 'Your mail loads from the local cache before the server answers.'],
   [
     "Your terminal's colours",
-    'Postal draws in your palette, with Nerd Font icons where the font has them.',
+    "Postal uses your terminal's colour scheme, and Nerd Font icons if your font has them.",
   ],
-  ['Signatures', 'One per Account, added to each Draft it sends.'],
+  ['Signatures', 'One per account, added to every message you send from it.'],
 ];
 
 const providers = [
-  ['Google', 'Gmail. Sign in through the browser; Postal keeps a token, never your password.'],
+  [
+    'Google',
+    'Gmail. You sign in through the browser, and Postal stores a token, never your password.',
+  ],
   ['iCloud', 'Sign in with an app-specific password.'],
-  ['Any IMAP server', 'Type your address: Postal finds the servers your domain publishes.'],
+  [
+    'Any IMAP server',
+    'Enter your email address, and Postal looks up the servers your domain publishes.',
+  ],
 ];
 ---
 
@@ -47,9 +53,9 @@ const providers = [
         Mail at <span>terminal speed.</span>
       </h1>
       <p class="lede prose-font">
-        Postal reads Gmail, iCloud and any IMAP mailbox in your terminal. It lays HTML mail out the
-        way a mail client does, opens from a local Cache in 100&nbsp;ms, and keeps everything on
-        your machine.
+        Postal is a mail client that runs in your terminal. It works with Gmail, iCloud and any IMAP
+        server, shows HTML mail with its layout intact, starts in 100&nbsp;ms from a local copy of
+        your mail, and keeps everything on your computer.
       </p>
       <div class="actions">
         <a class="button primary" href="#install">
@@ -61,10 +67,7 @@ const providers = [
       </div>
     </div>
     <div class="shot">
-      <Media
-        still={hero}
-        shows="The Message List beside the Preview, with an HTML mail in the Rendered View"
-      />
+      <Media still={hero} shows="The message list next to a preview of an HTML mail" />
       <div class="cancel">
         <Postmark value="≤100" unit="MS" rim="POSTAL · COLD START · FROM THE CACHE ·" />
       </div>
@@ -73,10 +76,10 @@ const providers = [
 
   <section class="budget wrap" aria-labelledby="budget-title">
     <div class="intro">
-      <h2 id="budget-title">A budget, not an adjective</h2>
+      <h2 id="budget-title">Speed, in numbers</h2>
       <p class="prose-font muted">
-        The targets Postal is built and checked against, on a Cache of 10,000 Messages. In a steady
-        state a frame allocates nothing.
+        Postal is built and tested against these targets, with 10,000 messages in the cache. Once it
+        is running, drawing a frame allocates no memory.
       </p>
     </div>
     <dl>
@@ -91,30 +94,30 @@ const providers = [
 
   <section id="features" class="html wrap" aria-labelledby="html-title">
     <div class="intro">
-      <p class="eyebrow">Rendered View</p>
-      <h2 id="html-title">HTML mail, laid out in cells</h2>
+      <p class="eyebrow">HTML mail</p>
+      <h2 id="html-title">HTML mail keeps its layout</h2>
       <p class="prose-font">
-        Postal runs an HTML and CSS layout engine and draws the result on the terminal's cell grid:
-        columns, buttons, coloured blocks and borders, in the mail's colours moved onto your
-        terminal's background.
+        Postal runs an HTML and CSS layout engine and draws the result in terminal cells. Columns,
+        buttons, coloured blocks and borders stay where the sender put them, and the mail's colours
+        are adjusted to your terminal's background.
       </p>
     </div>
     <div class="pair">
-      <Media still={browser} shows="A newsletter as a browser shows it" />
+      <Media still={browser} shows="A newsletter in a web browser" />
       <Media still={rendered} shows="The same newsletter in Postal" />
     </div>
     <ul class="points">
       <li>
-        <kbd>v</kbd> <span>switches to the Text View: the mail's text in reading order.</span>
+        <kbd>v</kbd> <span>switches to plain text, in reading order.</span>
       </li>
       <li>
-        <kbd>o</kbd> <span>labels every link; type a label to open it.</span>
+        <kbd>o</kbd> <span>puts a label on every link. Type the label to open the link.</span>
       </li>
       <li>
         <kbd>∅</kbd>
         <span>
-          Images are never fetched. A picture shows as its name, and no sender learns you opened
-          their mail.
+          Postal never downloads images, so a sender cannot tell that you opened their mail. Each
+          image shows as its name.
         </span>
       </li>
     </ul>
@@ -122,84 +125,86 @@ const providers = [
 
   <div class="features wrap">
     <Feature
-      label="Reading"
-      title="A Thread, read top to bottom"
+      label="Threads"
+      title="Read a whole conversation top to bottom"
       still={thread}
-      shows="A Thread in Reading: its Messages stacked, the read middle folded"
+      shows="A thread with its messages stacked and the read ones in the middle folded"
       keys={[
-        ['Enter', 'read the Thread full screen'],
-        ['n p', 'next and previous Message'],
-        ['|', 'open the Message in $PAGER'],
+        ['Enter', 'open the thread full screen'],
+        ['n p', 'next and previous message'],
+        ['|', 'open the message in $PAGER'],
       ]}
     >
       <p>
-        A Thread opens as a stack of its Messages, oldest first and the newest at the bottom. The
-        read middle folds into one line each, and the Quote a Message ends in is left out.
+        A thread opens as one page, oldest message at the top and newest at the bottom. Messages you
+        have already read in the middle fold to one line each, and the quoted earlier mail at the
+        end of a reply is hidden.
       </p>
-      <p>On Gmail, Postal brings in the Thread's Messages from other Folders too.</p>
+      <p>On Gmail, the thread also brings in its messages from other folders.</p>
     </Feature>
 
     <Feature
       flip
       label="Search"
-      title="Every Folder, as you type"
+      title="Search all your mail as you type"
       video="search"
-      shows="A Query narrowing the Message List, a keystroke at a time"
+      shows="A search narrowing the message list one keystroke at a time"
       keys={[
-        ['/', 'start a Search'],
-        ['Esc', 'end it, on the selected match'],
+        ['/', 'start a search'],
+        ['Esc', 'close it and stay on the selected message'],
       ]}
     >
       <p>
-        A Query narrows the Message List to the Threads that match, across every cached Folder of
-        every Account, ranked by best match.
+        Each keystroke narrows the list to the matching threads, best match first. The search covers
+        every cached folder in every account.
       </p>
-      <p>It runs on the local Cache, so it answers within a frame and works with no connection.</p>
+      <p>
+        It runs on the local cache, so results appear within a frame, with or without a connection.
+      </p>
     </Feature>
 
     <Feature
       label="Compose"
       title="Write in your own editor"
       video="compose"
-      shows="A Draft in $EDITOR: headers, recipients completing, an Attach: line"
+      shows="A draft in $EDITOR: headers, addresses completing, an Attach: line"
       keys={[
-        ['c', 'compose a new Message'],
+        ['c', 'write a new message'],
         ['r', 'reply'],
       ]}
     >
       <p>
-        A Draft opens in <code>$EDITOR</code>: <code>To</code>, <code>Cc</code>,{' '}
-        <code>Subject</code> and
-        <code>Attach</code> lines over the body. Recipients expand from the people you have had mail
-        from or written to.
+        A new message opens in <code>$EDITOR</code> as plain text: <code>To</code>, <code>Cc</code>,{' '}
+        <code>Subject</code> and <code>Attach</code> lines, then the body. Addresses complete from
+        the people you have exchanged mail with.
       </p>
       <p>
-        Send goes through an Outbox that retries until the server accepts. A Draft you set aside
-        waits in Local Drafts.
+        Sent mail goes through an outbox that keeps retrying until the server accepts it. A draft
+        you put aside stays on your computer until you come back to it.
       </p>
     </Feature>
 
     <Feature
       flip
       label="Neovim"
-      title="An agent beside the Draft"
+      title="An AI agent next to your draft"
       video="agent"
-      shows="The agent pane beside a Draft, an edit reviewed hunk by hunk"
+      shows="The agent pane next to a draft, with an edit reviewed hunk by hunk"
     >
       <p>
-        The Neovim plugin completes recipients as you type and opens a chat pane with the agent you
-        run, over the Agent Client Protocol. Ask it about the Message you are reading, or let it
-        edit the Draft and review each change hunk by hunk.
+        The Neovim plugin completes addresses as you type. It can also open a chat pane with an
+        agent you already use, connected over the Agent Client Protocol. Ask it about the message
+        you are reading, or let it edit your draft and review each change hunk by hunk.
       </p>
       <p>
-        Postal ships no agent. The one you run is yours, and it sees a Message only when you ask it
-        to.
+        Postal does not include an agent. You bring your own, and it sees a message only when you
+        ask it to.
       </p>
     </Feature>
   </div>
 
   <section class="also wrap" aria-labelledby="also-title">
-    <h2 id="also-title">Also</h2>
+    <h2 id="also-title">Also included</h2>
     <dl>
       {also.map(([name, what]) => (
         <div>
@@ -215,10 +220,10 @@ const providers = [
     <div class="wrap inner">
       <div class="intro">
         <p class="eyebrow">Privacy</p>
-        <h2 id="local-title">Your mail stays on your machine</h2>
+        <h2 id="local-title">Your mail stays on your computer</h2>
         <p class="prose-font">
-          Postal has no servers of its own. Your mail travels between your machine and your
-          Provider, and nowhere else.
+          Postal has no servers of its own. Your mail goes between your computer and your mail
+          provider, and nowhere else.
         </p>
         <p>
           <a href="/privacy/">Read the privacy policy</a>
@@ -226,16 +231,17 @@ const providers = [
       </div>
       <ul>
         <li>
-          <strong>Messages</strong> in a SQLite Cache under <code>~/.cache/postal</code>.
+          <strong>Messages</strong> are cached in a SQLite database under
+          <code>~/.cache/postal</code>.
         </li>
         <li>
-          <strong>Secrets</strong> in your operating system's keychain, by default.
+          <strong>Passwords and tokens</strong> go in your system keychain by default.
         </li>
         <li>
           <strong>No telemetry</strong>, analytics or crash reports. The log is a file on your disk.
         </li>
         <li>
-          <strong>No images fetched</strong>, so no tracking pixel ever loads.
+          <strong>No images</strong> are downloaded, so tracking pixels never load.
         </li>
       </ul>
     </div>
@@ -243,9 +249,9 @@ const providers = [
 
   <section class="providers wrap" aria-labelledby="providers-title">
     <div class="intro">
-      <h2 id="providers-title">Providers and platforms</h2>
+      <h2 id="providers-title">Mail providers and systems</h2>
       <p class="prose-font muted">
-        macOS and Linux, in any modern terminal. Several Accounts in one run.
+        Runs on macOS and Linux, in any modern terminal. You can use several accounts at once.
       </p>
     </div>
     <ul>
@@ -262,9 +268,9 @@ const providers = [
     <div class="intro">
       <h2 id="install-title">Install</h2>
       <p class="prose-font">
-        Postal builds from source with Rust 1.88 or newer and a C++ compiler.{' '}
-        <code>make install</code> puts the binary in <code>~/.cargo/bin</code> and the Neovim plugin
-        beside it.
+        Postal builds from source. You need Rust 1.88 or newer and a C++ compiler.{' '}
+        <code>make install</code> puts the binary in <code>~/.cargo/bin</code> and installs the
+        Neovim plugin.
       </p>
     </div>
     <div class="steps">
@@ -273,10 +279,10 @@ const providers = [
 <span class="p">$</span> make install
 <span class="p">$</span> postal</code></pre>
       <p class="muted">
-        The first run opens the Onboarding: pick a Provider and sign in. <kbd>?</kbd> lists every
-        key.
+        On first run, Postal asks you to pick a mail provider and sign in. Press <kbd>?</kbd> to see
+        every key.
       </p>
-      <Media still={onboarding} shows="The Onboarding's Provider list" />
+      <Media still={onboarding} shows="The list of mail providers on first run" />
     </div>
   </section>
 </Base>

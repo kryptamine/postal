@@ -46,5 +46,5 @@ Pages use the semantic and component tokens (`--color-primary`,
 
 ## Copy
 
-Every claim on a page is true of Postal's code or an ADR, and names things
-as `GLOSSARY.md` does. `docs/brand-guidelines.md` has the voice rules.
+Every claim on a page is true of Postal's code or an ADR, and uses the
+words of `GLOSSARY.md`, lowercase. `docs/brand-guidelines.md` has the voice rules.

@@ -62,8 +62,9 @@ their mail there without giving up HTML mail or speed.
 
 - Say a fact instead of an adjective: "Opens in 100 ms", not "lightning fast".
 - One idea per sentence. Short sentences. Active voice.
-- Name things as `GLOSSARY.md` does: Message, Thread, Folder, Account,
-  Draft, Cache, Provider. Capitalised the same way.
+- Use the words of `GLOSSARY.md` (message, thread, folder, account, draft,
+  cache), lowercase on the site: a reader new to Postal does not know them
+  as names. Internal names like Rendered View or Onboarding stay off it.
 - Keys and commands in code: `postal login`, `/`, `o`.
 - No promise the code does not keep. A claim on the site links to its proof
   when it can (an ADR, the source).
