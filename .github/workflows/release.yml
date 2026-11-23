@@ -3,21 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
-  # A pull request that changes how the archives are made builds, signs and
-  # checks them, without a release to upload to.
-  pull_request:
-    paths:
-      - .github/workflows/release.yml
-      - scripts/sign-macos.sh
-      - Makefile
-      - build.rs
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   release-please:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -34,10 +25,7 @@ jobs:
 
   build:
     needs: release-please
-    # Secrets reach no pull request from a fork, so one cannot sign.
-    if: >-
-      !cancelled() && (needs.release-please.outputs.created == 'true' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
+    if: needs.release-please.outputs.created == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -87,7 +75,6 @@ jobs:
   # Each archive runs on a runner that never built it, before it is published.
   verify:
     needs: build
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +102,6 @@ jobs:
 
   publish:
     needs: [release-please, verify]
-    if: ${{ !cancelled() && needs.verify.result == 'success' && needs.release-please.outputs.created == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
