@@ -59,6 +59,11 @@ termlens = "0.11.10"
 name = "frame_allocations"
 required-features = ["alloc-count"]
 
+# `make demo`: Postal over the fake servers of the tests, see demo/README.md.
+[[example]]
+name = "demo"
+path = "demo/main.rs"
+
 [lints.rust]
 let_underscore_drop = "deny"
 

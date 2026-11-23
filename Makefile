@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run install fmt lint test nvim sanitize brand landing landing-dev check
+.PHONY: help build run demo install fmt lint test nvim sanitize brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -16,6 +16,10 @@ build: ## build the release binary
 
 run: ## run the release build
 	cargo run --release
+
+demo: ## run postal over the demo mailbox, touching nothing of your own
+	cargo build --release
+	cargo run --release --quiet --example demo -- target/release/postal
 
 # The plugin is copied whole, then swapped in, so no Neovim loads half of one.
 install: ## install a release postal in ~/.cargo/bin and a copy of the plugin
