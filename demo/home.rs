@@ -100,7 +100,7 @@ impl Home {
         let dir = self.dirs.xdg_config_home().join("nvim");
         fs::create_dir_all(&dir).unwrap();
         let init = include_str!("init.lua")
-            .replace("@PLUGIN@", &repo.join("nvim").display().to_string())
+            .replace("@PLUGIN@", &repo.display().to_string())
             .replace(
                 "@AGENT@",
                 &repo.join("demo/agent.lua").display().to_string(),

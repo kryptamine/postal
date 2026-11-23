@@ -70,8 +70,8 @@ cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
   `clang-format -i cpp/*` before the commit. `vendor/` keeps upstream's style.
 - **`clang-tidy cpp/*.cpp` passes** with `bugprone`, `performance` and
   `modernize` as errors (`.clang-tidy`, flags in `compile_flags.txt`).
-- **`make -C nvim check` passes after a change to `nvim/`**: `stylua`
-  formats and checks the Lua (`nvim/.stylua.toml`), and `make smoke` runs
+- **`make -C nvim check` passes after a change to `lua/` or `nvim/`**:
+  `stylua` formats and checks the Lua (`.stylua.toml`), and `make smoke` runs
   `nvim/scripts/smoke.lua` in a bare headless Neovim against a stub `postal`
   and a stub ACP agent. `tests/nvim.rs` runs the same check with the real
   binary; both need `nvim`.
@@ -117,10 +117,9 @@ checks this.
   its landing on `main` closes the issue. A commit for part of one says `Refs #N`.
 - Tests land with the behaviour they cover.
 - `make` lists the targets: `make check` is lint, `cargo deny`, tests and the
-  Neovim check; `make install` puts a release build and the plugin where a user
-  has them.
+  Neovim check; `make install` puts a release build where a user has it.
 - After a feature or a bug fix is committed, run `make install`, so the
-  user can try the change in their own Postal and Neovim at once.
+  user can try the change in their own Postal at once.
 - While working, run the single test file you touch. Run the full suite once,
   as the last step before the commit: after the code review and its fixes.
 - The code is the source of truth, then the docs, then a comment. A doc that

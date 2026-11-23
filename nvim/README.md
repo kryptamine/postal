@@ -13,14 +13,16 @@ Postal has synced: run `postal` once before.
 
 ## Installation
 
-Both the install script and `make install` (see the [README](../README.md))
-copy the plugin to `~/.local/share/postal/nvim`.
+The plugin is the repository itself, its Lua in [`lua/`](../lua/). Install
+it with your plugin manager, on the release tag of the `postal` you run.
 
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
-{ dir = "~/.local/share/postal/nvim", main = "postal", opts = {} }
+{ "kryptamine/postal", version = "*", main = "postal", opts = {} }
 ```
+
+From a clone, point `dir` at it instead: `{ dir = "~/src/postal", main = "postal", opts = {} }`.
 
 ## Usage
 

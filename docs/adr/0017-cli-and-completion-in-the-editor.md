@@ -5,7 +5,7 @@ reach. Expanding a recipient once the editor exits (ADR 0016) proved
 surprising: nothing happens while typing, and a name typed wrong shows only
 after the editor is gone. Completion belongs where the typing happens, so
 Postal answers an editor's questions from the shell instead, and each
-editor gets a small plugin; Neovim's is the first, in `nvim/`. Without one,
+editor gets a small plugin; Neovim's is the first, in `lua/`. Without one,
 a recipient is typed in full.
 
 The same commands serve a person at a shell and an agent alike, which makes

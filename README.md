@@ -18,9 +18,8 @@ curl -fsSL https://postalmail.dev/install.sh | sh
 postal
 ```
 
-The script puts `postal` in `~/.local/bin` and the
-[Neovim plugin](nvim/) in `~/.local/share/postal/nvim`. On first run Postal
-asks for a mail provider and a sign-in; `?` lists every key.
+The script puts `postal` in `~/.local/bin`. On first run Postal asks for a
+mail provider and a sign-in; `?` lists every key.
 
 To build from source instead, with Rust 1.89+ and a C++ compiler:
 
@@ -29,8 +28,22 @@ git clone https://github.com/kryptamine/postal && cd postal
 make install
 ```
 
-`make install` puts `postal` in `~/.cargo/bin` and the plugin in the same
-place.
+`make install` puts `postal` in `~/.cargo/bin`.
+
+## Neovim
+
+Postal opens a Draft in `$EDITOR`. In Neovim 0.10+, the
+[plugin](nvim/) completes `To:`, `Cc:` and `Attach:` as you type, and
+`:PostalAgent` lets an [ACP](https://agentclientprotocol.com) agent edit the
+Draft for you to review hunk by hunk. It is optional; with
+[lazy.nvim](https://github.com/folke/lazy.nvim):
+
+```lua
+{ "kryptamine/postal", version = "*", main = "postal", opts = {} }
+```
+
+`version = "*"` keeps the plugin on the latest release, the one the install
+script fetches, since the plugin calls `postal`.
 
 ## Development
 

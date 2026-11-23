@@ -65,7 +65,7 @@ fn the_plugin_completes_from_what_the_cli_lists() {
     let home = synced(&imap, &smtp);
     let plugin = Path::new(env!("CARGO_MANIFEST_DIR")).join("nvim");
     let output = Command::new("nvim")
-        .args(["--clean", "--headless", "--cmd", "set rtp^=.", "-c"])
+        .args(["--clean", "--headless", "--cmd", "set rtp^=..", "-c"])
         .arg("lua vim.schedule(function() dofile('scripts/smoke.lua') end)")
         .current_dir(plugin)
         .env("XDG_CONFIG_HOME", home.xdg_config_home())

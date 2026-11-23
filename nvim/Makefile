@@ -6,13 +6,13 @@ help: ## list every target
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-8s %s\n", $$1, $$2}'
 
 fmt: ## format every Lua file with stylua
-	stylua .
+	stylua ../lua .
 
 lint: ## fail if a Lua file is not formatted
-	stylua --check .
+	stylua --check ../lua .
 
 # POSTAL_BIN runs a real postal; without it, scripts/postal-stub answers.
 smoke: ## complete a Draft's recipients and chat with a stub agent, headless
-	nvim --clean --headless --cmd "set rtp^=." -c "lua vim.schedule(function() dofile('scripts/smoke.lua') end)"
+	nvim --clean --headless --cmd "set rtp^=.." -c "lua vim.schedule(function() dofile('scripts/smoke.lua') end)"
 
 check: fmt lint smoke ## the gate before any commit
