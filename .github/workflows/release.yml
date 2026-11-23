@@ -24,7 +24,7 @@ jobs:
     steps:
       # Not GITHUB_TOKEN: its PRs start no CI, and the ruleset requires the ci check.
       - id: release
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
@@ -48,9 +48,10 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
       NAME: postal-${{ matrix.target }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
       - if: runner.os == 'macOS'
         run: make dist TARGET=${{ matrix.target }} SIGN=scripts/sign-macos.sh
@@ -71,7 +72,7 @@ jobs:
           RUSTFLAGS: >-
             -C link-arg=-Wl,-Bstatic -C link-arg=-lstdc++ -C link-arg=-lgcc
             -C link-arg=-Wl,-Bdynamic
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ env.NAME }}
           path: dist/${{ env.NAME }}.tar.gz*
@@ -94,7 +95,7 @@ jobs:
     env:
       NAME: postal-${{ matrix.target }}
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ env.NAME }}
       - run: sha256sum -c "$NAME.tar.gz.sha256" || shasum -a 256 -c "$NAME.tar.gz.sha256"
@@ -113,14 +114,14 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
           merge-multiple: true
       - run: cat dist/*.sha256 > dist/SHA256SUMS
       # A .sha256 sits in the same release as its archive, so it proves only
       # an intact download; this says the release workflow built it.
-      - uses: actions/attest-build-provenance@v4
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: dist/SHA256SUMS
       # The release stays a draft until here, so `latest` never names one
