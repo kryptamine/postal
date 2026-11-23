@@ -1,7 +1,8 @@
 # landing
 
 Postal's landing page, privacy policy and terms: a static
-[Astro](https://astro.build) site with no client-side JavaScript.
+[Astro](https://astro.build) site. Its one script is the install command's
+copy button, hidden where scripts do not run.
 
 ```
 pnpm install

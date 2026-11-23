@@ -2,6 +2,7 @@
 import { site } from '@app/site';
 import Base from '@app/layouts/Base.astro';
 import hero from '@app/assets/media/hero.png';
+import Copy from '@app/components/Copy.astro';
 import Media from '@app/components/Media.astro';
 import thread from '@app/assets/media/thread.png';
 import browser from '@app/assets/media/browser.png';
@@ -31,6 +32,8 @@ const also = [
   ],
   ['Signatures', 'One per account, added to every message you send from it.'],
 ];
+
+const install = `curl -fsSL ${site.url}/install.sh | sh`;
 
 const providers = [
   [
@@ -274,8 +277,11 @@ const providers = [
       </p>
     </div>
     <div class="steps">
-      <pre><code><span class="p">$</span> curl -fsSL {site.url}/install.sh | sh
+      <div class="command">
+        <pre><code><span class="p">$</span> {install}
 <span class="p">$</span> postal</code></pre>
+        <Copy text={install} />
+      </div>
       <p class="muted">
         On first run, Postal asks you to pick a mail provider and sign in. Press <kbd>?</kbd> to see
         every key.
@@ -555,6 +561,15 @@ const providers = [
     display: grid;
     gap: var(--space-3);
     min-width: 0;
+  }
+
+  .command {
+    position: relative;
+  }
+
+  /* Room on the right for the copy button, so the command never runs under it. */
+  .command pre {
+    padding-right: 6rem;
   }
 
   pre {
