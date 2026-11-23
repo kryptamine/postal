@@ -56,3 +56,10 @@ assessing the binary. Only when all four pass are they attached to the
 release. This runs only for a release, as macOS runners are scarce and
 costly: a failure is fixed and the run rerun, and the assets land on the
 same tag.
+
+**Provenance.** A `.sha256` lives in the same release as its archive, so
+whoever can edit the release can replace both. The publish job therefore
+writes `SHA256SUMS` of all four and a build provenance attestation over it,
+which ties each archive to this workflow and its commit; `gh attestation
+verify` checks it. The repository has immutable releases on, so once a
+release is published its archives can no longer change.
