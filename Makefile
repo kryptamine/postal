@@ -1,12 +1,14 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run demo-build demo media stills install fmt lint deny test nvim sanitize brand landing landing-dev check
+.PHONY: help build run demo-build demo media stills install dist fmt lint deny test nvim sanitize brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
 CLANG_FORMAT ?= $(or $(shell command -v clang-format),$(LLVM)/clang-format)
 CLANG_TIDY ?= $(or $(shell command -v clang-tidy),$(LLVM)/clang-tidy)
 PLUGIN := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/postal/nvim
+TARGET ?= $(shell rustc -vV | sed -n 's/^host: //p')
+DIST := postal-$(TARGET)
 
 help: ## list every target
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
@@ -39,6 +41,15 @@ install: ## install a release postal in ~/.cargo/bin and a copy of the plugin
 	rm -rf "$(PLUGIN)" && mv "$(PLUGIN).new" "$(PLUGIN)"
 	@echo "postal: $$(command -v postal)"
 	@echo "plugin: $(PLUGIN)"
+
+# install.sh reads this layout: the binary and nvim/lua side by side.
+dist: ## pack the release archive of postal and the plugin for TARGET
+	cargo build --release --locked --target $(TARGET)
+	rm -rf dist/$(DIST) && mkdir -p dist/$(DIST)/nvim
+	cp target/$(TARGET)/release/postal LICENSE THIRD_PARTY_LICENSES.md README.md dist/$(DIST)/
+	cp -R nvim/lua nvim/README.md dist/$(DIST)/nvim/
+	tar -czf dist/$(DIST).tar.gz -C dist $(DIST)
+	cd dist && shasum -a 256 $(DIST).tar.gz > $(DIST).tar.gz.sha256
 
 fmt: ## format the Rust, the C++ and the Lua
 	cargo fmt
