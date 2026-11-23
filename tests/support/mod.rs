@@ -8,6 +8,7 @@ pub mod fake_dns;
 pub mod fake_http;
 pub mod fake_imap;
 pub mod fake_oauth;
+pub mod fake_releases;
 pub mod fake_smtp;
 pub mod home;
 pub mod notifier;

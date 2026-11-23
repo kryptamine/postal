@@ -27,6 +27,7 @@ fn main() -> ExitCode {
         Some(Command::Thread {
             verb: Thread::Show(show),
         }) => answered(cli::thread_show::run(&show)),
+        Some(Command::Update) => answered(cli::update::run()),
         tui => {
             let run = if matches!(tui, Some(Command::Login)) {
                 app::login::run

@@ -1,5 +1,6 @@
 //! Compiles the vendored litehtml, its bundled gumbo and the cell-grid
-//! container in `cpp/`, for the rendered view of HTML mail.
+//! container in `cpp/`, for the rendered view of HTML mail, and names the
+//! target, whose release archive `postal update` fetches.
 
 use std::path::{Path, PathBuf};
 
@@ -12,6 +13,11 @@ fn sources(dir: &Path, extension: &str) -> Vec<PathBuf> {
         .collect();
     files.sort();
     files
+}
+
+#[expect(clippy::panic, reason = "a build script fails by panicking")]
+fn target() -> String {
+    std::env::var("TARGET").unwrap_or_else(|error| panic!("TARGET: {error}"))
 }
 
 fn main() {
@@ -52,4 +58,5 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp");
     println!("cargo:rerun-if-changed=vendor/litehtml");
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rustc-env=POSTAL_TARGET={}", target());
 }

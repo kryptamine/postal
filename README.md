@@ -25,7 +25,8 @@ postal
 ```
 
 The script puts `postal` in `~/.local/bin`. On first run Postal asks for a
-mail provider and a sign-in; `?` lists every key.
+mail provider and a sign-in; `?` lists every key. `postal update` replaces it
+with the latest release.
 
 To build from source instead, with Rust 1.89+ and a C++ compiler:
 
@@ -42,7 +43,7 @@ Postal opens a Draft in `$EDITOR`. In Neovim 0.10+, the
 [plugin](nvim/) completes `To:`, `Cc:` and `Attach:` as you type, and
 `:PostalAgent` lets an [ACP](https://agentclientprotocol.com) agent edit the
 Draft for you to review hunk by hunk. The plugin is optional, and calls
-`postal`: keep it on the latest release, the one the install script fetches.
+`postal`: keep it on the latest release with `postal update`.
 
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
