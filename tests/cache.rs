@@ -393,6 +393,11 @@ fn a_failed_cache_write_keeps_the_session_in_memory_and_is_toasted_once() {
     let mut t = postal(&home);
     t.wait_until(|s| s.contains("Newest")).unwrap();
     wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+    // The body fetch and the Dwell write too; one the lock caught would wait
+    // out SQLite's busy timeout and leave too little of the timeout below.
+    t.wait_until(|s| card(s, "Carol") == Some(false) && !preview(s).contains("Loading…"))
+        .unwrap();
+    wait_for(|| server.commands().iter().any(|c| c.contains("STORE")));
 
     // Another writer holding the lock makes every write of Postal's fail.
     let lock = rusqlite::Connection::open(home.cache_path()).unwrap();
