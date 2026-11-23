@@ -31,10 +31,10 @@ is always `chore(deps)`.
 ## Branches (mandatory)
 
 **Every change reaches `main` through a pull request that passes CI**, merged
-by rebase or squash so the history stays linear. Until the repository is
-public, GitHub cannot enforce this, so commits still go straight to `main`;
-on publication apply the ruleset:
-`gh api -X POST repos/kryptamine/postal/rulesets --input .github/rulesets/main.json`.
+by rebase or squash so the history stays linear. Postal is in production and
+nothing is pushed to `main` directly; the ruleset in
+`.github/rulesets/main.json` rejects such a push. Work on a branch, open a pull
+request with `gh pr create`, and merge it with `gh pr merge --rebase`.
 Keep each commit to one thing: a refactor, a feature and a formatting sweep
 are three commits.
 
