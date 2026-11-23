@@ -10,7 +10,7 @@ mod ui;
 
 use std::{error::Error, path::Path, process::ExitCode};
 
-use crate::cli::args::{Command, Correspondent, Thread};
+use crate::cli::args::{Command, Correspondent, Folder, Message, Thread};
 
 fn main() -> ExitCode {
     if let Some(code) = render::render_process::serve() {
@@ -23,10 +23,19 @@ fn main() -> ExitCode {
         // A command beside the TUI leaves its log alone.
         Some(Command::Correspondent {
             verb: Correspondent::List(list),
-        }) => answered(cli::correspondent_list::run(&list)),
+        }) => printed(cli::correspondent_list::answer(&list), list.json),
         Some(Command::Thread {
             verb: Thread::Show(show),
-        }) => answered(cli::thread_show::run(&show)),
+        }) => printed(cli::thread_show::answer(&show), show.json),
+        Some(Command::Folder {
+            verb: Folder::List(list),
+        }) => printed(cli::folder_list::answer(), list.json),
+        Some(Command::Message { verb }) => match verb {
+            Message::List(list) => printed(cli::message_list::answer(&list), list.json),
+            Message::Show(show) => printed(cli::message_show::answer(&show), show.json),
+            Message::Search(search) => printed(cli::message_search::answer(&search), search.json),
+        },
+        Some(Command::Mcp) => answered(cli::mcp::run()),
         Some(Command::Update) => answered(cli::update::run()),
         tui => {
             let run = if matches!(tui, Some(Command::Login)) {
@@ -44,6 +53,11 @@ fn main() -> ExitCode {
             code
         }
     }
+}
+
+/// A command's answer on stdout, as `--json` asks.
+fn printed(answer: Result<cli::answer::Answer, Box<dyn Error>>, json: bool) -> ExitCode {
+    answered(answer.and_then(|answer| Ok(answer.print(json)?)))
 }
 
 /// A command's end, its error on stderr.

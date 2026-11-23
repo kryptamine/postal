@@ -47,7 +47,9 @@ Lowest first:
   clipboard), `onboarding/`
   and `logging/`.
 - `cli/`: the commands beside the TUI: the arguments, `correspondent list`,
-  `thread show`, `update` and the releases it reads from GitHub.
+  `folder list`, `message list`, `show` and `search`, `thread show`, the
+  IDs they hand out, `mcp`, which serves each command as an MCP tool,
+  `update` and the releases it reads from GitHub.
 - `app/`: the TUI's run and `postal login`: the Accounts signed in, the
   Onboarding when one is not, each Account's connections and the screen
   over them, opened again after Settings or a sign-in.
@@ -66,6 +68,8 @@ Where a module could sit in two layers, its imports decided:
 - `mail::login` checks a sign-in by connecting and examining the Inbox, so it
   is `mail`, though it writes `config.toml` after.
 - `cli::correspondent` ranks Correspondents for `correspondent list` alone.
+- `cli::mcp` is a surface of its own, but each tool is a command's answer,
+  so it sits with them.
 - `compose::accounts` and `compose::outgoing` are the Accounts as senders:
   `Outgoing` builds a Draft's envelope, so they sit over `compose::draft`.
 - `render::stack_str` formats frame text without allocating; `mail::status`

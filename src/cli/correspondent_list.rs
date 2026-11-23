@@ -8,8 +8,8 @@ use crate::{
     account::config::Config,
     account::xdg,
     cache::Reader,
+    cli::answer::Answer,
     cli::args::CorrespondentList,
-    cli::command_output,
     cli::correspondent::{self, Correspondent},
     compose::notes::Notes,
 };
@@ -27,7 +27,7 @@ struct Row<'a> {
 
 /// `postal correspondent list`: every Correspondent the Cache knows, best
 /// first, the Account the arguments name first.
-pub fn run(list: &CorrespondentList) -> Result<(), Box<dyn Error>> {
+pub fn answer(list: &CorrespondentList) -> Result<Answer, Box<dyn Error>> {
     let configs = Config::load(&xdg::config_dir()?.join("config.toml"))?;
     let emails: Vec<&str> = configs.iter().map(|c| c.email.as_str()).collect();
     let seen = Reader::open(&xdg::cache_dir()?)?.correspondence()?;
@@ -35,25 +35,6 @@ pub fn run(list: &CorrespondentList) -> Result<(), Box<dyn Error>> {
     let first = first.unwrap_or_default();
     let ranked = correspondent::ranked(seen, &emails, &first, Utc::now());
 
-    let text = if list.json {
-        json(&ranked)?
-    } else {
-        table(&ranked, emails.len() > 1)
-    };
-
-    Ok(command_output::print(&text)?)
-}
-
-/// The address `--draft`'s notes or `--account` name; `None` for neither.
-fn first_account(list: &CorrespondentList) -> io::Result<Option<String>> {
-    if let Some(draft) = &list.draft {
-        return Ok(Notes::read(draft)?.and_then(|notes| notes.account));
-    }
-
-    Ok(list.account.clone())
-}
-
-fn json(ranked: &[Correspondent]) -> serde_json::Result<String> {
     let rows: Vec<Row<'_>> = ranked
         .iter()
         .map(|c| Row {
@@ -64,9 +45,16 @@ fn json(ranked: &[Correspondent]) -> serde_json::Result<String> {
             written: c.written,
         })
         .collect();
-    let mut text = serde_json::to_string(&rows)?;
-    text.push('\n');
-    Ok(text)
+    Ok(Answer::new(&rows, table(&ranked, emails.len() > 1))?)
+}
+
+/// The address `--draft`'s notes or `--account` name; `None` for neither.
+fn first_account(list: &CorrespondentList) -> io::Result<Option<String>> {
+    if let Some(draft) = &list.draft {
+        return Ok(Notes::read(draft)?.and_then(|notes| notes.account));
+    }
+
+    Ok(list.account.clone())
 }
 
 /// A line each, with the Account that knows it in a column of its own when

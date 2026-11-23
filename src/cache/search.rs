@@ -302,7 +302,7 @@ fn lists(account: AccountId, wanted: &[(Key, i64)], scope: &mut Scope) -> bool {
 
 /// The Query as `FTS5` terms: each word a quoted prefix, all required, cut
 /// as `unicode61` cuts the text, so no input reaches the query syntax.
-fn terms(query: &str) -> String {
+pub(super) fn terms(query: &str) -> String {
     let mut terms = String::new();
     for word in query
         .split(|c: char| !c.is_alphanumeric())
