@@ -212,6 +212,14 @@ fn a_query_narrows_the_picker_and_enter_shows_the_folder_live() {
     assert_eq!(selected_subject(&screen).as_deref(), Some("Client brief"));
     t.wait_until(|s| s.contains("Body of Client brief"))
         .unwrap();
+    // The Dwell marks Client brief read a second on; waited out, the
+    // count below is the arrival's alone, however slow the machine.
+    wait_for(|| {
+        let commands = server.commands();
+        commands
+            .iter()
+            .any(|c| c.starts_with("UID STORE 101 ") && c.contains("\\Seen"))
+    });
 
     // IDLE now watches the Folder shown.
     wait_for(|| {
@@ -227,7 +235,7 @@ fn a_query_narrows_the_picker_and_enter_shows_the_folder_live() {
     );
     let screen = t.snapshot_after(|s| s.contains("Client reply")).unwrap();
     assert!(screen.contains("Client brief"), "{screen}");
-    wait_picked(&mut t, "Work/Clients 2");
+    wait_picked(&mut t, "Work/Clients 1");
 
     // Back to the Inbox by its label.
     show(&mut t, "inbox");
