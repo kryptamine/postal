@@ -262,6 +262,7 @@ one colour.
 | App icon | postal-app-icon.svg, -512.png, apple-touch-icon.png | Graphite tile, night-red stamp |
 | Social preview | social-preview.svg/.png (1280 × 640) | GitHub, link cards |
 | Terminal | postal-mark.txt | Onboarding, `--version` |
+| Terminal lockup | postal-lockup.txt | Above `postal --help` |
 
 Clear space round the mark is one perforation pitch (8 units).
 
