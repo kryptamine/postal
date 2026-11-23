@@ -48,7 +48,9 @@ and the identifier `dev.postalmail.postal`; an unsigned binary asked
 every user allows access once more. `notarytool` takes a zip of the binary;
 a bare binary cannot be stapled, so Gatekeeper fetches the ticket online.
 The certificate, its password and an App Store Connect API key (role
-Developer) are repository secrets.
+Developer) are repository secrets. `make install` signs a local build the
+same way when a Developer ID sits in the login keychain, so the keychain
+stops asking after every rebuild; without one the build stays ad-hoc.
 
 **Check.** Before anything is uploaded, each archive is unpacked on a runner
 that did not build it and runs `postal --version`: a Linux one in an Ubuntu

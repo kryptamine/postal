@@ -8,6 +8,10 @@ CLANG_FORMAT ?= $(or $(shell command -v clang-format),$(LLVM)/clang-format)
 CLANG_TIDY ?= $(or $(shell command -v clang-tidy),$(LLVM)/clang-tidy)
 TARGET ?= $(shell rustc -vV | sed -n 's/^host: //p')
 DIST := postal-$(TARGET)
+# The keychain grants an item to the signing team and this identifier: once
+# changed, every user allows access again. See docs/adr/0029.
+IDENTIFIER := dev.postalmail.postal
+INSTALLED := $(or $(CARGO_INSTALL_ROOT),$(CARGO_HOME),$(HOME)/.cargo)/bin/postal
 
 help: ## list every target
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
@@ -32,17 +36,23 @@ media: demo-build ## record the landing page's videos from demo/tapes with VHS
 stills: demo-build ## shoot the landing page's screenshots in your Ghostty (macOS)
 	demo/stills.sh
 
+# A Developer ID in the keychain signs the build as a release is signed, so
+# the keychain stops asking after every rebuild; without one it stays ad-hoc.
 install: ## install a release postal in ~/.cargo/bin
 	cargo install --path . --locked --force
-	@echo "postal: $$(command -v postal)"
+	@if security find-identity -v -p codesigning 2>/dev/null | grep -q 'Developer ID Application'; then \
+		codesign --force --sign 'Developer ID Application' --identifier $(IDENTIFIER) \
+			--options runtime $(INSTALLED); \
+	fi
+	@echo "postal: $(INSTALLED)"
 
 # install.sh reads the binary from $(DIST)/postal in this archive.
-# SIGN, when set, is run on the binary before it is packed.
+# SIGN, when set, is run on the binary and the identifier before it is packed.
 dist: ## pack the release archive of postal for TARGET
 	cargo build --release --locked --target $(TARGET)
 	rm -rf dist/$(DIST) && mkdir -p dist/$(DIST)
 	cp target/$(TARGET)/release/postal LICENSE THIRD_PARTY_LICENSES.md README.md dist/$(DIST)/
-	$(if $(SIGN),$(SIGN) dist/$(DIST)/postal)
+	$(if $(SIGN),$(SIGN) dist/$(DIST)/postal $(IDENTIFIER))
 	tar -czf dist/$(DIST).tar.gz -C dist $(DIST)
 	cd dist && shasum -a 256 $(DIST).tar.gz > $(DIST).tar.gz.sha256
 

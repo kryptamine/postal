@@ -5,6 +5,7 @@
 set -eu
 
 binary=$1
+identifier=$2
 : "${MACOS_CERTIFICATE:?}" "${MACOS_CERTIFICATE_PASSWORD:?}" "${APPLE_TEAM_ID:?}"
 : "${APPLE_API_KEY:?}" "${APPLE_API_KEY_ID:?}" "${APPLE_API_ISSUER:?}"
 
@@ -33,10 +34,8 @@ security set-key-partition-list -S apple-tool:,apple: -s -k "$password" \
 # shellcheck disable=SC2086
 security list-keychains -d user -s "$keychain" $searched
 
-# The keychain grants an item to the team and this identifier, so changing
-# the identifier makes every user allow access again once.
 codesign --force --sign "Developer ID Application" --keychain "$keychain" \
-	--identifier dev.postalmail.postal --options runtime --timestamp "$binary"
+	--identifier "$identifier" --options runtime --timestamp "$binary"
 codesign --verify --strict --verbose=2 "$binary"
 codesign --display --verbose=2 "$binary" 2>&1 | grep -qx "TeamIdentifier=$APPLE_TEAM_ID"
 
