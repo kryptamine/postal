@@ -7,6 +7,7 @@ use crate::{
     cli::answer::Answer,
     cli::args::{LIMIT, MessageList},
     cli::thread_rows::{self, ThreadRows},
+    domain::folder::{Folder, INBOX},
 };
 
 /// `postal message list`: the newest Threads of a Folder, by default every
@@ -27,13 +28,11 @@ pub fn answer(list: &MessageList) -> Result<Answer, Box<dyn Error>> {
     };
 
     let reader = Reader::open(&xdg::cache_dir()?)?;
+    let folders = reader.folders()?;
     let mut places = Vec::new();
     for account in wanted {
-        let name = match &list.folder {
-            Some(folder) => reader.folder_named(account, folder)?,
-            None => Some("INBOX".to_owned()),
-        };
-
+        let name =
+            (list.folder.as_ref()).map_or(Some(INBOX), |folder| named(&folders, account, folder));
         places.extend(name.map(|name| (account.as_str(), name)));
     }
 
@@ -43,9 +42,24 @@ pub fn answer(list: &MessageList) -> Result<Answer, Box<dyn Error>> {
         return Err(format!("no Account has a Folder {folder}").into());
     }
 
-    let places: Vec<(&str, &str)> = places.iter().map(|(a, n)| (*a, n.as_str())).collect();
     let mut threads = ThreadRows::new(list.limit.unwrap_or(LIMIT));
     reader.listed(&places, |listed| threads.visit(listed))?;
     let rows = threads.into_rows();
     Ok(Answer::new(&rows, thread_rows::table(&rows))?)
+}
+
+/// The server's name of `account`'s Folder that `wanted` names: by that
+/// name, else by the name people read or its role's label, in any case.
+fn named<'a>(folders: &'a [Folder<String>], account: &str, wanted: &str) -> Option<&'a str> {
+    let mine = || folders.iter().filter(|f| f.account == *account);
+    mine()
+        .find(|f| f.name.as_str() == wanted)
+        .or_else(|| {
+            mine().find(|f| {
+                f.path.to_lowercase() == wanted.to_lowercase()
+                    || f.role
+                        .is_some_and(|role| role.label().eq_ignore_ascii_case(wanted))
+            })
+        })
+        .map(|f| f.name.as_str())
 }

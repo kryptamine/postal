@@ -150,6 +150,8 @@ fn a_listing_names_each_thread_and_message_for_the_commands_that_show_them() {
 #[test]
 fn a_folder_is_named_by_its_role_or_its_name() {
     let server = FakeImap::start(inbox());
+    // «Архив» in modified UTF-7, as the server lists it.
+    server.add_folder("&BBAEQARFBDgEMg-", &[], vec![]);
     let home = Home::for_server(&server);
     synced(&server, &home);
 
@@ -159,6 +161,17 @@ fn a_folder_is_named_by_its_role_or_its_name() {
         .find(|f| f["name"] == "[Gmail]/Sent Mail")
         .unwrap();
     assert_eq!(sent["role"], "Sent");
+    // A name is shown, and taken, as people read it.
+    assert!(folders.iter().any(|f| f["name"] == "Архив"), "{folders:?}");
+    let table = String::from_utf8(postal(&home, &["folder", "list"]).stdout).unwrap();
+    assert!(!table.contains('&'), "{table}");
+    for folder in ["архив", "&BBAEQARFBDgEMg-"] {
+        assert!(
+            postal(&home, &["message", "list", "--folder", folder])
+                .status
+                .success()
+        );
+    }
 
     for folder in ["Sent", "sent", "[Gmail]/Sent Mail"] {
         let listed = json(&home, &["message", "list", "--folder", folder]);

@@ -12,7 +12,7 @@ pub mod listing;
 pub mod message;
 pub mod message_flags;
 pub mod message_ref;
-mod modified_utf7;
+pub mod modified_utf7;
 pub mod new_message;
 pub mod per_account;
 pub mod pool;

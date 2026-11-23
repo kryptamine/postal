@@ -10,24 +10,26 @@ use crate::{
 #[derive(Serialize)]
 struct Row<'a> {
     account: &'a str,
+    /// Decoded from modified UTF-7, as `--folder` takes it.
     name: &'a str,
     /// Its special use as `Role::label` names it, such as `Trash`.
     role: Option<&'static str>,
     /// `null` until a sync counted it.
-    unread: Option<u32>,
+    unread: Option<usize>,
 }
 
 /// `postal folder list`: every Account's Folders as the last sync left them.
 pub fn answer() -> Result<Answer, Box<dyn Error>> {
     let emails = accounts::emails()?;
-    let folders = Reader::open(&xdg::cache_dir()?)?.folders()?;
+    let mut folders = Reader::open(&xdg::cache_dir()?)?.folders()?;
+    folders.sort_by(|a, b| a.account.cmp(&b.account).then_with(|| a.order(b)));
     let rows: Vec<Row<'_>> = folders
         .iter()
         // An Account unlinked may leave Folders until its rows are forgotten.
         .filter(|folder| emails.contains(&folder.account))
         .map(|folder| Row {
             account: &folder.account,
-            name: &folder.name,
+            name: &folder.path,
             role: folder.role.map(Role::label),
             unread: folder.unread,
         })
