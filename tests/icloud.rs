@@ -177,7 +177,7 @@ fn an_app_specific_password_signs_in_and_is_written() {
     t.wait_until(|s| s.contains(&format!("Signed in as {EMAIL}.")))
         .unwrap();
     assert!(t.wait_exit().unwrap().success());
-    assert!(browser.opened().is_empty());
+    assert_eq!(browser.opened(), Vec::<String>::new());
     assert_eq!(secret(&home).as_deref(), Some(APP_PASSWORD));
     let config = fs::read_to_string(home.config_path()).unwrap();
     assert!(config.contains("provider = \"icloud\"\n"), "{config}");

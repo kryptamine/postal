@@ -215,7 +215,7 @@ fn an_outbox_message_shows_read_only_with_its_last_error() {
     t.send(Key::Char('q')).unwrap();
     t.wait_until(|s| local(s) && !s.contains("Hi Bob")).unwrap();
     quit(t);
-    assert!(drafts(&home).is_empty());
+    assert_eq!(drafts(&home), Vec::<PathBuf>::new());
     assert!(smtp.received().is_empty());
 }
 
@@ -231,7 +231,7 @@ fn backspace_discards_a_draft_in_local_drafts_and_u_brings_it_back() {
     t.send(Key::Backspace).unwrap();
     t.wait_until(|s| s.contains("Discarded · u undo") && s.contains("no Drafts"))
         .unwrap();
-    assert!(drafts(&home).is_empty());
+    assert_eq!(drafts(&home), Vec::<PathBuf>::new());
 
     t.send(Key::Char('u')).unwrap();
     t.wait_until(|s| previewed(s) && s.contains("Café plans"))

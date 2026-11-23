@@ -305,7 +305,7 @@ fn without_a_cache_it_fails_and_creates_nothing() {
     assert!(!home.cache_path().exists());
     // The TUI's log is left alone.
     assert!(!home.log_path().exists());
-    assert!(imap.commands().is_empty());
+    assert_eq!(imap.commands(), Vec::<String>::new());
 }
 
 #[test]

@@ -472,6 +472,6 @@ fn esc_on_a_lost_secret_runs_without_that_account() {
         .snapshot_after(|s| picked(s).iter().any(|r| r == "Local Drafts"))
         .unwrap();
     assert!(!picked(&screen).iter().any(|r| r == OTHER), "{screen:?}");
-    assert!(two.second.commands().is_empty());
+    assert_eq!(two.second.commands(), Vec::<String>::new());
     quit(t);
 }

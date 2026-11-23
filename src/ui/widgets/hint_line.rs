@@ -120,7 +120,7 @@ impl HintLine<'_> {
             .x
             .saturating_add(width)
             .min(row.right().saturating_sub(1));
-        Some(Position::new(x, row.y)).filter(|_| !row.is_empty())
+        (!row.is_empty()).then_some(Position::new(x, row.y))
     }
 
     /// The Query, if any, then the hints that fit `room` and `?: help`;

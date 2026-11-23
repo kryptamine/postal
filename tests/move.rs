@@ -249,7 +249,7 @@ fn archive_in_the_archive_does_nothing() {
     t.wait_until(|s| hint_line(s).contains("already archived"))
         .unwrap();
     quit(t);
-    assert!(moves(&server).is_empty());
+    assert_eq!(moves(&server), Vec::<String>::new());
 }
 
 #[test]

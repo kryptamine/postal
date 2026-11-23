@@ -191,7 +191,7 @@ pub fn threads(
 
     // Unstable: a stable sort allocates its buffer.
     here.as_mut_slice()
-        .sort_unstable_by(|a, b| (b.received, b.uid).cmp(&(a.received, a.uid)));
+        .sort_unstable_by_key(|m| std::cmp::Reverse((m.received, m.uid)));
     elsewhere
         .as_mut_slice()
         .sort_unstable_by_key(|m| (m.received, m.body_key.get()));
