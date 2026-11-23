@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/kryptamine/postal/compare/v0.2.0...v0.3.0) (2026-11-23)
+
+
+### Features
+
+* **cli:** print the release with --version ([3368abf](https://github.com/kryptamine/postal/commit/3368abf3712f21b26166add5196d85224b4eacf9))
+* **cli:** replace the binary with the latest release on update ([bb63a55](https://github.com/kryptamine/postal/commit/bb63a5590e1b3711d874283eb83ef5502b2260b0)), closes [#135](https://github.com/kryptamine/postal/issues/135)
+* **release:** link libstdc++ statically on linux ([e79c415](https://github.com/kryptamine/postal/commit/e79c41550a22310957f2cd098916eb54110c3894)), closes [#116](https://github.com/kryptamine/postal/issues/116)
+* **release:** run each archive on a clean runner before publishing ([bfe455f](https://github.com/kryptamine/postal/commit/bfe455fdae63bf9e2e675ce3319071b8f15a1306)), closes [#116](https://github.com/kryptamine/postal/issues/116)
+* **release:** sign and notarize the macos binaries ([e81bad0](https://github.com/kryptamine/postal/commit/e81bad072b031652566620067aff28ba9da867fa)), closes [#116](https://github.com/kryptamine/postal/issues/116)
+
+
+### Bug Fixes
+
+* **cli:** give the editor and thread show lf line ends ([5bdbffe](https://github.com/kryptamine/postal/commit/5bdbffe59e26386b1a9bebcc37f567a362fdd0c8))
+* **release:** link libgcc.a after the static libstdc++ ([44849f4](https://github.com/kryptamine/postal/commit/44849f40a7f2f759f5633ce40080e0a4a5b38844)), closes [#116](https://github.com/kryptamine/postal/issues/116)
+
 ## [0.2.0](https://github.com/kryptamine/postal/compare/v0.1.0...v0.2.0) (2026-11-23)
 
 
