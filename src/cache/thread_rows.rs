@@ -4,8 +4,8 @@ use rusqlite::{OptionalExtension, params};
 
 use super::{Cache, Error};
 use crate::{
-    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::thread::Key,
-    domain::thread_id::ThreadId, domain::thread_row::ThreadRow, domain::uid::Uid,
+    domain::folder_name::FolderName, domain::thread::Key, domain::thread_row::ThreadRow,
+    domain::uid::Uid,
 };
 
 impl Cache {
@@ -32,7 +32,7 @@ impl Cache {
 
         // An index scan alone: `message_by_arrival` covers these columns.
         let mut statement = connection.prepare_cached(
-            "SELECT thread, body_key, received, uid FROM message
+            "SELECT thread, body_key, received, uid, root FROM message
              WHERE account = ?2 AND mailbox = ?1
              ORDER BY received DESC, uid DESC",
         )?;
@@ -47,12 +47,11 @@ impl Cache {
                 continue;
             }
 
-            let thread: Option<ThreadId> = row.get(0)?;
-            let key = match thread {
-                Some(id) if !seen.insert(id) => continue,
-                Some(id) => Key::Gmail(self.account(), id),
-                None => Key::Lone(self.account(), row.get::<_, BodyKey>(1)?),
-            };
+            let key = Key::new(self.account(), row.get(0)?, row.get(4)?, row.get(1)?);
+
+            if !matches!(key, Key::Lone(..)) && !seen.insert(key) {
+                continue;
+            }
 
             into.push(ThreadRow {
                 key,

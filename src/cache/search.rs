@@ -19,7 +19,6 @@ use crate::{
     domain::per_account::{AccountId, PerAccount},
     domain::pool::Pool,
     domain::thread::Key,
-    domain::thread_id::ThreadId,
 };
 
 /// The columns `window::read` takes, of a `message` row, at the local
@@ -29,12 +28,13 @@ macro_rules! message_row {
     () => {
         "uid, body_key, received,
          unixepoch(received, 'unixepoch', 'localtime') - received, unread, sender, subject,
-         coalesce(snippet, ''), thread, from_me, answered, from_line, to_line, attachments"
+         coalesce(snippet, ''), thread, from_me, answered, from_line, to_line, attachments, root"
     };
 }
 
-/// The rows of one Message's Threads, `?1`, and of Gmail Threads, `?3`, as
-/// JSON arrays. Without the index named, the planner scans the Account.
+/// The rows of one Message's Threads, `?1`, of Gmail Threads, `?3`, and of
+/// Threads by `References`, `?4`, as JSON arrays. Without the indexes
+/// named, the planner scans the Account.
 const HERE: &str = concat!(
     "SELECT ",
     message_row!(),
@@ -42,14 +42,18 @@ const HERE: &str = concat!(
      UNION ALL SELECT ",
     message_row!(),
     ", mailbox FROM message INDEXED BY message_by_thread
-     WHERE account = ?2 AND thread IN (SELECT value FROM json_each(?3))"
+     WHERE account = ?2 AND thread IN (SELECT value FROM json_each(?3))
+     UNION ALL SELECT ",
+    message_row!(),
+    ", mailbox FROM message INDEXED BY message_by_root
+     WHERE account = ?2 AND root IN (SELECT value FROM json_each(?4))"
 );
 
 /// The Messages of the Gmail Threads `?2` whose body is cached, by key.
 const ELSEWHERE: &str = "SELECT 0, t.key, t.received,
     unixepoch(t.received, 'unixepoch', 'localtime') - t.received, t.unread, t.sender,
     t.subject, t.snippet, t.thread, t.from_me, t.answered, t.from_line, t.to_line,
-    t.attachments
+    t.attachments, NULL
     FROM thread_message t JOIN body ON body.account = t.account AND body.key = t.key
     WHERE t.account = ?1 AND t.thread IN (SELECT value FROM json_each(?2))";
 
@@ -66,14 +70,14 @@ macro_rules! ranked_text {
 const CANDIDATES: &str = concat!(
     "SELECT m.account, m.mailbox, m.body_key, m.thread, m.rowid, ",
     ranked_text!(),
-    " FROM message m ORDER BY m.rowid DESC"
+    ", m.root FROM message m ORDER BY m.rowid DESC"
 );
 
 /// The Messages matching `?1`, newest first, with the text they are ranked by.
 const MATCHING: &str = concat!(
     "SELECT m.account, m.mailbox, m.body_key, m.thread, m.rowid, ",
     ranked_text!(),
-    " FROM message_text JOIN message m ON m.rowid = message_text.rowid
+    ", m.root FROM message_text JOIN message m ON m.rowid = message_text.rowid
      WHERE message_text MATCH ?1 ORDER BY message_text.rowid DESC"
 );
 
@@ -157,9 +161,7 @@ pub fn candidates(
             Entry::Vacant(new) => {
                 new.insert((rank, Some(found.found.len())));
                 found.found.push(Candidate {
-                    key: row
-                        .get::<_, Option<ThreadId>>(3)?
-                        .map_or(Key::Lone(account, body), |id| Key::Gmail(account, id)),
+                    key: Key::new(account, row.get(3)?, row.get(6)?, body),
                     row: rowid,
                     text: text(row, 5)?.to_owned(),
                 });
@@ -210,9 +212,14 @@ impl Cache {
         let folders = &scope.accounts[at].1;
         // Not `prepare_cached`: it allocates its key on every call.
         let mut statement = connection.prepare(HERE)?;
-        let mut rows = statement.query(params![scope.lone, self.email(), scope.threads])?;
+        let mut rows = statement.query(params![
+            scope.lone,
+            self.email(),
+            scope.threads,
+            scope.roots
+        ])?;
         while let Some(row) = rows.next()? {
-            let Some(rank) = scope::rank(folders, text(row, 14)?) else {
+            let Some(rank) = scope::rank(folders, text(row, 15)?) else {
                 continue;
             };
 
@@ -256,11 +263,11 @@ impl Cache {
 }
 
 /// Writes into `scope`'s lists `account`'s Threads of `wanted` as JSON
-/// arrays: the rows of those of one Message, and the Gmail Threads; false
-/// when it has none.
+/// arrays: the rows of those of one Message, the Gmail Threads and those
+/// by `References`; false when it has none.
 fn lists(account: AccountId, wanted: &[(Key, i64)], scope: &mut Scope) -> bool {
-    let (lone, threads) = (&mut scope.lone, &mut scope.threads);
-    for list in [&mut *lone, &mut *threads] {
+    let (lone, threads, roots) = (&mut scope.lone, &mut scope.threads, &mut scope.roots);
+    for list in [&mut *lone, &mut *threads, &mut *roots] {
         list.clear();
         list.push('[');
     }
@@ -271,6 +278,9 @@ fn lists(account: AccountId, wanted: &[(Key, i64)], scope: &mut Scope) -> bool {
             Key::Gmail(of, id) if of == account => {
                 write!(threads, "{},", id.get().cast_signed()).ok();
             }
+            Key::Root(of, root) if of == account => {
+                write!(roots, "{},", root.get().cast_signed()).ok();
+            }
             Key::Lone(of, _) if of == account => {
                 write!(lone, "{row},").ok();
             }
@@ -278,8 +288,8 @@ fn lists(account: AccountId, wanted: &[(Key, i64)], scope: &mut Scope) -> bool {
         }
     }
 
-    let any = lone.len() > 1 || threads.len() > 1;
-    for list in [lone, threads] {
+    let any = lone.len() > 1 || threads.len() > 1 || roots.len() > 1;
+    for list in [lone, threads, roots] {
         if list.ends_with(',') {
             list.pop();
         }

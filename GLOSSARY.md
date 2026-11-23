@@ -33,7 +33,7 @@ A run of Message List rows whose newest Message arrived in the same span of loca
 _Avoid_: section, bucket, separator
 
 **Thread**:
-The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, each Message is a Thread of its own. A Thread never spans Accounts. In the Message List, those in the shown Folder and the Cache, joined in its count by those found in other Folders once it has been read. Unread while any of its Messages in the shown Folder is.
+The Messages of one conversation, as Gmail groups them by `X-GM-THRID`; on another server, by their root: the first `Message-ID` of `References`, else of `In-Reply-To`, else the Message's own. A Thread never spans Accounts. In the Message List, those in the shown Folder and the Cache, joined in its count by those found in other Folders once it has been read. Unread while any of its Messages in the shown Folder is.
 _Avoid_: conversation, chain
 
 **Unread**:

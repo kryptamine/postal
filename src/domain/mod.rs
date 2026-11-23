@@ -16,6 +16,7 @@ mod modified_utf7;
 pub mod new_message;
 pub mod per_account;
 pub mod pool;
+pub mod root_id;
 pub mod shown;
 pub mod sync_state;
 pub mod text_part;

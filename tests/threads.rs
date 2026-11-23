@@ -1,5 +1,6 @@
 //! The Message List shows one row per Thread, grouped by Gmail's
-//! `X-GM-THRID`: its senders, count, oldest subject and newest Snippet.
+//! `X-GM-THRID`, else by `References`: its senders, count, oldest subject
+//! and newest Snippet.
 
 #![allow(
     clippy::unwrap_used,
@@ -323,6 +324,64 @@ fn without_gmail_each_message_is_a_row_of_its_own() {
     }
 
     assert!(above(&screen, "Bob", "me"), "{screen}");
+    let commands = server.commands();
+    assert!(
+        !commands.iter().any(|c| c.contains("X-GM-THRID")),
+        "{commands:#?}"
+    );
+}
+
+/// Alice asks; Bob answers her and Dave answers Bob, both carrying
+/// `References`; Erin answers her with `In-Reply-To` alone. Carol is apart.
+fn referencing() -> Vec<FakeMessage> {
+    let asked = "<trip@example.com>";
+    vec![
+        message("Alice", ("Trip plans", "Where to?"), "2024-03-01T09:00:00Z").message_id(asked),
+        message("Carol", ("Newsletter", "This week"), "2024-03-02T09:00:00Z"),
+        message(
+            "Bob",
+            ("Re: Trip plans", "The coast"),
+            "2024-03-03T09:00:00Z",
+        )
+        .message_id("<bob@example.com>")
+        .header("In-Reply-To", asked)
+        .header("References", asked),
+        message(
+            "Dave",
+            ("Re: Trip plans", "Count me in"),
+            "2024-03-04T09:00:00Z",
+        )
+        .header("In-Reply-To", "<bob@example.com>")
+        .header("References", "<trip@example.com>\r\n <bob@example.com>"),
+        message("Erin", ("Re: Trip plans", "Me too"), "2024-03-05T09:00:00Z")
+            .header("In-Reply-To", asked),
+    ]
+}
+
+#[test]
+fn without_gmail_replies_group_by_their_references() {
+    let server = FakeImap::start(referencing());
+    server.without_gmail();
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Me too");
+    let screen = t
+        .snapshot_after(|s| card(s, "Alice … Erin (4)").is_some())
+        .unwrap();
+    let [carol, ..] = card(&screen, "Carol").expect("Carol's card");
+    assert!(!carol.contains('('), "{screen}");
+    assert!(above(&screen, "Alice … Erin", "Carol"), "{screen}");
+
+    // Reading stacks the whole Thread from the Cache, with no Gmail search.
+    t.send(Key::Enter).unwrap();
+    let screen = t
+        .snapshot_after(|s| s.contains("Where to?") && s.contains("Me too"))
+        .unwrap();
+    assert!(
+        screen.contains("Trip plans · Alice, Bob, Dave, Erin"),
+        "{screen}"
+    );
+    assert!(screen.contains(" 4/4 ┐"), "{screen}");
+    quit(t);
     let commands = server.commands();
     assert!(
         !commands.iter().any(|c| c.contains("X-GM-THRID")),

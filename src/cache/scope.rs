@@ -14,6 +14,7 @@ pub struct Scope {
     pub(super) accounts: Vec<(AccountId, Vec<FolderName>)>,
     pub(super) lone: String,
     pub(super) threads: String,
+    pub(super) roots: String,
     /// The rank of the Folder each Message the window read comes from.
     pub(super) ranks: Vec<usize>,
 }
@@ -40,6 +41,7 @@ impl Scope {
             accounts: Vec::new(),
             lone: String::new(),
             threads: String::new(),
+            roots: String::new(),
             ranks: Vec::new(),
         }
     }

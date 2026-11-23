@@ -2,8 +2,8 @@ use chrono::{DateTime, FixedOffset};
 
 use crate::{
     domain::attachment::Attachments, domain::body_key::BodyKey, domain::folder_name::FolderName,
-    domain::message_ref::MessageRef, domain::per_account::AccountId, domain::thread_id::ThreadId,
-    domain::uid::Uid,
+    domain::message_ref::MessageRef, domain::per_account::AccountId, domain::root_id::RootId,
+    domain::thread_id::ThreadId, domain::uid::Uid,
 };
 
 /// One Message as the Message List knows it.
@@ -26,9 +26,11 @@ pub struct Message<A = AccountId> {
     /// when it has no text part.
     pub snippet: String,
     pub attachments: Attachments,
-    /// Gmail's `X-GM-THRID`; `None` elsewhere, where the Message is a Thread
-    /// of its own.
+    /// Gmail's `X-GM-THRID`; `None` elsewhere.
     pub thread: Option<ThreadId>,
+    /// Elsewhere, its Thread by `References`. `None` on Gmail, and when it
+    /// names no `Message-ID`: then the Message is a Thread of its own.
+    pub root: Option<RootId>,
     /// Sent from the Account's address: the Message List names its sender `me`.
     pub from_me: bool,
     /// The Folder `uid` is of. `None` for a Message found only with its
@@ -66,6 +68,7 @@ impl Message {
             snippet: String::new(),
             attachments: Attachments::default(),
             thread: None,
+            root: None,
             from_me: false,
             folder: None,
             account,

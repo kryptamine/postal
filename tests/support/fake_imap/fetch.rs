@@ -1,6 +1,9 @@
 //! What a `FETCH` asks for, and the items the fake answers it with.
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::{
+    fmt::Write,
+    num::{NonZeroU32, NonZeroU64},
+};
 
 use imap_next::{
     imap_types::{
@@ -36,7 +39,7 @@ pub(super) fn answer_fetch(
     };
 
     let asked = Asked {
-        from_header: header_fields(&macro_or_item_names),
+        header_fields: header_fields(&macro_or_item_names),
         parts: body_parts(&macro_or_item_names),
         whole: whole_body(&macro_or_item_names),
     };
@@ -95,7 +98,7 @@ pub(super) fn contains(set: &SequenceSet, value: u32, max: u32) -> bool {
 }
 
 /// The `HEADER.FIELDS` section the client asked for, if any; the fake serves
-/// only the `From` field whatever the list names.
+/// `From` whatever the list names, and the added header lines it names.
 pub(super) fn header_fields(
     items: &MacroOrMessageDataItemNames<'static>,
 ) -> Option<Section<'static>> {
@@ -110,6 +113,21 @@ pub(super) fn header_fields(
         } => Some(section.clone()),
         _ => None,
     })
+}
+
+/// `From`, then each added header field `section` names, then the blank line.
+fn served_fields(message: &FakeMessage, section: &Section<'static>) -> String {
+    let mut data = format!("From: {}\r\n", message.sender_header());
+    if let Section::HeaderFields(_, names) = section {
+        for name in names.as_ref() {
+            let name = String::from_utf8_lossy(name.as_ref());
+            if let Some(value) = message.header_value(&name) {
+                write!(data, "{name}: {value}\r\n").unwrap();
+            }
+        }
+    }
+
+    data + "\r\n"
 }
 
 /// A section of the body the client asked for, and the octets it asked for.
@@ -130,7 +148,7 @@ pub(super) enum Asking {
 
 /// The items of a `FETCH` the fake answers only when asked.
 pub(super) struct Asked {
-    from_header: Option<Section<'static>>,
+    header_fields: Option<Section<'static>>,
     parts: Vec<PartAsked>,
     /// `BODY[]`, the whole Message.
     whole: bool,
@@ -281,7 +299,9 @@ pub(super) fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
         to: addresses(&message.to),
         cc: addresses(&message.cc),
         bcc: vec![],
-        in_reply_to: NString(None),
+        in_reply_to: message
+            .header_value("In-Reply-To")
+            .map_or(NString(None), nstring),
         message_id: message.message_id.map_or(NString(None), nstring),
     };
 
@@ -302,11 +322,11 @@ pub(super) fn fetch(seq: u32, stored: &Stored, asked: &Asked) -> Data<'static> {
         items.push(whole_body_item(message));
     }
 
-    if let Some(section) = &asked.from_header {
+    if let Some(section) = &asked.header_fields {
         items.push(MessageDataItem::BodyExt {
             section: Some(section.clone()),
             origin: None,
-            data: nstring(&format!("From: {}\r\n\r\n", message.sender_header())),
+            data: nstring(&served_fields(message, section)),
         });
     }
 

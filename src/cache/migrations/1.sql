@@ -31,6 +31,9 @@ CREATE TABLE message (
     subject TEXT NOT NULL,
     -- Gmail's `X-GM-THRID`; NULL on another server.
     thread INTEGER,
+    -- Elsewhere, the Thread by `References`, as `RootId` hashes it; NULL on
+    -- Gmail: docs/adr/0009-threads-from-gmail-thread-id.md.
+    root INTEGER,
     from_me INTEGER NOT NULL,
     -- NULL until the second fetch phase writes it.
     snippet TEXT,
@@ -44,8 +47,9 @@ CREATE TABLE message (
     PRIMARY KEY (account, mailbox, uid)
 );
 CREATE INDEX message_by_arrival
-    ON message (account, mailbox, received DESC, uid DESC, thread, body_key);
+    ON message (account, mailbox, received DESC, uid DESC, thread, root, body_key);
 CREATE INDEX message_by_thread ON message (account, thread, mailbox);
+CREATE INDEX message_by_root ON message (account, root, mailbox);
 -- The words a Search finds a row by: docs/adr/0023-search-finds-candidates-in-fts5-and-ranks-them-with-nucleo.md.
 -- Keyed by the row's rowid, which the triggers below set to its arrival
 -- second shifted left 24 bits, so `ORDER BY rowid DESC` reads newest first.
@@ -151,6 +155,7 @@ CREATE TABLE moved (
     to_line TEXT NOT NULL,
     subject TEXT NOT NULL,
     thread INTEGER,
+    root INTEGER,
     from_me INTEGER NOT NULL,
     snippet TEXT,
     text_section TEXT,

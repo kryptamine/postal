@@ -34,9 +34,10 @@ use crate::{
     mail::snippet,
 };
 
-/// The raw `From` header rides along, for a `From` the server cannot parse.
+/// The raw `From` header rides along, for a `From` the server cannot parse,
+/// and `References`, which a Thread is grouped by without Gmail's IDs.
 const ITEMS: &str =
-    "(UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
+    "(UID FLAGS INTERNALDATE ENVELOPE BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM REFERENCES)])";
 
 /// `ITEMS` with the Gmail IDs a body is cached under and a Thread is grouped
 /// by, for a server that lists `X-GM-EXT-1`: anywhere else they are `BAD`.

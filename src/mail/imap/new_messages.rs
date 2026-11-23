@@ -2,7 +2,7 @@ use async_imap::{
     Session,
     imap_proto::{Address, AttributeValue, Envelope, MessageSection, Response, SectionPath},
 };
-use chrono::DateTime;
+use chrono::{DateTime, FixedOffset};
 
 use super::{Error, Pushed, attachments, connect::Transport, origin::Origin, tagged, text_part};
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
     domain::message::Message,
     domain::message_flags::MessageFlags,
     domain::new_message::NewMessage,
+    domain::root_id::RootId,
     domain::thread_id::ThreadId,
     domain::uid::Uid,
     mail::header,
@@ -69,15 +70,7 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
         AttributeValue::GmailThrId(id) => Some(ThreadId::new(*id)),
         _ => None,
     });
-    let received = attributes
-        .iter()
-        .find_map(|a| match a {
-            AttributeValue::InternalDate(date) => {
-                DateTime::parse_from_str(date, INTERNAL_DATE).ok()
-            }
-            _ => None,
-        })
-        .unwrap_or_default();
+    let received = internal_date(attributes);
     let flags = MessageFlags::from_names(
         attributes
             .iter()
@@ -89,6 +82,7 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
     );
 
     let envelope = envelope(attributes);
+    let header = header_block(attributes);
     let structure = attributes.iter().find_map(|a| match a {
         AttributeValue::BodyStructure(structure) => Some(structure),
         _ => None,
@@ -101,12 +95,13 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
         answered: flags.answered,
         sender: envelope
             .and_then(sender)
-            .unwrap_or_else(|| raw_from(attributes)),
-        from: from_line(envelope, attributes),
+            .unwrap_or_else(|| raw_from(header)),
+        from: from_line(envelope, header),
         to: envelope.map_or_else(String::new, |e| shown(e.to.iter().chain(&e.cc).flatten())),
         subject: subject(envelope),
         snippet: String::new(),
         attachments: structure.map(attachments::find).unwrap_or_default(),
+        root: thread.is_none().then(|| root(header, envelope)).flatten(),
         thread,
         from_me: envelope.is_some_and(|e| from(e, origin.email)),
         folder: None,
@@ -118,6 +113,35 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
         row,
         text_part: structure.and_then(text_part::find),
     })
+}
+
+/// The first `Message-ID` of `References`, else of `In-Reply-To`, else
+/// the Message's own; `None` when it names none.
+fn root(header: &[u8], envelope: Option<&Envelope<'_>>) -> Option<RootId> {
+    header::field(header, "References")
+        .and_then(first_id)
+        .or_else(|| envelope?.in_reply_to.as_deref().and_then(first_id))
+        .or_else(|| envelope?.message_id.as_deref().and_then(first_id))
+        .map(RootId::of)
+}
+
+/// The first `<id>` of `ids`, without its brackets.
+fn first_id(ids: &[u8]) -> Option<&[u8]> {
+    let open = ids.iter().position(|&b| b == b'<')?;
+    let close = ids[open..].iter().position(|&b| b == b'>')?;
+    Some(&ids[open + 1..open + close]).filter(|id| !id.is_empty())
+}
+
+fn internal_date(attributes: &[AttributeValue<'_>]) -> DateTime<FixedOffset> {
+    attributes
+        .iter()
+        .find_map(|a| match a {
+            AttributeValue::InternalDate(date) => {
+                DateTime::parse_from_str(date, INTERNAL_DATE).ok()
+            }
+            _ => None,
+        })
+        .unwrap_or_default()
 }
 
 fn subject(envelope: Option<&Envelope<'_>>) -> String {
@@ -195,11 +219,11 @@ fn sender(envelope: &Envelope<'_>) -> Option<String> {
 }
 
 /// The first `From` address as `one` shows it, else the header as sent.
-fn from_line(envelope: Option<&Envelope<'_>>, attributes: &[AttributeValue<'_>]) -> String {
+fn from_line(envelope: Option<&Envelope<'_>>, header: &[u8]) -> String {
     envelope
         .and_then(|e| e.from.as_ref()?.first())
         .and_then(one)
-        .unwrap_or_else(|| raw_from(attributes))
+        .unwrap_or_else(|| raw_from(header))
 }
 
 /// Each of `addresses` as `one` shows it, joined by commas.
@@ -219,9 +243,9 @@ fn one(address: &Address<'_>) -> Option<String> {
     )
 }
 
-/// The `From` header's value as sent, decoded to one line.
-fn raw_from(attributes: &[AttributeValue<'_>]) -> String {
-    let header = attributes
+/// The header fields the list items asked for; empty when none came.
+fn header_block<'a>(attributes: &'a [AttributeValue<'_>]) -> &'a [u8] {
+    attributes
         .iter()
         .find_map(|a| match a {
             AttributeValue::BodySection {
@@ -232,10 +256,12 @@ fn raw_from(attributes: &[AttributeValue<'_>]) -> String {
             | AttributeValue::Rfc822Header(Some(header)) => Some(&**header),
             _ => None,
         })
-        .unwrap_or_default();
-    let value = header
-        .iter()
-        .position(|&b| b == b':')
-        .map_or(&[][..], |colon| &header[colon + 1..]);
-    header::decode(value).trim().to_owned()
+        .unwrap_or_default()
+}
+
+/// The `From` header's value as sent, decoded to one line.
+fn raw_from(header: &[u8]) -> String {
+    header::decode(header::field(header, "From").unwrap_or_default())
+        .trim()
+        .to_owned()
 }

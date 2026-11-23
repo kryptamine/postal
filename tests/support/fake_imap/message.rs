@@ -133,6 +133,32 @@ impl FakeMessage {
         )
     }
 
+    /// The added header field `name`, its case ignored, as written: folds
+    /// kept, no final CRLF.
+    pub(super) fn header_value(&self, name: &str) -> Option<&str> {
+        let mut fields = self.headers.split_inclusive("\r\n").peekable();
+        let mut start = 0;
+        while let Some(line) = fields.next() {
+            let mut end = start + line.len();
+            while fields
+                .peek()
+                .is_some_and(|next| next.starts_with([' ', '\t']))
+            {
+                end += fields.next().unwrap().len();
+            }
+
+            let field = self.headers.get(start..end - 2)?;
+            let (field_name, value) = field.split_once(':')?;
+            if field_name.eq_ignore_ascii_case(name) {
+                return Some(value.trim_start());
+            }
+
+            start = end;
+        }
+
+        None
+    }
+
     /// The `From` header's value as the Message carries it.
     pub(super) fn sender_header(&self) -> String {
         match (self.unparsable_from, self.from_name) {

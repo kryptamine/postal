@@ -8,9 +8,10 @@ A Message Gmail files under several labels is cached once per Folder under one
 `X-GM-MSGID`, its body key (ADR 0005), so the matches are deduplicated by body
 key: the copy in the shown Folder wins, else the first in Folder Picker order;
 in All Inboxes, the copy in each Account's Inbox.
-Threads group across Folders by `X-GM-THRID`, as in Reading. On a server
+Threads group across Folders by `X-GM-THRID`, else by the root of
+`References` (ADR 0009), as in Reading. On a server
 without Gmail's extensions copies in two Folders have different keys and both
-match.
+match, and a Thread grouped by its root stacks both.
 
 With several Accounts it matches the Folders of every Account. Body keys and
 thread IDs are unique only within an Account, so the deduplication and the

@@ -2,7 +2,7 @@ use std::{cmp::Reverse, collections::HashMap};
 
 use crate::{
     domain::body_key::BodyKey, domain::message::Message, domain::per_account::AccountId,
-    domain::pool::Pool, domain::thread_id::ThreadId,
+    domain::pool::Pool, domain::root_id::RootId, domain::thread_id::ThreadId,
 };
 
 /// What tells one Thread from another across reloads of the Message List.
@@ -11,16 +11,33 @@ use crate::{
 /// IDs and body keys may repeat.
 pub enum Key {
     Gmail(AccountId, ThreadId),
-    /// A Message with no thread ID, a Thread of its own, by body key: UIDs
+    Root(AccountId, RootId),
+    /// A Message with neither, a Thread of its own, by body key: UIDs
     /// repeat across Folders.
     Lone(AccountId, BodyKey),
 }
 
 impl Key {
     pub const fn of(message: &Message) -> Self {
-        match message.thread {
-            Some(id) => Self::Gmail(message.account, id),
-            None => Self::Lone(message.account, message.body_key),
+        Self::new(
+            message.account,
+            message.thread,
+            message.root,
+            message.body_key,
+        )
+    }
+
+    /// Gmail's Thread first, then the root of `References`, else the body.
+    pub const fn new(
+        account: AccountId,
+        thread: Option<ThreadId>,
+        root: Option<RootId>,
+        body: BodyKey,
+    ) -> Self {
+        match (thread, root) {
+            (Some(id), _) => Self::Gmail(account, id),
+            (None, Some(root)) => Self::Root(account, root),
+            (None, None) => Self::Lone(account, body),
         }
     }
 }
