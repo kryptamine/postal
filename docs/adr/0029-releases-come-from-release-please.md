@@ -25,8 +25,8 @@ Linux builds on Ubuntu 22.04, so a binary needs its glibc (2.35) and
 libstdc++, which litehtml links; an older or a musl system builds from
 source. The keychain backend on Linux is zbus, pure Rust, with no libdbus.
 
-**Archive.** `make dist` packs `postal-<target>.tar.gz`: `postal`, the
-plugin's `nvim/lua` and the licenses, next to a `.sha256` file the install
-script checks. The Makefile owns the layout; the workflow only uploads it. The
-script puts the binary in `~/.local/bin` and the plugin where `make install`
-does, so the plugin's setup is the same whichever way Postal came.
+**Archive.** `make dist` packs `postal-<target>.tar.gz`: `postal` and the
+licenses, next to a `.sha256` file the install script checks. The Makefile
+owns the layout; the workflow only uploads it. The script puts the binary in
+`~/.local/bin`. The Neovim plugin is not in the archive: a plugin manager
+installs it from the repository, on the same release tag.

@@ -6,7 +6,6 @@
 LLVM := /opt/homebrew/opt/llvm/bin
 CLANG_FORMAT ?= $(or $(shell command -v clang-format),$(LLVM)/clang-format)
 CLANG_TIDY ?= $(or $(shell command -v clang-tidy),$(LLVM)/clang-tidy)
-PLUGIN := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/postal/nvim
 TARGET ?= $(shell rustc -vV | sed -n 's/^host: //p')
 DIST := postal-$(TARGET)
 
@@ -33,21 +32,15 @@ media: demo-build ## record the landing page's videos from demo/tapes with VHS
 stills: demo-build ## shoot the landing page's screenshots in your Ghostty (macOS)
 	demo/stills.sh
 
-# The plugin is copied whole, then swapped in, so no Neovim loads half of one.
-install: ## install a release postal in ~/.cargo/bin and a copy of the plugin
+install: ## install a release postal in ~/.cargo/bin
 	cargo install --path . --locked --force
-	rm -rf "$(PLUGIN).new" && mkdir -p "$(PLUGIN).new"
-	cp -R nvim/lua "$(PLUGIN).new/"
-	rm -rf "$(PLUGIN)" && mv "$(PLUGIN).new" "$(PLUGIN)"
 	@echo "postal: $$(command -v postal)"
-	@echo "plugin: $(PLUGIN)"
 
-# install.sh reads this layout: the binary and nvim/lua side by side.
-dist: ## pack the release archive of postal and the plugin for TARGET
+# install.sh reads the binary from $(DIST)/postal in this archive.
+dist: ## pack the release archive of postal for TARGET
 	cargo build --release --locked --target $(TARGET)
-	rm -rf dist/$(DIST) && mkdir -p dist/$(DIST)/nvim
+	rm -rf dist/$(DIST) && mkdir -p dist/$(DIST)
 	cp target/$(TARGET)/release/postal LICENSE THIRD_PARTY_LICENSES.md README.md dist/$(DIST)/
-	cp -R nvim/lua nvim/README.md dist/$(DIST)/nvim/
 	tar -czf dist/$(DIST).tar.gz -C dist $(DIST)
 	cd dist && shasum -a 256 $(DIST).tar.gz > $(DIST).tar.gz.sha256
 

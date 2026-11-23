@@ -5,7 +5,6 @@ set -eu
 
 repo=kryptamine/postal
 bin_dir=${POSTAL_BIN_DIR:-$HOME/.local/bin}
-plugin=${XDG_DATA_HOME:-$HOME/.local/share}/postal/nvim
 
 fail() {
   echo "postal: $*" >&2
@@ -60,13 +59,7 @@ cp "$tmp/$name/postal" "$bin_dir/postal.new"
 chmod 755 "$bin_dir/postal.new"
 mv "$bin_dir/postal.new" "$bin_dir/postal"
 
-# The plugin is copied whole, then swapped in, so no Neovim loads half of one.
-rm -rf "$plugin.new" && mkdir -p "$plugin.new"
-cp -R "$tmp/$name/nvim/lua" "$plugin.new/"
-rm -rf "$plugin" && mv "$plugin.new" "$plugin"
-
 echo "postal: $bin_dir/postal"
-echo "plugin: $plugin"
 case :$PATH: in
   *:"$bin_dir":*) ;;
   *) echo "postal: add $bin_dir to your PATH" ;;

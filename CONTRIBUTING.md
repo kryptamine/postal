@@ -18,7 +18,7 @@ You need Rust 1.89+ and a C++17 compiler; Neovim for the plugin's checks.
 ```sh
 make          # list the targets
 make check    # lint, cargo deny, tests and the Neovim check
-make install  # a release build and the plugin where a user has them
+make install  # a release build where a user has it
 ```
 
 `make check` needs `cargo-deny`, `clang-format`, `clang-tidy`, `stylua` and

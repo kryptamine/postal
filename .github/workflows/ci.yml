@@ -78,7 +78,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: 2.6.0
-          args: --check nvim
+          args: --check lua nvim
 
   nvim-smoke:
     strategy:
