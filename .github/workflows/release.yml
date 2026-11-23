@@ -66,12 +66,15 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       # An empty CXXSTDLIB stops cc linking libstdc++ dynamically; the link
-      # args put the static one last, so no user needs a matching C++ runtime.
+      # args put the static one last. Its aarch64 build calls the outline
+      # atomics of libgcc.a, which the shared libgcc_s does not export.
       - if: runner.os == 'Linux'
         run: make dist TARGET=${{ matrix.target }}
         env:
           CXXSTDLIB: ""
-          RUSTFLAGS: -C link-arg=-Wl,-Bstatic -C link-arg=-lstdc++ -C link-arg=-Wl,-Bdynamic
+          RUSTFLAGS: >-
+            -C link-arg=-Wl,-Bstatic -C link-arg=-lstdc++ -C link-arg=-lgcc
+            -C link-arg=-Wl,-Bdynamic
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.NAME }}
