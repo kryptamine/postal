@@ -30,9 +30,13 @@ is always `chore(deps)`.
 
 ## Branches (mandatory)
 
-**Commit and push straight to `main`**, with no branches or pull requests, while
-the project is young. Keep each commit to one thing: a refactor, a feature and a
-formatting sweep are three commits.
+**Every change reaches `main` through a pull request that passes CI**, merged
+by rebase or squash so the history stays linear. Until the repository is
+public, GitHub cannot enforce this, so commits still go straight to `main`;
+on publication apply the ruleset:
+`gh api -X POST repos/kryptamine/postal/rulesets --input .github/rulesets/main.json`.
+Keep each commit to one thing: a refactor, a feature and a formatting sweep
+are three commits.
 
 ## Type rule (mandatory)
 
@@ -110,7 +114,7 @@ checks this.
 - Non-trivial work starts from an issue, with scope settled there. Small fixes
   go straight to a commit: a typo, an obvious bug, a dependency bump.
 - The commit that finishes an issue closes it: `Closes #N` in the body, and
-  the push to `main` closes the issue. A commit for part of one says `Refs #N`.
+  its landing on `main` closes the issue. A commit for part of one says `Refs #N`.
 - Tests land with the behaviour they cover.
 - `make` lists the targets: `make check` is lint, `cargo deny`, tests and the
   Neovim check; `make install` puts a release build and the plugin where a user
