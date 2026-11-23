@@ -43,11 +43,12 @@ and the identifier `dev.postalmail.postal`; an unsigned binary asked
 every user allows access once more. `notarytool` takes a zip of the binary;
 a bare binary cannot be stapled, so Gatekeeper fetches the ticket online.
 The certificate, its password and an App Store Connect API key (role
-Developer) are repository secrets. A pull request that touches the release
-path runs the same build and signing, with nothing to upload.
+Developer) are repository secrets.
 
 **Check.** Before anything is uploaded, each archive is unpacked on a runner
 that did not build it and runs `postal --version`: a Linux one in an Ubuntu
 22.04 container, checked to load no libstdc++, a macOS one with Gatekeeper
 assessing the binary. Only when all four pass are they attached to the
-release.
+release. This runs only for a release, as macOS runners are scarce and
+costly: a failure is fixed and the run rerun, and the assets land on the
+same tag.
