@@ -282,7 +282,7 @@ fn a_mark_made_offline_reaches_the_server_on_the_next_run() {
     t.wait_until(|s| s.contains("Body of Newest")).unwrap();
     t.wait_until(|s| card(s, "Carol") == Some(false)).unwrap();
     quit(t);
-    assert!(stores(&server).is_empty());
+    assert_eq!(stores(&server), Vec::<String>::new());
 
     server.recover();
     let mut t = postal(&home);

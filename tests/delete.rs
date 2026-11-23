@@ -285,7 +285,7 @@ fn delete_in_trash_does_nothing() {
         .unwrap();
     assert!(list(&screen).contains("Junked"), "{screen}");
     quit(t);
-    assert!(moves(&server).is_empty());
+    assert_eq!(moves(&server), Vec::<String>::new());
 }
 
 #[test]
@@ -378,7 +378,7 @@ fn an_undo_while_offline_takes_the_delete_back_unsent() {
 
     server.recover();
     quit(ready(&server, &home, "Newest"));
-    assert!(moves(&server).is_empty());
+    assert_eq!(moves(&server), Vec::<String>::new());
     assert_eq!(server.subjects(INBOX).len(), 3);
 }
 
@@ -485,7 +485,7 @@ fn an_undo_while_the_move_is_under_way_keeps_the_row() {
     let screen = t.snapshot_after(|_| true).unwrap();
     quit(t);
     assert!(list(&screen).contains("Newest"), "{screen}");
-    assert!(server.subjects(TRASH).is_empty());
+    assert_eq!(server.subjects(TRASH), Vec::<String>::new());
 }
 
 // A Delete before the server made the Undo takes the Undo back: nothing

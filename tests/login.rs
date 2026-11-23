@@ -304,7 +304,10 @@ fn a_denied_consent_names_the_refusal() {
     follow_redirect(&consent["redirect_uri"], &denied);
 
     assert_failed_writing_nothing(&mut t, &home, &seed, "refused the sign-in: access_denied");
-    assert!(oauth.requests().is_empty());
+    assert_eq!(
+        oauth.requests(),
+        Vec::<std::collections::HashMap<String, String>>::new()
+    );
 }
 
 #[test]
@@ -646,7 +649,7 @@ fn quitting_the_provider_list_writes_nothing() {
 
     t.wait_until(|s| s.contains("login cancelled")).unwrap();
     assert!(!t.wait_exit().unwrap().success());
-    assert!(browser.opened().is_empty());
+    assert_eq!(browser.opened(), Vec::<String>::new());
     assert_eq!(fs::read_to_string(home.config_path()).unwrap(), seed);
 }
 

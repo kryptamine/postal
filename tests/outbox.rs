@@ -152,7 +152,7 @@ fn a_message_sent_while_smtp_is_down_waits_in_the_outbox_until_it_is_back() {
     let mut t = sent(&home, &editor);
     t.wait_until(|s| listed(s) && s.contains("1 outbox"))
         .unwrap();
-    assert!(files(&home.drafts_dir()).is_empty());
+    assert_eq!(files(&home.drafts_dir()), Vec::<PathBuf>::new());
     let id = message_id(&waiting(&home));
 
     // New mail ends the IDLE, and the sync after it sends the Outbox again.
@@ -165,7 +165,7 @@ fn a_message_sent_while_smtp_is_down_waits_in_the_outbox_until_it_is_back() {
     let received = smtp.received();
     assert_eq!(received.len(), 1);
     assert_eq!(message_id(&received[0].data), id, "the Message as queued");
-    assert!(files(&home.outbox_dir()).is_empty());
+    assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn a_message_left_in_the_outbox_is_sent_after_a_restart() {
     let received = smtp.received();
     assert_eq!(received.len(), 1);
     assert_eq!(message_id(&received[0].data), id, "the Message as queued");
-    assert!(files(&home.outbox_dir()).is_empty());
+    assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
 }
 
 #[test]
@@ -203,7 +203,7 @@ fn a_refused_message_goes_back_to_the_drafts_with_the_server_answer() {
     quit(t);
 
     assert!(smtp.received().is_empty());
-    assert!(files(&home.outbox_dir()).is_empty());
+    assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
     let drafts = files(&home.drafts_dir());
     assert_eq!(drafts.len(), 2, "the Draft and its notes: {drafts:?}");
     assert_eq!(fs::read_to_string(&drafts[0]).unwrap(), WRITTEN);

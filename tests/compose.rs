@@ -233,7 +233,7 @@ fn a_sent_draft_reaches_the_server_as_written_with_the_headers_postal_adds() {
         "decoded, each line is as written, the long one too"
     );
     assert!(!head.contains("flowed"), "{head}");
-    assert!(drafts(&home).is_empty());
+    assert_eq!(drafts(&home), Vec::<(PathBuf, String)>::new());
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn refused(text: &str, error: &str) {
         .unwrap();
     quit(t);
 
-    assert!(smtp.logins().is_empty());
+    assert_eq!(smtp.logins(), Vec::<(String, String)>::new());
     assert!(smtp.received().is_empty());
     let drafts = drafts(&home);
     assert_eq!(drafts.len(), 1);
@@ -337,7 +337,7 @@ fn q_discards_the_draft_and_u_brings_it_back() {
     t.send(Key::Char('q')).unwrap();
     t.wait_until(|s| s.contains("Discarded · u undo") && listed(s))
         .unwrap();
-    assert!(drafts(&home).is_empty());
+    assert_eq!(drafts(&home), Vec::<(PathBuf, String)>::new());
 
     t.send(Key::Char('u')).unwrap();
     t.wait_until(|s| previewed(s) && s.contains("Café plans"))

@@ -16,7 +16,7 @@ impl<'a> Accounts<'a> {
     /// The address a Draft's notes keep: none with one Account, which
     /// every Draft goes out from.
     pub fn noted(self, account: AccountId) -> Option<&'a str> {
-        Some(self.email(account)).filter(|_| self.0.len() > 1)
+        (self.0.len() > 1).then(|| self.email(account))
     }
 
     /// The Account a Draft's notes name; the first for none or one no
