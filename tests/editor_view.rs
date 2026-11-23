@@ -111,3 +111,14 @@ fn the_quote_is_kept() {
     let (text, _) = opened(FakeBody::plain(body), &[Key::Char('E')]);
     assert!(text.contains("> Shall we meet?"), "{text}");
 }
+
+// Mail travels with CRLF line ends; the editor would show each `\r` as `^M`.
+#[test]
+fn line_ends_are_the_editors() {
+    let (text, _) = opened(
+        FakeBody::plain("Dear Ada,\r\n\r\nSee you.\r\n"),
+        &[Key::Char('E')],
+    );
+    assert!(!text.contains('\r'), "{text:?}");
+    assert!(text.ends_with("\n\nDear Ada,\n\nSee you.\n"), "{text:?}");
+}

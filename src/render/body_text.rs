@@ -5,11 +5,11 @@ use crate::render::html_preview::{self, Links};
 /// Columns an HTML body is laid out in: the line RFC 5322 recommends.
 pub const WIDTH: usize = 78;
 
-/// The `text/plain` part of `message`, else its HTML one as text laid out
-/// in `width` columns, its links as `links` says.
+/// The `text/plain` part of `message` with `\n` line ends, else its HTML one
+/// as text laid out in `width` columns, its links as `links` says.
 pub fn plain(message: &Message<'_>, width: usize, links: Links) -> String {
     if let Some(PartType::Text(text)) = message.text_part(0).map(|p| &p.body) {
-        return text.to_string();
+        return text.replace("\r\n", "\n");
     }
 
     let Some(PartType::Html(html)) = message.html_part(0).map(|p| &p.body) else {
