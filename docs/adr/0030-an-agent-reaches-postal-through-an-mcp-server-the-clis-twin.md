@@ -33,10 +33,10 @@ triaging an Inbox, but never to teach the commands: their schemas do that.
 
 ## Reads first
 
-The server starts with reads only (issue #144), as the CLI does: it opens the Cache
-read-only, never syncs and never writes, runs beside a TUI already open,
-and refuses a missing Cache or one of another schema. It knows what the TUI
-or a `postal sync` (issue #69) last synced.
+The server starts with reads only (issue #144), as the CLI does: it opens
+the Cache read-only, never syncs and never writes, runs beside a TUI
+already open, and refuses a missing Cache or one of another schema. It
+knows what the TUI or a `postal sync` (issue #69) last synced.
 
 Writes come later, each in its own decision: a Move, an Archive, a flag, a
 Draft. Two things hold for them already:
