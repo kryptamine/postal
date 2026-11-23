@@ -2437,7 +2437,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "postal"
+name = "postalmail"
 version = "0.1.0"
 dependencies = [
  "async-imap",

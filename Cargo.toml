@@ -1,9 +1,9 @@
 [package]
-name = "postal"
+name = "postalmail"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "A keyboard-driven terminal mail client that reads one IMAP mailbox"
+description = "A keyboard-driven mail client for the terminal: Gmail, iCloud and any IMAP server"
 license = "MIT"
 publish = false
 
@@ -43,6 +43,11 @@ unicode-segmentation = "1.13.3"
 unicode-width = "0.2.3"
 ureq = { version = "3.5.2", default-features = false, features = ["rustls"] }
 webpki-roots = "1.0.12"
+
+# The crate name `postal` is taken on crates.io; the command stays `postal`.
+[[bin]]
+name = "postal"
+path = "src/main.rs"
 
 [features]
 # Test-only: counts allocations per frame, see docs/adr/0001-performance-budget.md.
