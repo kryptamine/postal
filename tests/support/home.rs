@@ -2,7 +2,7 @@
 //! `$XDG_STATE_HOME` for its log, an `$XDG_CACHE_HOME` for its Cache and an
 //! `$XDG_DATA_HOME` for its Drafts and its Outbox.
 
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command, time::Duration};
 
 use tempfile::TempDir;
 use termlens::{Terminal, TerminalBuilder};
@@ -53,6 +53,20 @@ impl Home {
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("TZ", "UTC")
             .timeout(Duration::from_secs(10))
+    }
+
+    /// `postal`, the binary a test names, as a command beside the TUI, on
+    /// this home alone.
+    pub fn command(&self, postal: &str) -> Command {
+        let mut command = Command::new(postal);
+        command
+            .env_clear()
+            .env("XDG_CONFIG_HOME", self.xdg_config_home())
+            .env("XDG_STATE_HOME", self.xdg_state_home())
+            .env("XDG_CACHE_HOME", self.xdg_cache_home())
+            .env("XDG_DATA_HOME", self.xdg_data_home())
+            .env("TZ", "UTC");
+        command
     }
 
     pub fn xdg_config_home(&self) -> PathBuf {

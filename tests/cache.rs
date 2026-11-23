@@ -11,7 +11,6 @@ use std::{
     fs,
     os::unix::fs::PermissionsExt,
     path::Path,
-    process::Command,
     time::{Duration, Instant},
 };
 
@@ -317,13 +316,7 @@ fn a_newer_schema_exits_before_the_tui_and_is_left_alone() {
     drop(newer);
     let before = fs::read(home.cache_path()).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_postal"))
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .output()
-        .unwrap();
+    let output = home.command(env!("CARGO_BIN_EXE_postal")).output().unwrap();
 
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).unwrap();
