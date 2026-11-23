@@ -6,8 +6,12 @@ fetches the one for the machine.
 
 **Versions.** release-please reads the Conventional Commits on `main` and
 keeps a release PR open that bumps `Cargo.toml` and writes `CHANGELOG.md`.
-Merging it tags `vX.Y.Z` and creates the GitHub release; the same run of
-`.github/workflows/release.yml` builds and uploads the binaries. Before 1.0
+Merging it tags `vX.Y.Z` and creates the GitHub release as a draft; the
+same run of `.github/workflows/release.yml` builds and uploads the binaries,
+then publishes it. Until then `latest` still names the previous release, so
+`postal update` and the install script never meet a release with no
+archives; a failed run leaves the draft, and re-running its failed jobs
+finishes it. Before 1.0
 a `feat` bumps the minor version and a breaking change does too. The
 manifest starts at `0.0.0`, below `Cargo.toml`'s `0.1.0`, so the first
 `feat` releases `0.1.0`; `bootstrap-sha` starts the changelog at the commit
