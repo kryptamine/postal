@@ -4,17 +4,19 @@ Postal's landing page, privacy policy and terms: a static
 [Astro](https://astro.build) site with no client-side JavaScript.
 
 ```
-npm install
-npm run dev      # http://localhost:4321
-npm run build    # into dist/
+pnpm install
+pnpm dev         # http://localhost:4321
+pnpm build       # into dist/
+pnpm preview     # serves dist/
 ```
 
-`make landing` at the repository's root lints, type-checks and builds it.
+`make landing` at the repository's root lints, type-checks and builds it;
+`make landing-dev` serves it.
 
 ## Lint
 
-`npm run lint` is Prettier's check, then ESLint; `npm run lint:fix` and
-`npm run format` write the fixes. The rules sit under `eslint/`, a file to
+`pnpm lint` is Prettier's check, then ESLint; `pnpm lint:fix` and
+`pnpm format` write the fixes. The rules sit under `eslint/`, a file to
 a concern, each with its reason beside it: `base.js` for every file,
 `astro.js` for the pages and their accessibility, `scripts.js` for tool
 configs, `format.js` for what Prettier leaves to ESLint. In an `.astro`

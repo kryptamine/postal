@@ -1,0 +1,5 @@
+# A single package; the file holds pnpm's settings for it.
+peerDependencyRules:
+  allowedVersions:
+    # The plugin works on ESLint 10 and has yet to say so.
+    eslint-plugin-jsx-a11y>eslint: '10'

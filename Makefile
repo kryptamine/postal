@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run install fmt lint test nvim sanitize brand landing check
+.PHONY: help build run install fmt lint test nvim sanitize brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -9,7 +9,7 @@ CLANG_TIDY ?= $(or $(shell command -v clang-tidy),$(LLVM)/clang-tidy)
 PLUGIN := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/postal/nvim
 
 help: ## list every target
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-9s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
 
 build: ## build the release binary
 	cargo build --release
@@ -51,6 +51,9 @@ brand: ## write the design tokens and draw the logo files in assets/brand
 	uv run scripts/brand.py
 
 landing: ## lint, type-check and build the landing page
-	cd landing && npm install --no-audit --no-fund && npm run lint && npm run check && npm run build
+	cd landing && pnpm install --frozen-lockfile && pnpm lint && pnpm check && pnpm build
+
+landing-dev: ## serve the landing page at http://localhost:4321, reloading on edits
+	cd landing && pnpm install --frozen-lockfile && pnpm dev
 
 check: lint test nvim ## the gate before a commit

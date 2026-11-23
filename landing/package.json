@@ -11,7 +11,7 @@
     "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "astro": "ASTRO_TELEMETRY_DISABLED=1 astro",
     "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
-    "lint": "npm run lint:format && npm run lint:es",
+    "lint": "pnpm lint:format && pnpm lint:es",
     "lint:es": "eslint . --cache --cache-strategy content",
     "lint:format": "prettier --check . --cache",
     "lint:fix": "eslint . --cache --cache-strategy content --fix",
@@ -44,9 +44,5 @@
     "typescript-eslint": "^8.73.0"
   },
   "private": true,
-  "overrides": {
-    "eslint-plugin-jsx-a11y": {
-      "eslint": "$eslint"
-    }
-  }
+  "packageManager": "pnpm@12.21.0"
 }

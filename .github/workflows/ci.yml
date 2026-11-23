@@ -63,15 +63,19 @@ jobs:
         working-directory: landing
     steps:
       - uses: actions/checkout@v4
+      # The version comes from packageManager in landing/package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: landing/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: landing/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run check
-      - run: npm run build
+          cache: pnpm
+          cache-dependency-path: landing/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm check
+      - run: pnpm build
 
   # The one check branch protection requires. A skipped job counts as passing
   # there, so this runs always and fails unless every job above succeeded.
