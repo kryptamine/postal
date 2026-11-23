@@ -3,6 +3,13 @@ name: Release
 on:
   push:
     branches: [main]
+  # Finishes a release whose run could not: builds, checks and publishes the
+  # archives of an existing tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the release, e.g. v0.3.0
+        required: true
 
 # A run on main must not start the next release while a draft waits for its binaries.
 concurrency:
@@ -14,6 +21,7 @@ env:
 
 jobs:
   release-please:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,13 +38,17 @@ jobs:
 
   build:
     needs: release-please
-    if: needs.release-please.outputs.created == 'true'
+    if: >-
+      !cancelled() && (needs.release-please.outputs.created == 'true' ||
+      github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { target: aarch64-apple-darwin, os: macos-latest }
-          - { target: x86_64-apple-darwin, os: macos-latest }
+          # Both on the Intel pool: arm64 macOS runners ran out for hours, and
+          # either target cross-compiles from x86_64.
+          - { target: aarch64-apple-darwin, os: macos-26-intel }
+          - { target: x86_64-apple-darwin, os: macos-26-intel }
           # The oldest runner sets the glibc a Linux binary needs.
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
@@ -49,6 +61,8 @@ jobs:
       NAME: postal-${{ matrix.target }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           toolchain: stable
@@ -81,6 +95,7 @@ jobs:
   # Each archive runs on a runner that never built it, before it is published.
   verify:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +123,7 @@ jobs:
 
   publish:
     needs: [release-please, verify]
+    if: ${{ !cancelled() && needs.verify.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -132,4 +148,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.release-please.outputs.tag }}
+          TAG: ${{ needs.release-please.outputs.tag || inputs.tag }}
