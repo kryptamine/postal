@@ -10,32 +10,90 @@ type Props = (Still | Video) & {
 };
 
 const props = Astro.props;
+const name = 'still' in props ? (props.still.src.split('/').pop() ?? '') : props.video;
+const id = `zoom-${name.split('.', 1)[0]}`;
 ---
 
 <figure class="media">
-  <div class="stamp">
-    {'still' in props ? (
-      <Image
-        class="frame"
-        src={props.still}
-        alt={props.shows}
-        widths={[800, 1600, 2400]}
-        sizes="(min-width: 60rem) 60vw, 100vw"
-      />
-    ) : (
-      <video
-        class="frame"
-        aria-label={props.shows}
-        autoplay
-        muted
-        loop
-        playsinline
-        preload="metadata"
+  <button class="open" type="button" popovertarget={id} aria-label={`Enlarge: ${props.shows}`}>
+    <span class="stamp">
+      {'still' in props ? (
+        <Image
+          class="frame"
+          src={props.still}
+          alt={props.shows}
+          widths={[800, 1600, 2400]}
+          sizes="(min-width: 60rem) 60vw, 100vw"
+        />
+      ) : (
+        <video
+          class="frame"
+          aria-label={props.shows}
+          width="1600"
+          height="1000"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        >
+          <source src={`/media/${props.video}.webm`} type="video/webm" />
+          <source src={`/media/${props.video}.mp4`} type="video/mp4" />
+        </video>
+      )}
+    </span>
+    <span class="hint" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="18" height="18">
+        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
+      </svg>
+    </span>
+  </button>
+
+  <!-- A native popover: the page ships no JavaScript, and Esc or a tap outside closes it.
+       A video in it plays once shown, from the bytes the thumbnail already fetched. -->
+  <div id={id} class="zoom" popover role="dialog" aria-label={props.shows}>
+    <div class="bar">
+      <p class="caption">{props.shows}</p>
+      <button
+        class="close"
+        type="button"
+        popovertarget={id}
+        popovertargetaction="hide"
+        aria-label="Close"
       >
-        <source src={`/media/${props.video}.webm`} type="video/webm" />
-        <source src={`/media/${props.video}.mp4`} type="video/mp4" />
-      </video>
-    )}
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="view">
+      {'still' in props ? (
+        <Image
+          class="big"
+          src={props.still}
+          alt={props.shows}
+          widths={[1600, 2400, 3200].filter((w) => w <= props.still.width)}
+          sizes="max(100vw, 60rem)"
+          loading="lazy"
+        />
+      ) : (
+        <video
+          class="big"
+          aria-label={props.shows}
+          width="1600"
+          height="1000"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        >
+          <source src={`/media/${props.video}.webm`} type="video/webm" />
+          <source src={`/media/${props.video}.mp4`} type="video/mp4" />
+        </video>
+      )}
+    </div>
+    <p class="swipe muted">Swipe sideways to see the whole screen.</p>
   </div>
 </figure>
 
@@ -44,9 +102,21 @@ const props = Astro.props;
     min-width: 0;
   }
 
+  .open {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: zoom-in;
+  }
+
   /* Solid inside, perforated in a ring one hole deep round the edge. */
   .stamp {
     --p: var(--media-perforation);
+    display: block;
     padding: calc(var(--p) * 2);
     background: var(--media-bg);
     -webkit-mask:
@@ -76,5 +146,179 @@ const props = Astro.props;
     width: 100%;
     height: auto;
     border-radius: var(--media-radius);
+  }
+
+  .hint {
+    position: absolute;
+    right: var(--space-3);
+    bottom: var(--space-3);
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-pill);
+    background: var(--color-bg);
+    color: var(--color-text);
+    opacity: 0.85;
+    transition:
+      opacity var(--motion-fast) var(--motion-ease),
+      scale var(--motion-fast) var(--motion-ease);
+  }
+
+  .hint svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .open:hover .hint,
+  .open:focus-visible .hint {
+    opacity: 1;
+    scale: 1.1;
+  }
+
+  .zoom {
+    flex-direction: column;
+    gap: var(--space-1);
+    width: min(100% - var(--space-4), 100rem);
+    max-width: none;
+    height: fit-content;
+    max-height: calc(100dvh - var(--space-4));
+    margin: auto;
+    padding: var(--space-2);
+    overflow: hidden;
+    border: 1px solid var(--color-rule);
+    border-radius: var(--card-radius);
+    background: var(--color-surface);
+    color: var(--color-text);
+    opacity: 0;
+    scale: 0.97;
+    transition:
+      opacity var(--motion-base) var(--motion-ease),
+      scale var(--motion-base) var(--motion-ease),
+      overlay var(--motion-base) allow-discrete,
+      display var(--motion-base) allow-discrete;
+  }
+
+  .zoom:popover-open {
+    display: flex;
+    opacity: 1;
+    scale: 1;
+  }
+
+  @starting-style {
+    .zoom:popover-open {
+      opacity: 0;
+      scale: 0.97;
+    }
+  }
+
+  .zoom::backdrop {
+    background: rgb(0 0 0 / 0.7);
+  }
+
+  :global(html:has(.zoom:popover-open)) {
+    overflow: hidden;
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .caption {
+    color: var(--color-text-muted);
+    font-size: var(--text-caption);
+  }
+
+  .close {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--color-bg);
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background-color var(--motion-fast) var(--motion-ease);
+  }
+
+  .close:hover {
+    background: var(--color-rule);
+  }
+
+  .close svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .view {
+    display: grid;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .big {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: calc(100dvh - var(--space-4) - var(--space-4) - 52px);
+    margin: auto;
+    border-radius: var(--media-radius);
+  }
+
+  /* 1.6 is the videos' 1600×1000 frame: as wide as fits the height, never letterboxed. */
+  @media (min-width: 48rem) {
+    video.big {
+      width: 100%;
+      max-width: calc((100dvh - var(--space-4) - var(--space-4) - 52px) * 1.6);
+    }
+  }
+
+  .swipe {
+    display: none;
+    font-size: var(--text-caption);
+  }
+
+  /* A phone is too narrow for a terminal screenshot: show it wider and let it scroll. */
+  @media (max-width: 47.99rem) {
+    .zoom {
+      width: 100%;
+      padding: var(--space-2) 0;
+      border-inline: 0;
+      border-radius: 0;
+    }
+
+    .bar,
+    .swipe {
+      padding-inline: var(--space-2);
+    }
+
+    .caption {
+      display: none;
+    }
+
+    .big {
+      width: 60rem;
+      max-width: none;
+      max-height: none;
+      margin: 0 var(--space-2);
+    }
+
+    .swipe {
+      display: block;
+    }
   }
 </style>
