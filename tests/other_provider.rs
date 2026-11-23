@@ -293,7 +293,9 @@ fn a_minimal_server_polls_for_new_mail_and_deletes_to_its_trash() {
 
     t.send(Key::Backspace).unwrap();
     // The selection stays on the row it was on as new mail lands above.
+    // The copy lands before the expunge: waiting on it alone races the quit.
     wait_for(|| server.subjects("Papierkorb") == ["Weekly notes"]);
+    wait_for(|| server.subjects("INBOX") == ["Lunch"]);
     quit(t);
     let commands = server.commands();
     assert!(
