@@ -6,6 +6,7 @@ mod correspondent;
 mod correspondent_list;
 mod folder_list;
 mod ids;
+mod lockup;
 pub mod mcp;
 mod message_list;
 mod message_search;

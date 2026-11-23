@@ -189,10 +189,14 @@ def main():
     write("social-preview.svg", social)
 
     write("postal-mark.txt", "┌┄┄┄┄┄┐\n┆ ›_  ┆\n└┄┄┄┄┄┘\n")
+    # The stamp fills the first 19 columns of each line, which the CLI colours.
     write("postal-lockup.txt",
-          "┌┄┄┄┄┄┐                  █        █\n"
-          "┆ ›_  ┆  █▀▀▄ ▄▀▀▄ ▄█▀▀ ▀█▀▀ ▀▀█▄ █\n"
-          "└┄┄┄┄┄┘  █▀▀  ▀▄▄▀ ▄▄█▀  ▀▄▄ ▀▄▄█ ▀▄▄")
+          "▄█▄█▄█▄█▄█▄█▄█▄█▄█▄\n"
+          "▄████▄ ▀██████████▄                         ██          ██\n"
+          "▄██████▄ ▀████████▄   ██▀▀█▄ ▄█▀▀█▄ ▄█▀▀▀▀ ▀██▀▀  ▀▀▀█▄ ██\n"
+          "▄██████▀ ▄████████▄   ██  ██ ██  ██  ▀▀▀█▄  ██   ▄█▀▀██ ██\n"
+          "▄████▀ ▄███    ███▄   ██▀▀▀  ▀█▄▄█▀ ▄▄▄▄█▀  ▀█▄▄ ▀█▄▄██ ██\n"
+          " █▀█▀█▀█▀█▀█▀█▀█▀█    ██")
 
     small_red = svg(small_view, f'<path fill="{RED}" d="{small}"/>')
     png("favicon-16.png", small_red, 16, 16)
