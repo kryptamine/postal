@@ -63,7 +63,7 @@ pub fn forward(
         "To: \nCc: \nSubject: {}\n{attach}\n\n{signed}---------- Forwarded message ---------\n\
          {header}\n{}\n",
         self::subject(subject),
-        text.replace("\r\n", "\n").trim_end(),
+        text.trim_end(),
     )
 }
 
