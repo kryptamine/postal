@@ -11,8 +11,8 @@ and cost a full resync of every Folder.
 
 The schema is the list of steps in `cache/migrations.rs`, one SQL file each
 under `cache/migrations/`, run in order from an empty file. `user_version`
-counts the steps a Cache has run, on top of 21, the last schema before
-migrations: step 1, the first released schema, reaches 22. Each step runs in
+counts the steps a Cache has run, on top of `PRE_RELEASE` (27), the last
+schema before migrations: step 1 reaches 28. Each step runs in
 one transaction with the version it reaches, so a failed step leaves the
 Cache whole at the version before, and Postal exits with the error rather
 than delete what the step could not carry.
@@ -26,10 +26,10 @@ than delete what the step could not carry.
   state, `correspondence`, `sent_pass`, `envelope_pass`) and let the sync
   refill them.
 - **Rebuild is the fallback**, for a Cache that fails `quick_check` and one
-  at 21 or under, from before migrations.
-- **Until the first production release** a schema change may still edit
-  the steps in place, and raises `PRE_RELEASE` past every version written
-  so far: those Caches are rebuilt, and their fixtures go.
+  at `PRE_RELEASE` or under, from before migrations.
+- **`PRE_RELEASE` is frozen since 0.1.0.** Before it, a schema change edited
+  the steps in place and raised `PRE_RELEASE`, rebuilding every Cache; with
+  Postal in production, that would throw away a user's synced mail.
 - **A downgrade is refused.** An older Postal finds a Cache newer than its
   schema and exits, naming the directory to delete; it never rebuilds it,
   so going back and forth does not churn the Cache. `postal correspondent
