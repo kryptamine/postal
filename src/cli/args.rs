@@ -1,6 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
+use schemars::JsonSchema;
+use serde::Deserialize;
+
+/// The Threads a listing holds when the arguments name no limit.
+pub const LIMIT: usize = 50;
 
 /// A keyboard-driven terminal mail client that reads one or more IMAP
 /// mailboxes. Without a command, the TUI.
@@ -29,6 +34,18 @@ pub enum Command {
         #[command(subcommand)]
         verb: Thread,
     },
+    /// The mailboxes of every account
+    Folder {
+        #[command(subcommand)]
+        verb: Folder,
+    },
+    /// The mail the Cache holds
+    Message {
+        #[command(subcommand)]
+        verb: Message,
+    },
+    /// Serve these commands to an agent as MCP tools on stdin and stdout
+    Mcp,
     /// Replace this postal with the latest release
     Update,
 }
@@ -45,17 +62,93 @@ pub enum Thread {
     Show(ThreadShow),
 }
 
-#[derive(clap::Args)]
+#[derive(Subcommand)]
+pub enum Folder {
+    /// Every account's Folders, with their Unread counts
+    List(FolderList),
+}
+
+#[derive(Subcommand)]
+pub enum Message {
+    /// The newest Threads of a Folder, by default every account's Inbox
+    List(MessageList),
+    /// One Message with its body as plain text
+    Show(MessageShow),
+    /// The newest Threads with a Message whose words start with the query's
+    Search(MessageSearch),
+}
+
+// Each struct of arguments is also its MCP tool's parameters (ADR 0030);
+// `--json` is the CLI's alone, as a tool answers both ways.
+#[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct ThreadShow {
+    /// The Thread's ID, as a listing names it
+    #[arg(conflicts_with = "draft", required_unless_present = "draft")]
+    pub id: Option<String>,
     /// The Thread of the Message this Reply's Draft answers
     #[arg(long, value_name = "PATH")]
-    pub draft: PathBuf,
+    pub draft: Option<PathBuf>,
     /// Print a JSON array, whose fields only grow
     #[arg(long)]
+    #[serde(skip)]
+    #[schemars(skip)]
     pub json: bool,
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Deserialize, JsonSchema)]
+pub struct FolderList {
+    /// Print a JSON array, whose fields only grow
+    #[arg(long)]
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub json: bool,
+}
+
+#[derive(clap::Args, Deserialize, JsonSchema)]
+pub struct MessageList {
+    /// Only this Folder, by its name or its role, such as Sent
+    #[arg(long, value_name = "NAME")]
+    pub folder: Option<String>,
+    /// Only this account
+    #[arg(long, value_name = "EMAIL")]
+    pub account: Option<String>,
+    /// At most this many Threads, 50 when not given
+    #[arg(long, value_name = "N")]
+    pub limit: Option<usize>,
+    /// Print a JSON array, whose fields only grow
+    #[arg(long)]
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub json: bool,
+}
+
+#[derive(clap::Args, Deserialize, JsonSchema)]
+pub struct MessageShow {
+    /// The Message's ID, as a listing names it
+    pub id: String,
+    /// Print a JSON array, whose fields only grow
+    #[arg(long)]
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub json: bool,
+}
+
+#[derive(clap::Args, Deserialize, JsonSchema)]
+pub struct MessageSearch {
+    /// Words each matching the start of a word of the sender, subject or
+    /// Snippet, or of the recipients of mail the account sent
+    pub query: String,
+    /// At most this many Threads, 50 when not given
+    #[arg(long, value_name = "N")]
+    pub limit: Option<usize>,
+    /// Print a JSON array, whose fields only grow
+    #[arg(long)]
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub json: bool,
+}
+
+#[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct CorrespondentList {
     /// Rank first the account this Draft goes out from
     #[arg(long, value_name = "PATH", conflicts_with = "account")]
@@ -65,6 +158,8 @@ pub struct CorrespondentList {
     pub account: Option<String>,
     /// Print a JSON array, whose fields only grow
     #[arg(long)]
+    #[serde(skip)]
+    #[schemars(skip)]
     pub json: bool,
 }
 

@@ -31,6 +31,26 @@ The CLI stays for people and scripts. The MCP server is the way in for an
 agent. A skill may sit above the tools to teach a way of working, such as
 triaging an Inbox, but never to teach the commands: their schemas do that.
 
+A command's arguments are one struct, which clap parses and the tool's
+schema is derived from, `--json` left out. A tool answers both ways: the
+text the command prints, and the `--json` array under `items` in
+`structuredContent`, which MCP wants an object. The server is `rmcp`, the
+protocol's own Rust SDK, so Postal keeps no JSON-RPC of its own.
+
+## How a command names mail
+
+A listing gives each Thread and Message an ID that another command takes:
+`m`, then a tag of the Account and the Message's body key (ADR 0005); `t`,
+then whether Gmail's Thread, the root of `References` or a lone Message
+names it (ADR 0009), the tag and that key. The tag is 20 bits of the
+address's hash, and each part is Crockford's base32, so an ID is 18 or 19
+characters an agent copies as they are.
+
+Nothing is stored: an ID is read back into the key, and the key looked up.
+It lives as long as the key does: on Gmail for good, elsewhere until the
+Folder's UIDVALIDITY changes. A Search from the CLI finds what the TUI's
+does, but lists it newest first: nucleo's ranking lives in the TUI.
+
 ## Reads first
 
 The server starts with reads only (issue #144), as the CLI does: it opens
@@ -58,6 +78,12 @@ buffer, which `postal mcp` cannot reach. An agent in the pane may get both.
 - **An MCP server with no CLI twin.** One surface less to keep, but a
   person and a script lose the commands, and the tests lose the simpler
   boundary.
+- **A hash of the key as the ID.** Ten characters instead of 18, but a
+  lookup hashes every row of the Cache, and two keys may share one.
+- **An ID stored in the Cache.** Shortest, but only a sync could assign
+  it, a migration would add it, and it would last no longer than the key.
+- **`Message-ID` as the ID.** It outlives every Cache, but is long, can be
+  missing or repeated, and the Cache does not keep it.
 - **A remote MCP server over HTTP**, for claude.ai and phones. The mail and
   its credentials would live on a host, and mail would leave the machine
   without the user asking, against ADR 0018. Not now.

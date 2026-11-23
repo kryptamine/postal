@@ -67,6 +67,19 @@ latest tag into a `pack/*/start/` directory on your `packpath`, then call
 
 [`nvim/`](nvim/) lists the options, commands and keys.
 
+## Agents
+
+`postal mcp` serves Postal's mail to any [MCP](https://modelcontextprotocol.io)
+client on its stdio, read-only: Folders, Threads, Messages and Search, from
+what the TUI last synced. In Claude Code:
+
+```sh
+claude mcp add postal -- postal mcp
+```
+
+The same reads are commands for a shell, `postal message list` and its
+siblings; `postal help` lists them, and `--json` prints what the tools answer.
+
 ## Development
 
 ```sh
