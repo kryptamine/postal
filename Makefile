@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run demo media stills install fmt lint test nvim sanitize brand landing landing-dev check
+.PHONY: help build run demo-build demo media stills install fmt lint test nvim sanitize brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -17,17 +17,18 @@ build: ## build the release binary
 run: ## run the release build
 	cargo run --release
 
-demo: ## run postal over the demo mailbox, touching nothing of your own
+demo-build:
 	cargo build --release --bins --example demo
+
+demo: demo-build ## run postal over the demo mailbox, touching nothing of your own
 	target/release/examples/demo target/release/postal
 
-media: ## record the landing page's videos from demo/tapes with VHS
-	cargo build --release --bins --example demo
+media: demo-build ## record the landing page's videos from demo/tapes with VHS
 	for tape in demo/tapes/*.tape; do \
 		[ "$$tape" = demo/tapes/setup.tape ] || vhs "$$tape" || exit 1; \
 	done
 
-stills: ## shoot the landing page's screenshots in your Ghostty (macOS)
+stills: demo-build ## shoot the landing page's screenshots in your Ghostty (macOS)
 	demo/stills.sh
 
 # The plugin is copied whole, then swapped in, so no Neovim loads half of one.

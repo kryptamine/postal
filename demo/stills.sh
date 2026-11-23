@@ -1,7 +1,7 @@
 #!/bin/sh
-# The landing page's screenshots: each shot natively in a Ghostty window of
-# your own config at the display's scale, and the newsletter as Chrome draws
-# it. macOS only; needs tmux, and Screen Recording for the terminal running it.
+# The landing page's screenshots, shot natively in your own Ghostty at the
+# display's scale, and the newsletter as Chrome draws it. `make stills` runs
+# it after building the demo; macOS only, with tmux and Screen Recording.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -10,7 +10,6 @@ chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 socket=postal-stills
 title=postal-stills
 mkdir -p "$out"
-cargo build --release --bins --example demo
 
 work=$(mktemp -d)
 trap 'tmux -L $socket kill-server 2>/dev/null || true; rm -rf "$work"' EXIT

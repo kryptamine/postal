@@ -50,6 +50,7 @@ fn main() {
         .envs(home.env())
         .status()
         .expect("postal starts");
+    // `exit` runs no destructor: the home's temporary directory goes first.
     drop(home);
     std::process::exit(status.code().unwrap_or(1));
 }
