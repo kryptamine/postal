@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Write};
+use std::{borrow::Cow, error::Error, fmt::Write};
 
 use serde::Serialize;
 
@@ -11,6 +11,7 @@ use crate::{
     cli::args::MessageShow,
     cli::ids,
     cli::plain_body::{self, MISSING},
+    domain::modified_utf7,
     render::header_date,
 };
 
@@ -21,7 +22,7 @@ struct Row<'a> {
     thread: String,
     account: &'a str,
     /// `null` for one only its Thread in All Mail held.
-    folder: Option<&'a str>,
+    folder: Option<Cow<'a, str>>,
     from: &'a str,
     /// `To`, then `Cc`, joined by commas.
     recipients: &'a str,
@@ -54,7 +55,7 @@ pub fn answer(show: &MessageShow) -> Result<Answer, Box<dyn Error>> {
         message: &show.id,
         thread: ids::thread(account, ThreadOf::of(kept.thread, kept.root, key)),
         account,
-        folder: kept.folder.as_deref(),
+        folder: kept.folder.as_deref().map(modified_utf7::decode),
         from: &kept.from,
         recipients: &kept.to,
         subject: &kept.subject,

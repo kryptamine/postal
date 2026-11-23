@@ -6,6 +6,7 @@ use crate::{
     cache::{Listed, ThreadOf},
     cli::ids,
     domain::body_key::BodyKey,
+    domain::modified_utf7,
     render::header_date,
 };
 
@@ -65,7 +66,7 @@ impl ThreadRows {
                 self.rows.push(Row {
                     thread: ids::thread(&listed.account, key),
                     message: ids::message(&listed.account, listed.body_key),
-                    folder: listed.folder.clone(),
+                    folder: modified_utf7::decode(&listed.folder).into_owned(),
                     snippet: listed.snippet.clone(),
                     date: listed.received.to_rfc3339(),
                     shown_date: header_date::date(&listed.received).as_str().to_owned(),
