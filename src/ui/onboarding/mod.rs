@@ -134,7 +134,7 @@ enum Typed {
 struct Screen<'t> {
     terminal: &'t mut Terminal<TerminalBackend>,
     theme: &'t Theme,
-    events: Input,
+    events: &'t mut Input,
 }
 
 impl Screen<'_> {
@@ -312,6 +312,7 @@ impl Screen<'_> {
 /// and may be tried again.
 pub async fn run(
     terminal: &mut Terminal<TerminalBackend>,
+    events: &mut Input,
     theme: &Theme,
     dir: &Path,
     start: Start<'_>,
@@ -319,7 +320,7 @@ pub async fn run(
     let mut screen = Screen {
         terminal,
         theme,
-        events: Input::new(),
+        events,
     };
 
     let (choosing, hint, again) = match start {

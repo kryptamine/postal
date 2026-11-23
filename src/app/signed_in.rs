@@ -47,9 +47,11 @@ async fn signed_in(
                 break;
             }
 
-            let (terminal, background) = slot.take()?;
+            let (tty, background) = slot.take()?;
             let theme = onboarding_theme(dir, background)?;
-            match onboarding::run(terminal, &theme, dir, Start::Again(&config)).await? {
+            match onboarding::run(tty.terminal, tty.events, &theme, dir, Start::Again(&config))
+                .await?
+            {
                 Outcome::SignedIn(_) => {}
                 Outcome::Quit(error) => {
                     tracing::info!("running without {}", config.email);
