@@ -35,6 +35,11 @@ by rebase or squash so the history stays linear. Postal is in production and
 nothing is pushed to `main` directly; the ruleset in
 `.github/rulesets/main.json` rejects such a push. Work on a branch, open a pull
 request with `gh pr create`, and merge it with `gh pr merge --rebase`.
+A pull request body follows
+[.github/pull_request_template.md](.github/pull_request_template.md): Summary,
+Evidence, Merge Danger and the checklist, every section filled and no
+attribution line. How to fill each section is in
+[.claude/skills/pr/SKILL.md](.claude/skills/pr/SKILL.md), for any agent.
 Keep each commit to one thing: a refactor, a feature and a formatting sweep
 are three commits.
 
