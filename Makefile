@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run demo install fmt lint test nvim sanitize brand landing landing-dev check
+.PHONY: help build run demo media stills install fmt lint test nvim sanitize brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -18,8 +18,14 @@ run: ## run the release build
 	cargo run --release
 
 demo: ## run postal over the demo mailbox, touching nothing of your own
-	cargo build --release
-	cargo run --release --quiet --example demo -- target/release/postal
+	cargo build --release --bins --example demo
+	target/release/examples/demo target/release/postal
+
+media: ## record the landing page's videos from demo/tapes with VHS
+	cargo build --release --bins --example demo
+	for tape in demo/tapes/*.tape; do \
+		[ "$$tape" = demo/tapes/setup.tape ] || vhs "$$tape" || exit 1; \
+	done
 
 # The plugin is copied whole, then swapped in, so no Neovim loads half of one.
 install: ## install a release postal in ~/.cargo/bin and a copy of the plugin
