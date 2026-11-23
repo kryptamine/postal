@@ -37,9 +37,11 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                     continue;
                 }
                 Exit::AddAccount => {
-                    let (terminal, background) = slot.take()?;
+                    let (tty, background) = slot.take()?;
                     let theme = onboard::onboarding_theme(&dir, background)?;
-                    let outcome = onboarding::run(terminal, &theme, &dir, Start::Choose).await?;
+                    let outcome =
+                        onboarding::run(tty.terminal, tty.events, &theme, &dir, Start::Choose)
+                            .await?;
                     if let Outcome::Quit(Some(_)) = outcome {
                         failure = Some("sign-in failed");
                     }

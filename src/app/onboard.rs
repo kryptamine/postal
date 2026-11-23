@@ -26,9 +26,9 @@ pub async fn onboard(
     dir: &Path,
     start: Start<'_>,
 ) -> Result<String, Box<dyn Error>> {
-    let (terminal, background) = slot.take()?;
+    let (tty, background) = slot.take()?;
     let theme = onboarding_theme(dir, background)?;
-    match onboarding::run(terminal, &theme, dir, start).await? {
+    match onboarding::run(tty.terminal, tty.events, &theme, dir, start).await? {
         Outcome::SignedIn(email) => Ok(email),
         Outcome::Quit(error) => Err(error.unwrap_or_else(|| login::Error::Cancelled.into())),
     }
@@ -41,18 +41,19 @@ pub async fn sign_in_again(
     config: &Config,
     sign_in: &mut Option<SignIn>,
 ) -> Result<Option<&'static str>, Box<dyn Error>> {
-    let (terminal, background) = slot.take()?;
+    let (tty, background) = slot.take()?;
     let theme = onboarding_theme(dir, background)?;
-    let failed = match onboarding::run(terminal, &theme, dir, Start::Again(config)).await? {
-        Outcome::SignedIn(_) => {
-            *sign_in = read_sign_in(config, dir)?;
-            sign_in.is_none()
-        }
-        Outcome::Quit(error) => {
-            *sign_in = None;
-            error.is_some()
-        }
-    };
+    let failed =
+        match onboarding::run(tty.terminal, tty.events, &theme, dir, Start::Again(config)).await? {
+            Outcome::SignedIn(_) => {
+                *sign_in = read_sign_in(config, dir)?;
+                sign_in.is_none()
+            }
+            Outcome::Quit(error) => {
+                *sign_in = None;
+                error.is_some()
+            }
+        };
 
     Ok(failed.then_some("sign-in failed"))
 }

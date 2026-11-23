@@ -13,15 +13,12 @@ use crate::{
 /// The terminal the TUI draws on, and the input read from it.
 pub struct Tty<'a> {
     pub terminal: &'a mut Terminal<TerminalBackend>,
-    pub events: Input,
+    pub events: &'a mut Input,
 }
 
 impl<'a> Tty<'a> {
-    pub fn new(terminal: &'a mut Terminal<TerminalBackend>) -> Self {
-        Self {
-            terminal,
-            events: Input::new(),
-        }
+    pub const fn new(terminal: &'a mut Terminal<TerminalBackend>, events: &'a mut Input) -> Self {
+        Self { terminal, events }
     }
 
     /// Where the main screen's parts go in `mode` at the terminal's size.

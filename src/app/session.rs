@@ -74,7 +74,7 @@ pub async fn session(
     let replies = ReplyFetch::new(requests.clone(), configs.map(|_| false));
     let forwards = ForwardFetch::new(requests.clone(), configs.map(|_| false));
     let attachments = WantedAttachments::new(requests.clone(), configs.map(|_| false));
-    let (terminal, background) = slot.take()?;
+    let (tty, background) = slot.take()?;
     let icons = configs
         .values()
         .next()
@@ -100,7 +100,7 @@ pub async fn session(
             .map_or_else(NotifyChoice::default, |config| config.notify),
     };
 
-    Ok(run::run(terminal, &mut theme, &caches, &mut previews, background).await?)
+    Ok(run::run(tty, &mut theme, &caches, &mut previews, background).await?)
 }
 
 /// The Status an Account starts in.

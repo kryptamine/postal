@@ -2,7 +2,7 @@ use std::{io, path::Path};
 
 use crossterm::event::Event;
 use futures::{FutureExt, Stream, StreamExt, future::FusedFuture};
-use ratatui::{Terminal, layout::Rect};
+use ratatui::layout::Rect;
 use tokio::time::Instant;
 
 use crate::{
@@ -40,7 +40,6 @@ use crate::{
     ui::react::timed::{expire, next_change},
     ui::state::screen::Screen,
     ui::state::ui::Ui,
-    ui::terminal::terminal_backend::TerminalBackend,
     ui::terminal::tty::Tty,
     ui::world::World,
 };
@@ -97,7 +96,7 @@ pub struct Model<'a> {
 /// redrawn after each. The first frame reads only the rows it shows from the
 /// Cache, before any network; the rest follows right after it.
 pub async fn run(
-    terminal: &mut Terminal<TerminalBackend>,
+    tty: Tty<'_>,
     theme: &mut Theme,
     caches: &PerAccount<Cache>,
     previews: &mut Previews,
@@ -107,7 +106,6 @@ pub async fn run(
         impl Stream<Item = (AccountId, Update)> + Unpin,
     >,
 ) -> Result<Exit, Error> {
-    let tty = Tty::new(terminal);
     let (mut updates, asks) = (background.updates, background.asks);
     let world = World {
         caches,
