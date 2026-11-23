@@ -32,14 +32,19 @@ use std::{path::PathBuf, process::Command};
 use support::{fake_imap::FakeImap, fake_smtp::FakeSmtp};
 
 fn main() {
-    let mut args = std::env::args_os().skip(1);
+    let mut args = std::env::args_os().skip(1).peekable();
     let postal = PathBuf::from(args.next().expect("the path of the postal binary"));
+    let onboarding = args.next_if(|arg| arg == "--onboarding").is_some();
     let work = FakeImap::start(Vec::new());
     mailbox::work(&work);
     let personal = FakeImap::start(Vec::new());
     mailbox::personal(&personal);
     let smtp = (FakeSmtp::start(), FakeSmtp::start());
     let home = home::Home::new(&postal, (&work, &personal), (&smtp.0, &smtp.1));
+    if onboarding {
+        home.forget_accounts();
+    }
+
     let status = Command::new(&postal)
         .args(args)
         .envs(home.env())

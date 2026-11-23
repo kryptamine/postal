@@ -29,3 +29,14 @@ stills, and the demo started off camera, with `open` stubbed so a link
 opened on camera starts nothing. A tape shows one action in 5 to 11
 seconds; each starts from the same mailbox, so a new take replaces the
 old one whole.
+
+## Screenshots
+
+`make stills` shoots each one natively, in a Ghostty window of your own
+config at your display's scale, driven through tmux, into
+`landing/src/assets/media/`: the hero, the Thread, the newsletter in the
+Rendered View, and the Onboarding (`demo --onboarding` starts with no
+Account). Headless Chrome draws the same newsletter for the page's
+comparison. It needs macOS, tmux, Ghostty, Chrome, and Screen Recording
+for the terminal it runs in. Each shot is cropped to the aspect ratio of
+its place on the page.

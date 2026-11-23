@@ -71,6 +71,11 @@ impl Home {
         .collect()
     }
 
+    /// Leaves no Account signed in, so Postal opens on the Onboarding.
+    pub fn forget_accounts(&self) {
+        fs::remove_file(self.dirs.config_path()).unwrap();
+    }
+
     fn home_dir(&self) -> PathBuf {
         self.dirs.xdg_config_home().join("home")
     }

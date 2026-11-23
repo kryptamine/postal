@@ -27,6 +27,9 @@ media: ## record the landing page's videos from demo/tapes with VHS
 		[ "$$tape" = demo/tapes/setup.tape ] || vhs "$$tape" || exit 1; \
 	done
 
+stills: ## shoot the landing page's screenshots in your Ghostty (macOS)
+	demo/stills.sh
+
 # The plugin is copied whole, then swapped in, so no Neovim loads half of one.
 install: ## install a release postal in ~/.cargo/bin and a copy of the plugin
 	cargo install --path . --locked --force
