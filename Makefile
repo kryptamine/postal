@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run install fmt lint test nvim sanitize check
+.PHONY: help build run install fmt lint test nvim sanitize brand check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -45,5 +45,8 @@ nvim: ## format, lint and smoke-test the Neovim plugin
 
 sanitize: ## lay out every cached HTML mail under ASan and UBSan
 	scripts/sanitize.sh
+
+brand: ## draw the logo files in assets/brand
+	uv run scripts/brand.py
 
 check: lint test nvim ## the gate before a commit
