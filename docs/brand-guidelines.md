@@ -1,4 +1,4 @@
-# Brand Guidelines v0.2
+# Brand Guidelines v0.3
 
 > Last updated: 2026-11-23
 > Status: Draft
@@ -314,8 +314,30 @@ media frames, 9999px only for key caps and pills.
   the terminal's palette, so it fits any theme the user runs. The brand
   lives around the app, not inside it; the logo's terminal variant is the
   one bridge.
-- These guidelines are the source; design tokens (CSS variables, JSON) are
-  generated from them and kept beside the logo files in `assets/brand/`.
+- These guidelines explain the choices; the values live in
+  `assets/brand/tokens.json`, and everything else is drawn from it.
+
+---
+
+## 11. Tokens
+
+`assets/brand/tokens.json` holds every value, in the W3C design-token
+format. `make brand` checks its contrast pairs and writes `tokens.css`,
+then draws the logo files in the same colours.
+
+| Layer | Names | Example |
+|-------|-------|---------|
+| Primitive | material names | `--paper`, `--postbox-red`, `--cell` |
+| Semantic | role, per theme | `--color-primary`, `--text-h1`, `--space-3` |
+| Component | part and property | `--button-primary-bg`, `--media-perforation` |
+
+- **Use semantic or component tokens in pages**; a primitive only inside
+  tokens.json. A theme switch rewrites the semantic layer and nothing else.
+- **Themes:** light on `:root`; dark follows `prefers-color-scheme`
+  unless the page sets `data-theme`, which wins either way.
+- **Contrast is enforced:** every pair in `$contrast` is measured in both
+  themes, and `make brand` fails below its minimum.
+- **Spacing is in cells:** `--space-N` is N × 8px (`--space-half` is 4px).
 
 ---
 
@@ -325,3 +347,4 @@ media frames, 9999px only for key caps and pills.
 |---------|------|---------|
 | 0.1 | 2026-11-23 | First draft: essence, voice, palette, type, motifs, logo brief |
 | 0.2 | 2026-11-23 | Logo: the stamp prompt, its files and exports |
+| 0.3 | 2026-11-23 | Tokens: tokens.json, tokens.css and the contrast check |

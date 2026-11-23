@@ -46,7 +46,8 @@ nvim: ## format, lint and smoke-test the Neovim plugin
 sanitize: ## lay out every cached HTML mail under ASan and UBSan
 	scripts/sanitize.sh
 
-brand: ## draw the logo files in assets/brand
+brand: ## write the design tokens and draw the logo files in assets/brand
+	uv run scripts/tokens.py
 	uv run scripts/brand.py
 
 check: lint test nvim ## the gate before a commit

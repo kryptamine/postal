@@ -6,6 +6,7 @@
 
 Every SVG is pure paths, with no fonts or masks, so all renderers agree.
 """
+import json
 import pathlib
 import urllib.parse
 import urllib.request
@@ -23,9 +24,11 @@ OUT = ROOT / "assets" / "brand"
 FONTS = ROOT / "target" / "brand-fonts"
 GOOGLE_FONTS = "https://github.com/google/fonts/raw/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl"
 
-RED, RED_NIGHT = "#B5361F", "#F0674A"
-INK, TEXT_NIGHT = "#1C1B19", "#ECE6DA"
-PAPER, MUTED, BLUE = "#F4EFE6", "#5E5A53", "#2B4C9B"
+COLOUR = {name: token["$value"]
+          for name, token in json.loads((OUT / "tokens.json").read_text())["primitive"]["color"].items()}
+RED, RED_NIGHT = COLOUR["postbox-red"], COLOUR["postbox-red-night"]
+INK, TEXT_NIGHT = COLOUR["ink"], COLOUR["chalk"]
+PAPER, MUTED, BLUE = COLOUR["paper"], COLOUR["ink-soft"], COLOUR["airmail-blue"]
 KAPPA = 0.5522847498
 
 
