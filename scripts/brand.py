@@ -189,6 +189,10 @@ def main():
     write("social-preview.svg", social)
 
     write("postal-mark.txt", "┌┄┄┄┄┄┐\n┆ ›_  ┆\n└┄┄┄┄┄┘\n")
+    write("postal-lockup.txt",
+          "┌┄┄┄┄┄┐                  █        █\n"
+          "┆ ›_  ┆  █▀▀▄ ▄▀▀▄ ▄█▀▀ ▀█▀▀ ▀▀█▄ █\n"
+          "└┄┄┄┄┄┘  █▀▀  ▀▄▄▀ ▄▄█▀  ▀▄▄ ▀▄▄█ ▀▄▄")
 
     small_red = svg(small_view, f'<path fill="{RED}" d="{small}"/>')
     png("favicon-16.png", small_red, 16, 16)
