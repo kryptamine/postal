@@ -37,10 +37,12 @@ install: ## install a release postal in ~/.cargo/bin
 	@echo "postal: $$(command -v postal)"
 
 # install.sh reads the binary from $(DIST)/postal in this archive.
+# SIGN, when set, is run on the binary before it is packed.
 dist: ## pack the release archive of postal for TARGET
 	cargo build --release --locked --target $(TARGET)
 	rm -rf dist/$(DIST) && mkdir -p dist/$(DIST)
 	cp target/$(TARGET)/release/postal LICENSE THIRD_PARTY_LICENSES.md README.md dist/$(DIST)/
+	$(if $(SIGN),$(SIGN) dist/$(DIST)/postal)
 	tar -czf dist/$(DIST).tar.gz -C dist $(DIST)
 	cd dist && shasum -a 256 $(DIST).tar.gz > $(DIST).tar.gz.sha256
 

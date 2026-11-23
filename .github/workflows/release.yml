@@ -3,12 +3,21 @@ name: Release
 on:
   push:
     branches: [main]
+  # A pull request that changes how the archives are made builds and signs
+  # them, without a release to upload to.
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/sign-macos.sh
+      - Makefile
+      - build.rs
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   release-please:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,7 +34,10 @@ jobs:
 
   build:
     needs: release-please
-    if: needs.release-please.outputs.created == 'true'
+    # Secrets reach no pull request from a fork, so one cannot sign.
+    if: >-
+      !cancelled() && (needs.release-please.outputs.created == 'true' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       contents: write
     strategy:
@@ -46,7 +58,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - run: make dist TARGET=${{ matrix.target }}
-      - run: gh release upload "${{ needs.release-please.outputs.tag }}" "dist/$NAME.tar.gz" "dist/$NAME.tar.gz.sha256"
+      - if: runner.os == 'macOS'
+        run: make dist TARGET=${{ matrix.target }} SIGN=scripts/sign-macos.sh
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      - if: runner.os == 'Linux'
+        run: make dist TARGET=${{ matrix.target }}
+      - if: needs.release-please.outputs.created == 'true'
+        run: gh release upload "${{ needs.release-please.outputs.tag }}" "dist/$NAME.tar.gz" "dist/$NAME.tar.gz.sha256"
         env:
           GH_TOKEN: ${{ github.token }}
