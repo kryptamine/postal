@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
 
+# A run on main must not start the next release while a draft waits for its binaries.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -110,7 +115,11 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: gh release upload "$TAG" dist/*
+      # The release stays a draft until here, so `latest` never names one
+      # without archives; re-running the failed jobs finishes it.
+      - run: |
+          gh release upload "$TAG" dist/* --clobber
+          gh release edit "$TAG" --draft=false --latest
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
