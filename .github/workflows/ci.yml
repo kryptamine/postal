@@ -56,11 +56,28 @@ jobs:
           version: ${{ matrix.neovim }}
       - run: make -C nvim smoke
 
+  landing:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: landing/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check
+      - run: npm run build
+
   # The one check branch protection requires. A skipped job counts as passing
   # there, so this runs always and fails unless every job above succeeded.
   ci:
     if: always()
-    needs: [check, nvim-lint, nvim-smoke]
+    needs: [check, nvim-lint, nvim-smoke, landing]
     runs-on: ubuntu-latest
     steps:
       - run: test "${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}" = true
