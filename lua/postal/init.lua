@@ -89,6 +89,7 @@ function M.setup(opts)
 			end
 
 			agent_command(event.buf, "Chat with an ACP agent about this Draft")
+			attach.watch(event.buf, group)
 		end,
 	})
 

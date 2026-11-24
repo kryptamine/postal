@@ -12,6 +12,7 @@ local DEFAULTS = {
 	reject = "<leader>r",
 	accept_all = "<leader>A",
 	reject_all = "<leader>R",
+	attach = "gf",
 }
 
 M.lhs = vim.deepcopy(DEFAULTS)

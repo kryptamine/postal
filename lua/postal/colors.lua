@@ -16,6 +16,8 @@ local LINKS = {
 	PostalReviewAdd = "DiffAdd",
 	PostalReviewDelete = "DiffDelete",
 	PostalReviewConflict = "DiffText",
+	PostalAttachSize = "Comment",
+	PostalAttachMissing = "DiagnosticError",
 }
 
 local function link()

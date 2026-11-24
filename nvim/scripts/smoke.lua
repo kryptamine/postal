@@ -92,6 +92,50 @@ for typed, want_path in pairs({ ["Documents/rep"] = "Documents/report.pdf", ["~/
 	end
 end
 
+-- Each `Attach:` line shows its file's size or what is wrong with it, and
+-- the files over Postal's limit together say so before a send refuses them;
+-- a folded header is read whole, as Postal reads it
+local big = vim.uv.fs_open(vim.env.HOME .. "/big.bin", "w", 420)
+vim.uv.fs_ftruncate(big, 26 * 1024 * 1024)
+vim.uv.fs_close(big)
+local draft_one = vim.api.nvim_get_current_buf()
+vim.api.nvim_buf_set_lines(
+	0,
+	3,
+	3,
+	false,
+	{ "Attach: Documents/report.pdf", "Attach: gone.txt", "attach:", "  ~/big.bin" }
+)
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+local marked = {}
+local attach_ns = vim.api.nvim_get_namespaces()["postal-attach"]
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, attach_ns, 0, -1, { details = true })) do
+	marked[#marked + 1] = mark[2] .. " " .. mark[4].virt_text[1][1]
+end
+
+local want_marks = { "3 0 B", "4 no such file", "5 26.0 MB", "5 26.0 MB together, over 25 MB" }
+if not vim.deep_equal(marked, want_marks) then
+	fail("the Attach: lines are marked " .. vim.inspect(marked))
+end
+
+-- `gf` edits the file as Postal reads the path, and on a missing one stays
+local function gf(row)
+	vim.api.nvim_win_set_cursor(0, { row, 0 })
+	vim.cmd.normal("gf")
+end
+
+gf(4)
+if vim.uv.fs_realpath(vim.api.nvim_buf_get_name(0)) ~= vim.uv.fs_realpath(vim.env.HOME .. "/Documents/report.pdf") then
+	fail("gf opened " .. vim.api.nvim_buf_get_name(0))
+end
+
+vim.cmd.buffer(draft_one)
+gf(5)
+if vim.api.nvim_get_current_buf() ~= draft_one then
+	fail("gf left the Draft for a missing file")
+end
+
+vim.api.nvim_buf_set_lines(0, 3, 7, false, {})
 vim.env.HOME = real_home
 
 local reply = drafts .. "/2.eml"
