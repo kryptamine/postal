@@ -16,6 +16,7 @@ use crate::{
     ui::popup::folder_picker::{FolderPicker, Purpose, Row},
     ui::widgets::centred::centred,
     ui::widgets::truncate,
+    ui::widgets::{popup_area::popup_area, scrollbar::scrollbar},
 };
 
 const TITLE: &str = " Folders ";
@@ -26,10 +27,13 @@ const WIDTH: u16 = 48;
 const CHROME: u16 = 4;
 /// Columns between the border and a row's text, each side.
 const PADDING: u16 = 1;
+/// The column the scrollbar takes, inside the right padding.
+const BAR: u16 = 1;
 
 /// The Folder Picker centred over `area`: the Query, a rule, then a row per
 /// Folder with its Unread count right-aligned, none for `0` or one not yet
-/// counted, under each Account's address when there are several.
+/// counted, under each Account's address when there are several; scrolled
+/// to keep the selected row in view.
 pub struct PickerPopup<'a> {
     pub theme: &'a Theme,
     pub picker: &'a FolderPicker,
@@ -47,17 +51,7 @@ impl Widget for PickerPopup<'_> {
         buf.set_stringn(popup.x + 1, popup.y, title, room, self.theme.title);
 
         let inner = inner(popup);
-        let (x, _) = buf.set_stringn(inner.x, inner.y, PROMPT, inner.width.into(), self.theme.key);
-        let left = usize::from(inner.right().saturating_sub(x));
-        buf.set_stringn(x, inner.y, self.picker.query(), left, Style::new());
-
-        let rule = Rect::new(popup.x, inner.y + 1, popup.width, 1);
-        if rule.width >= 2 && rule.y < popup.bottom().saturating_sub(1) {
-            let middle = line::HORIZONTAL.repeat(usize::from(rule.width.saturating_sub(2)));
-            let joined = format!("{}{middle}{}", line::VERTICAL_RIGHT, line::VERTICAL_LEFT);
-            buf.set_string(rule.x, rule.y, joined, self.theme.border);
-        }
-
+        self.query(buf, popup, inner);
         let list = Rect {
             y: inner.y + 2,
             height: inner.height.saturating_sub(2),
@@ -104,10 +98,28 @@ impl Widget for PickerPopup<'_> {
                 style,
             );
         }
+
+        let track = Rect::new(list.right(), list.y, BAR, list.height);
+        let total = self.picker.rows().count();
+        scrollbar(buf, track, (offset, total), self.theme.muted);
     }
 }
 
 impl PickerPopup<'_> {
+    /// The Query on the first row of `inner`, and the rule under it.
+    fn query(&self, buf: &mut Buffer, popup: Rect, inner: Rect) {
+        let (x, _) = buf.set_stringn(inner.x, inner.y, PROMPT, inner.width.into(), self.theme.key);
+        let left = usize::from(inner.right().saturating_sub(x));
+        buf.set_stringn(x, inner.y, self.picker.query(), left, Style::new());
+
+        let rule = Rect::new(popup.x, inner.y + 1, popup.width, 1);
+        if rule.width >= 2 && rule.y < popup.bottom().saturating_sub(1) {
+            let middle = line::HORIZONTAL.repeat(usize::from(rule.width.saturating_sub(2)));
+            let joined = format!("{}{middle}{}", line::VERTICAL_RIGHT, line::VERTICAL_LEFT);
+            buf.set_string(rule.x, rule.y, joined, self.theme.border);
+        }
+    }
+
     /// One Folder in `row`: its icon and label, then its Unread count.
     fn folder(&self, buf: &mut Buffer, row: Rect, folder: &Shown, style: Style) {
         let mut count = StackStr::<24>::new();
@@ -158,24 +170,17 @@ const fn title(picker: &FolderPicker) -> &'static str {
     }
 }
 
-/// Tall enough for every Folder, as `area` allows.
+/// Tall enough for every Folder, as `popup_area` allows.
 fn popup(area: Rect, picker: &FolderPicker) -> Rect {
     let rows = u16::try_from(picker.rows().count().max(1)).unwrap_or(u16::MAX);
-    let width = WIDTH.min(area.width);
-    let height = rows.saturating_add(CHROME).min(area.height);
-    Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
-    }
+    popup_area(area, WIDTH, rows.saturating_add(CHROME))
 }
 
 const fn inner(popup: Rect) -> Rect {
     Rect {
         x: popup.x.saturating_add(1 + PADDING),
         y: popup.y.saturating_add(1),
-        width: popup.width.saturating_sub(2 + 2 * PADDING),
+        width: popup.width.saturating_sub(2 + 2 * PADDING + BAR),
         height: popup.height.saturating_sub(2),
     }
 }
