@@ -2,6 +2,7 @@ pub mod answering;
 pub mod attachment;
 pub mod body_key;
 pub mod correspondence;
+pub mod counts;
 pub mod flag;
 pub mod flag_change;
 pub mod folder;

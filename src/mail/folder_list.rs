@@ -18,7 +18,7 @@ pub async fn refresh(
     // RFC 3501 advises against `STATUS` on the selected Folder: ADR 0008.
     for folder in listed.iter().filter(|f| f.name != *shown) {
         match server.counts_in(&folder.name).await {
-            Ok((unread, total)) => cache.write_counts(&folder.name, unread, total)?,
+            Ok(counts) => cache.write_counts(&folder.name, counts)?,
             Err(error) if error.refusal().is_some() => {
                 tracing::warn!(
                     "counting the Messages of {} was refused: {error}",

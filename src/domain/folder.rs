@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, sync::Arc};
 
+use crate::domain::counts::Counts;
 use crate::domain::folder_name::FolderName;
 use crate::domain::per_account::AccountId;
 
@@ -63,10 +64,7 @@ pub struct Folder<A = AccountId> {
     pub path: Arc<str>,
     pub role: Option<Role>,
     /// `None` until a resync or a `STATUS` counts it.
-    pub unread: Option<usize>,
-    /// Every Message the server holds; `None` until a resync or a `STATUS`
-    /// counts it.
-    pub total: Option<usize>,
+    pub counts: Option<Counts>,
 }
 
 impl Folder {
@@ -86,8 +84,7 @@ impl<A> Folder<A> {
             path,
             name,
             role: if inbox { Some(Role::Inbox) } else { role },
-            unread: None,
-            total: None,
+            counts: None,
         }
     }
 

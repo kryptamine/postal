@@ -1,6 +1,7 @@
 use rusqlite::{Connection, params};
 
 use super::{Cache, Error, folder_key::FolderKey};
+use crate::domain::counts::Counts;
 use crate::domain::folder::{Folder, Role};
 use crate::domain::folder_name::FolderName;
 
@@ -20,8 +21,7 @@ impl Cache {
                     role.and_then(|r| Role::from_label(&r)),
                 );
                 Ok(Folder {
-                    unread: row.get(2)?,
-                    total: row.get(3)?,
+                    counts: counts(row.get(2)?, row.get(3)?),
                     ..folder
                 })
             })?
@@ -70,18 +70,13 @@ impl Cache {
     }
 
     /// The counts `STATUS` gave for `folder`; one no longer listed is ignored.
-    pub fn write_counts(
-        &self,
-        folder: &FolderName,
-        unread: usize,
-        total: usize,
-    ) -> Result<(), Error> {
+    pub fn write_counts(&self, folder: &FolderName, counts: Counts) -> Result<(), Error> {
         self.write(|connection| {
             connection
                 .prepare_cached(
                     "UPDATE mailbox SET unread = ?2, exists_count = ?3 WHERE account = ?4 AND name = ?1",
                 )?
-                .execute(params![folder, unread, total, self.email()])
+                .execute(params![folder, counts.unread, counts.total, self.email()])
                 .map(drop)
         })
     }
@@ -111,4 +106,13 @@ fn forget(connection: &Connection, key: FolderKey<'_>) -> rusqlite::Result<()> {
         params![folder, account],
     )?;
     Ok(())
+}
+
+/// A Cache from before the total was kept has the Unread count alone until
+/// the next `STATUS`: that row counts as not counted yet.
+pub(super) fn counts(unread: Option<usize>, total: Option<usize>) -> Option<Counts> {
+    Some(Counts {
+        unread: unread?,
+        total: total?,
+    })
 }

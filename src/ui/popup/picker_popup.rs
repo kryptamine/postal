@@ -10,6 +10,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    domain::counts::Counts,
     domain::shown::Shown,
     render::stack_str::StackStr,
     ui::frame::theme::Theme,
@@ -123,20 +124,15 @@ impl PickerPopup<'_> {
     /// its total, or the total alone, muted, when nothing is Unread.
     fn folder(&self, buf: &mut Buffer, row: Rect, folder: &Shown, style: Style) {
         let mut count = StackStr::<48>::new();
-        let unread = folder.unread().filter(|&n| n > 0);
-        match (unread, folder.total()) {
-            (Some(unread), Some(total)) => write!(count, "{unread} / {total}"),
-            (Some(unread), None) => write!(count, "{unread}"),
-            (None, Some(total)) => write!(count, "{total}"),
-            (None, None) => Ok(()),
+        let mut count_style = style;
+        if let Some(Counts { unread, total }) = folder.counts() {
+            if unread > 0 {
+                write!(count, "{unread} / {total}").ok();
+            } else {
+                write!(count, "{total}").ok();
+                count_style = style.patch(self.theme.muted);
+            }
         }
-        .ok();
-
-        let count_style = if unread.is_some() {
-            style
-        } else {
-            style.patch(self.theme.muted)
-        };
 
         let count_width = u16::try_from(count.as_str().width()).unwrap_or(0);
         let label = Rect {
