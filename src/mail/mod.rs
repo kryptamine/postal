@@ -20,6 +20,7 @@ pub mod login;
 mod move_changes;
 pub mod outage;
 pub mod outbox_flush;
+mod queued;
 mod reconnect;
 pub mod reply_fetch;
 mod role_folder;

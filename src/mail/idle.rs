@@ -4,15 +4,14 @@ use crate::{
     cache::{Cache, Changes},
     domain::folder::INBOX,
     domain::folder_name::FolderName,
-    mail::flag_changes,
     mail::folder_list,
     mail::imap::{MailServer, Mode, Pushed},
     mail::inbox_poll::InboxPoll,
-    mail::move_changes,
-    mail::outbox_flush::{self, Sender},
+    mail::outbox_flush::Sender,
+    mail::queued::{send_changes, send_outbox},
     mail::sequence_numbers::SequenceNumbers,
     mail::snippets,
-    mail::steering::{Asked, Steering},
+    mail::steering::Steering,
     mail::sync::{self, Error},
     mail::tell::Tell,
     mail::thread_fetch,
@@ -59,7 +58,9 @@ pub async fn listen<S: MailServer>(
         }
 
         if std::mem::take(&mut asked.send) {
-            pushed.extend(send_outbox(&mut server, cache, sender, &mut asked, tell.send).await?);
+            // A resync of the shown Folder shows a Message accepted in Sent.
+            asked.switched |= send_outbox(&mut server, cache, sender, tell.send).await?;
+            pushed.extend(server.pushed());
             continue;
         }
 
@@ -107,43 +108,6 @@ pub async fn listen<S: MailServer>(
         take_in(&mut server, cache, &mut sequence, pushed, tell).await?;
         pushed = server.pushed();
     }
-}
-
-/// Sends the flag changes and the moves the Cache queues, flags first, as
-/// a move would leave them behind.
-async fn send_changes(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    send: &impl Fn(Update),
-) -> Result<(), Error> {
-    flag_changes::send(server, cache).await?;
-    move_changes::send(server, cache, send).await
-}
-
-/// Sends the Outbox and returns what the server pushed meanwhile. After a
-/// Message SMTP accepted: its `\Answered`, then the Thread it answers read
-/// again, then a resync of the shown Folder, which shows it in Sent.
-async fn send_outbox(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    sender: Sender<'_>,
-    asked: &mut Asked,
-    send: &impl Fn(Update),
-) -> Result<Vec<Pushed>, Error> {
-    let accepted = outbox_flush::flush(server, cache, sender, send).await?;
-    if accepted.is_empty() {
-        return Ok(server.pushed());
-    }
-
-    // Before the Thread is read, or its rows lose the `\Answered` just set.
-    send_changes(server, cache, send).await?;
-    // Gmail files the Reply in All Mail itself; the stack shows it from there.
-    for id in accepted.into_iter().flatten() {
-        thread_fetch::fetch(server, cache, id, send).await?;
-    }
-
-    asked.switched = true;
-    Ok(server.pushed())
 }
 
 /// Writes what `pushed` changed in the Folder of `sequence` to the Cache,
