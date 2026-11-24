@@ -58,12 +58,14 @@ fn main() -> ExitCode {
 
 /// A command's answer on stdout, as `--json` asks; 1 when part of it failed.
 fn printed(command: &impl cli::answer::Answers, json: bool) -> ExitCode {
-    let mut failed = false;
-    let code = answered(command.answer().and_then(|answer| {
-        failed = answer.failed;
-        Ok(answer.print(json)?)
-    }));
-    if failed { ExitCode::FAILURE } else { code }
+    let printed = command.answer().and_then(|answer| {
+        answer.print(json)?;
+        Ok(answer.failed)
+    });
+    match printed {
+        Ok(true) => ExitCode::FAILURE,
+        printed => answered(printed.map(drop)),
+    }
 }
 
 /// A command's end, its error on stderr.
