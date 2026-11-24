@@ -23,7 +23,8 @@ own Account's connection. Ending the
 Search always stays in the shown Folder: on the match when that Folder holds
 its Thread, else back where `/` was pressed.
 
-A Query is matched against a Message's sender, subject and Snippet. A Message
+A Query is matched against a Message's sender, subject and Snippet, and its
+body since ADR 0032. A Message
 the Account sent has the same sender as every other, so its recipients' names
 and addresses, `To` then `Cc`, are matched too: what was sent to someone is
 found by their name. Mail from others is not found by its recipients, which

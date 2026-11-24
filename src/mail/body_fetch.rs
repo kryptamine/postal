@@ -168,17 +168,12 @@ enum Next {
     Closed,
 }
 
-/// The next request, waiting no longer than `patience` when given.
-async fn next(requests: &mut UnboundedReceiver<Request>, patience: Option<Duration>) -> Next {
-    let next = match patience {
-        Some(patience) => tokio::time::timeout(patience, requests.next()).await.ok(),
-        None => Some(requests.next().await),
-    };
-
-    match next {
-        Some(Some(request)) => Next::Request(request),
-        Some(None) => Next::Closed,
-        None => Next::Spare,
+/// The next request, waiting no longer than `patience`.
+async fn next(requests: &mut UnboundedReceiver<Request>, patience: Duration) -> Next {
+    match tokio::time::timeout(patience, requests.next()).await {
+        Ok(Some(request)) => Next::Request(request),
+        Ok(None) => Next::Closed,
+        Err(_) => Next::Spare,
     }
 }
 

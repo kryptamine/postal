@@ -4,6 +4,7 @@ pub mod attachment_fetch;
 pub mod backfill;
 mod backoff;
 pub mod body_fetch;
+mod body_index;
 pub mod discover;
 mod envelope_pass;
 mod flag_changes;

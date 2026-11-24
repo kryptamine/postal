@@ -2,6 +2,7 @@
 //! and UID, with each Folder's UIDVALIDITY beside them.
 
 mod bodies;
+mod body_index;
 mod changes;
 mod correspondence;
 mod correspondents;
@@ -30,6 +31,7 @@ mod thread_rows;
 mod threads;
 mod window;
 
+pub use body_index::Indexed;
 pub use changes::Changes;
 pub use correspondence::SentPass;
 pub use correspondents::Correspondents;

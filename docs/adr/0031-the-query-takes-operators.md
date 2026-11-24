@@ -10,7 +10,7 @@ what the word being typed can become. Issue #156.
 
 | Term | Matches |
 | --- | --- |
-| a word | the start of a word of the sender, subject, Snippet or, of mail the Account sent, its recipients, as before |
+| a word | the start of a word of the sender, subject, Snippet or, of mail the Account sent, its recipients, as before; its body too since ADR 0032 |
 | `from:x` | the From line, name and address |
 | `to:x`, `cc:x` | `To` and `Cc` of every Message: the Cache keeps them as one line, so the two are one |
 | `subject:x` | the subject |

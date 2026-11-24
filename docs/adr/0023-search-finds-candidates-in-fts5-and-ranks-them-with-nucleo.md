@@ -33,7 +33,8 @@ prefixes are how Gmail, Apple Mail and Thunderbird's Gloda search mail.
   `contentless_delete=1`: Postal reads the text from `message`, so FTS5
   keeps none. Its columns are the sender, the subject, the Snippet and, for
   a Message the Account sent, its recipients' names and addresses; ADR
-  0031 adds every Message's From line and recipients, for its operators.
+  0031 adds every Message's From line and recipients, for its operators,
+  and ADR 0032 its body, with prefix indexes of one and two characters.
   Triggers on `message` keep it, so `mail` is untouched and an arriving
   Message is findable once its row is written. They also set each row's
   rowid to its arrival second shifted left 24 bits, so the index reads
