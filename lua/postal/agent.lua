@@ -28,9 +28,10 @@ local MCP = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h") .. "
 local Chat = {}
 Chat.__index = Chat
 
---- Asks `postal thread show` for the Thread the Draft answers; until it
---- answers, `self.thread` is nil, then the text, or false for none.
-function Chat:fetch_thread()
+--- Asks `postal thread show` for the Thread the mail answers or is of,
+--- `flag` `--draft` or `--message`; until it answers, `self.thread` is
+--- nil, then the text, or false for none.
+function Chat:fetch_thread(flag)
 	local function done(result)
 		if result.code == 0 then
 			-- A new mail answers nothing, and its Thread is empty.
@@ -43,7 +44,7 @@ function Chat:fetch_thread()
 		self:next()
 	end
 
-	local command = { recipients.cmd, "thread", "show", "--draft", self.path }
+	local command = { recipients.cmd, "thread", "show", flag, self.path }
 	local ok, failure = pcall(vim.system, command, { text = true }, function(result)
 		vim.schedule(function()
 			done(result)

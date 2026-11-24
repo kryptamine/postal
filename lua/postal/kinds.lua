@@ -21,7 +21,7 @@ You are helping the user write the email Draft open in their editor.
 	noun = "Draft",
 	review = review.keys,
 	prepare = function(chat)
-		chat:fetch_thread()
+		chat:fetch_thread("--draft")
 	end,
 	context = function(chat)
 		if not chat.thread then
@@ -67,14 +67,20 @@ M.message = {
 	rules = [[
 You are helping the user read the email Message open in their editor: find things in it, explain and analyse it.
 - The Message resource is the whole Message, its headers then its body as text, each link's URL listed at the end; the postal tool `read_message` gives it again. No other tool reaches it.
+- The Thread resource, when there is one, is the whole correspondence the Message is part of, oldest first, the Message among it.
 - It is read-only: you cannot change it, reply to it or send anything. Answer in the chat.]],
 	tools = tools.message,
 	prepare = function(chat)
-		-- A Message is read alone, without its Thread.
-		chat.thread = false
+		chat:fetch_thread("--message")
 	end,
 	context = function(chat)
-		return { chat:resource("postal-message://" .. chat.path, body.whole(chat.mail)) }
+		local blocks = { chat:resource("postal-message://" .. chat.path, body.whole(chat.mail)) }
+		if chat.thread then
+			chat.pane:dim("context", "Context: the Thread of the Message")
+			table.insert(blocks, chat:resource("postal-thread://" .. chat.path, chat.thread))
+		end
+
+		return blocks
 	end,
 	turn = function()
 		return {}

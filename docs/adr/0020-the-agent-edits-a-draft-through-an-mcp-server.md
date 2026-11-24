@@ -18,7 +18,8 @@ the list `postal.tools` holds and passes each call there. There are two:
 
 A Message opened to read, with `E` in the TUI, gets one tool instead:
 `read_message` gives the whole buffer, headers included, as nothing in it
-is the agent's to change.
+is the agent's to change. Its first prompt carries the Thread `postal
+thread show --message` prints too.
 
 The headers never leave the editor, and a write lands in the buffer, never
 on disk. The client offers no `fs/*` any more, and the body goes in each

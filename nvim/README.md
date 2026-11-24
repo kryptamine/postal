@@ -28,7 +28,7 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 | an `Attach:` line  | shows the file's size, or that it is missing; `gf` edits the file    |
 | a Reply's Quote    | folds away closed: `zo` opens it                             |
 | a Signature        | `:PostalAgent` edits the signature                           |
-| a Message (`E`)    | read-only; `:PostalAgent` answers questions about it         |
+| a Message (`E`)    | read-only; `:PostalAgent` answers questions about it and its Thread |
 
 Completion goes through [blink.cmp](https://github.com/saghen/blink.cmp)
 when installed, Neovim's own menu otherwise.
