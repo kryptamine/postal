@@ -13,15 +13,8 @@ use crate::{
     account::sign_in::smtp_key,
     ui::onboarding::field::{self, Edit},
     ui::popup::settings_section::Section,
+    ui::popup::settings_value::Value,
 };
-
-pub const ICONS: [IconChoice; 3] = [IconChoice::Auto, IconChoice::Nerd, IconChoice::None];
-pub const NOTIFY: [NotifyChoice; 3] = [
-    NotifyChoice::Unfocused,
-    NotifyChoice::Always,
-    NotifyChoice::Never,
-];
-pub const SECRETS: [SecretStore; 2] = [SecretStore::Keychain, SecretStore::File];
 
 /// One row of a Settings tab the selection can rest on.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -31,8 +24,7 @@ pub enum Row {
     /// The signature of the Account at this place.
     Signature(usize),
     Add,
-    /// The value at this place in the tab's list of them.
-    Choice(usize),
+    Choice(Value),
     Name,
 }
 
@@ -111,45 +103,38 @@ impl Settings {
 
     /// The rows of `section`: its Accounts, or its values.
     pub fn rows_of(&self, section: Section) -> impl Iterator<Item = Row> {
-        let accounts = if section == Section::Accounts {
-            0..self.accounts.len()
-        } else {
-            0..0
-        };
-        let accounts =
-            accounts.flat_map(|account| [Row::Account(account), Row::Signature(account)]);
-        let rest = match section {
-            Section::Icons => 0..ICONS.len(),
-            Section::Notify => 0..NOTIFY.len(),
-            Section::Secrets => 0..SECRETS.len(),
-            Section::Accounts | Section::Name => 0..0,
-        };
+        let accounts = (section == Section::Accounts)
+            .then_some(0..self.accounts.len())
+            .into_iter()
+            .flatten()
+            .flat_map(|account| [Row::Account(account), Row::Signature(account)]);
+        let values = Value::of(section).iter().copied().map(Row::Choice);
         let last = match section {
             Section::Accounts => Some(Row::Add),
             Section::Name => Some(Row::Name),
-            _ => None,
+            Section::Icons | Section::Notify | Section::Secrets => None,
         };
-        accounts.chain(rest.map(Row::Choice)).chain(last)
+        accounts.chain(values).chain(last)
     }
 
     pub fn selected(&self) -> Row {
         self.rows().nth(self.selected).unwrap_or(Row::Add)
     }
 
-    /// The place of the value in effect among the tab's rows.
-    pub fn current(&self) -> Option<usize> {
-        match self.section {
-            Section::Icons => ICONS.iter().position(|&c| c == self.icons),
-            Section::Notify => NOTIFY.iter().position(|&c| c == self.notify),
-            Section::Secrets => SECRETS.iter().position(|&c| c == self.secrets),
-            Section::Accounts | Section::Name => None,
+    pub fn in_effect(&self, value: Value) -> bool {
+        match value {
+            Value::Icons(icons) => icons == self.icons,
+            Value::Notify(notify) => notify == self.notify,
+            Value::Secrets(store) => store == self.secrets,
         }
     }
 
-    /// Shows the tab `step` places on, its value in effect selected.
-    fn switch(&mut self, step: isize) {
-        self.section = self.section.moved(step);
-        self.selected = self.current().unwrap_or(0);
+    /// Shows the next tab or the one before, its value in effect selected.
+    fn switch(&mut self, forward: bool) {
+        self.section = self.section.next(forward);
+        let in_effect = |row| matches!(row, Row::Choice(value) if self.in_effect(value));
+        let at = self.rows().position(in_effect);
+        self.selected = at.unwrap_or(0);
         self.failure = None;
     }
 
@@ -187,8 +172,8 @@ impl Settings {
 
         let last = self.rows().count().saturating_sub(1);
         match key.code {
-            KeyCode::Tab | KeyCode::Char('l') | KeyCode::Right => self.switch(1),
-            KeyCode::BackTab | KeyCode::Char('h') | KeyCode::Left => self.switch(-1),
+            KeyCode::Tab | KeyCode::Char('l') | KeyCode::Right => self.switch(true),
+            KeyCode::BackTab | KeyCode::Char('h') | KeyCode::Left => self.switch(false),
             KeyCode::Char('j') | KeyCode::Down => self.selected = (self.selected + 1).min(last),
             KeyCode::Char('k') | KeyCode::Up => self.selected = self.selected.saturating_sub(1),
             KeyCode::Char('d') | KeyCode::Backspace => {
@@ -221,40 +206,34 @@ impl Settings {
             }
             Row::Add => return Step::AddAccount,
             Row::Name => self.editing = Some(self.name.clone().unwrap_or_default()),
-            Row::Choice(at) => return self.choose(at),
+            Row::Choice(value) => return self.choose(value),
         }
 
         Step::Stay
     }
 
-    /// Puts the value at `at` of the tab shown in effect.
-    fn choose(&mut self, at: usize) -> Step {
-        match self.section {
-            Section::Icons => {
-                let icons = ICONS[at];
-                if icons != self.icons
-                    && self.change(|settings| settings.write(|config| config.set_icons(icons)))
-                {
+    /// Puts `value` in effect, unless it is already.
+    fn choose(&mut self, value: Value) -> Step {
+        if self.in_effect(value) {
+            return Step::Stay;
+        }
+
+        match value {
+            Value::Icons(icons) => {
+                if self.change(|settings| settings.write(|config| config.set_icons(icons))) {
                     self.icons = icons;
                     return Step::Icons(icons);
                 }
             }
-            Section::Notify => {
-                let notify = NOTIFY[at];
-                if notify != self.notify
-                    && self.change(|settings| settings.write(|config| config.set_notify(notify)))
-                {
+            Value::Notify(notify) => {
+                if self.change(|settings| settings.write(|config| config.set_notify(notify))) {
                     self.notify = notify;
                     return Step::Notify(notify);
                 }
             }
-            Section::Secrets => {
-                let store = SECRETS[at];
-                if store != self.secrets {
-                    self.change(|settings| settings.switch_store(store));
-                }
+            Value::Secrets(store) => {
+                self.change(|settings| settings.switch_store(store));
             }
-            Section::Accounts | Section::Name => {}
         }
 
         Step::Stay

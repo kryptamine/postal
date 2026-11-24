@@ -28,11 +28,22 @@ impl Section {
         }
     }
 
-    /// The tab `step` places from this one, round the ends.
-    pub fn moved(self, step: isize) -> Self {
+    /// What the tab sets, under its heading.
+    pub const fn about(self) -> &'static str {
+        match self {
+            Self::Accounts => "the Accounts Postal signs in to, each with its Signature",
+            Self::Icons => "Nerd Font glyphs in the lists, or symbols any font draws",
+            Self::Notify => "when new mail in an Inbox raises a desktop notification",
+            Self::Name => "your name in the From line of the Messages you send",
+            Self::Secrets => "where the passwords and tokens of the Accounts are kept",
+        }
+    }
+
+    /// The tab after this one, or before it, round the ends.
+    pub fn next(self, forward: bool) -> Self {
+        let count = Self::ALL.len();
         let at = Self::ALL.iter().position(|&s| s == self).unwrap_or(0);
-        let count = Self::ALL.len().cast_signed();
-        let to = (at.cast_signed() + step).rem_euclid(count);
-        Self::ALL[to.cast_unsigned()]
+        let step = if forward { 1 } else { count - 1 };
+        Self::ALL[(at + step) % count]
     }
 }
