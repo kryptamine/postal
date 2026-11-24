@@ -100,7 +100,8 @@ require("postal").setup({
 For example, `keys = { accept = "<leader>y", reject_all = false }`.
 
 `claude` is set up by default. The agent signs in through its own CLI
-(`claude /login`). `:checkhealth postal` says what is missing.
+(`claude /login`). `:checkhealth postal` says what is missing, and whether `postal` is the
+release the plugin came with.
 
 ## Development
 
