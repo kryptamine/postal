@@ -662,7 +662,12 @@ local message_blocks = vim.tbl_map(function(block)
 	return block.resource and block.resource.uri:match("^[%w-]+") or block.text
 end, asked)
 
-local want_blocks = { asked[1].text, "postal-message", "what is it about?" }
+-- It goes with its Thread, which the stub gives whatever it is asked of
+local want_blocks = { asked[1].text, "postal-message", "postal-thread", "what is it about?" }
+if os.getenv("POSTAL_BIN") then
+	table.remove(want_blocks, 3)
+end
+
 if not vim.deep_equal(message_blocks, want_blocks) or not asked[1].text:find("read_message", 1, true) then
 	fail("the Message's prompt holds " .. vim.inspect(asked))
 end
