@@ -69,6 +69,9 @@ pub enum Thread {
 pub enum Folder {
     /// Every account's Folders, with their Message and Unread counts
     List(FolderList),
+    /// Bring each account's Inbox up to date, first sending what Postal left
+    /// queued; an open Postal does it already
+    Sync(FolderSync),
 }
 
 #[derive(Subcommand)]
@@ -100,6 +103,16 @@ pub struct ThreadShow {
 
 #[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct FolderList {}
+
+#[derive(clap::Args, Deserialize, JsonSchema)]
+pub struct FolderSync {
+    /// Only this Folder, by its name or its role, such as Sent
+    #[arg(long, value_name = "NAME")]
+    pub folder: Option<String>,
+    /// Only this account
+    #[arg(long, value_name = "EMAIL")]
+    pub account: Option<String>,
+}
 
 #[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct MessageList {

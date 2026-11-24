@@ -15,7 +15,8 @@ the CLI a surface of its own beside the TUI. Its commands read
 whose fields only grow. A command runs beside a TUI already open: it opens
 the Cache read-only, never rebuilds it and never writes it, and when the
 Cache is missing or of another schema it says so and exits with 1. It knows
-only what the TUI has synced; a command that syncs is left for later.
+only what the last sync left; `folder sync` is the one command that syncs,
+and writes (ADR 0033).
 
 `postal correspondent list` is the first: every Correspondent, ranked as
 ADR 0016 ranks them, the Account a `--draft` path's notes name first, else

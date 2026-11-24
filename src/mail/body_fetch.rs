@@ -230,7 +230,7 @@ async fn fetch_reply(
 /// Fetches `uids` and says how it went. A `NO` names no UID: they are asked
 /// again one by one, so a single refused body does not take its batch with it.
 /// Returns the UIDs the server answered for, stored or refused.
-async fn fetch_each(
+pub async fn fetch_each(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &FolderName,

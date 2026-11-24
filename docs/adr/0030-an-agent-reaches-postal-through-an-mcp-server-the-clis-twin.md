@@ -58,7 +58,8 @@ does, but lists it newest first: nucleo's ranking lives in the TUI.
 The server starts with reads only (issue #144), as the CLI does: it opens
 the Cache read-only, never syncs and never writes, runs beside a TUI
 already open, and refuses a missing Cache or one of another schema. It
-knows what the TUI or a `postal sync` (issue #69) last synced.
+knows what the TUI or a `folder_sync` (ADR 0033) last synced, the one tool
+that writes.
 
 Writes come later, each in its own decision: a Move, an Archive, a flag, a
 Draft. Two things hold for them already:
@@ -66,8 +67,8 @@ Draft. Two things hold for them already:
 - A send is never a tool the agent calls alone. The agent writes a Draft,
   and the user sends it, or confirms it when the server asks (MCP
   elicitation).
-- A write with a TUI open is the question issue #69 asks of `postal sync`:
-  two writers on one Cache. The answer serves both surfaces.
+- A write with a TUI open is two writers on one Cache. ADR 0033 answers
+  it for `folder_sync`: one process writes at a time, under a lock.
 
 The plugin's MCP server (ADR 0020) stays as it is: it edits a Neovim
 buffer, which `postal mcp` cannot reach. An agent in the pane may get both.

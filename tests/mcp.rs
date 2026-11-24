@@ -133,6 +133,7 @@ fn each_command_is_a_tool_with_its_arguments() {
         [
             "correspondent_list",
             "folder_list",
+            "folder_sync",
             "message_list",
             "message_search",
             "message_show",
@@ -223,6 +224,22 @@ fn without_a_cache_a_tool_says_so() {
     assert_eq!(
         listed["content"][0]["text"],
         "Cache not ready: run `postal` once"
+    );
+    client.close();
+}
+
+#[test]
+fn folder_sync_brings_the_cache_up_for_the_tools_that_read_it() {
+    let server = FakeImap::start(inbox());
+    let home = Home::for_server(&server);
+    let mut client = Client::start(&home);
+    let synced = client.call("folder_sync", &json!({}));
+    assert_eq!(synced["isError"], false, "{synced}");
+    assert_eq!(synced["structuredContent"]["items"][0]["new"], 2);
+    let listed = client.call("message_list", &json!({}));
+    assert_eq!(
+        text_of(&listed, "subject"),
+        ["Weekly notes", "Invoice 1042"]
     );
     client.close();
 }

@@ -79,15 +79,17 @@ latest tag into a `pack/*/start/` directory on your `packpath`, then call
 ## Agents
 
 `postal mcp` serves Postal's mail to any [MCP](https://modelcontextprotocol.io)
-client on its stdio, read-only: Folders, Threads, Messages and Search, from
-what the TUI last synced. In Claude Code:
+client on its stdio: Folders, Threads, Messages and Search, from what the
+last sync left, and `folder_sync`, which fetches new mail when the TUI is
+not open. In Claude Code:
 
 ```sh
 claude mcp add postal -- postal mcp
 ```
 
-The same reads are commands for a shell, `postal message list` and its
-siblings; `postal help` lists them, and `--json` prints what the tools answer.
+The same tools are commands for a shell, `postal message list`, `postal
+folder sync` and their siblings; `postal help` lists them, and `--json`
+prints what the tools answer.
 
 ## Development
 
