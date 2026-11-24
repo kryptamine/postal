@@ -636,6 +636,18 @@ end
 local before_message = #prompts()
 vim.cmd("PostalAgent")
 local message_pane = vim.api.nvim_get_current_buf()
+-- What was sent in another chat comes back, newest first, and past the
+-- newest what was typed
+vim.api.nvim_buf_set_lines(0, -2, -1, false, { "half typed" })
+local recalled = {}
+for _, lhs in ipairs({ "<C-p>", "<C-p>", "<C-n>", "<C-n>", "<C-n>" }) do
+	vim.cmd.normal(vim.keycode(lhs))
+	table.insert(recalled, vim.api.nvim_buf_get_lines(0, -2, -1, false)[1])
+end
+
+if not vim.deep_equal(recalled, { "hang", "after", "hang", "half typed", "half typed" }) then
+	fail("the history typed " .. vim.inspect(recalled))
+end
 vim.api.nvim_buf_set_lines(0, -2, -1, false, { "what is it about?" })
 vim.cmd.normal(vim.keycode("<CR>"))
 if not vim.wait(10000, function()
