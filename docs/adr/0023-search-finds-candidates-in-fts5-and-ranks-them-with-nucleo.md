@@ -32,7 +32,8 @@ prefixes are how Gmail, Apple Mail and Thunderbird's Gloda search mail.
   diacritics removed and prefix indexes, contentless with
   `contentless_delete=1`: Postal reads the text from `message`, so FTS5
   keeps none. Its columns are the sender, the subject, the Snippet and, for
-  a Message the Account sent, its recipients' names and addresses.
+  a Message the Account sent, its recipients' names and addresses; ADR
+  0031 adds every Message's From line and recipients, for its operators.
   Triggers on `message` keep it, so `mail` is untouched and an arriving
   Message is findable once its row is written. They also set each row's
   rowid to its arrival second shifted left 24 bits, so the index reads
@@ -42,6 +43,7 @@ prefixes are how Gmail, Apple Mail and Thunderbird's Gloda search mail.
   (ADR 0021).
 - **The Query.** It is cut into words by the same rules as the text, each
   a quoted prefix term, all required: `p.novak` asks for `"p"* "novak"*`.
+  Operators came after, in ADR 0031.
 - **Candidates.** The matching rows of every Folder but Trash and Spam of
   every Account, each Message once, the shown Folder's copy winning
   (ADR 0010), newest first, at most `N`. `N` is 500, set by measurement

@@ -125,11 +125,11 @@ The selected Thread filling the screen in place of the Message List, entered wit
 _Avoid_: reader, zoom, full view
 
 **Search**:
-The Message List narrowed to the Threads holding a Message with a word in its sender, subject or Snippet starting with each word of a typed Query, not a fuzzy match, each Thread ranked by its best match (ADR 0023). A Message the Account sent matches by its recipients' names and addresses too. It matches every Folder of every Account in the Cache but Trash and Spam, each Message once; `/` starts it, and `Esc` ends it in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
+The Message List narrowed to the Threads holding a Message that matches a typed Query: a word in its sender, subject or Snippet starting with each of the Query's words, not a fuzzy match, and each of its operators; each Thread ranked by its best match (ADR 0023, ADR 0031). A Message the Account sent matches by its recipients' names and addresses too. It matches every Folder of every Account in the Cache but Trash and Spam, unless an `in:` names one, each Message once; a Message whose flags change while it is open stays until the Query does. `/` starts it, a menu over the Query line suggests what its last word can become, `Tab` writing one in, and `Esc` closes the menu, else ends the Search in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
 _Avoid_: filter, find, fzf, lookup
 
 **Query**:
-The text typed into a Search.
+The text typed into a Search: free words, and operators in Gmail's syntax, as `from:ada`, `is:unread`, `in:Trash`, `before:2024-01-31` or `-word` (ADR 0031). An unknown operator is searched as words.
 _Avoid_: pattern, search string
 
 **Compose**:

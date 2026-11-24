@@ -180,6 +180,9 @@ fn a_tool_answers_as_its_command_beside_an_open_tui() {
     let found = client.call("message_search", &json!({ "query": "invoice" }));
     let subject = &found["structuredContent"]["items"][0]["subject"];
     assert_eq!(subject, "Invoice 1042");
+    let found = client.call("message_search", &json!({ "query": "from:bob -is:unread" }));
+    let subject = &found["structuredContent"]["items"][0]["subject"];
+    assert_eq!(subject, "Invoice 1042");
 
     // A failure is the tool's, and the server keeps serving.
     let refused = client.call("message_show", &json!({ "id": "nonsense" }));

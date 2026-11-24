@@ -53,6 +53,10 @@ pub enum Action {
     Type(char),
     /// The Query's last character deleted.
     Erase,
+    /// The menu's next or previous suggestion written into the Query.
+    Complete(Direction),
+    /// The suggestion written in taken, and the menu suggesting anew.
+    Accept,
     /// The narrowed list, with the Query kept.
     KeepQuery,
     /// The full list again: while the Query is typed, on the Message

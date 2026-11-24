@@ -8,6 +8,7 @@ use rusqlite::Connection;
 const MIGRATIONS: &[&str] = &[
     include_str!("migrations/1.sql"),
     include_str!("migrations/2.sql"),
+    include_str!("migrations/3.sql"),
 ];
 
 /// The `user_version` of the last schema before migrations; a Cache at or

@@ -124,9 +124,15 @@ fn survives(version: i64) {
     wait_for(|| server.seen(INBOX, FIRST_UID + 1));
     wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     let screen = t.snapshot_after(|_| true).unwrap();
-    quit(t);
     assert!(!screen.contains("Newest"), "{screen}");
     assert_eq!(card(&screen, "Bob"), Some(false), "{screen}");
+
+    // The index is whole, for the operators too.
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("from:alice").unwrap();
+    t.wait_until(|s| s.contains("Body of Oldest") && !s.contains("Middle"))
+        .unwrap();
+    quit(t);
     let log = fs::read_to_string(home.log_path()).unwrap();
     assert!(!log.contains("cache rebuilt"), "{log}");
 }

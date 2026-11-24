@@ -1,7 +1,8 @@
 use crate::{
     mail::steering::Ask,
+    ui::input::keymap::Direction,
     ui::input::step::Steer,
-    ui::list::folder_show::{edit_query, folders, start_search, switch},
+    ui::list::folder_show::{accept, complete, folders, start_search, switch, type_query},
     ui::list::marking::{mark_read, mark_unread},
     ui::list::moving,
     ui::list::search::Search,
@@ -49,8 +50,10 @@ pub fn steer(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
         Steer::MoveTo(folder) => moving::move_to(ui, world, &folder)?,
         Steer::Undo => moving::undo(ui, world)?,
         Steer::Search => start_search(ui, caches)?,
-        Steer::Type(c) => edit_query(ui, caches, |search| search.push(c))?,
-        Steer::Erase => edit_query(ui, caches, Search::pop)?,
+        Steer::Type(c) => type_query(ui, caches, |search| search.push(c))?,
+        Steer::Erase => type_query(ui, caches, Search::pop)?,
+        Steer::Complete(direction) => complete(ui, caches, matches!(direction, Direction::Down))?,
+        Steer::Accept => accept(ui, caches)?,
     }
 
     Ok(())

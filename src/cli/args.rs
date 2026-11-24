@@ -117,7 +117,9 @@ pub struct MessageShow {
 #[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct MessageSearch {
     /// Words each matching the start of a word of the sender, subject or
-    /// Snippet, or of the recipients of mail the account sent
+    /// Snippet, and operators: from:, to:, subject:, is:unread,
+    /// has:attachment, in:, account:, before:, after:, older:, newer:, -word
+    #[arg(allow_hyphen_values = true)]
     pub query: String,
     /// At most this many Threads, 50 when not given
     #[arg(long, value_name = "N")]

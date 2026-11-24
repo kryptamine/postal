@@ -90,7 +90,7 @@ fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     let (thread, selected) = (view.selected_key(), view.selected_body());
     let stack: Vec<BodyKey> = match ui.screen.showing {
         Showing::Reading(_) => view.stack().map(|m| m.body_key).collect(),
-        Showing::List | Showing::Query => Vec::new(),
+        Showing::List | Showing::Query | Showing::Menu => Vec::new(),
     };
 
     show(&mut ui.view, caches, None)?;

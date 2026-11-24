@@ -1,10 +1,12 @@
 use ratatui::{Frame, Terminal, layout::Rect};
 use tokio::time::Instant;
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     compose::accounts::Accounts,
     ui::frame::layout,
     ui::frame::theme::Theme,
+    ui::list::completion_menu::CompletionMenu,
     ui::list::message_list::MessageList,
     ui::list::search::Search,
     ui::popup::help_popup::HelpPopup,
@@ -71,6 +73,7 @@ pub fn draw(
                     query: view.search.as_ref().map(Search::query).filter(|_| {
                         !matches!(keys, Mode::Draft | Mode::LocalDrafts | Mode::Queued)
                     }),
+                    parsed: view.search.as_ref().map(Search::parsed),
                     capped: view.search.as_ref().is_some_and(Search::capped),
                     now: Instant::now(),
                 };
@@ -80,10 +83,29 @@ pub fn draw(
             }
 
             frame.render_widget(hint_line, panes.hint);
+            if let Some(search) = view.search.as_ref().filter(|_| keys.typing()) {
+                frame.render_widget(menu(theme, search, panes.hint), frame.area());
+            }
+
             popups(frame, theme, accounts, panes.body, screen);
         })
         .map_err(Error::Terminal)?;
     Ok(())
+}
+
+/// The Search's suggestions over the hint line `hint`, from the word they
+/// complete.
+fn menu<'a>(theme: &'a Theme, search: &'a Search, hint: Rect) -> CompletionMenu<'a> {
+    let completion = search.completion();
+    let typed = search.query().get(..completion.at()).unwrap_or_default();
+    let typed = u16::try_from(typed.width()).unwrap_or(u16::MAX);
+    CompletionMenu {
+        theme,
+        completion,
+        // The hint line's margin and the `/` before the Query.
+        x: hint.x.saturating_add(2).saturating_add(typed),
+        above: hint.y,
+    }
 }
 
 /// What shows over the panes in `body`, the layer taking the keys on top,
