@@ -135,7 +135,7 @@ fn spawn_with(home: &Home, browser: &Browser, args: &[&str], envs: &[(&str, &str
 }
 
 #[test]
-fn postal_refreshes_the_access_token_at_start() {
+fn one_refresh_buys_the_access_token_both_connections_sign_in_with() {
     let server = FakeImap::start(Vec::new());
     let oauth = FakeOAuth::start();
     let home = signed_in(&server, &oauth);
@@ -181,20 +181,30 @@ fn an_unreachable_token_endpoint_at_start_is_an_outage() {
     assert!(t.wait_exit().unwrap().success());
 }
 
+// Starting waits on no network, so a revoked token shows once the first
+// connection asks for an access token, over the mail the Cache holds.
 #[test]
-fn a_revoked_refresh_token_at_start_signs_in_again_as_the_account() {
+fn a_revoked_refresh_token_at_start_shows_signed_out_and_l_signs_in_again() {
     let server = FakeImap::start(Vec::new());
     let oauth = FakeOAuth::start();
     let home = signed_in(&server, &oauth);
     fs::write(home.secret_path(), "1//revoked\n").unwrap();
     let browser = Browser::new();
     let mut t = spawn(&home, &browser, &[]);
+    t.wait_until(|s| s.contains("signed out · L sign in"))
+        .unwrap();
+    let commands = server.commands();
+    assert!(
+        !commands.iter().any(|c| c.starts_with("AUTHENTICATE")),
+        "{commands:?}"
+    );
+
+    t.send(Key::Char('L')).unwrap();
     let consent = query::of_url(&consent_url(&browser));
     assert_eq!(consent["login_hint"], EMAIL);
-    assert!(server.commands().is_empty(), "{:?}", server.commands());
-
     grant(&consent);
-    t.wait_until(|s| s.contains("Inbox is empty")).unwrap();
+    t.wait_until(|s| s.contains("Inbox is empty") && !s.contains("signed out"))
+        .unwrap();
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
     assert_eq!(secret(&home).as_deref(), Some(REFRESH_TOKEN));
@@ -212,7 +222,7 @@ fn an_access_token_near_its_expiry_is_refreshed_before_a_connection() {
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 
-    // One at start, then one more for the connection that synced.
+    // One so close to its expiry is bought anew by each connection.
     let requests = oauth.requests();
     assert!(requests.len() >= 2, "{requests:?}");
     assert!(requests.iter().all(|r| r["grant_type"] == "refresh_token"));

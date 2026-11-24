@@ -20,8 +20,10 @@ times the first-run fetch).
 | Allocations per frame in steady state | 0 | CI, `alloc-count` |
 
 - Cold start reads only the visible window of rows from Cache, never the whole
-  Inbox. The network is not part of it. Nor is the check of the whole
-  Cache, which follows only a session that did not end in order (ADR 0021).
+  Inbox. The network is not part of it: an OAuth access token is bought by
+  the first connection, after the first frame. Nor is the check of the
+  whole Cache, which follows only a session that did not end in order
+  (ADR 0021).
 - A Folder of 100,000 Messages keeps an `Update::Inbox` within a frame and
   the Message List within 5 MB: its Threads are rows, and only the cards
   around the selection are read (ADR 0022, where the numbers are).
