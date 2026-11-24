@@ -2,6 +2,7 @@
 -- `Attach:` paths as they are typed (blink.cmp, else Neovim's own menu), and
 -- chats with an ACP agent about a Draft, a Signature or a Message through
 -- `:PostalAgent`.
+local addresses = require("postal.addresses")
 local agent = require("postal.agent")
 local attach = require("postal.attach")
 local colors = require("postal.colors")
@@ -83,13 +84,16 @@ function M.setup(opts)
 		callback = function(event)
 			vim.b[event.buf].postal_kind = "draft"
 			vim.bo[event.buf].omnifunc = "v:lua.require'postal'.omnifunc"
-			recipients.ask(event.buf)
+			recipients.ask(event.buf, function()
+				addresses.check(event.buf)
+			end)
 			if not blink() then
 				native(event.buf)
 			end
 
 			agent_command(event.buf, "Chat with an ACP agent about this Draft")
 			attach.watch(event.buf, group)
+			addresses.watch(event.buf, group)
 		end,
 	})
 

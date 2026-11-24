@@ -23,6 +23,7 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 | in                 | does                                                         |
 | ------------------ | ------------------------------------------------------------ |
 | a Draft            | completes `To:`, `Cc:` and `Attach:`; `:PostalAgent` edits the body |
+| `To:` and `Cc:`    | marks a recipient a send would refuse, and an address no mail holds |
 | an `Attach:` line  | shows the file's size, or that it is missing; `gf` edits the file    |
 | a Signature        | `:PostalAgent` edits the signature                           |
 | a Message (`E`)    | read-only; `:PostalAgent` answers questions about it         |
