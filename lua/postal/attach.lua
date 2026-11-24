@@ -124,18 +124,9 @@ end
 
 M.keys = { { name = "attach", desc = "edit the file of the Attach: line", run = open } }
 
---- Maps the key over Draft buffer `buf`, and keeps its lines marked in
---- `augroup`; not while a path is typed, which is missing until whole.
-function M.watch(buf, augroup)
+--- Maps the key over Draft buffer `buf`.
+function M.map(buf)
 	keys.map(buf, keys.bound(M.keys))
-	M.mark(buf)
-	vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave", "BufEnter", "FocusGained" }, {
-		group = augroup,
-		buffer = buf,
-		callback = function()
-			M.mark(buf)
-		end,
-	})
 end
 
 return M

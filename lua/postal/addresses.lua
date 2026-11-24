@@ -5,8 +5,6 @@ local recipients = require("postal.recipients")
 
 local M = {}
 
-local NS = vim.api.nvim_create_namespace("postal-addresses")
-
 -- Close to what a send accepts, not a parse of RFC 5322: a local part, an
 -- `@` and a domain with a dot in it.
 local ADDRESS = '^[^%s@<>,"]+@[^%s@<>,"]+%.[^%s@<>,".]+$'
@@ -33,8 +31,8 @@ local function problem(buf, text)
 	end
 end
 
---- Sets the diagnostics of Draft buffer `buf` from its headers as they stand.
-function M.check(buf)
+--- The diagnostics of Draft buffer `buf`'s headers as they stand.
+function M.diagnose(buf)
 	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 	local diagnostics = {}
 	for _, field in ipairs(header.fields(buf)) do
@@ -49,27 +47,13 @@ function M.check(buf)
 						end_col = recipient.end_col,
 						message = message,
 						severity = severity,
-						source = "postal",
 					})
 				end
 			end
 		end
 	end
 
-	vim.diagnostic.set(NS, buf, diagnostics)
-end
-
---- Keeps Draft buffer `buf` checked in `augroup`, but not while a recipient
---- is typed, which is no address until whole.
-function M.watch(buf, augroup)
-	M.check(buf)
-	vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave" }, {
-		group = augroup,
-		buffer = buf,
-		callback = function()
-			M.check(buf)
-		end,
-	})
+	return diagnostics
 end
 
 return M

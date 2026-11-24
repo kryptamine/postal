@@ -2,9 +2,9 @@
 -- `Attach:` paths as they are typed (blink.cmp, else Neovim's own menu), and
 -- chats with an ACP agent about a Draft, a Signature or a Message through
 -- `:PostalAgent`.
-local addresses = require("postal.addresses")
 local agent = require("postal.agent")
 local attach = require("postal.attach")
+local checks = require("postal.checks")
 local colors = require("postal.colors")
 local config = require("postal.config")
 local contacts = require("postal.contacts")
@@ -12,7 +12,6 @@ local fold = require("postal.fold")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
 local links = require("postal.links")
-local mention = require("postal.mention")
 local prompts = require("postal.prompts")
 local recipients = require("postal.recipients")
 
@@ -100,7 +99,7 @@ function M.setup(opts)
 			vim.b[event.buf].postal_kind = "draft"
 			vim.bo[event.buf].omnifunc = "v:lua.require'postal'.omnifunc"
 			recipients.ask(event.buf, function()
-				addresses.check(event.buf)
+				checks.run(event.buf)
 			end)
 			if not blink() then
 				native(event.buf)
@@ -110,9 +109,8 @@ function M.setup(opts)
 			vim.api.nvim_buf_create_user_command(event.buf, "PostalContacts", function()
 				contacts.pick(event.buf)
 			end, { desc = "Add a Correspondent to the Draft's To: or Cc:" })
-			attach.watch(event.buf, group)
-			addresses.watch(event.buf, group)
-			mention.watch(event.buf, group)
+			attach.map(event.buf)
+			checks.watch(event.buf, group)
 		end,
 	})
 
