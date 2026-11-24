@@ -6,7 +6,7 @@ use crate::{
     domain::folder_name::FolderName,
     mail::flag_changes,
     mail::folder_list,
-    mail::imap::{MailServer, Pushed},
+    mail::imap::{MailServer, Mode, Pushed},
     mail::inbox_poll::InboxPoll,
     mail::move_changes,
     mail::outbox_flush::{self, Sender},
@@ -277,7 +277,9 @@ async fn resynced(
     folder: &FolderName,
     tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<SequenceNumbers, Error> {
-    let (examined, changes) = sync::resync(server, cache, folder, tell.report).await?;
+    // Selected, not examined, so a Mark Read can be stored: ADR 0011.
+    let (examined, changes) =
+        sync::resync(server, cache, folder, Mode::Select, tell.report).await?;
     let send = tell.send;
     arrived(tell, folder, &changes);
     send(Update::Inbox);

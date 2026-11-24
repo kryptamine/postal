@@ -2,8 +2,8 @@ use rusqlite::params;
 
 use super::{Cache, Error, snippets::text_part};
 use crate::{
-    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::text_part::TextPart,
-    domain::uid::Uid,
+    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::indexing::Indexing,
+    domain::text_part::TextPart, domain::uid::Uid,
 };
 
 /// A Message whose body the index lacks.
@@ -67,16 +67,42 @@ impl Cache {
         Ok(Some((folder, pending)))
     }
 
-    /// The Messages whose body the index lacks.
-    pub fn unindexed_count(&self) -> Result<usize, Error> {
-        let count = self
-            .connection()
+    /// How far the index is, counting as not cached yet what the server
+    /// last counted in `walked` past the rows cached there. 22 ms at
+    /// 500,000: the partial index, then every row's Folder once.
+    pub fn indexing(&self, walked: &[FolderName]) -> Result<Indexing, Error> {
+        let connection = self.connection();
+        let unbodied: usize = connection
             .prepare_cached(
                 "SELECT count(*) FROM message INDEXED BY message_unbodied
                  WHERE account = ?1 AND bodied = 0",
             )?
             .query_row(params![self.email()], |row| row.get(0))?;
-        Ok(count)
+        let mut statement = connection.prepare_cached(
+            "SELECT m.mailbox, count(*), b.exists_count FROM message m
+             LEFT JOIN mailbox b ON b.account = m.account AND b.name = m.mailbox
+             WHERE m.account = ?1 GROUP BY m.mailbox",
+        )?;
+        let (mut cached, mut missing) = (0, 0);
+        let folders = statement.query_map(params![self.email()], |row| {
+            Ok((
+                row.get::<_, FolderName>(0)?,
+                row.get::<_, usize>(1)?,
+                row.get::<_, Option<usize>>(2)?,
+            ))
+        })?;
+        for folder in folders {
+            let (name, rows, exists) = folder?;
+            cached += rows;
+            if walked.contains(&name) {
+                missing += exists.unwrap_or(0).saturating_sub(rows);
+            }
+        }
+
+        Ok(Indexing {
+            indexed: cached - unbodied.min(cached),
+            total: cached + missing,
+        })
     }
 
     /// Indexes each body in `folder` in one transaction, on Gmail in every
@@ -99,6 +125,7 @@ impl Cache {
             )?;
             let mut forget =
                 transaction.prepare_cached("DELETE FROM message_text WHERE rowid = ?1")?;
+            // The columns the triggers of migrations/4.sql index, and the body.
             let mut index = transaction.prepare_cached(
                 "INSERT INTO message_text
                      (rowid, sender, subject, snippet, recipients, from_line, to_line, body)

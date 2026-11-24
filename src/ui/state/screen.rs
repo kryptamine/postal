@@ -4,10 +4,10 @@ use crate::{
     cache::Cache,
     compose::awaited_forward::AwaitedForward,
     compose::awaited_reply::AwaitedReply,
+    domain::indexing::Indexing,
     domain::per_account::{AccountId, PerAccount},
     domain::thread::Key,
     mail::status::Status,
-    mail::update::Unindexed,
     ui::list::inbox_view::InboxView,
     ui::popup::layer::Layer,
     ui::popup::over::Over,
@@ -30,7 +30,7 @@ pub struct Screen {
     /// A page of older Messages under way on the fetch connection.
     pub backfill: Option<Status>,
     /// How far each Account's search index is from every Message.
-    pub unindexed: PerAccount<Unindexed>,
+    pub indexing: PerAccount<Indexing>,
     pub showing: Showing,
     pub over: Over,
     pub dwell: Dwell,
@@ -52,7 +52,7 @@ impl Screen {
     ) -> Self {
         let toast = failure.map(Toast::error);
         Self {
-            unindexed: statuses.map(|_| Unindexed::default()),
+            indexing: statuses.map(|_| Indexing::default()),
             statuses,
             toast: toast.or_else(|| rebuilt.then(|| Toast::new("cache rebuilt"))),
             ..Self::default()
@@ -60,12 +60,9 @@ impl Screen {
     }
 
     /// How far the search index of every Account is from every Message.
-    pub fn index_progress(&self) -> Unindexed {
-        let each = self.unindexed.values();
-        each.fold(Unindexed::default(), |all, one| Unindexed {
-            bodies: all.bodies + one.bodies,
-            fetching: all.fetching || one.fetching,
-        })
+    pub fn index_progress(&self) -> Indexing {
+        let each = self.indexing.values().copied();
+        each.fold(Indexing::default(), Indexing::plus)
     }
 
     pub fn list(&mut self) {

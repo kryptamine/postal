@@ -15,6 +15,7 @@ mod header;
 mod idle;
 mod imap;
 mod inbox_poll;
+mod index_progress;
 pub mod login;
 mod move_changes;
 pub mod outage;

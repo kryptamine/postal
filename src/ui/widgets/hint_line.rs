@@ -10,10 +10,10 @@ use tokio::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    domain::indexing::Indexing,
     domain::query::Query,
     mail::outage::Outage,
     mail::status::Status,
-    mail::update::Unindexed,
     render::icons::Icons,
     render::stack_str::StackStr,
     ui::frame::theme::Theme,
@@ -43,7 +43,7 @@ pub struct HintLine<'a> {
     /// The Query matched more than a Search reads.
     pub capped: bool,
     /// How far the search index is from every Message.
-    pub unindexed: Unindexed,
+    pub indexing: Indexing,
     /// What the Status's countdown counts from.
     pub now: Instant,
 }
@@ -154,8 +154,8 @@ impl HintLine<'_> {
     }
 
     /// Draws `/` and `query` from `x`, then whether it matched more than is
-    /// shown and how many bodies are not searched yet, cut at the row's
-    /// end; returns where they end.
+    /// shown and how far the search index is, cut at the row's end; returns
+    /// where they end.
     fn query(&self, buf: &mut Buffer, x: u16, row: Rect, query: &str) -> u16 {
         let room = |x: u16| usize::from(row.right().saturating_sub(x));
         let (x, _) = buf.set_stringn(x, row.y, "/", room(x), self.theme.key);
@@ -173,26 +173,26 @@ impl HintLine<'_> {
         let mut notice = StackStr::<96>::new();
         // The texts fit, so the writes cannot fail.
         if self.capped {
-            write!(notice, "newest {LIMIT} matches only: type more").ok();
+            write!(notice, "newest {LIMIT} matches only: type more  ").ok();
         }
 
-        let Unindexed { bodies, fetching } = self.unindexed;
-        if fetching {
-            separate(&mut notice);
-            notice.write_str("downloading mail").ok();
+        // A word not found yet may only be waiting for its body.
+        if self.indexing.under_way() {
+            let Indexing { indexed, total } = self.indexing;
+            write!(notice, "search index {}% (", self.indexing.percent()).ok();
+            grouped(&mut notice, indexed);
+            notice.write_str(" of ").ok();
+            grouped(&mut notice, total);
+            notice.write_str(")").ok();
         }
 
-        if bodies > 0 {
-            separate(&mut notice);
-            write!(notice, "{bodies} bodies to index").ok();
-        }
-
-        if notice.as_str().is_empty() {
+        let notice = notice.as_str().trim_end();
+        if notice.is_empty() {
             return x;
         }
 
         let x = x.saturating_add(GAP).min(row.right());
-        buf.set_stringn(x, row.y, notice.as_str(), room(x), self.theme.muted)
+        buf.set_stringn(x, row.y, notice, room(x), self.theme.muted)
             .0
     }
 
@@ -206,10 +206,14 @@ impl HintLine<'_> {
     }
 }
 
-/// Parts what `notice` holds from what comes next.
-fn separate(notice: &mut StackStr<96>) {
-    if !notice.as_str().is_empty() {
-        notice.write_str(" · ").ok();
+/// Writes `n` with its thousands parted by commas, as `120,312`.
+fn grouped(into: &mut StackStr<96>, n: usize) {
+    let (high, low) = (n / 1000, n % 1000);
+    if high == 0 {
+        write!(into, "{low}").ok();
+    } else {
+        grouped(into, high);
+        write!(into, ",{low:03}").ok();
     }
 }
 

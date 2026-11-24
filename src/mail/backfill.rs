@@ -22,32 +22,39 @@ pub enum Backfill {
     },
 }
 
-/// Fetches the `size` Messages of `folder` just older than every cached one (phase 1).
-/// Returns the UID below which phase 2 has Snippets to cut, when it wrote
-/// any rows. `report` follows phase 1, and its `Paged` the Cache write.
+/// How a page of older Messages ended.
+pub struct Page {
+    /// The UID below which phase 2 has Snippets to cut, when it wrote rows.
+    pub below: Option<Uid>,
+    /// As `Backfill::Paged` has it.
+    pub nothing_below: Option<Uid>,
+}
+
+/// Fetches the `size` Messages of `folder` just older than every cached one
+/// (phase 1); `progress` follows it, `done` of `total`.
 pub async fn page(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &FolderName,
     size: u32,
-    report: impl Fn(Backfill),
-) -> Result<Option<Uid>, Error> {
-    let paged = |nothing_below| Backfill::Paged {
-        folder: folder.clone(),
-        nothing_below,
-    };
-
+    progress: impl Fn(u32, u32),
+) -> Result<Page, Error> {
     let Some(oldest) = cache.oldest_uid(folder)? else {
-        report(paged(None));
-        return Ok(None);
+        return Ok(Page {
+            below: None,
+            nothing_below: None,
+        });
     };
 
+    let unreachable = Page {
+        below: None,
+        nothing_below: Some(oldest),
+    };
     // A fresh EXAMINE, so the sequence numbers below are this moment's.
     let examined = match sync::reopen(server, folder, Mode::Examine).await {
         Err(Error::Gone(error)) => {
             tracing::warn!("{folder} is gone: {error}");
-            report(paged(Some(oldest)));
-            return Ok(None);
+            return Ok(unreachable);
         }
         examined => examined?,
     };
@@ -62,27 +69,26 @@ pub async fn page(
 
     let before = match server.sequence_number(oldest).await? {
         Some(before) if before > 1 && same(cache)? => before,
-        _ => {
-            report(paged(Some(oldest)));
-            return Ok(None);
-        }
+        _ => return Ok(unreachable),
     };
 
     let total = (before - 1).min(size);
-    report(Backfill::Fetching { done: 0, total });
-    let progress = |done| report(Backfill::Fetching { done, total });
-    let mut older = server.older(before, size, progress).await?;
+    progress(0, total);
+    let mut older = server
+        .older(before, size, |done| progress(done, total))
+        .await?;
     older.retain(|new| new.row.uid < oldest);
     // The sync connection may have replaced the rows while this one fetched.
     if !same(cache)? {
-        report(paged(Some(oldest)));
-        return Ok(None);
+        return Ok(unreachable);
     }
 
     cache.backfill(folder, &older)?;
     tracing::info!("backfilled {} older Messages", older.len());
     let first = before.saturating_sub(size) <= 1;
     let new_oldest = older.iter().map(|new| new.row.uid).min().unwrap_or(oldest);
-    report(paged(first.then_some(new_oldest)));
-    Ok(Some(oldest))
+    Ok(Page {
+        below: Some(oldest),
+        nothing_below: first.then_some(new_oldest),
+    })
 }

@@ -153,16 +153,17 @@ pub async fn serve(
         }
 
         if let Some(folder) = pending.older.take() {
-            let report = |backfill| {
-                // The rows a `Paged` follows are shown before it is told.
-                if matches!(backfill, Backfill::Paged { .. }) {
-                    send(Update::Inbox);
-                }
+            let progress = |done, total| send(Update::Backfill(Backfill::Fetching { done, total }));
+            let page = backfill::page(server, cache, &folder, backfill::PAGE, progress).await?;
+            if page.below.is_some() {
+                send(Update::Inbox);
+            }
 
-                send(Update::Backfill(backfill));
-            };
-            let below = backfill::page(server, cache, &folder, backfill::PAGE, report).await?;
-            spare.backfilled(folder, below);
+            send(Update::Backfill(Backfill::Paged {
+                folder: folder.clone(),
+                nothing_below: page.nothing_below,
+            }));
+            spare.backfilled(folder, page.below);
         }
     }
 }

@@ -3,8 +3,8 @@ use std::time::Duration;
 use crate::{
     cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::body_fetch::open,
     mail::body_index::BodyPass, mail::envelope_pass, mail::folder_pass::FolderPass,
-    mail::imap::MailServer, mail::sent_pass, mail::snippets, mail::sync::Error,
-    mail::update::Update,
+    mail::imap::MailServer, mail::index_progress::IndexProgress, mail::sent_pass, mail::snippets,
+    mail::sync::Error, mail::update::Update,
 };
 
 /// How long the fetch connection goes without a request before the pass
@@ -29,6 +29,7 @@ pub struct SpareWork {
     bodies: BodyPass,
     envelopes_due: bool,
     turn: Turn,
+    progress: IndexProgress,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -48,6 +49,15 @@ impl Turn {
     }
 }
 
+/// The step `SpareWork` takes next.
+enum Work {
+    Snippets,
+    Sent,
+    Long(Turn),
+    /// No pass is due: a look for bodies new mail brought.
+    Recheck,
+}
+
 impl SpareWork {
     pub const fn new() -> Self {
         Self {
@@ -57,21 +67,16 @@ impl SpareWork {
             bodies: BodyPass::new(),
             envelopes_due: true,
             turn: Turn::Folders,
+            progress: IndexProgress::new(),
         }
     }
 
     /// How long to wait for a request before the next step.
     pub fn patience(&self) -> Duration {
-        if self.snippets_below.is_some() {
-            Duration::ZERO
-        } else if self.sent_due {
-            QUIET
-        } else if self.folders.due() || self.bodies.due() {
-            Duration::ZERO
-        } else if self.envelopes_due {
-            QUIET
-        } else {
-            RECHECK
+        match self.next() {
+            Work::Snippets | Work::Long(Turn::Folders | Turn::Bodies) => Duration::ZERO,
+            Work::Sent | Work::Long(Turn::Envelopes) => QUIET,
+            Work::Recheck => RECHECK,
         }
     }
 
@@ -87,65 +92,79 @@ impl SpareWork {
         };
     }
 
-    /// One batch of Snippets, else the pass over Sent, else a step of the
-    /// long pass whose turn it is.
-    pub async fn step(
-        &mut self,
-        server: &mut impl MailServer,
-        cache: &Cache,
-        send: &impl Fn(Update),
-    ) -> Result<(), Error> {
-        if let Some((folder, below)) = &self.snippets_below {
-            let written = || send(Update::Inbox);
-            if !open(server, folder).await?
-                || !snippets::batch(server, cache, folder, Some(*below), written).await?
-            {
-                self.snippets_below = None;
-            }
-        } else if self.sent_due {
-            self.sent_due = false;
-            sent_pass::read(server, cache, send).await?;
-        } else {
-            self.long_step(server, cache, send).await?;
+    /// Snippets a Backfill left, else the pass over Sent, else the first due
+    /// long pass from `turn` on.
+    fn next(&self) -> Work {
+        if self.snippets_below.is_some() {
+            return Work::Snippets;
         }
 
-        Ok(())
-    }
+        if self.sent_due {
+            return Work::Sent;
+        }
 
-    /// A step of the first due long pass from `turn` on; with none due, a
-    /// recheck for bodies new mail brought.
-    async fn long_step(
-        &mut self,
-        server: &mut impl MailServer,
-        cache: &Cache,
-        send: &impl Fn(Update),
-    ) -> Result<(), Error> {
         let due = |turn| match turn {
             Turn::Folders => self.folders.due(),
             Turn::Bodies => self.bodies.due(),
             Turn::Envelopes => self.envelopes_due,
         };
 
-        let (first, second) = (self.turn, self.turn.after());
-        let turn = [first, second, second.after()]
+        let turns = [self.turn, self.turn.after(), self.turn.after().after()];
+        turns
             .into_iter()
             .find(|&turn| due(turn))
-            .unwrap_or(Turn::Bodies);
-        self.turn = turn.after();
-        match turn {
-            Turn::Folders => {
-                self.folders.step(server, cache, send).await?;
+            .map_or(Work::Recheck, Work::Long)
+    }
+
+    pub async fn step(
+        &mut self,
+        server: &mut impl MailServer,
+        cache: &Cache,
+        send: &impl Fn(Update),
+    ) -> Result<(), Error> {
+        match self.next() {
+            Work::Snippets => {
+                let Some((folder, below)) = &self.snippets_below else {
+                    return Ok(());
+                };
+
+                let written = || send(Update::Inbox);
+                if !open(server, folder).await?
+                    || !snippets::batch(server, cache, folder, Some(*below), written).await?
+                {
+                    self.snippets_below = None;
+                }
+
+                return Ok(());
+            }
+            Work::Sent => {
+                self.sent_due = false;
+                return sent_pass::read(server, cache, send).await;
+            }
+            Work::Long(turn) => {
+                self.turn = turn.after();
+                match turn {
+                    Turn::Folders => {
+                        self.folders.step(server, cache, send).await?;
+                        self.bodies.wake();
+                    }
+                    Turn::Bodies => self.bodies.step(server, cache, send).await?,
+                    Turn::Envelopes => {
+                        self.envelopes_due = envelope_pass::step(server, cache, send).await?;
+                    }
+                }
+            }
+            Work::Recheck => {
                 self.bodies.wake();
-            }
-            Turn::Bodies => {
-                let fetching = self.folders.due();
-                self.bodies.step(server, cache, fetching, send).await?;
-            }
-            Turn::Envelopes => {
-                self.envelopes_due = envelope_pass::step(server, cache, send).await?;
+                self.bodies.step(server, cache, send).await?;
             }
         }
 
-        Ok(())
+        let walked = self.folders.walked();
+        if self.folders.due() || self.bodies.due() {
+            self.progress.tell(cache, walked, send)
+        } else {
+            self.progress.tell_now(cache, walked, send)
+        }
     }
 }
