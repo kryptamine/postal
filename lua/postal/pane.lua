@@ -4,6 +4,7 @@
 local bar = require("postal.bar")
 local body = require("postal.body")
 local help = require("postal.help")
+local history = require("postal.history")
 local icons = require("postal.icons")
 local keys = require("postal.keys")
 
@@ -26,6 +27,12 @@ function M.new(mail, kind, actions)
 		self:submit()
 	end
 
+	local function recall(step)
+		return function()
+			self:recall(step)
+		end
+	end
+
 	local function list()
 		local groups = { { "Chat", self.keys } }
 		if kind.review then
@@ -41,6 +48,8 @@ function M.new(mail, kind, actions)
 		{ name = "send_insert", modes = { "n", "i" }, desc = "send, from insert mode too", run = submit },
 		{ name = "stop", modes = "n", short = "stop", desc = "stop the agent's turn", run = actions.stop },
 		{ name = "close", modes = "n", short = "end", desc = "end the chat and close the pane", run = actions.close },
+		{ name = "previous", modes = "n", desc = "type what was sent before, in any chat", run = recall(-1) },
+		{ name = "next", modes = "n", desc = "type what was sent after", run = recall(1) },
 		{ name = "help", modes = "n", short = "keys", desc = "list the keys", run = list },
 	})
 	self.more = self.keys.help
@@ -248,16 +257,46 @@ function Pane:header(who, role)
 	return row
 end
 
+-- What is typed under the last `## Me`.
+function Pane:typed()
+	return vim.trim(table.concat(vim.api.nvim_buf_get_lines(self.buf, self:bottom() + 1, -1, false), "\n"))
+end
+
+--- Types into the input what was sent `step` messages away from what it
+--- shows; past the newest, what the user had typed before.
+function Pane:recall(step)
+	local at = (self.recalled or #history.sent + 1) + step
+	if at < 1 or at > #history.sent + 1 then
+		return
+	end
+
+	if not self.recalled then
+		self.unsent = self:typed()
+	end
+
+	self.recalled = at <= #history.sent and at or nil
+	local text = self.recalled and history.sent[at] or self.unsent
+	vim.api.nvim_buf_set_lines(self.buf, self:bottom() + 1, -1, false, vim.split(text, "\n", { plain = true }))
+	vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(self.buf), 0 })
+	self:placeholder()
+end
+
 --- The user's message, taken from the input.
 function Pane:submit()
-	local row = self:bottom()
-	local text = vim.trim(table.concat(vim.api.nvim_buf_get_lines(self.buf, row + 1, -1, false), "\n"))
+	local text = self:typed()
 	if text == "" then
 		return
 	end
 
-	self:write(function(buf)
-		vim.api.nvim_buf_set_lines(buf, row + 1, -1, false, { "" })
+	self.recalled, self.unsent = nil, nil
+	history.add(text)
+	vim.api.nvim_buf_set_lines(self.buf, self:bottom() + 1, -1, false, { "" })
+	self:post(text)
+end
+
+--- Sends `text` as the user's message, leaving what is typed in the input.
+function Pane:post(text)
+	self:write(function()
 		self:header(ME, "me")
 		self:block(nil, vim.split(text, "\n", { plain = true }))
 	end)

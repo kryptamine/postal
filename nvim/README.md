@@ -34,7 +34,8 @@ Completion goes through [blink.cmp](https://github.com/saghen/blink.cmp)
 when installed, Neovim's own menu otherwise.
 
 In the chat pane, send with `<CR>` or `<C-s>`; `q` stops the agent's turn,
-`<C-c>` ends the chat, `?` lists the keys. The agent reaches only the text,
+`<C-c>` ends the chat, `<C-p>` and `<C-n>` bring back what you sent in any
+chat, `?` lists the keys. The agent reaches only the text,
 through an MCP server the plugin hands it: no headers, no commands, no
 sending. Its edit lands in the buffer for review:
 
@@ -79,6 +80,8 @@ require("postal").setup({
 | `stop`        | `q`         |
 | `close`       | `<C-c>`     |
 | `help`        | `?`         |
+| `previous`    | `<C-p>`     |
+| `next`        | `<C-n>`     |
 | `accept`      | `<leader>a` |
 | `reject`      | `<leader>r` |
 | `accept_all`  | `<leader>A` |
