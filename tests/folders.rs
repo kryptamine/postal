@@ -203,15 +203,15 @@ fn many_folders_scroll_in_a_capped_picker() {
     let inbox = (0..screen.rows())
         .find(|&r| screen.row_text(r).contains("│ Inbox "))
         .unwrap();
-    let chars: Vec<char> = screen.row_text(inbox).chars().collect();
-    let col = chars
-        .windows(5)
-        .position(|w| w.iter().eq("Inbox".chars().collect::<Vec<_>>().iter()))
-        .unwrap();
-    let style = screen
-        .cell(inbox, u16::try_from(col).unwrap())
+    let before = screen
+        .row_text(inbox)
+        .split("│ Inbox")
+        .next()
         .unwrap()
-        .style();
+        .chars()
+        .count();
+    let col = u16::try_from(before + 2).unwrap();
+    let style = screen.cell(inbox, col).unwrap().style();
     assert!(
         style.reverse && style.fg == termlens::Color::Indexed(3),
         "{screen}"

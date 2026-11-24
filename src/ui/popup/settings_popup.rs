@@ -7,10 +7,10 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    account::config::{IconChoice, NotifyChoice, SecretStore},
     ui::frame::theme::Theme,
-    ui::popup::settings::{ICONS, NOTIFY, Row, SECRETS, Settings},
+    ui::popup::settings::{Row, Settings},
     ui::popup::settings_section::Section,
+    ui::popup::settings_value::Value,
     ui::widgets::{popup_area::popup_area, truncate},
 };
 
@@ -26,6 +26,8 @@ const FOOTER: u16 = 4;
 /// The fewest rows a tab's list takes, so a short one keeps the box.
 const LIST: u16 = 3;
 const GAP: u16 = 2;
+/// Where a row's text starts: after a column, the marker, and a gap.
+const TEXT: u16 = 3;
 const MARKER: &str = "▸";
 const CURRENT: &str = "✓";
 const ESC: &str = "esc";
@@ -56,11 +58,11 @@ impl Widget for SettingsPopup<'_> {
         self.tabs(buf, line(inner, inner.y + 1));
         let rule = "─".repeat(usize::from(inner.width));
         buf.set_string(inner.x, inner.y + 2, rule, self.theme.border);
-        let (heading, description) = about(self.settings.section());
+        let section = self.settings.section();
         let strong = Style::new().add_modifier(Modifier::BOLD);
-        truncate::draw(buf, line(inner, inner.y + 4), heading, strong);
+        truncate::draw(buf, line(inner, inner.y + 4), section.label(), strong);
         let at = line(inner, inner.y + 5);
-        truncate::draw(buf, at, description, self.theme.muted);
+        truncate::draw(buf, at, section.about(), self.theme.muted);
 
         let list = Rect {
             y: inner.y + HEADER,
@@ -109,8 +111,8 @@ impl SettingsPopup<'_> {
             let marker = if chosen { MARKER } else { " " };
             buf.set_stringn(area.x + 1, y, marker, 1, style);
             let text = Rect {
-                x: area.x + 3,
-                width: area.width.saturating_sub(4),
+                x: area.x + TEXT,
+                width: area.width.saturating_sub(TEXT + 1),
                 ..area
             };
 
@@ -118,7 +120,7 @@ impl SettingsPopup<'_> {
         }
     }
 
-    /// One row in `area`: its label, then what it holds or means, muted.
+    /// One row in `area`: its label, then what it holds, right-aligned.
     fn row(&self, buf: &mut Buffer, area: Rect, row: Row, style: Style) {
         let settings = self.settings;
         let muted = style.patch(self.theme.muted);
@@ -137,9 +139,7 @@ impl SettingsPopup<'_> {
                 (None, Some(name)) => (name.as_str(), "", style),
                 (None, None) => ("none", "", muted),
             },
-            Row::Choice(at) => {
-                return self.choice(buf, area, at, style);
-            }
+            Row::Choice(value) => return self.choice(buf, area, value, style),
         };
 
         let width = u16::try_from(detail.width())
@@ -160,34 +160,26 @@ impl SettingsPopup<'_> {
         truncate::draw(buf, detail_area, detail, detail_style);
     }
 
-    /// The value at `at` of the tab shown, a tick on the one in effect,
-    /// then what it does, muted, in a column of its own.
-    fn choice(&self, buf: &mut Buffer, area: Rect, at: usize, style: Style) {
-        let section = self.settings.section();
-        let Some((label, detail)) = choice(section, at) else {
-            return;
-        };
-
-        let (x, _) = buf.set_stringn(area.x, area.y, label, area.width.into(), style);
-        if self.settings.current() == Some(at) {
+    /// `value`, a tick when it is in effect, then what it does, muted, in
+    /// a column of its own.
+    fn choice(&self, buf: &mut Buffer, area: Rect, value: Value, style: Style) {
+        let (x, _) = buf.set_stringn(area.x, area.y, value.key(), area.width.into(), style);
+        if self.settings.in_effect(value) {
             let room = usize::from(area.right().saturating_sub(x + 1));
             buf.set_stringn(x + 1, area.y, CURRENT, room, style);
         }
 
-        let widest = (0..)
-            .map_while(|at| choice(section, at))
-            .map(|(label, _)| label.width())
-            .max()
-            .unwrap_or(0);
+        let values = Value::of(self.settings.section());
+        let widest = values.iter().map(|v| v.key().width()).max().unwrap_or(0);
         let column = u16::try_from(widest).unwrap_or(u16::MAX) + 2 + GAP;
-        let detail_area = Rect {
+        let detail = Rect {
             x: area.x.saturating_add(column),
             width: area.width.saturating_sub(column),
             ..area
         };
 
-        if !detail_area.is_empty() {
-            truncate::draw(buf, detail_area, detail, style.patch(self.theme.muted));
+        if !detail.is_empty() {
+            truncate::draw(buf, detail, value.detail(), style.patch(self.theme.muted));
         }
     }
 
@@ -242,7 +234,7 @@ impl SettingsPopup<'_> {
         let typed = self.settings.editing.as_ref()?;
         let inner = inner(popup(area, self.settings));
         let typed = u16::try_from(typed.width()).unwrap_or(u16::MAX);
-        let x = (inner.x + 3).saturating_add(typed);
+        let x = (inner.x + TEXT).saturating_add(typed);
         let y = inner.y + HEADER;
         (x < inner.right() && y < inner.bottom()).then(|| Position::new(x, y))
     }
@@ -258,66 +250,6 @@ fn primary(settings: &Settings) -> Option<&'static str> {
         Row::Add => Some(" ↵ add "),
         Row::Choice(_) => Some(" ↵ apply "),
     }
-}
-
-/// The heading of `section` and what it sets.
-const fn about(section: Section) -> (&'static str, &'static str) {
-    match section {
-        Section::Accounts => (
-            "Accounts",
-            "the Accounts Postal signs in to, each with its Signature",
-        ),
-        Section::Icons => (
-            "Icons",
-            "Nerd Font glyphs in the lists, or symbols any font draws",
-        ),
-        Section::Notify => (
-            "Notify",
-            "when new mail in an Inbox raises a desktop notification",
-        ),
-        Section::Name => (
-            "Name",
-            "your name in the From line of the Messages you send",
-        ),
-        Section::Secrets => (
-            "Secrets",
-            "where the passwords and tokens of the Accounts are kept",
-        ),
-    }
-}
-
-/// The value at `at` of `section`, as `config.toml` names it, and what
-/// it does.
-fn choice(section: Section, at: usize) -> Option<(&'static str, &'static str)> {
-    Some(match section {
-        Section::Icons => {
-            let icons = *ICONS.get(at)?;
-            let detail = match icons {
-                IconChoice::Auto => "Nerd Font in Ghostty, WezTerm and kitty",
-                IconChoice::Nerd => "always Nerd Font glyphs",
-                IconChoice::None => "plain symbols",
-            };
-            (icons.key(), detail)
-        }
-        Section::Notify => {
-            let notify = *NOTIFY.get(at)?;
-            let detail = match notify {
-                NotifyChoice::Unfocused => "while the terminal is in the background",
-                NotifyChoice::Always => "even while Postal has focus",
-                NotifyChoice::Never => "no notifications",
-            };
-            (notify.key(), detail)
-        }
-        Section::Secrets => {
-            let store = *SECRETS.get(at)?;
-            let detail = match store {
-                SecretStore::Keychain => "the OS keychain",
-                SecretStore::File => "files in secrets/ beside config.toml",
-            };
-            (store.key(), detail)
-        }
-        Section::Accounts | Section::Name => return None,
-    })
 }
 
 /// The first row shown, keeping the selected one in `list`.
