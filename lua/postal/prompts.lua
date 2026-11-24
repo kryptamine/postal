@@ -1,17 +1,16 @@
--- The instructions `:PostalAgent <name>` sends without typing, by name,
--- each for the kinds of mail it makes sense over; the user's for any.
+-- The instructions `:PostalAgent <name>` sends without typing, by name: a
+-- default over mail the user `edits` or over mail only read, the user's own
+-- over any.
 local M = {}
-
-local WRITTEN = { draft = true, signature = true }
 
 local DEFAULTS = {
 	proofread = {
 		text = "Correct the spelling, grammar and punctuation, and change nothing else.",
-		kinds = WRITTEN,
+		edits = true,
 	},
-	shorter = { text = "Make it shorter, keeping every point it makes.", kinds = WRITTEN },
-	formal = { text = "Make it more formal.", kinds = WRITTEN },
-	summary = { text = "Sum it up in a few lines.", kinds = { message = true } },
+	shorter = { text = "Make it shorter, keeping every point it makes.", edits = true },
+	formal = { text = "Make it more formal.", edits = true },
+	summary = { text = "Sum it up in a few lines.", edits = false },
 }
 
 local by_name = vim.deepcopy(DEFAULTS)
@@ -31,11 +30,11 @@ function M.set(prompts)
 	end
 end
 
---- The text of each prompt over mail of `kind`, by name.
-function M.over(kind)
+--- The text of each prompt over mail the user `edits`, or does not, by name.
+function M.over(edits)
 	local texts = {}
 	for name, prompt in pairs(by_name) do
-		if not prompt.kinds or prompt.kinds[kind] then
+		if prompt.edits == nil or prompt.edits == edits then
 			texts[name] = prompt.text
 		end
 	end

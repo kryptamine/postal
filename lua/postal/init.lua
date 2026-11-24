@@ -54,35 +54,79 @@ local function native(buf)
 	vim.bo[buf].completeopt = "menuone,noselect"
 end
 
--- `:PostalAgent [agent] [prompt]`, each by its name in setup().
-local function agent_command(buf, desc)
-	local function named()
-		return prompts.over(vim.b[buf].postal_kind)
+-- `:PostalAgent [agent] [prompt]` over buffer `buf` of `kind`, each by its
+-- name in setup().
+local function agent_command(buf, kind)
+	local texts = function()
+		return prompts.over(kind.edits)
 	end
 
 	local function complete(typed)
-		local names = vim.list_extend(vim.tbl_keys(config.options.agents), vim.tbl_keys(named()))
+		local names = vim.list_extend(vim.tbl_keys(config.options.agents), vim.tbl_keys(texts()))
 		return vim.tbl_filter(function(name)
 			return vim.startswith(name, typed)
 		end, names)
 	end
 
 	vim.api.nvim_buf_create_user_command(buf, "PostalAgent", function(command)
-		local texts, name, text = named(), nil, nil
-		for _, word in ipairs(command.fargs) do
-			if config.options.agents[word] and not name and not text then
-				name = word
-			elseif texts[word] and not text then
-				text = texts[word]
-			else
-				vim.notify("postal: no agent or prompt " .. word .. " in setup()", vim.log.levels.ERROR)
-				return
-			end
+		local words = vim.deepcopy(command.fargs)
+		local name = config.options.agents[words[1]] and table.remove(words, 1) or nil
+		local text = words[1] and texts()[words[1]]
+		if #words > 1 or (words[1] and not text) then
+			vim.notify("postal: no agent or prompt " .. words[1] .. " in setup()", vim.log.levels.ERROR)
+			return
 		end
 
 		agent.ask(buf, name, text)
-	end, { nargs = "*", complete = complete, desc = desc })
+	end, { nargs = "*", complete = complete, desc = kind.desc })
 end
+
+-- Each kind of mail buffer by its `postal_kind`: the files it is, whether
+-- the user edits it and whether it ends in a Quote, and what it sets up.
+local KINDS = {
+	draft = {
+		pattern = DRAFTS,
+		events = { "BufReadPost", "BufNewFile" },
+		edits = true,
+		quoted = true,
+		desc = "Chat with an ACP agent about this Draft",
+		setup = function(buf, group)
+			vim.bo[buf].omnifunc = "v:lua.require'postal'.omnifunc"
+			recipients.ask(buf, function()
+				checks.run(buf)
+			end)
+			if not blink() then
+				native(buf)
+			end
+
+			vim.api.nvim_buf_create_user_command(buf, "PostalContacts", function()
+				contacts.pick(buf)
+			end, { desc = "Add a Correspondent to the Draft's To: or Cc:" })
+			attach.map(buf)
+			checks.watch(buf, group)
+		end,
+		unload = recipients.forget,
+	},
+	signature = {
+		pattern = SIGNATURES,
+		events = { "BufReadPost", "BufNewFile" },
+		edits = true,
+		quoted = false,
+		desc = "Chat with an ACP agent about this Signature",
+	},
+	message = {
+		pattern = MESSAGES,
+		events = { "BufReadPost" },
+		edits = false,
+		quoted = true,
+		desc = "Ask an ACP agent about this Message",
+		setup = function(buf)
+			vim.bo[buf].readonly = true
+			vim.bo[buf].modifiable = false
+			links.watch(buf)
+		end,
+	},
+}
 
 --- `opts` as the Configuration of nvim/README.md lists them.
 function M.setup(opts)
@@ -92,73 +136,39 @@ function M.setup(opts)
 	prompts.set(opts.prompts)
 	local group = vim.api.nvim_create_augroup("postal", { clear = true })
 	colors.setup(group)
-	vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
-		group = group,
-		pattern = DRAFTS,
-		callback = function(event)
-			vim.b[event.buf].postal_kind = "draft"
-			vim.bo[event.buf].omnifunc = "v:lua.require'postal'.omnifunc"
-			recipients.ask(event.buf, function()
-				checks.run(event.buf)
-			end)
-			if not blink() then
-				native(event.buf)
-			end
+	for name, kind in pairs(KINDS) do
+		vim.api.nvim_create_autocmd(kind.events, {
+			group = group,
+			pattern = kind.pattern,
+			callback = function(event)
+				vim.b[event.buf].postal_kind = name
+				agent_command(event.buf, kind)
+				if kind.setup then
+					kind.setup(event.buf, group)
+				end
+			end,
+		})
 
-			agent_command(event.buf, "Chat with an ACP agent about this Draft")
-			vim.api.nvim_buf_create_user_command(event.buf, "PostalContacts", function()
-				contacts.pick(event.buf)
-			end, { desc = "Add a Correspondent to the Draft's To: or Cc:" })
-			attach.map(event.buf)
-			checks.watch(event.buf, group)
-		end,
-	})
+		vim.api.nvim_create_autocmd("BufWinEnter", {
+			group = group,
+			pattern = kind.pattern,
+			callback = function(event)
+				layout.apply(event.buf, kind)
+			end,
+		})
 
-	vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
-		group = group,
-		pattern = SIGNATURES,
-		callback = function(event)
-			vim.b[event.buf].postal_kind = "signature"
-			agent_command(event.buf, "Chat with an ACP agent about this Signature")
-		end,
-	})
-
-	vim.api.nvim_create_autocmd("BufReadPost", {
-		group = group,
-		pattern = MESSAGES,
-		callback = function(event)
-			vim.b[event.buf].postal_kind = "message"
-			vim.bo[event.buf].readonly = true
-			vim.bo[event.buf].modifiable = false
-			agent_command(event.buf, "Ask an ACP agent about this Message")
-			links.watch(event.buf)
-		end,
-	})
-
-	vim.api.nvim_create_autocmd("BufWinEnter", {
-		group = group,
-		pattern = { DRAFTS, MESSAGES, SIGNATURES },
-		callback = function(event)
-			layout.apply(event.buf)
-		end,
-	})
-
-	vim.api.nvim_create_autocmd("BufUnload", {
-		group = group,
-		pattern = { DRAFTS, MESSAGES, SIGNATURES },
-		callback = function(event)
-			agent.close(event.buf)
-			fold.forget(event.buf)
-		end,
-	})
-
-	vim.api.nvim_create_autocmd("BufWipeout", {
-		group = group,
-		pattern = DRAFTS,
-		callback = function(event)
-			recipients.forget(event.buf)
-		end,
-	})
+		vim.api.nvim_create_autocmd("BufUnload", {
+			group = group,
+			pattern = kind.pattern,
+			callback = function(event)
+				agent.close(event.buf)
+				fold.forget(event.buf)
+				if kind.unload then
+					kind.unload(event.buf)
+				end
+			end,
+		})
+	end
 end
 
 -- What the last `findstart` found under the cursor: "attach" or "recipient".

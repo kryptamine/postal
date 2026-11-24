@@ -5,23 +5,22 @@ local fold = require("postal.fold")
 
 local M = {}
 
---- Lays out the current window on mail buffer `buf`.
-function M.apply(buf)
+--- Lays out the current window on mail buffer `buf`, of a `kind` that
+--- `edits` or not and is `quoted` or not.
+function M.apply(buf, kind)
 	vim.wo[0][0].wrap = true
 	vim.wo[0][0].linebreak = true
 	vim.wo[0][0].breakindent = true
-	vim.wo[0][0].spell = config.options.spell and vim.bo[buf].modifiable
-	if vim.b[buf].postal_kind ~= "signature" then
+	vim.wo[0][0].spell = config.options.spell and kind.edits
+	if kind.quoted then
 		fold.apply(buf)
 	end
 
-	if not vim.bo[buf].modifiable then
-		return
+	if kind.edits then
+		-- The ftplugin's 72 would break each paragraph typed into hard lines.
+		vim.bo[buf].textwidth = 0
+		vim.bo[buf].formatoptions = vim.bo[buf].formatoptions:gsub("[tca]", "")
 	end
-
-	-- The ftplugin's 72 would break each paragraph typed into hard lines.
-	vim.bo[buf].textwidth = 0
-	vim.bo[buf].formatoptions = vim.bo[buf].formatoptions:gsub("[tca]", "")
 end
 
 return M
