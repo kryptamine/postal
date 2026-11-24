@@ -10,7 +10,7 @@ use crate::domain::query::{Field, Kind, Query, Term};
 
 /// What a word without an operator matches: `from_line` and `to_line` are
 /// for the operators alone.
-const ANY: &str = "{sender subject snippet recipients}";
+const ANY: &str = "{sender subject snippet recipients body}";
 
 /// A statement reading some columns of the `message m` rows matching a
 /// Query in some Folders, newest first, with what it binds.

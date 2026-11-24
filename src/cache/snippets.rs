@@ -58,7 +58,7 @@ impl Cache {
 
 /// The text part in the four columns from `first`: section, encoding,
 /// charset and html; `None` when the section is NULL.
-fn text_part(row: &Row<'_>, first: usize) -> rusqlite::Result<Option<TextPart>> {
+pub(super) fn text_part(row: &Row<'_>, first: usize) -> rusqlite::Result<Option<TextPart>> {
     let Some(section) = row.get::<_, Option<String>>(first)? else {
         return Ok(None);
     };

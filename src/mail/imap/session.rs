@@ -31,7 +31,6 @@ use crate::{
     domain::sync_state::SyncState,
     domain::thread_id::ThreadId,
     domain::uid::Uid,
-    mail::snippet,
 };
 
 /// The raw `From` header rides along, for a `From` the server cannot parse,
@@ -152,12 +151,13 @@ pub trait MailServer {
     /// Unread Messages in the whole examined Folder.
     async fn unread_count(&mut self) -> Result<usize, Error>;
 
-    /// The first `snippet::FETCHED` octets of part `section` of each of
-    /// `uids`, as sent; a UID the server did not answer for is left out.
+    /// The first `octets` of part `section` of each of `uids`, as sent; a
+    /// UID the server did not answer for is left out.
     async fn text_parts(
         &mut self,
         uids: &[Uid],
         section: &str,
+        octets: u32,
     ) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
 
     /// Each of `uids` as the Preview needs it, its header and text parts in
@@ -570,13 +570,14 @@ impl MailServer for ImapSession {
         &mut self,
         uids: &[Uid],
         section: &str,
+        octets: u32,
     ) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
         let path = SectionPath::Part(
             section.split('.').filter_map(|n| n.parse().ok()).collect(),
             None,
         );
         // PEEK, or the server would mark every Message seen.
-        let items = format!("(BODY.PEEK[{section}]<0.{}>)", snippet::FETCHED);
+        let items = format!("(BODY.PEEK[{section}]<0.{octets}>)");
         let fetches = self.uid_fetch(uid_set(uids), &items).await?;
         Ok(fetches
             .iter()

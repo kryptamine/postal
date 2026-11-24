@@ -9,8 +9,8 @@ use super::{
 
 const FILE: &str = "cache.sqlite3";
 
-/// The columns of a `message` row but its Folder and UID, which `moved`
-/// keeps too; `open` checks both tables against it in a debug build.
+/// The columns of a `message` row but its Folder, UID and `bodied`, which
+/// `moved` keeps too; `open` checks both tables against it in a debug build.
 pub const MOVED_ROW: &str = "account, body_key, received, received_offset, unread, answered,
     sender, from_line, to_line, subject, thread, root, from_me, snippet, text_section, text_encoding,
     text_charset, text_html, attachments";
@@ -81,6 +81,8 @@ fn rows_match(connection: &Connection) -> rusqlite::Result<bool> {
         .collect();
     let mut message = columns("message")?;
     let folder_and_uid = message.remove("mailbox") && message.remove("uid");
+    // A moved row is indexed anew, so its body is not.
+    message.remove("bodied");
     Ok(folder_and_uid && message == row && columns("moved")?.is_superset(&row))
 }
 

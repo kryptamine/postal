@@ -48,17 +48,8 @@ pub async fn cut(
     server: &mut impl MailServer,
     pending: &[(Uid, TextPart)],
 ) -> Result<Vec<(Uid, String)>, Error> {
-    // One FETCH asks for one section, so the batch splits by section.
-    let mut by_section: BTreeMap<&str, Vec<Uid>> = BTreeMap::new();
-    for (uid, part) in pending {
-        by_section.entry(&part.section).or_default().push(*uid);
-    }
-
-    let mut raw = HashMap::new();
-    for (section, uids) in by_section {
-        raw.extend(server.text_parts(&uids, section).await?);
-    }
-
+    let asked: Vec<_> = pending.iter().map(|(uid, part)| (*uid, part)).collect();
+    let raw = parts(server, &asked, snippet::FETCHED).await?;
     Ok(pending
         .iter()
         .map(|(uid, part)| {
@@ -69,4 +60,25 @@ pub async fn cut(
             (*uid, snippet)
         })
         .collect())
+}
+
+/// The first `octets` of each `(uid, part)` of the examined Folder, as sent;
+/// a UID the server did not answer for is left out.
+pub async fn parts(
+    server: &mut impl MailServer,
+    pending: &[(Uid, &TextPart)],
+    octets: u32,
+) -> Result<HashMap<Uid, Vec<u8>>, Error> {
+    // One FETCH asks for one section, so the batch splits by section.
+    let mut by_section: BTreeMap<&str, Vec<Uid>> = BTreeMap::new();
+    for (uid, part) in pending {
+        by_section.entry(&part.section).or_default().push(*uid);
+    }
+
+    let mut raw = HashMap::new();
+    for (section, uids) in by_section {
+        raw.extend(server.text_parts(&uids, section, octets).await?);
+    }
+
+    Ok(raw)
 }

@@ -97,7 +97,7 @@ The first words of a Message's body, shown under its subject in the Message List
 _Avoid_: preview, excerpt, summary
 
 **Cache**:
-Messages kept on disk between runs, so the Message List shows before the server answers. After a write to disk fails, it lives in memory for the rest of the session.
+Messages kept on disk between runs, so the Message List shows before the server answers. Its search index holds every cached Message's body too, fetched in the background; the raw bodies are kept only as the Preview opens them. After a write to disk fails, it lives in memory for the rest of the session.
 _Avoid_: store, database, offline copy
 
 **Backfill**:
@@ -125,7 +125,7 @@ The selected Thread filling the screen in place of the Message List, entered wit
 _Avoid_: reader, zoom, full view
 
 **Search**:
-The Message List narrowed to the Threads holding a Message that matches a typed Query: a word in its sender, subject or Snippet starting with each of the Query's words, not a fuzzy match, and each of its operators; each Thread ranked by its best match (ADR 0023, ADR 0031). A Message the Account sent matches by its recipients' names and addresses too. It matches every Folder of every Account in the Cache but Trash and Spam, unless an `in:` names one, each Message once; a Message whose flags change while it is open stays until the Query does. `/` starts it, a menu over the Query line suggests what its last word can become, `Tab` writing one in, and `Esc` closes the menu, else ends the Search in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
+The Message List narrowed to the Threads holding a Message that matches a typed Query: a word in its sender, subject, Snippet or body starting with each of the Query's words, not a fuzzy match, and each of its operators; each Thread ranked by its best match (ADR 0023, ADR 0031). Bodies match once the background pass has indexed them (ADR 0032). A Message the Account sent matches by its recipients' names and addresses too. It matches every Folder of every Account in the Cache but Trash and Spam, unless an `in:` names one, each Message once; a Message whose flags change while it is open stays until the Query does. `/` starts it, a menu over the Query line suggests what its last word can become, `Tab` writing one in, and `Esc` closes the menu, else ends the Search in the shown Folder, on the selected match when that Folder holds its Thread, else where `/` was pressed (ADR 0010).
 _Avoid_: filter, find, fzf, lookup
 
 **Query**:
