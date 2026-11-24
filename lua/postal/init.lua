@@ -10,6 +10,7 @@ local fold = require("postal.fold")
 local icons = require("postal.icons")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
+local links = require("postal.links")
 local mention = require("postal.mention")
 local prompts = require("postal.prompts")
 local recipients = require("postal.recipients")
@@ -141,6 +142,7 @@ function M.setup(opts)
 			vim.bo[event.buf].readonly = true
 			vim.bo[event.buf].modifiable = false
 			agent_command(event.buf, "Ask an ACP agent about this Message")
+			links.watch(event.buf)
 		end,
 	})
 

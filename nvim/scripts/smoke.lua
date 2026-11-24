@@ -625,7 +625,15 @@ vim.cmd("bwipeout! " .. fetched_buf)
 -- and the agent reads it whole
 local messages = vim.fn.tempname() .. "/postal/messages/me@example.com"
 vim.fn.mkdir(messages, "p")
-local message_text = { "From: Ada <ada@example.com>", "Subject: Weekly notes", "", "See you soon." }
+local message_text = {
+	"From: Ada <ada@example.com>",
+	"Subject: Weekly notes",
+	"",
+	"Read the notes[1], then [2].",
+	"",
+	"[1] https://example.com/notes",
+	"[2] https://example.com/next",
+}
 vim.fn.writefile(message_text, messages .. "/7.eml")
 home()
 vim.cmd.edit(messages .. "/7.eml")
@@ -682,6 +690,35 @@ end, vim.list_slice(answers(), #answers() - 1))
 
 if not vim.deep_equal(message_outcomes, { "no", "yes" }) then
 	fail("over a Message the agent was answered " .. vim.inspect(message_outcomes))
+end
+
+-- `gx` on a link's marker opens its URL, listed at the end as Postal lays
+-- a Message out, and :PostalLinks lists each at its line
+local opened_urls = {}
+local ui_open = vim.ui.open
+vim.ui.open = function(url)
+	table.insert(opened_urls, url)
+end
+
+home()
+vim.cmd.buffer(message_buf)
+for _, col in ipairs({ #"Read the notes", #"Read the notes[1], then [2" }) do
+	vim.api.nvim_win_set_cursor(0, { 4, col })
+	vim.cmd.normal("gx")
+end
+
+vim.ui.open = ui_open
+if not vim.deep_equal(opened_urls, { "https://example.com/notes", "https://example.com/next" }) then
+	fail("gx opened " .. vim.inspect(opened_urls))
+end
+
+vim.cmd("PostalLinks")
+local listed = vim.tbl_map(function(item)
+	return item.lnum .. " " .. item.text
+end, vim.fn.getloclist(0))
+vim.cmd.lclose()
+if not vim.deep_equal(listed, { "6 [1] https://example.com/notes", "7 [2] https://example.com/next" }) then
+	fail(":PostalLinks listed " .. vim.inspect(listed))
 end
 
 vim.cmd("bwipeout! " .. message_buf)
