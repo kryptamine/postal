@@ -735,13 +735,14 @@ end
 
 home()
 vim.cmd.buffer(message_buf)
-for _, col in ipairs({ #"Read the notes", #"Read the notes[1], then [2" }) do
-	vim.api.nvim_win_set_cursor(0, { 4, col })
+for _, at in ipairs({ { 4, #"Read the notes" }, { 4, #"Read the notes[1], then [2" }, { 7, #"[2] https" } }) do
+	vim.api.nvim_win_set_cursor(0, at)
 	vim.cmd.normal("gx")
 end
 
 vim.ui.open = ui_open
-if not vim.deep_equal(opened_urls, { "https://example.com/notes", "https://example.com/next" }) then
+local want_urls = { "https://example.com/notes", "https://example.com/next", "https://example.com/next" }
+if not vim.deep_equal(opened_urls, want_urls) then
 	fail("gx opened " .. vim.inspect(opened_urls))
 end
 
