@@ -38,6 +38,25 @@ const also = [
 
 const install = `curl -fsSL ${site.url}/install.sh | sh`;
 
+// schema.org's description of the app, for search engines that read JSON-LD.
+const app = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: site.name,
+  description: site.description,
+  url: `${site.url}/`,
+  applicationCategory: 'CommunicationApplication',
+  operatingSystem: 'macOS, Linux',
+  license: 'https://opensource.org/license/mit',
+  downloadUrl: `${site.url}/install.sh`,
+  sameAs: [site.repo],
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+};
+
 const providers = [
   [
     'Google',
@@ -52,11 +71,13 @@ const providers = [
 ---
 
 <Base>
+  <script slot="head" type="application/ld+json" is:inline set:html={JSON.stringify(app)} />
   <section class="hero wrap">
     <div class="pitch">
-      <p class="eyebrow">A mail client for the terminal</p>
+      <!-- The eyebrow sits in the h1, so the heading names what Postal is. -->
       <h1>
-        Mail at <span>terminal speed.</span>
+        <span class="eyebrow">A mail client for the terminal</span>
+        Mail at <span class="accent">terminal speed.</span>
       </h1>
       <p class="lede prose-font">
         Gmail, iCloud and any IMAP server in one keyboard-driven window. HTML mail keeps its layout,
@@ -367,7 +388,14 @@ const providers = [
     line-height: var(--leading-display);
   }
 
-  .hero h1 span {
+  .hero h1 .eyebrow {
+    display: block;
+    margin-bottom: var(--space-3);
+    font: var(--weight-body) var(--text-caption) / var(--leading-body) var(--font-ui);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .hero h1 .accent {
     color: var(--color-primary);
     white-space: nowrap;
   }
