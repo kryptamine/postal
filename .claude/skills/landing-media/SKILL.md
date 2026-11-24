@@ -45,8 +45,9 @@ of working that produced them, and the traps on the way.
 - A screenshot of the real screen can catch the user's private windows:
   capture only the demo's window (`screencapture -l <id>`), and delete any
   test capture at once.
-- Ghostty clamps the window to the screen: at the user's font size 140x36
-  is the most that fits. `stills.sh` crops each shot to its slot's ratio.
+- `stills.sh` crops each shot about its centre to its slot's ratio, so a
+  window wider than the ratio loses its edges: after a font change, size
+  the cells so the window already has the ratio (132x36 is 16:10 at 22pt).
 - Downloading tools through `npx` may be refused; the HTML mails are
   written by hand in MJML's output style, which needs nothing.
 
