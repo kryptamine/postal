@@ -16,7 +16,7 @@ use std::{fs, process::Output};
 use serde_json::{Value, json};
 use support::{
     fake_body::FakeBody,
-    fake_imap::{EMAIL, FakeImap, FakeMessage},
+    fake_imap::{EMAIL, FakeImap, FakeMessage, Outage},
     fake_oauth,
     fake_smtp::FakeSmtp,
     home::Home,
@@ -186,4 +186,17 @@ fn a_signed_out_account_fails_the_sync() {
     assert_eq!(output.status.code(), Some(1));
     let rows: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(rows[0]["outcome"], "signed-out");
+}
+
+// An agent or a cron job tells an outage from success by the exit code alone.
+#[test]
+fn a_server_outage_fails_the_sync() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let home = home(&imap, &smtp);
+    imap.fail(Outage::Offline);
+
+    let output = postal(&home, &["folder", "sync", "--json"]);
+    assert_eq!(output.status.code(), Some(1));
+    let rows: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(rows[0]["outcome"], "failed");
 }
