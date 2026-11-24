@@ -2,7 +2,6 @@
   <img src="assets/brand/social-preview.png" alt="Postal" width="100%">
   <p>A mail client for the terminal. Works with Gmail, iCloud and any IMAP server, shows HTML mail with its layout, and keeps everything on your computer.</p>
   <p>
-    <a href="https://github.com/kryptamine/postal/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/kryptamine/postal/ci.yml?branch=main&logo=githubactions&logoColor=white&label=CI&style=for-the-badge&labelColor=000000" alt="CI status"></a>
     <a href="https://github.com/kryptamine/postal/releases"><img src="https://img.shields.io/github/v/release/kryptamine/postal?logo=github&logoColor=white&color=0797ff&style=for-the-badge&labelColor=000000" alt="Latest release"></a>
     <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/rust-1.89%2B-0797ff?logo=rust&logoColor=white&style=for-the-badge&labelColor=000000" alt="Rust 1.89+"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0797ff?style=for-the-badge&labelColor=000000" alt="MIT licence"></a>
