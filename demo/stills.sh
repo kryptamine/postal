@@ -75,9 +75,9 @@ shoot() {
 	sleep 1
 }
 
-shoot hero 16:10 140 36 "" Brightfold g "j j j"
-shoot thread 16:10 140 36 "" Brightfold g j Enter p Enter
-shoot rendered 4:3 118 36 "" Brightfold g "j j j" Enter
+shoot hero 16:10 132 36 "" Brightfold g "j j j"
+shoot thread 16:10 132 36 "" Brightfold g j Enter p Enter
+shoot rendered 4:3 110 36 "" Brightfold g "j j j" Enter
 shoot onboarding 16:9 140 32 --onboarding "Sign in"
 
 # The same newsletter as a browser draws it, beside the rendered one.
