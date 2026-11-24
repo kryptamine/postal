@@ -20,7 +20,7 @@ use support::{
     home::Home,
     picker::wait_picked,
 };
-use termlens::{Color, Key, Screen, Terminal};
+use termlens::{Color, Key, Screen, Signal, Terminal};
 
 const ITEMS: &str = "(UID FLAGS INTERNALDATE ENVELOPE X-GM-MSGID X-GM-THRID BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM)])";
 
@@ -287,6 +287,44 @@ fn a_corrupt_cache_is_rebuilt() {
         .query_row("SELECT count(*) FROM message", [], |row| row.get(0))
         .unwrap();
     assert_eq!(rows, 4);
+}
+
+// The check of the whole file costs a start 0.8 s at 80 MB, so only a
+// session that did not end in order is followed by it.
+#[test]
+fn a_cache_damaged_under_a_killed_session_is_checked_and_rebuilt() {
+    let server = FakeImap::start(four_messages());
+    let home = Home::for_server(&server);
+    first_run(&home, &server);
+    first_run(&home, &server);
+    let log = fs::read_to_string(home.log_path()).unwrap();
+    assert!(!log.contains("checking the Cache"), "{log}");
+
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains(" · 1/")).unwrap();
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+    t.signal(Signal::Kill).unwrap();
+    t.wait_exit().unwrap();
+    // The schema's pages stay, so only the check finds the damage.
+    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
+    let root: usize = cache
+        .query_row(
+            "SELECT rootpage FROM sqlite_master WHERE name = 'message'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    drop(cache);
+    let mut bytes = fs::read(home.cache_path()).unwrap();
+    bytes[(root - 1) * 4096..root * 4096].fill(0xff);
+    fs::write(home.cache_path(), bytes).unwrap();
+
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains(" · 1/") && hint_line(s).ends_with("cache rebuilt"))
+        .unwrap();
+    quit(t);
+    let log = fs::read_to_string(home.log_path()).unwrap();
+    assert!(log.contains("checking the Cache"), "{log}");
 }
 
 #[test]

@@ -7,6 +7,7 @@ use crate::{
     app::onboard,
     app::session::session,
     app::signed_in::opened,
+    cache,
     compose::forwarded,
     ui::attachment_file,
     ui::exit::Exit,
@@ -27,6 +28,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         let mut failure = None;
         loop {
             let exit = Box::pin(session(slot, &dir, &configs, &sign_ins, failure)).await?;
+            cache::settle(&xdg::cache_dir()?);
             failure = None;
             match exit {
                 Exit::Quit => return Ok(()),
