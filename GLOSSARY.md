@@ -17,7 +17,7 @@ The Folder named `INBOX` of an Account; with one Account, the one every run star
 _Avoid_: feed
 
 **Folder Picker**:
-A popup over the screen listing every Folder with its Unread count, and Local Drafts, opened with `f`; with more than one Account, All Inboxes first, then a section per Account headed by its address; typing narrows it, `Enter` shows the chosen Folder. Opened by a Move, it lists only the Account's other Folders, and `Enter` moves there.
+A popup over the screen listing every Folder with its Unread count over its total (the total alone when nothing is Unread), and Local Drafts, opened with `f`; with more than one Account, All Inboxes first, then a section per Account headed by its address; typing narrows it, `Enter` shows the chosen Folder. Opened by a Move, it lists only the Account's other Folders, and `Enter` moves there.
 _Avoid_: folder list, switcher, sidebar
 
 **Message**:

@@ -102,7 +102,7 @@ fn new_mail_appears_above_and_the_selection_stays_on_its_message() {
     let screen = t
         .snapshot_after(|s| s.contains("Body of Brand new"))
         .unwrap();
-    wait_picked(&mut t, "Inbox 2");
+    wait_picked(&mut t, "Inbox 2 / 5");
     quit(t);
 
     assert_eq!(card(&screen, "Erin"), Some(true), "{screen}");
@@ -156,7 +156,7 @@ fn expunges_in_one_burst_each_renumber_the_rest() {
     let screen = t
         .snapshot_after(|s| !s.contains("Alice") && !s.contains("Carol"))
         .unwrap();
-    wait_picked(&mut t, "Inbox");
+    wait_picked(&mut t, "Inbox 2");
     quit(t);
     for kept in ["Bob", "Dave"] {
         assert!(screen.contains(kept), "{kept}: {screen}");
@@ -180,7 +180,7 @@ fn a_flag_change_updates_unread_and_the_count() {
     let screen = t
         .snapshot_after(|s| card(s, "Carol") == Some(false) && card(s, "Bob") == Some(true))
         .unwrap();
-    wait_picked(&mut t, "Inbox 1");
+    wait_picked(&mut t, "Inbox 1 / 4");
     quit(t);
     assert_eq!(card(&screen, "Alice"), Some(false), "{screen}");
 }
@@ -203,7 +203,7 @@ fn an_expunge_older_than_the_cache_renumbers_the_cached_rows() {
     server.expunge(FIRST_UID);
     wait_for(|| idles(&server) > 1);
     server.set_seen(FIRST_UID + 502, false);
-    wait_picked(&mut t, "Inbox 1");
+    wait_picked(&mut t, "Inbox 1 / 502");
     let screen = t.snapshot_after(|s| s.contains("Message 503")).unwrap();
     quit(t);
 

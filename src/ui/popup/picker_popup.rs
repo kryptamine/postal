@@ -31,9 +31,8 @@ const PADDING: u16 = 1;
 const BAR: u16 = 1;
 
 /// The Folder Picker centred over `area`: the Query, a rule, then a row per
-/// Folder with its Unread count right-aligned, none for `0` or one not yet
-/// counted, under each Account's address when there are several; scrolled
-/// to keep the selected row in view.
+/// Folder with its counts right-aligned, under each Account's address when
+/// there are several; scrolled to keep the selected row in view.
 pub struct PickerPopup<'a> {
     pub theme: &'a Theme,
     pub picker: &'a FolderPicker,
@@ -120,12 +119,24 @@ impl PickerPopup<'_> {
         }
     }
 
-    /// One Folder in `row`: its icon and label, then its Unread count.
+    /// One Folder in `row`: its icon and label, then its Unread count over
+    /// its total, or the total alone, muted, when nothing is Unread.
     fn folder(&self, buf: &mut Buffer, row: Rect, folder: &Shown, style: Style) {
-        let mut count = StackStr::<24>::new();
-        if let Some(unread) = folder.unread().filter(|&n| n > 0) {
-            write!(count, "{unread}").ok();
+        let mut count = StackStr::<48>::new();
+        let unread = folder.unread().filter(|&n| n > 0);
+        match (unread, folder.total()) {
+            (Some(unread), Some(total)) => write!(count, "{unread} / {total}"),
+            (Some(unread), None) => write!(count, "{unread}"),
+            (None, Some(total)) => write!(count, "{total}"),
+            (None, None) => Ok(()),
         }
+        .ok();
+
+        let count_style = if unread.is_some() {
+            style
+        } else {
+            style.patch(self.theme.muted)
+        };
 
         let count_width = u16::try_from(count.as_str().width()).unwrap_or(0);
         let label = Rect {
@@ -137,7 +148,13 @@ impl PickerPopup<'_> {
         let label = icon.map_or(label, |icon| after_icon(buf, label, icon, style));
         truncate::draw(buf, label, folder.label(), style);
         let count_x = row.right().saturating_sub(count_width);
-        buf.set_stringn(count_x, row.y, count.as_str(), count_width.into(), style);
+        buf.set_stringn(
+            count_x,
+            row.y,
+            count.as_str(),
+            count_width.into(),
+            count_style,
+        );
     }
 
     /// Where the terminal's cursor goes: after the Query.

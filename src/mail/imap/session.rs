@@ -90,8 +90,9 @@ pub trait MailServer {
     /// Every Folder the server lists that can be opened.
     async fn folders(&mut self) -> Result<Vec<Folder<()>>, Error>;
 
-    /// Unread Messages in a Folder other than the examined one, by `STATUS`.
-    async fn unread_in(&mut self, folder: &FolderName) -> Result<usize, Error>;
+    /// The Unread and all Messages in a Folder other than the examined one,
+    /// by one `STATUS`.
+    async fn counts_in(&mut self, folder: &FolderName) -> Result<(usize, usize), Error>;
 
     /// The `UIDNEXT` of a Folder other than the examined one, by `STATUS`.
     async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error>;
@@ -434,11 +435,10 @@ impl MailServer for ImapSession {
         Ok(folders)
     }
 
-    async fn unread_in(&mut self, folder: &FolderName) -> Result<usize, Error> {
-        let status = self.session.status(folder, "(UNSEEN)").await?;
-        Ok(status
-            .unseen
-            .map_or(0, |n| usize::try_from(n).unwrap_or(usize::MAX)))
+    async fn counts_in(&mut self, folder: &FolderName) -> Result<(usize, usize), Error> {
+        let status = self.session.status(folder, "(UNSEEN MESSAGES)").await?;
+        let count = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
+        Ok((status.unseen.map_or(0, count), count(status.exists)))
     }
 
     async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error> {

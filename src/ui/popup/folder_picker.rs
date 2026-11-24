@@ -239,11 +239,12 @@ impl FolderPicker {
     }
 }
 
-/// All Inboxes, its Unread count the sum of the Inboxes' counted.
+/// All Inboxes, each count the sum of the Inboxes' counted.
 fn counted_all_inboxes(folders: &[Folder]) -> Shown {
-    let counts = folders.iter().filter(|f| f.role == Some(Role::Inbox));
+    let inboxes = || folders.iter().filter(|f| f.role == Some(Role::Inbox));
     Shown::AllInboxes {
-        unread: counts.filter_map(|f| f.unread).reduce(|a, b| a + b),
+        unread: inboxes().filter_map(|f| f.unread).reduce(|a, b| a + b),
+        total: inboxes().filter_map(|f| f.total).reduce(|a, b| a + b),
     }
 }
 

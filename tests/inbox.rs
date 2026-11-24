@@ -236,7 +236,7 @@ fn counts_unread_over_the_whole_inbox() {
     let home = Home::for_server(&server);
     let mut t = postal(&home);
     t.wait_until(loaded).unwrap();
-    wait_picked(&mut t, "Inbox 4");
+    wait_picked(&mut t, "Inbox 4 / 503");
     quit(t);
 }
 

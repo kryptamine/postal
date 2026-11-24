@@ -154,7 +154,8 @@ fn new_mail_in_the_inbox_notifies_while_another_folder_shows() {
     t.send(Key::Char('f')).unwrap();
     t.send_str("Work").unwrap();
     // The Cache lists the Inbox alone until the server's list comes.
-    t.snapshot_after(|s| picked(s) == ["Work"]).unwrap();
+    t.snapshot_after(|s| matches!(&picked(s)[..], [work] if work.starts_with("Work")))
+        .unwrap();
     t.send(Key::Enter).unwrap();
     t.wait_until(|s| s.contains("Quarterly plan") && !s.contains("Weekly notes"))
         .unwrap();

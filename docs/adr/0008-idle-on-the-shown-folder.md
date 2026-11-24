@@ -4,17 +4,18 @@ Postal holds one IMAP connection, and IDLE (RFC 2177) reports changes to the
 selected mailbox only. When the Folder Picker shows another Folder, IDLE moves
 with it: the new Folder's arrivals and flag changes show live, and the Inbox
 is not watched by IDLE until the user goes back to it; `STATUS` looks at it
-every two minutes meanwhile (ADR 0025). Its Unread count in the Folder
-Picker is as fresh as the last `STATUS` sent when the Picker opened.
+every two minutes meanwhile (ADR 0025). Its counts in the Folder Picker
+are as fresh as the last `STATUS` sent when the Picker opened.
 
 With several Accounts each holds its own connection, and in All Inboxes each
 idles on its own Inbox. Showing another Folder moves that Account's IDLE
 alone; the others stay on the Folder they last showed.
 
-The Folder Picker's `LIST` and `STATUS (UNSEEN)` go over the same connection:
-Postal ends IDLE with `DONE`, sends them, and idles again. `STATUS` is never
-sent for the selected Folder (RFC 3501 advises against it); its count comes
-from `UID SEARCH UNSEEN` as in ADR 0004.
+The Folder Picker's `LIST` and `STATUS (UNSEEN MESSAGES)` go over the same
+connection: Postal ends IDLE with `DONE`, sends them, and idles again.
+`STATUS` is never sent for the selected Folder (RFC 3501 advises against
+it); its Unread count comes from `UID SEARCH UNSEEN` as in ADR 0004, its
+total from `EXISTS`.
 
 ## Considered options
 

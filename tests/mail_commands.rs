@@ -157,8 +157,19 @@ fn a_folder_is_named_by_its_role_or_its_name() {
     assert_eq!(sent["role"], "Sent");
     // A name is shown, and taken, as people read it.
     assert!(folders.iter().any(|f| f["name"] == "Архив"), "{folders:?}");
+    // A total is counted beside the Unread, and shown when nothing is Unread.
+    assert_eq!(sent["total"], 1);
+    assert_eq!(sent["unread"], 0);
+    let inbox = folders.iter().find(|f| f["name"] == "INBOX").unwrap();
+    assert_eq!((&inbox["total"], &inbox["unread"]), (&3.into(), &1.into()));
     let table = String::from_utf8(postal(&home, &["folder", "list"]).stdout).unwrap();
     assert!(!table.contains('&'), "{table}");
+    let line = |name: &str| table.lines().find(|l| l.starts_with(name)).unwrap();
+    assert!(line("INBOX").ends_with("  3 messages, 1 unread"), "{table}");
+    assert!(
+        line("[Gmail]/Sent Mail").ends_with("  1 message"),
+        "{table}"
+    );
     for folder in ["архив", "&BBAEQARFBDgEMg-"] {
         assert!(
             postal(&home, &["message", "list", "--folder", folder])

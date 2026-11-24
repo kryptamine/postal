@@ -92,7 +92,7 @@ fn a_second_run_shows_the_cache_before_the_server_answers() {
         .snapshot_after(|s| s.contains("Oldest") && s.contains(" Inbox · 1/4 "))
         .unwrap();
     assert_eq!(card(&screen, "Carol"), Some(true), "{screen}");
-    wait_picked(&mut t, "Inbox 1");
+    wait_picked(&mut t, "Inbox 1 / 4");
     assert!(server.commands().is_empty(), "{:#?}", server.commands());
     quit(t);
 }
@@ -112,7 +112,7 @@ fn resync_picks_up_new_expunged_and_flag_changed_messages() {
     let screen = t
         .snapshot_after(|s| s.contains("Brand new") && !s.contains("Oldest"))
         .unwrap();
-    wait_picked(&mut t, "Inbox 2");
+    wait_picked(&mut t, "Inbox 2 / 4");
     quit(t);
 
     assert_eq!(card(&screen, "Erin"), Some(true), "{screen}");
@@ -214,7 +214,7 @@ fn flags_are_fetched_in_full_without_condstore() {
     server.set_seen(FIRST_UID + 2, true);
     let mut t = postal(&home);
     t.wait_until(|s| card(s, "Carol") == Some(false)).unwrap();
-    wait_picked(&mut t, "Inbox");
+    wait_picked(&mut t, "Inbox 4");
     quit(t);
     assert!(
         server
@@ -246,7 +246,7 @@ fn a_uidvalidity_change_keeps_the_old_rows_until_the_refetch() {
     server.release();
     t.wait_until(|s| s.contains("Renumbered") && !s.contains("Newest"))
         .unwrap();
-    wait_picked(&mut t, "Inbox");
+    wait_picked(&mut t, "Inbox 1");
     quit(t);
 
     // The next run resyncs against the new UIDVALIDITY rather than refetching.

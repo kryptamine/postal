@@ -6,7 +6,7 @@ use crate::{domain::folder::INBOX, domain::folder_name::FolderName, domain::thre
 pub enum Ask {
     /// Resync and IDLE on this Folder from now on.
     Show(FolderName),
-    /// `LIST` and `STATUS (UNSEEN)`, for the Folder Picker.
+    /// `LIST` and `STATUS (UNSEEN MESSAGES)`, for the Folder Picker.
     ListFolders,
     /// The Messages of Gmail's Thread with this ID in other Folders.
     Thread(ThreadId),

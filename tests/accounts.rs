@@ -157,13 +157,13 @@ fn the_picker_lists_all_inboxes_first_then_a_section_per_account_and_local_draft
     let mut t = postal(&two);
     t.wait_until(|s| s.contains("Charlie plans")).unwrap();
     t.send(Key::Char('f')).unwrap();
-    // Its Unread count sums the Inboxes'.
+    // Each of its counts sums the Inboxes'.
     let screen = t
-        .snapshot_after(|s| both_listed(s) && picked(s).iter().any(|r| r == "All Inboxes 2"))
+        .snapshot_after(|s| both_listed(s) && picked(s).iter().any(|r| r == "All Inboxes 2 / 3"))
         .unwrap();
     let rows = picked(&screen);
     let at = |row: &str| rows.iter().position(|r| r == row).unwrap();
-    assert_eq!(rows[0], "All Inboxes 2", "{rows:?}");
+    assert_eq!(rows[0], "All Inboxes 2 / 3", "{rows:?}");
     assert_eq!(rows[1], EMAIL, "{rows:?}");
     assert!(rows[2].starts_with("Inbox"), "{rows:?}");
     assert!(at(OTHER) > 2, "{rows:?}");

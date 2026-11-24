@@ -9,7 +9,7 @@ use crate::{
 pub enum Update {
     /// The sync wrote rows or Snippets to the Cache.
     Inbox,
-    /// The sync wrote the Folder list or an Unread count to the Cache.
+    /// The sync wrote the Folder list or a Folder's counts to the Cache.
     Folders,
     /// The server no longer has this Folder; the sync went back to the Inbox.
     FolderGone(FolderName),

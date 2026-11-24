@@ -74,11 +74,12 @@ fn inbox() -> FakeImap {
     server
 }
 
-/// The Folder Picker's rows, once every Folder is listed.
+/// The Folder Picker's rows, once every Folder is listed and counted.
 fn picker_rows(t: &mut Terminal) -> (Vec<String>, Screen) {
     t.send(Key::Char('f')).unwrap();
+    let counted = |s: &Screen, name: &str| picked(s).iter().any(|row| row.ends_with(name));
     let screen = t
-        .snapshot_after(|s| picked(s).iter().any(|row| row.ends_with("Work")))
+        .snapshot_after(|s| counted(s, "Work 0") && counted(s, "Trash 0"))
         .unwrap();
     (picked(&screen), screen)
 }
@@ -95,10 +96,10 @@ fn auto_draws_icons_in_a_terminal_that_bundles_them() {
     assert_eq!(
         rows,
         [
-            "\u{f0687} Inbox 1",
+            "\u{f0687} Inbox 1 / 2",
             "\u{f0322} Local Drafts",
-            "\u{f01b4} Trash",
-            "\u{f024b} Work",
+            "\u{f01b4} Trash 0",
+            "\u{f024b} Work 0",
         ],
         "{screen}"
     );
@@ -123,7 +124,7 @@ fn auto_keeps_the_plain_look_elsewhere_and_none_keeps_it_everywhere() {
         let (rows, screen) = picker_rows(&mut t);
         assert_eq!(
             rows,
-            ["Inbox 1", "Local Drafts", "Trash", "Work"],
+            ["Inbox 1 / 2", "Local Drafts", "Trash 0", "Work 0"],
             "{screen}"
         );
         quit(t);
