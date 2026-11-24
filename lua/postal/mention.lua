@@ -1,6 +1,7 @@
 -- A warning over a Draft whose own words mention an attachment while no
 -- `Attach:` line names a file, the Quote aside.
 local body = require("postal.body")
+local config = require("postal.config")
 local header = require("postal.header")
 local quote = require("postal.quote")
 
@@ -8,22 +9,13 @@ local M = {}
 
 local NS = vim.api.nvim_create_namespace("postal-mention")
 
-local DEFAULTS = { "attach", "enclos" }
-
---- The start of each word that mentions an attachment, case aside.
-M.words = DEFAULTS
-
-function M.set(words)
-	M.words = words or DEFAULTS
-end
-
 -- The 0-based row and column of the first mention in `buf`'s own words.
 local function first(buf)
 	local own = quote.cut(body.get(buf))
 	local top = body.start(buf)
 	for n, line in ipairs(vim.split(own, "\n", { plain = true })) do
 		local lower = line:lower()
-		for _, word in ipairs(M.words) do
+		for _, word in ipairs(config.options.attachment_words) do
 			local col = lower:find("%f[%w]" .. vim.pesc(word:lower()))
 			if col then
 				return top + n - 1, col - 1

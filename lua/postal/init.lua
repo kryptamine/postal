@@ -6,9 +6,9 @@ local addresses = require("postal.addresses")
 local agent = require("postal.agent")
 local attach = require("postal.attach")
 local colors = require("postal.colors")
+local config = require("postal.config")
 local contacts = require("postal.contacts")
 local fold = require("postal.fold")
-local icons = require("postal.icons")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
 local links = require("postal.links")
@@ -62,7 +62,7 @@ local function agent_command(buf, desc)
 	end
 
 	local function complete(typed)
-		local names = vim.list_extend(vim.tbl_keys(agent.agents), vim.tbl_keys(named()))
+		local names = vim.list_extend(vim.tbl_keys(config.options.agents), vim.tbl_keys(named()))
 		return vim.tbl_filter(function(name)
 			return vim.startswith(name, typed)
 		end, names)
@@ -71,7 +71,7 @@ local function agent_command(buf, desc)
 	vim.api.nvim_buf_create_user_command(buf, "PostalAgent", function(command)
 		local texts, name, text = named(), nil, nil
 		for _, word in ipairs(command.fargs) do
-			if agent.agents[word] and not name and not text then
+			if config.options.agents[word] and not name and not text then
 				name = word
 			elseif texts[word] and not text then
 				text = texts[word]
@@ -88,17 +88,9 @@ end
 --- `opts` as the Configuration of nvim/README.md lists them.
 function M.setup(opts)
 	opts = opts or {}
+	config.set(opts)
 	keys.set(opts.keys)
 	prompts.set(opts.prompts)
-	if opts.nerd_font ~= nil then
-		icons.nerd = opts.nerd_font
-	end
-
-	recipients.cmd = opts.cmd or recipients.cmd
-	mention.set(opts.attachment_words)
-	layout.spell = opts.spell or false
-	agent.agents = vim.tbl_deep_extend("force", agent.agents, opts.agents or {})
-	agent.default = opts.agent or agent.default
 	local group = vim.api.nvim_create_augroup("postal", { clear = true })
 	colors.setup(group)
 	vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
