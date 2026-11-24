@@ -20,29 +20,18 @@ function M.start(buf, row, col)
 		return nil
 	end
 
-	local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1]
-	local before = line:sub(1, col)
-	local start = at == row and #name + 1 or 0
-	-- A comma inside quotes or angle brackets is part of one recipient.
-	local quoted, angled = false, false
-	for n = start + 1, #before do
-		local c = before:sub(n, n)
-		if c == '"' then
-			quoted = not quoted
-		elseif c == "<" and not quoted then
-			angled = true
-		elseif c == ">" and not quoted then
-			angled = false
-		elseif c == "," and not quoted and not angled then
-			start = n
+	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+	local line = lines[row]
+	for _, piece in ipairs(header.pieces(lines, at - 1)) do
+		if piece.row == row - 1 and piece.from <= col and col <= piece.to then
+			local start = piece.from
+			while start < col and line:sub(start + 1, start + 1):match("%s") do
+				start = start + 1
+			end
+
+			return start
 		end
 	end
-
-	while start < col and before:sub(start + 1, start + 1):match("%s") do
-		start = start + 1
-	end
-
-	return start
 end
 
 -- Takes the answer of buffer `buf`'s asking, which Postal may have refused.
