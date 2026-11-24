@@ -6,8 +6,8 @@ use crate::{
     mail::sync::{self, Error},
 };
 
-/// Messages per page of older ones.
-const PAGE: u32 = 500;
+/// Messages per page of older ones the Message List asks for.
+pub const PAGE: u32 = 500;
 
 /// How a page of older Messages is coming along.
 pub enum Backfill {
@@ -22,15 +22,15 @@ pub enum Backfill {
     },
 }
 
-/// Fetches the page of Messages of `folder` just older than every cached one (phase 1).
+/// Fetches the `size` Messages of `folder` just older than every cached one (phase 1).
 /// Returns the UID below which phase 2 has Snippets to cut, when it wrote
-/// any rows. `report` follows phase 1; `written` follows the Cache write.
+/// any rows. `report` follows phase 1, and its `Paged` the Cache write.
 pub async fn page(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &FolderName,
+    size: u32,
     report: impl Fn(Backfill),
-    written: impl Fn(),
 ) -> Result<Option<Uid>, Error> {
     let paged = |nothing_below| Backfill::Paged {
         folder: folder.clone(),
@@ -68,10 +68,10 @@ pub async fn page(
         }
     };
 
-    let total = (before - 1).min(PAGE);
+    let total = (before - 1).min(size);
     report(Backfill::Fetching { done: 0, total });
     let progress = |done| report(Backfill::Fetching { done, total });
-    let mut older = server.older(before, PAGE, progress).await?;
+    let mut older = server.older(before, size, progress).await?;
     older.retain(|new| new.row.uid < oldest);
     // The sync connection may have replaced the rows while this one fetched.
     if !same(cache)? {
@@ -81,8 +81,7 @@ pub async fn page(
 
     cache.backfill(folder, &older)?;
     tracing::info!("backfilled {} older Messages", older.len());
-    written();
-    let first = before.saturating_sub(PAGE) <= 1;
+    let first = before.saturating_sub(size) <= 1;
     let new_oldest = older.iter().map(|new| new.row.uid).min().unwrap_or(oldest);
     report(paged(first.then_some(new_oldest)));
     Ok(Some(oldest))

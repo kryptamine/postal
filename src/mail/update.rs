@@ -20,6 +20,7 @@ pub enum Update {
     Rendered(PreviewKey, Preview),
     Status(Status),
     Backfill(Backfill),
+    Unindexed(Unindexed),
     /// No Folder has this role: the moves queued to it were taken back.
     NoFolder(Role),
     /// An Undo found its Messages gone from where they were moved.
@@ -28,6 +29,15 @@ pub enum Update {
     Sent,
     /// SMTP refused a Message from the Outbox: it is a Draft again.
     Refused,
+}
+
+/// How far the search index is from every Message.
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub struct Unindexed {
+    /// Cached Messages whose body the index lacks.
+    pub bodies: usize,
+    /// Folders are still coming into the Cache.
+    pub fetching: bool,
 }
 
 /// The state of the connection for bodies.

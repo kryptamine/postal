@@ -8,7 +8,7 @@ use crate::{
     domain::message_ref::MessageRef,
     domain::uid::Uid,
     mail::attachment_fetch::{self, AttachmentRequest},
-    mail::backfill,
+    mail::backfill::{self, Backfill},
     mail::imap::{MailServer, Mode},
     mail::spare_work::SpareWork,
     mail::sync::{self, Error},
@@ -153,9 +153,15 @@ pub async fn serve(
         }
 
         if let Some(folder) = pending.older.take() {
-            let report = |backfill| send(Update::Backfill(backfill));
-            let written = || send(Update::Inbox);
-            let below = backfill::page(server, cache, &folder, report, written).await?;
+            let report = |backfill| {
+                // The rows a `Paged` follows are shown before it is told.
+                if matches!(backfill, Backfill::Paged { .. }) {
+                    send(Update::Inbox);
+                }
+
+                send(Update::Backfill(backfill));
+            };
+            let below = backfill::page(server, cache, &folder, backfill::PAGE, report).await?;
             spare.backfilled(folder, below);
         }
     }

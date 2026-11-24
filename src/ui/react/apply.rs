@@ -65,6 +65,7 @@ pub fn apply(
             ui.screen.backfill = None;
             paged(&mut ui.view, caches, account, folder, nothing_below)?;
         }
+        Update::Unindexed(left) => ui.screen.unindexed[account] = left,
         Update::NoFolder(role) => {
             ui.screen.toast = Some(Toast::error(format!("no {} Folder", role.label())));
         }

@@ -20,7 +20,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
-    search::{list, postal, quit},
+    search::{hint_line, list, postal, quit, wait_selected},
 };
 use termlens::{Key, Terminal};
 
@@ -33,13 +33,14 @@ fn past_the_snippet(word: &str) -> String {
 }
 
 /// `count` Messages a minute apart, the newest last, so the List shows UID
-/// `FIRST_UID + count - 1` first; Message `n` says `wordn` past its Snippet.
+/// `FIRST_UID + count - 1` first; Message `n` says `wordnx` past its Snippet,
+/// a word no other one starts with.
 fn messages(count: u32) -> Vec<FakeMessage> {
     (0..count)
         .map(|n| {
             let date = format!("2024-03-01T{:02}:{:02}:00Z", n / 60, n % 60);
             FakeMessage::new("Sender", &format!("Subject {n}"), &date)
-                .body(FakeBody::plain(&past_the_snippet(&format!("word{n}"))))
+                .body(FakeBody::plain(&past_the_snippet(&format!("word{n}x"))))
         })
         .collect()
 }
@@ -91,16 +92,16 @@ fn a_word_only_in_a_body_is_found_and_stays_found_offline() {
     let home = Home::for_server(&server);
     let mut t = started(&server, &home);
 
-    wait_for(|| found(&home, "word1") == ["Subject 1"]);
+    wait_for(|| found(&home, "word1x") == ["Subject 1"]);
     t.send(Key::Char('/')).unwrap();
-    t.send_str("word2").unwrap();
+    t.send_str("word2x").unwrap();
     let screen = t.snapshot_after(|s| list(s).contains("Subject 2")).unwrap();
     assert!(!list(&screen).contains("Subject 1"), "{screen}");
     quit(t);
 
     // The CLI reads the Cache alone, as an offline Postal does.
     drop(server);
-    assert_eq!(found(&home, "word0"), ["Subject 0"]);
+    assert_eq!(found(&home, "word0x"), ["Subject 0"]);
 }
 
 #[test]
@@ -108,7 +109,7 @@ fn mail_arriving_after_the_pass_is_indexed_too() {
     let server = FakeImap::start(messages(2));
     let home = Home::for_server(&server);
     let t = started(&server, &home);
-    wait_for(|| found(&home, "word0") == ["Subject 0"]);
+    wait_for(|| found(&home, "word0x") == ["Subject 0"]);
 
     server.deliver(
         FakeMessage::new("Sender", "Late", "2024-04-01T09:00:00Z")
@@ -123,10 +124,10 @@ fn an_expunged_message_leaves_the_index() {
     let server = FakeImap::start(messages(2));
     let home = Home::for_server(&server);
     let t = started(&server, &home);
-    wait_for(|| found(&home, "word0") == ["Subject 0"]);
+    wait_for(|| found(&home, "word0x") == ["Subject 0"]);
 
     server.expunge(FIRST_UID);
-    wait_for(|| found(&home, "word0").is_empty());
+    wait_for(|| found(&home, "word0x").is_empty());
     quit(t);
 }
 
@@ -149,7 +150,7 @@ fn a_preview_waits_on_one_batch_at_most() {
     // Row 12 from the top, newest first.
     let selected = FIRST_UID + COUNT - 1 - 12;
     server.release();
-    t.wait_until(|s| s.contains("word187")).unwrap();
+    t.wait_until(|s| s.contains("word187x")).unwrap();
     let commands = server.commands();
     let preview = commands
         .iter()
@@ -159,5 +160,177 @@ fn a_preview_waits_on_one_batch_at_most() {
         !commands[held + 1..preview].iter().any(|c| indexing(c)),
         "{commands:#?}"
     );
+    quit(t);
+}
+
+fn plans() -> FakeMessage {
+    FakeMessage::new("Ada", "Engine plans", "2024-02-01T09:00:00Z")
+        .body(FakeBody::plain(&past_the_snippet("difference")))
+}
+
+#[test]
+fn a_message_in_a_folder_never_opened_is_found_then_shown() {
+    let server = FakeImap::start(messages(1));
+    server.add_folder("Projects", &[], vec![plans()]);
+    let home = Home::for_server(&server);
+    let mut t = started(&server, &home);
+
+    wait_for(|| found(&home, "difference") == ["Engine plans"]);
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("difference").unwrap();
+    wait_selected(&mut t, "Engine plans");
+    // Its body comes from the Folder it is in.
+    t.wait_until(|s| s.contains("difference at the end"))
+        .unwrap();
+    quit(t);
+}
+
+// The first sync and a Backfill fetch the newest 500; the rest of the
+// Folder comes in the background.
+#[test]
+fn a_message_past_the_newest_page_is_found() {
+    let server = FakeImap::start(messages(600));
+    let home = Home::for_server(&server);
+    let t = started(&server, &home);
+
+    wait_for(|| found(&home, "word3x") == ["Subject 3"]);
+    quit(t);
+}
+
+#[test]
+fn trash_and_spam_are_left_on_the_server() {
+    let server = FakeImap::start(messages(1));
+    for (name, attribute) in [("Trash", "\\Trash"), ("Spam", "\\Junk")] {
+        server.add_folder(
+            name,
+            &[attribute],
+            vec![
+                FakeMessage::new("Eve", name, "2024-02-01T09:00:00Z")
+                    .body(FakeBody::plain("binned")),
+            ],
+        );
+    }
+
+    // Listed after them, so the pass is past them once it is found.
+    server.add_folder("Projects", &[], vec![plans()]);
+    let home = Home::for_server(&server);
+    let t = started(&server, &home);
+
+    wait_for(|| found(&home, "difference") == ["Engine plans"]);
+    quit(t);
+    let examined = |name: &str| {
+        server
+            .commands()
+            .iter()
+            .any(|c| c.starts_with("EXAMINE") && c.contains(name))
+    };
+    assert!(
+        !examined("Trash") && !examined("Spam"),
+        "{:#?}",
+        server.commands()
+    );
+}
+
+// All Mail holds every label's Messages: walking each label too would
+// download them twice.
+#[test]
+fn on_gmail_all_mail_alone_is_walked() {
+    let server = FakeImap::start(messages(1));
+    server.add_folder("Projects", &[], vec![plans()]);
+    server.add_all_mail("[Gmail]/All Mail");
+    let home = Home::for_server(&server);
+    let t = started(&server, &home);
+
+    wait_for(|| found(&home, "difference") == ["Engine plans"]);
+    quit(t);
+    assert!(
+        !server.commands().iter().any(|c| c.contains("Projects")),
+        "{:#?}",
+        server.commands()
+    );
+}
+
+// Outside Gmail a body key is UIDVALIDITY and UID, which two Folders may
+// share: one Folder's body must not be indexed under the other's Message.
+#[test]
+fn folders_sharing_a_uidvalidity_keep_their_own_bodies() {
+    let server = FakeImap::start(vec![
+        FakeMessage::new("Sender", "Inbox one", "2024-03-01T09:00:00Z")
+            .body(FakeBody::plain(&past_the_snippet("alphaword"))),
+    ]);
+    server.without_gmail();
+    server.add_folder(
+        "Projects",
+        &[],
+        vec![
+            FakeMessage::new("Sender", "Projects one", "2024-02-01T09:00:00Z")
+                .body(FakeBody::plain(&past_the_snippet("betaword"))),
+        ],
+    );
+    let home = Home::for_server(&server);
+    let t = started(&server, &home);
+
+    wait_for(|| found(&home, "betaword") == ["Projects one"]);
+    assert_eq!(found(&home, "alphaword"), ["Inbox one"]);
+    quit(t);
+}
+
+#[test]
+fn a_match_in_a_body_alone_comes_after_one_on_the_card() {
+    let server = FakeImap::start(vec![
+        FakeMessage::new("Sender", "Lunch", "2024-03-02T09:00:00Z")
+            .body(FakeBody::plain(&past_the_snippet("zeppelinword"))),
+        FakeMessage::new("Sender", "Zeppelinword plans", "2024-03-01T09:00:00Z")
+            .body(FakeBody::plain("Nothing else")),
+    ]);
+    let home = Home::for_server(&server);
+    let mut t = started(&server, &home);
+    wait_for(|| found(&home, "zeppelinword").len() == 2);
+
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("zeppelinword").unwrap();
+    let screen = t
+        .snapshot_after(|s| list(s).contains("Lunch") && list(s).contains("plans"))
+        .unwrap();
+    let list = list(&screen);
+    assert!(
+        list.find("Zeppelinword plans") < list.find("Lunch"),
+        "{screen}"
+    );
+    quit(t);
+}
+
+#[test]
+fn new_mail_arrives_by_idle_during_the_body_pass() {
+    let server = FakeImap::start(messages(100));
+    let home = Home::for_server(&server);
+    let mut t = started(&server, &home);
+
+    server.stall(Stall::Part);
+    wait_for(|| server.commands().iter().any(|c| indexing(c)));
+    server.deliver(FakeMessage::new("Sender", "Late", "2024-04-01T09:00:00Z"));
+    t.wait_until(|s| list(s).contains("Late")).unwrap();
+    server.release();
+    quit(t);
+}
+
+// A word not found yet may only be waiting for its body.
+#[test]
+fn the_hint_line_counts_the_bodies_left_while_a_search_is_open() {
+    let server = FakeImap::start(messages(100));
+    let home = Home::for_server(&server);
+    let mut t = started(&server, &home);
+
+    server.stall(Stall::Part);
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("zeppelin").unwrap();
+    let screen = t
+        .snapshot_after(|s| hint_line(s).contains("bodies to index"))
+        .unwrap();
+    assert!(hint_line(&screen).contains("/zeppelin"), "{screen}");
+
+    server.release();
+    t.wait_until(|s| hint_line(s).contains("/zeppelin") && !hint_line(s).contains("bodies"))
+        .unwrap();
     quit(t);
 }

@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::{domain::html_text, domain::text_part::TextPart};
 
 /// The octets of a text part fetched to cut a Snippet from.
@@ -10,14 +8,7 @@ const LENGTH: usize = 200;
 /// The first words of `raw`, the start of `part` as the server sent it:
 /// decoded, markup stripped, whitespace collapsed to single spaces.
 pub fn from_part(raw: &[u8], part: &TextPart) -> String {
-    let text = part.decode(raw);
-    // A multi-byte character cut off by the partial fetch decodes as U+FFFD.
-    let text = text.trim_end_matches('\u{FFFD}');
-    let text = if part.html {
-        Cow::Owned(html_text::strip(text))
-    } else {
-        Cow::Borrowed(text)
-    };
+    let text = text(raw, part);
 
     let mut snippet = String::new();
     for word in text.split(|c: char| c.is_whitespace() || c.is_control()) {
@@ -38,5 +29,18 @@ pub fn from_part(raw: &[u8], part: &TextPart) -> String {
     match snippet.char_indices().nth(LENGTH) {
         Some((end, _)) => snippet.split_at(end).0.trim_end().to_owned(),
         None => snippet,
+    }
+}
+
+/// The text of `raw`, the start of `part` as the server sent it: decoded
+/// and markup stripped.
+pub fn text(raw: &[u8], part: &TextPart) -> String {
+    let mut text = part.decode(raw);
+    // A multi-byte character cut off by the partial fetch decodes as U+FFFD.
+    text.truncate(text.trim_end_matches('\u{FFFD}').len());
+    if part.html {
+        html_text::strip(&text)
+    } else {
+        text
     }
 }

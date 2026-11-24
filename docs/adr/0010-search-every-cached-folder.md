@@ -32,8 +32,9 @@ are mostly the Account itself. The card does not show recipients, and its
 highlight needs the whole Query on the card: a Query matched partly or wholly
 in the recipients highlights nothing.
 
-Only the Cache is searched: a Folder never opened, or the pages of one never
-backfilled, are not found. Every keypress stays in process (ADR 0007); the
+Only the Cache is searched. Since ADR 0032 the fetch connection brings every
+Folder but Trash and Spam whole into it, so a Folder never opened, or the
+pages of one never backfilled, are found once that pass reaches them. Every keypress stays in process (ADR 0007); the
 Cache is read whole at `/` and again with each change while a Search is on.
 
 ## Considered options
