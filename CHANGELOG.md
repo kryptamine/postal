@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.4.0](https://github.com/kryptamine/postal/compare/v0.3.0...v0.4.0) (2026-11-24)
+
+
+### Features
+
+* **cli:** draw the solid red stamp in the help lockup ([30ff85c](https://github.com/kryptamine/postal/commit/30ff85c2130392b68cffd19a52294a4195f94ca5))
+* **cli:** open the top-level help with the terminal lockup ([5993db9](https://github.com/kryptamine/postal/commit/5993db99aa1848ee14340715e5e2fbf96e21a496))
+* **cli:** sign a local install with the developer id when present ([0559db3](https://github.com/kryptamine/postal/commit/0559db310ba3bd1096a66e8e6aaefe748b87c29e))
+* **landing:** put the install command in the hero and name the problem ([6911140](https://github.com/kryptamine/postal/commit/691114064ac983b33dda6f7fe55393a9c58c743f))
+* **landing:** show Search operators, Settings, Picks, mcp and update ([cddf93c](https://github.com/kryptamine/postal/commit/cddf93caaef30d8ececb253a3a7c39079968f7ad)), closes [#171](https://github.com/kryptamine/postal/issues/171)
+* **list:** pick several Threads with J and K and act on them at once ([60718a9](https://github.com/kryptamine/postal/commit/60718a9330f67bec200a1bb6bea7f5647e80317c)), closes [#160](https://github.com/kryptamine/postal/issues/160)
+* **mcp:** serve the cache read-only to agents as mcp tools ([d620896](https://github.com/kryptamine/postal/commit/d62089619e5a87d388022b621f71f002674edfbd)), closes [#144](https://github.com/kryptamine/postal/issues/144)
+* **release:** attest the build provenance of every archive ([2ebe590](https://github.com/kryptamine/postal/commit/2ebe5902670a5bb7241cdbb59cf26d5a409f4311)), closes [#139](https://github.com/kryptamine/postal/issues/139)
+* **release:** publish a release only once its binaries are attached ([a298545](https://github.com/kryptamine/postal/commit/a298545602f9dfb26054c62297cd47bf9ad64840)), closes [#139](https://github.com/kryptamine/postal/issues/139)
+* **search:** download every Folder whole and count what is left ([19917f4](https://github.com/kryptamine/postal/commit/19917f432232fb59d7ee82ff90c0f74fdbf1ded3)), closes [#157](https://github.com/kryptamine/postal/issues/157)
+* **search:** index the body of every cached Message ([970a8ab](https://github.com/kryptamine/postal/commit/970a8ab484b2318b681ca4e2dc2f03a425089908)), closes [#157](https://github.com/kryptamine/postal/issues/157)
+* **search:** show the search index as a share of every Message ([9c4eaf9](https://github.com/kryptamine/postal/commit/9c4eaf901cb0df6bc73dba2220b963cbfc170e67)), closes [#157](https://github.com/kryptamine/postal/issues/157)
+* **search:** take operators in the Query and complete them ([c2ae6cf](https://github.com/kryptamine/postal/commit/c2ae6cf12d3c4f5e7cc5cf896a2e7e9a4d38be1f)), closes [#156](https://github.com/kryptamine/postal/issues/156)
+* **ui:** cap the height of the help and folder popups and scroll them ([a9352d1](https://github.com/kryptamine/postal/commit/a9352d1c71d49ab7c9ac8d224a65ed61986bd384))
+* **ui:** mark the selected Folder in the picker in yellow ([f918182](https://github.com/kryptamine/postal/commit/f9181820e6254653cede2ce0af8874ff81b1c3de)), closes [#165](https://github.com/kryptamine/postal/issues/165)
+* **ui:** mark the Settings tab and row in the terminal's yellow ([9aac2f9](https://github.com/kryptamine/postal/commit/9aac2f98a643073f1b5fbe34ae02b5823a9ae459)), closes [#165](https://github.com/kryptamine/postal/issues/165)
+* **ui:** scroll the help popup and filter it with / ([9e13e4b](https://github.com/kryptamine/postal/commit/9e13e4b3fb92133ca30d2d07822fd6bbd31bc7b1)), closes [#161](https://github.com/kryptamine/postal/issues/161)
+* **ui:** show each Folder's total beside its Unread count ([0e2807f](https://github.com/kryptamine/postal/commit/0e2807f206f45a46619394a02edbb97d42b92fc0)), closes [#164](https://github.com/kryptamine/postal/issues/164)
+* **ui:** split Settings into tabs with a hint per setting ([a129976](https://github.com/kryptamine/postal/commit/a1299760d47e3110a497f49aa541f8949fd9f51a)), closes [#165](https://github.com/kryptamine/postal/issues/165)
+
+
+### Bug Fixes
+
+* **cache:** keep the Picker's total apart from the resync's count ([1b8fb5a](https://github.com/kryptamine/postal/commit/1b8fb5a9552e27dcd2a83b1b6a6c8234baaabd46)), closes [#164](https://github.com/kryptamine/postal/issues/164)
+* **cli:** show and take folder names as people read them ([bbdaf6b](https://github.com/kryptamine/postal/commit/bbdaf6b34e44bd499f0134ae8b06afe11d47363f))
+* **install:** warn when another postal comes first on path ([6b6d1c5](https://github.com/kryptamine/postal/commit/6b6d1c54ffc14f06d805e3281c6edb1348c8adac))
+* **landing:** load the hero still at once and size Copy for a finger ([7018cfc](https://github.com/kryptamine/postal/commit/7018cfcc17ad0107b0ceddb9ef69a98056ca3d0d))
+* **release:** build and verify the archives only for a release ([185d171](https://github.com/kryptamine/postal/commit/185d171170f70796b702332d20aade2076590b8b))
+* **release:** build macos on intel runners, finish a release by hand ([8f953df](https://github.com/kryptamine/postal/commit/8f953dfcd92df53b152c0df12a215d83bda81554))
+* **release:** time out a build after 30 minutes ([a70f608](https://github.com/kryptamine/postal/commit/a70f6081d9146f6255be224517dd6a9e717a8fa2))
+* **ui:** offer d unlink only on the Settings tab that unlinks ([6faf4ee](https://github.com/kryptamine/postal/commit/6faf4eeac0e2c0295e831b1b5b8a9cf142ce6726))
+* **ui:** set the Settings title into the popup's border ([8f4e58b](https://github.com/kryptamine/postal/commit/8f4e58b232803455e0f91d47428274e88e12a3a6))
+
 ## [0.3.0](https://github.com/kryptamine/postal/compare/v0.2.0...v0.3.0) (2026-11-23)
 
 
