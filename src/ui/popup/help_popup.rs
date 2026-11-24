@@ -14,6 +14,7 @@ use crate::{
     ui::input::keymap::{self, Binding, Key},
     ui::popup::help::Help,
     ui::state::mode::Mode,
+    ui::widgets::{popup_area::popup_area, scrollbar::scrollbar},
 };
 
 const TITLE: &str = " Help ";
@@ -24,7 +25,6 @@ const FRAME: u16 = 4;
 const BAR: u16 = 1;
 /// The filter line and the footer, each with a blank row on the body's side.
 const CHROME: u16 = 4;
-const SCROLLBAR: &str = "▐";
 const PLACEHOLDER: &str = " to filter by key or description";
 const KEYS: &str = "/ filter · j/k scroll · esc close";
 const FILTERING: &str = "type to filter · ↑/↓ scroll · enter keep · esc clear";
@@ -50,7 +50,7 @@ impl StatefulWidget for HelpPopup<'_> {
         let width = (keys + GAP + aliases + GAP + descriptions).max(footer) + FRAME + BAR;
         // The whole keymap's height, so that filtering never resizes it.
         let all = u16::try_from(lines(bindings.clone(), "").count()).unwrap_or(u16::MAX);
-        let popup = centre(area, width, all.saturating_add(CHROME + FRAME));
+        let popup = popup_area(area, width, all.saturating_add(CHROME + FRAME));
         Clear.render(popup, buf);
         Block::bordered()
             .border_style(self.theme.border)
@@ -100,10 +100,8 @@ impl StatefulWidget for HelpPopup<'_> {
             self.line(buf, (body, y), line, (keys, aliases));
         }
 
-        if total > help.height {
-            let track = Rect::new(body.right(), body.y, BAR, body.height);
-            self.scrollbar(buf, track, help, total);
-        }
+        let track = Rect::new(body.right(), body.y, BAR, body.height);
+        scrollbar(buf, track, (help.scroll, total), self.theme.muted);
     }
 }
 
@@ -148,19 +146,6 @@ impl HelpPopup<'_> {
                     binding.description,
                     self.theme.muted,
                 );
-            }
-        }
-    }
-
-    /// A thumb down `track` as long as the share of the rows shown,
-    /// placed as far down as `help` has scrolled.
-    fn scrollbar(&self, buf: &mut Buffer, track: Rect, help: &Help, total: usize) {
-        let height = usize::from(track.height);
-        let thumb = (height * height / total).clamp(1, height);
-        let top = (height - thumb) * help.scroll / help.bottom.max(1);
-        for (row, y) in (track.y..track.bottom()).enumerate() {
-            if (top..top + thumb).contains(&row) {
-                buf.set_string(track.x, y, SCROLLBAR, self.theme.muted);
             }
         }
     }
@@ -239,17 +224,6 @@ fn column<'a>(
         .map(|b| u16::try_from(width(b)).unwrap_or(u16::MAX))
         .max()
         .unwrap_or(0)
-}
-
-fn centre(area: Rect, width: u16, height: u16) -> Rect {
-    let width = width.min(area.width);
-    let height = height.min(area.height);
-    Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
-    }
 }
 
 fn spelled(keys: &[Key]) -> usize {

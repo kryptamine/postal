@@ -164,6 +164,53 @@ fn the_picker_lists_special_use_folders_first_then_the_rest_with_unread_counts()
     quit(t);
 }
 
+// A long list stays in a box of bounded height on a tall terminal, and
+// scrolls with the selection behind a scrollbar instead.
+#[test]
+fn many_folders_scroll_in_a_capped_picker() {
+    let server = FakeImap::start(vec![message(
+        "Alice",
+        "Inbox newest",
+        "2024-03-01T09:00:00Z",
+    )]);
+    for n in 0..40 {
+        server.add_folder(&format!("Label {n:02}"), &[], vec![]);
+    }
+
+    let home = Home::for_server(&server);
+    let mut t = Terminal::builder()
+        .size(120, 60)
+        .env_clear()
+        .env("XDG_CONFIG_HOME", home.xdg_config_home())
+        .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
+        .env("TZ", "UTC")
+        .timeout(Duration::from_secs(10))
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(|s| s.contains("Inbox newest")).unwrap();
+    t.send(Key::Char('f')).unwrap();
+    let screen = t
+        .snapshot_after(|s| picked(s).iter().any(|row| row == "Label 00"))
+        .unwrap();
+    assert!(picker(&screen).len() < 30, "{screen}");
+    assert!(
+        !picked(&screen).iter().any(|r| r.contains("Label 39")),
+        "{screen}"
+    );
+    assert!(screen.contains("▐"), "{screen}");
+
+    for _ in 0..45 {
+        t.send(Key::Down).unwrap();
+    }
+
+    let screen = t
+        .snapshot_after(|s| picked(s).iter().any(|r| r.contains("Label 39")))
+        .unwrap();
+    assert!(!picked(&screen).iter().any(|r| r == "Inbox"), "{screen}");
+    quit(t);
+}
+
 /// The subject line of the card drawn in reverse video, the selection.
 fn selected_subject(screen: &Screen) -> Option<String> {
     let first =

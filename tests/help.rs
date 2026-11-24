@@ -107,7 +107,7 @@ fn hint_keys_are_bold_and_descriptions_dim() {
 fn the_help_popup_lists_the_keymap_by_group() {
     let server = FakeImap::start(two_messages());
     let home = Home::for_server(&server);
-    // The tall one has room for every group; the others scroll to the last.
+    // The tall one stops at the popup's cap and scrolls like the others.
     let sizes = [
         ("popup_80", (80, 24)),
         ("popup_44", (44, 18)),
