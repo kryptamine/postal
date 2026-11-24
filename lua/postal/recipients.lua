@@ -5,11 +5,9 @@ local header = require("postal.header")
 
 local M = {}
 
--- Each Draft's Correspondents once read, the asking still running, and
--- the Drafts Postal could not answer for.
-local lists = {}
-local asking = {}
-local failed = {}
+-- Each Draft's asking: its `job` while it runs, then its `list` of
+-- Correspondents, false when Postal could not answer.
+local drafts = {}
 
 --- The 0-based byte column where the recipient under the cursor starts, in
 --- the `To` or `Cc` header of buffer `buf` or a line folded into it; nil
@@ -34,14 +32,14 @@ function M.start(buf, row, col)
 	end
 end
 
--- Takes the answer of buffer `buf`'s asking, which Postal may have refused.
-local function take(buf, result)
-	asking[buf] = nil
+-- Takes the answer of `asking`'s job.
+local function take(asking, result)
+	asking.job = nil
 	if result.code == 0 then
-		lists[buf] = vim.json.decode(result.stdout, { luanil = { object = true } })
+		asking.list = vim.json.decode(result.stdout, { luanil = { object = true } })
 	else
 		vim.notify_once(vim.trim(result.stderr), vim.log.levels.WARN)
-		lists[buf], failed[buf] = {}, true
+		asking.list = false
 	end
 end
 
@@ -50,12 +48,13 @@ end
 function M.ask(buf, done)
 	local path = vim.api.nvim_buf_get_name(buf)
 	local command = { config.options.cmd, "correspondent", "list", "--json", "--draft", path }
-	local job
-	local ok, failure = pcall(vim.system, command, { text = true }, function(result)
+	local asking = {}
+	drafts[buf] = asking
+	local ok, job = pcall(vim.system, command, { text = true }, function(result)
 		vim.schedule(function()
 			-- `list` may have waited for it already.
-			if asking[buf] == job then
-				take(buf, result)
+			if asking.job then
+				take(asking, result)
 			end
 
 			if done and vim.api.nvim_buf_is_valid(buf) then
@@ -65,11 +64,10 @@ function M.ask(buf, done)
 	end)
 
 	if ok then
-		job = failure
-		asking[buf] = job
+		asking.job = job
 	else
-		vim.notify_once("postal: " .. tostring(failure), vim.log.levels.WARN)
-		lists[buf], failed[buf] = {}, true
+		vim.notify_once("postal: " .. tostring(job), vim.log.levels.WARN)
+		asking.list = false
 	end
 end
 
@@ -77,34 +75,34 @@ end
 --- `address`, `name`, `mailbox`, `account` and `written`; empty when Postal
 --- cannot answer, which it says once.
 function M.list(buf)
-	if not lists[buf] and not asking[buf] then
+	if not drafts[buf] then
 		M.ask(buf)
 	end
 
-	if asking[buf] then
-		take(buf, asking[buf]:wait())
+	local asking = drafts[buf]
+	if asking.job then
+		take(asking, asking.job:wait())
 	end
 
-	return lists[buf]
+	return asking.list or {}
 end
 
 --- Whether `address` is a Correspondent's of buffer `buf`'s Draft, case
 --- aside; nil while Postal has not answered, or could not.
 function M.knows(buf, address)
-	if not lists[buf] or failed[buf] then
+	local list = drafts[buf] and drafts[buf].list
+	if not list then
 		return nil
 	end
 
 	address = address:lower()
-	return vim.iter(lists[buf]):any(function(correspondent)
+	return vim.iter(list):any(function(correspondent)
 		return correspondent.address:lower() == address
 	end)
 end
 
 function M.forget(buf)
-	lists[buf] = nil
-	asking[buf] = nil
-	failed[buf] = nil
+	drafts[buf] = nil
 end
 
 --- Whether each word of `query` is found in the Correspondent's name or
