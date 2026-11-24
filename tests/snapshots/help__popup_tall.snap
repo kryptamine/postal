@@ -3,42 +3,42 @@ source: tests/help.rs
 expression: screen
 ---
 size: 80x39  cursor: hidden
-┌─ 2024 ───┌ Help ──────────────────────────────────────────────────┐──────────┐
-│   Bob    │                                                        │024-11-18 │
-│   Newer  │ Navigate                                               │          │
-│   Newer b│ j / k      ↓ / ↑        next / previous Message        │          │
-│   Ada    │ g / G      Home / End   first / last Message           │024-11-17 │
-│   Older  │                                                        │          │
-│   Older b│ Message                                                │          │
-│          │ ^d / ^u    PgDn / PgUp  scroll the Preview half a page │          │
-│          │ Enter      l            read the Message full screen   │          │
-│          │ |                       open the Message in $PAGER     │          │
-│          │ E                       open the Message in $EDITOR    │          │
-│          │ U                       mark the Message Unread        │          │
-│          │ Backspace               delete: move to Trash          │          │
-│          │ e                       archive                        │          │
-│          │ m                       move to a Folder               │          │
-│          │ u                       undo a move or discard         │          │
-└──────────│ c                       compose a new Message          │──────────┘
-┌ Inbox · 1│ r                       reply to the sender            │──────────┐
-│ From    B│ R                       reply to all                   │024 09:00 │
-│ To       │ F                       forward                        │          │
-│ Subject N│ a / s                   open / save an attachment      │          │
-├──────────│                                                        │──────────┤
-│ Newer bod│ Links                                                  │          │
-│          │ o                       label the links in the Preview │          │
-│          │                                                        │          │
-│          │ View                                                   │          │
-│          │ v                       rendered / text view of HTML   │          │
-│          │ z                       show / hide the Quote          │          │
-│          │                                                        │          │
-│          │ App                                                    │          │
-│          │ ,                       settings and Accounts          │          │
-│          │ ?                       this help                      │          │
-│          │ q          ^c           quit                           │          │
-│          │                                                        │          │
-│          │ Search                                                 │          │
-│          │ /                       search, or edit the Query      │          │
-│          │                                                        │          │
-└──────────└────────────────────────────────────────────────────────┘──────────┘
+┌─ 2024 ┌ Help ───────────────────────────────────────────────────────┐────────┐
+│   Bob │                                                             │4-11-18 │
+│   Newe│ Navigate                                                    │        │
+│   Newe│ j / k        ↓ / ↑        next / previous Message           │        │
+│   Ada │ g / G        Home / End   first / last Message              │4-11-17 │
+│   Olde│                                                             │        │
+│   Olde│ Message                                                     │        │
+│       │ ^d / ^u      PgDn / PgUp  scroll the Preview half a page    │        │
+│       │ Enter        l            read the Message full screen      │        │
+│       │ |                         open the Message in $PAGER        │        │
+│       │ E                         open the Message in $EDITOR       │        │
+│       │ U                         mark the Message Unread           │        │
+│       │ Backspace                 delete: move to Trash             │        │
+│       │ e                         archive                           │        │
+│       │ m                         move to a Folder                  │        │
+│       │ u                         undo a move or discard            │        │
+└───────│ c                         compose a new Message             │────────┘
+┌ Inbox │ r                         reply to the sender               │────────┐
+│ From  │ R                         reply to all                      │4 09:00 │
+│ To    │ F                         forward                           │        │
+│ Subjec│ a / s                     open / save an attachment         │        │
+├───────│                                                             │────────┤
+│ Newer │ Links                                                       │        │
+│       │ o                         label the links in the Preview    │        │
+│       │                                                             │        │
+│       │ View                                                        │        │
+│       │ v                         rendered / text view of HTML      │        │
+│       │ z                         show / hide the Quote             │        │
+│       │                                                             │        │
+│       │ App                                                         │        │
+│       │ ,                         settings and Accounts             │        │
+│       │ ?                         this help                         │        │
+│       │ q            ^c           quit                              │        │
+│       │                                                             │        │
+│       │ Search                                                      │        │
+│       │ /                         search, or edit the Query         │        │
+│       │                                                             │        │
+└───────└─────────────────────────────────────────────────────────────┘────────┘
  j/k move  ^d/^u scroll  enter read  F forward  o links  q quit  ?: help

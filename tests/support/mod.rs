@@ -17,3 +17,4 @@ pub mod picker;
 pub mod query;
 mod relay;
 pub mod rendered;
+pub mod search;

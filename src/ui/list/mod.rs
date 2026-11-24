@@ -1,4 +1,6 @@
 mod all_inboxes;
+mod completion;
+pub mod completion_menu;
 mod date_group;
 pub mod date_label;
 pub mod folder_list;

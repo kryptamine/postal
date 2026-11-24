@@ -9,6 +9,8 @@ pub enum Key {
     Space,
     Enter,
     Esc,
+    Tab,
+    BackTab,
     Backspace,
     Up,
     Down,
@@ -29,6 +31,8 @@ impl Key {
             (Self::Space, KeyCode::Char(' '))
             | (Self::Enter, KeyCode::Enter)
             | (Self::Esc, KeyCode::Esc)
+            | (Self::Tab, KeyCode::Tab)
+            | (Self::BackTab, KeyCode::BackTab)
             | (Self::Backspace, KeyCode::Backspace)
             | (Self::Up, KeyCode::Up)
             | (Self::Down, KeyCode::Down)
@@ -57,6 +61,8 @@ impl Key {
                 Self::Space => part("Space"),
                 Self::Enter => part("Enter"),
                 Self::Esc => part("Esc"),
+                Self::Tab => part("Tab"),
+                Self::BackTab => part("S-Tab"),
                 Self::Backspace => part("Backspace"),
                 Self::Up => part("↑"),
                 Self::Down => part("↓"),

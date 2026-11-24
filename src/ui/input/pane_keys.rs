@@ -32,6 +32,7 @@ pub fn act(
         Some(Action::Reply(to)) => Step::Reply(to),
         Some(Action::Forward) => Step::Forward,
         Some(Action::Back | Action::KeepQuery) => {
+            view.close_menu();
             screen.list();
             Step::Stay
         }
@@ -54,9 +55,10 @@ pub fn act(
         Some(Action::Search) => Step::Steer(Steer::Search),
         Some(Action::Type(c)) => Step::Steer(Steer::Type(c)),
         Some(Action::Erase) => Step::Steer(Steer::Erase),
+        Some(Action::Complete(direction)) => Step::Steer(Steer::Complete(direction)),
+        Some(Action::Accept) => Step::Steer(Steer::Accept),
         Some(Action::EndSearch) => {
-            view.end_search(matches!(screen.showing, Showing::Query));
-            screen.list();
+            end_search(view, screen);
             Step::Stay
         }
         Some(Action::Move(movement)) => {
@@ -73,6 +75,18 @@ pub fn act(
         }
         None => Step::Stay,
     }
+}
+
+/// Closes the menu while the Query is typed, else ends the Search.
+fn end_search(view: &mut InboxView, screen: &mut Screen) {
+    let typing = screen.showing.mode().typing();
+    if typing && view.close_menu() {
+        screen.showing = Showing::Query;
+        return;
+    }
+
+    view.end_search(typing);
+    screen.list();
 }
 
 /// Shows HTML mail in the other View; on any other `action`, the Quote of

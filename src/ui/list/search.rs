@@ -1,4 +1,6 @@
-use std::{collections::HashMap, num::NonZeroUsize, ops::Range, panic, thread};
+use std::{collections::HashMap, num::NonZeroUsize, ops::Range, panic, sync::Arc, thread};
+
+use chrono::Local;
 
 use nucleo_matcher::{
     Config, Matcher, Utf32Str, Utf32String, chars,
@@ -10,8 +12,10 @@ use crate::{
     domain::listing::Listing,
     domain::message::Message,
     domain::per_account::PerAccount,
+    domain::query::Query,
     domain::shown::Shown,
     domain::thread::{self as threads, Key, Thread},
+    ui::list::completion::Completion,
     ui::list::folder_list,
     ui::list::matched::Matched,
 };
@@ -30,6 +34,13 @@ pub const SENDER_GAP: &str = ", ";
 /// docs/adr/0023-search-finds-candidates-in-fts5-and-ranks-them-with-nucleo.md.
 pub struct Search {
     query: String,
+    /// `query` cut into its terms at the last run.
+    parsed: Query,
+    /// The Query of the last run, and the rows of its candidates: a
+    /// Message whose flags change while it is open stays in.
+    ran: String,
+    kept: Vec<i64>,
+    completion: Completion,
     /// More candidates matched than `LIMIT`.
     more: bool,
     pattern: Pattern,
@@ -59,9 +70,17 @@ pub struct Search {
 impl Search {
     /// A Search with an empty Query over every cached Folder, `shown`'s
     /// copies winning (ADR 0010).
-    pub fn new(caches: &PerAccount<Cache>, shown: &Shown) -> Result<Self, cache::Error> {
+    pub fn new(
+        caches: &PerAccount<Cache>,
+        shown: &Shown,
+        accounts: &PerAccount<Arc<str>>,
+    ) -> Result<Self, cache::Error> {
         let mut search = Self {
             query: String::new(),
+            parsed: Query { terms: Vec::new() },
+            ran: String::new(),
+            kept: Vec::new(),
+            completion: Completion::new(caches, accounts.clone()),
             more: false,
             pattern: Pattern::default(),
             matcher: Matcher::new(Config::DEFAULT),
@@ -79,6 +98,7 @@ impl Search {
         };
 
         search.run(caches, shown)?;
+        search.suggest(caches)?;
         Ok(search)
     }
 
@@ -95,6 +115,14 @@ impl Search {
         self.more && !self.query.is_empty()
     }
 
+    pub const fn parsed(&self) -> &Query {
+        &self.parsed
+    }
+
+    pub const fn completion(&self) -> &Completion {
+        &self.completion
+    }
+
     /// Types `c` into the Query; true, as the Query always changes.
     pub fn push(&mut self, c: char) -> bool {
         self.query.push(c);
@@ -106,11 +134,37 @@ impl Search {
         self.query.pop().is_some()
     }
 
+    /// Writes the menu's next suggestion into the Query, or with `forward`
+    /// false its previous; whether it had one.
+    pub fn complete(&mut self, forward: bool) -> bool {
+        self.completion.cycle(&mut self.query, forward)
+    }
+
+    /// Fills the menu anew for the Query's last word.
+    pub fn suggest(&mut self, caches: &PerAccount<Cache>) -> Result<(), cache::Error> {
+        self.completion.suggest(&self.query, caches)
+    }
+
+    /// Closes the menu; whether it was open.
+    pub fn close_menu(&mut self) -> bool {
+        self.completion.close()
+    }
+
     /// Asks the Cache for the Query's candidates and ranks them; the next
     /// `fill` reads the window anew.
     pub fn run(&mut self, caches: &PerAccount<Cache>, shown: &Shown) -> Result<(), cache::Error> {
-        self.scope.reload(caches, shown)?;
-        let found = cache::candidates(caches, &self.scope, &self.query, LIMIT)?;
+        let again = self.ran == self.query;
+        if !again {
+            self.ran.clone_from(&self.query);
+            self.parsed = Query::parse(&self.query, Local::now());
+        }
+
+        self.scope.reload(caches, shown, &self.parsed)?;
+        let kept = again.then_some(&*self.kept);
+        let found = cache::candidates(caches, &self.scope, (&self.parsed, kept), LIMIT)?;
+        self.kept.clear();
+        self.kept
+            .extend(found.found.iter().map(|candidate| candidate.row));
         self.more = found.more;
         self.threads.clear();
         self.haystacks.clear();
@@ -232,7 +286,7 @@ impl Search {
     fn rematch(&mut self) {
         // `Pattern::new` takes no fzf syntax; `parse` and `reparse` would.
         self.pattern = Pattern::new(
-            &self.query,
+            &self.parsed.ranked(),
             CaseMatching::Smart,
             Normalization::Smart,
             AtomKind::Fuzzy,

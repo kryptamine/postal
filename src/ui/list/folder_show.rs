@@ -87,12 +87,41 @@ pub fn start_search(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error
     Ok(())
 }
 
-/// Edits the Query of the Search under way and asks the Cache for it anew.
-pub fn edit_query(
+/// Edits the Query as typed, which leaves the menu, asks the Cache for it
+/// anew, and suggests for its last word.
+pub fn type_query(
     ui: &mut Ui,
     caches: &PerAccount<Cache>,
     edit: impl FnOnce(&mut Search) -> bool,
 ) -> Result<(), Error> {
     ui.view.edit_query(caches, edit)?;
+    accept(ui, caches)
+}
+
+/// Leaves the menu on the suggestion written in, suggesting for it: after
+/// `from:`, the Correspondents.
+pub fn accept(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
+    ui.screen.showing = Showing::Query;
+    if let Some(search) = &mut ui.view.search {
+        search.suggest(caches)?;
+    }
+
+    Ok(())
+}
+
+/// Writes the menu's next suggestion, or its previous, into the Query, and
+/// goes into the menu.
+pub fn complete(ui: &mut Ui, caches: &PerAccount<Cache>, forward: bool) -> Result<(), Error> {
+    ui.view
+        .edit_query(caches, |search| search.complete(forward))?;
+    let selected = ui
+        .view
+        .search
+        .as_ref()
+        .and_then(|s| s.completion().selected());
+    if selected.is_some() {
+        ui.screen.showing = Showing::Menu;
+    }
+
     Ok(())
 }

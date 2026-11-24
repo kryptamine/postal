@@ -8,6 +8,8 @@ pub enum Showing {
     List,
     /// The Message List, while the Query is typed in the hint line.
     Query,
+    /// As `Query`, a suggestion of the menu written in.
+    Menu,
     /// The selected Thread fills the screen as a stack of its Messages.
     Reading(Reading),
 }
@@ -17,6 +19,7 @@ impl Showing {
         match self {
             Self::List => Mode::List,
             Self::Query => Mode::Query,
+            Self::Menu => Mode::Menu,
             Self::Reading(_) => Mode::Reading,
         }
     }
@@ -24,14 +27,14 @@ impl Showing {
     pub const fn reading(&self) -> Option<&Reading> {
         match self {
             Self::Reading(reading) => Some(reading),
-            Self::List | Self::Query => None,
+            Self::List | Self::Query | Self::Menu => None,
         }
     }
 
     pub const fn reading_mut(&mut self) -> Option<&mut Reading> {
         match self {
             Self::Reading(reading) => Some(reading),
-            Self::List | Self::Query => None,
+            Self::List | Self::Query | Self::Menu => None,
         }
     }
 }

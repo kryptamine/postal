@@ -8,6 +8,7 @@ use crate::{
     domain::shown::Shown,
     domain::thread_id::ThreadId,
     ui::exit::Exit,
+    ui::input::keymap::Direction,
     ui::outside::open_outside::Outside,
     ui::outside::wanted_attachments::{Purpose, Wanted},
 };
@@ -44,6 +45,10 @@ pub enum Steer {
     Type(char),
     /// The Query's last character erased.
     Erase,
+    /// The menu's next suggestion written into the Query, or its previous.
+    Complete(Direction),
+    /// The suggestion written in taken, for the menu to suggest anew.
+    Accept,
     /// Reading opened, on the Gmail Thread with this ID if it has one, of
     /// this Account: its Messages in other Folders are asked for.
     Read(Option<(AccountId, ThreadId)>),

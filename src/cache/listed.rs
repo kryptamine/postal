@@ -3,9 +3,9 @@ use std::ops::ControlFlow;
 use chrono::{DateTime, FixedOffset};
 use rusqlite::{Row, params};
 
-use super::{Error, Reader, received::received, search};
+use super::{Error, Reader, query_sql::Select, received::received};
 use crate::{
-    domain::body_key::BodyKey, domain::folder::Role, domain::root_id::RootId,
+    domain::body_key::BodyKey, domain::query::Query, domain::root_id::RootId,
     domain::thread_id::ThreadId,
 };
 
@@ -54,33 +54,24 @@ impl Reader {
         Ok(())
     }
 
-    /// The Messages of every Folder but Trash and Spam whose words start
-    /// with each word of `query`, newest first, until `visit` breaks; none
-    /// for a `query` of no words.
+    /// The Messages matching `query` in the Folders it reads, newest
+    /// first, until `visit` breaks; none for a Query of no terms.
     pub fn matching(
         &self,
-        query: &str,
+        query: &Query,
         mut visit: impl FnMut(Listed) -> ControlFlow<()>,
     ) -> Result<(), Error> {
-        let terms = search::terms(query);
-        if terms.is_empty() {
+        if query.terms.is_empty() {
             return Ok(());
         }
 
-        let mut statement = self.connection.prepare(&format!(
-            "SELECT {COLUMNS} FROM message_text JOIN message m ON m.rowid = message_text.rowid
-             WHERE message_text MATCH ?1
-               AND m.mailbox NOT IN (SELECT name FROM mailbox
-                                     WHERE account = m.account AND role IN (?2, ?3))
-             ORDER BY message_text.rowid DESC"
-        ))?;
-        let args = params![terms, Role::Trash.label(), Role::Spam.label()];
-        let mut rows = statement.query(args)?;
-        while let Some(row) = rows.next()? {
-            if visit(listed(row)?).is_break() {
-                break;
-            }
-        }
+        let folders = self.folders()?;
+        let places: Vec<_> = (folders.iter())
+            .filter(|folder| query.reads(&folder.account, folder))
+            .map(|folder| (folder.account.as_str(), folder.name.as_str()))
+            .collect();
+        Select::new(COLUMNS, query, &places, None)
+            .rows(&self.connection, |row| Ok(visit(listed(row)?)))?;
 
         Ok(())
     }

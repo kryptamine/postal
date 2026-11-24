@@ -6,18 +6,18 @@ size: 44x18  cursor: hidden
 ┌ Help ────────────────────────────────────┐
 │                                          │
 │ Navigate                                 │
-│ j / k      ↓ / ↑        next / previous  │
-│ g / G      Home / End   first / last Mes │
+│ j / k        ↓ / ↑        next / previou │
+│ g / G        Home / End   first / last M │
 │                                          │
 │ Message                                  │
-│ ^d / ^u    PgDn / PgUp  scroll the Previ │
-│ Enter      l            read the Message │
-│ |                       open the Message │
-│ E                       open the Message │
-│ U                       mark the Message │
-│ Backspace               delete: move to  │
-│ e                       archive          │
-│ m                       move to a Folder │
+│ ^d / ^u      PgDn / PgUp  scroll the Pre │
+│ Enter        l            read the Messa │
+│ |                         open the Messa │
+│ E                         open the Messa │
+│ U                         mark the Messa │
+│ Backspace                 delete: move t │
+│ e                         archive        │
+│ m                         move to a Fold │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help

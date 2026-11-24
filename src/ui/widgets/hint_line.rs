@@ -10,6 +10,7 @@ use tokio::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    domain::query::Query,
     mail::outage::Outage,
     mail::status::Status,
     render::icons::Icons,
@@ -36,6 +37,8 @@ pub struct HintLine<'a> {
     pub outbox: usize,
     pub mode: Mode,
     pub query: Option<&'a str>,
+    /// The Query's terms, whose operators it highlights.
+    pub parsed: Option<&'a Query>,
     /// The Query matched more than a Search reads.
     pub capped: bool,
     /// What the Status's countdown counts from.
@@ -66,7 +69,7 @@ impl Widget for HintLine<'_> {
 
         let room = usize::from(row.width).saturating_sub(reserved);
         let end = match self.query {
-            Some(query) if self.mode == Mode::Query => self.query(buf, row.x, row, query),
+            Some(query) if self.mode.typing() => self.query(buf, row.x, row, query),
             _ => self.hints(buf, row, room),
         };
 
@@ -113,7 +116,7 @@ impl HintLine<'_> {
 
     /// Where the terminal's cursor goes: after the Query, while it is typed.
     pub fn cursor(&self, area: Rect) -> Option<Position> {
-        let query = self.query.filter(|_| self.mode == Mode::Query)?;
+        let query = self.query.filter(|_| self.mode.typing())?;
         let row = row(area);
         let width = u16::try_from(query.width() + 1).unwrap_or(u16::MAX);
         let x = row
@@ -152,7 +155,17 @@ impl HintLine<'_> {
     fn query(&self, buf: &mut Buffer, x: u16, row: Rect, query: &str) -> u16 {
         let room = |x: u16| usize::from(row.right().saturating_sub(x));
         let (x, _) = buf.set_stringn(x, row.y, "/", room(x), self.theme.key);
+        let start = x;
         let (x, _) = buf.set_stringn(x, row.y, query, room(x), Style::new());
+        for term in self.parsed.iter().flat_map(|parsed| &parsed.terms) {
+            let at = |byte: usize| {
+                let width = query.get(..byte).map_or(0, UnicodeWidthStr::width);
+                start.saturating_add(u16::try_from(width).unwrap_or(u16::MAX))
+            };
+            let (from, to) = (at(term.head.start).min(x), at(term.head.end).min(x));
+            buf.set_style(Rect::new(from, row.y, to - from, 1), self.theme.key);
+        }
+
         if !self.capped {
             return x;
         }

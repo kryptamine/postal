@@ -4,6 +4,7 @@
 mod bodies;
 mod changes;
 mod correspondence;
+mod correspondents;
 mod envelope_pass;
 mod error;
 mod flags;
@@ -15,6 +16,7 @@ mod listed;
 mod message_row;
 mod migrations;
 mod moves;
+mod query_sql;
 mod reader;
 mod received;
 mod schema;
@@ -30,6 +32,7 @@ mod window;
 
 pub use changes::Changes;
 pub use correspondence::SentPass;
+pub use correspondents::Correspondents;
 pub use envelope_pass::EnvelopePass;
 pub use error::Error;
 pub use forget::forget;

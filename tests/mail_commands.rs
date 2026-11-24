@@ -207,6 +207,31 @@ fn a_search_finds_threads_by_the_start_of_a_word() {
 }
 
 #[test]
+fn a_search_takes_the_operators_the_tui_does() {
+    let server = FakeImap::start(inbox());
+    let home = Home::for_server(&server);
+    synced(&server, &home);
+
+    for (query, subjects) in [
+        ("from:ada is:unread", &["Re: Weekly notes"][..]),
+        ("from:bob@example.com", &["Invoice 1042"]),
+        ("-from:ada before:2024-11-17", &["Invoice 1042", "Rent"]),
+        ("in:trash", &["Old offer"]),
+        ("notes -is:unread", &["Weekly notes"]),
+    ] {
+        let found = json(&home, &["message", "search", query]);
+        assert_eq!(text(&found, "subject"), subjects, "{query}");
+    }
+
+    let output = postal(&home, &["message", "search", "from:"]);
+    assert!(!output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "postal: the Query has no word or operator to search by\n"
+    );
+}
+
+#[test]
 fn an_id_postal_never_handed_out_is_refused() {
     let server = FakeImap::start(inbox());
     let home = Home::for_server(&server);

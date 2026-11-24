@@ -22,7 +22,7 @@ pub fn next_change(ui: &mut Ui, previews: &Previews, text: Option<Rect>) -> Opti
 /// it: listed, Unread, and its body shown in the Preview `text`.
 fn dwelling(ui: &Ui, previews: &Previews, text: Option<Rect>) -> Option<(Key, BodyKey)> {
     let Ui { view, screen } = ui;
-    let listed = matches!(screen.showing.mode(), Mode::List | Mode::Query)
+    let listed = (screen.showing.mode() == Mode::List || screen.showing.mode().typing())
         && !screen.over.is_open::<FolderPicker>()
         && !screen.over.is_open::<LocalDrafts>()
         && !screen.over.is_open::<DraftPreview>();

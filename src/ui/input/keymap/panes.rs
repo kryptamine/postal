@@ -40,6 +40,8 @@ const fn listed(binding: Binding, actions: &'static [Action]) -> PaneKeys {
 const LIST: &[Mode] = &[Mode::List];
 const READING: &[Mode] = &[Mode::Reading];
 const QUERY: &[Mode] = &[Mode::Query];
+const TYPING: &[Mode] = &[Mode::Query, Mode::Menu];
+const MENU: &[Mode] = &[Mode::Menu];
 const BOTH: &[Mode] = &[Mode::List, Mode::Reading];
 const ANY: &[Mode] = &[
     Mode::List,
@@ -66,7 +68,7 @@ const MOVE: &[Action] = &[Action::Move(Move::Down), Action::Move(Move::Up)];
 
 /// The panes' keymap and the keys every layer shares, as the hint line and
 /// the `?` popup show them and `action` reads them.
-const PANES: [PaneKeys; 37] = [
+const PANES: [PaneKeys; 40] = [
     listed(
         Binding {
             group: "Navigate",
@@ -216,7 +218,7 @@ const PANES: [PaneKeys; 37] = [
             }),
         },
         actions: HALF_PAGE,
-        acts: &[Mode::List, Mode::Query],
+        acts: &[Mode::List, Mode::Query, Mode::Menu],
     },
     listed(
         Binding {
@@ -494,7 +496,7 @@ const PANES: [PaneKeys; 37] = [
             hint: None,
         },
         actions: &[Action::Quit],
-        acts: &[Mode::Reading, Mode::Query],
+        acts: &[Mode::Reading, Mode::Query, Mode::Menu],
     },
     listed(
         Binding {
@@ -541,6 +543,51 @@ const PANES: [PaneKeys; 37] = [
             group: "Search",
             modes: LIST,
             signed_out: false,
+            keys: &[Key::Tab, Key::BackTab],
+            aliases: &[],
+            description: "suggestions: next / previous",
+            hint: None,
+        },
+        actions: &[
+            Action::Complete(Direction::Down),
+            Action::Complete(Direction::Up),
+        ],
+        acts: TYPING,
+    },
+    PaneKeys {
+        binding: Binding {
+            group: "Search",
+            modes: LIST,
+            signed_out: false,
+            keys: &[Key::Char("j"), Key::Char("k")],
+            aliases: DOWN_UP,
+            description: "in the menu: next / previous",
+            hint: None,
+        },
+        actions: &[
+            Action::Complete(Direction::Down),
+            Action::Complete(Direction::Up),
+        ],
+        acts: MENU,
+    },
+    PaneKeys {
+        binding: Binding {
+            group: "Search",
+            modes: LIST,
+            signed_out: false,
+            keys: &[Key::Enter],
+            aliases: &[],
+            description: "in the menu: take the suggestion",
+            hint: None,
+        },
+        actions: &[Action::Accept],
+        acts: MENU,
+    },
+    PaneKeys {
+        binding: Binding {
+            group: "Search",
+            modes: LIST,
+            signed_out: false,
             keys: &[Key::Enter],
             aliases: &[],
             description: "keep the Query",
@@ -556,11 +603,11 @@ const PANES: [PaneKeys; 37] = [
             signed_out: false,
             keys: &[Key::Esc],
             aliases: &[],
-            description: "end the Search",
+            description: "close the menu, or end the Search",
             hint: None,
         },
         actions: &[Action::EndSearch],
-        acts: &[Mode::List, Mode::Query],
+        acts: &[Mode::List, Mode::Query, Mode::Menu],
     },
     listed(
         Binding {
@@ -611,7 +658,7 @@ pub fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         .iter()
         .filter(|keys| keys.acts.contains(&mode))
         .find_map(|keys| keys.action(key));
-    if bound.is_some() || mode != Mode::Query {
+    if bound.is_some() || !mode.typing() {
         return bound;
     }
 

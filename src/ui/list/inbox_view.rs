@@ -192,7 +192,7 @@ impl InboxView {
 
         let (before, body) = (self.selected_key(), self.selected_body());
         if self.search.is_none() {
-            self.search = Some(Search::new(caches, &self.folder)?);
+            self.search = Some(Search::new(caches, &self.folder, &self.accounts)?);
             self.offset = 0;
             self.keep_row(before);
             self.fill(caches, self.screen)?;
@@ -230,6 +230,11 @@ impl InboxView {
         }
 
         Ok(())
+    }
+
+    /// Closes the Search's menu; whether it was open.
+    pub fn close_menu(&mut self) -> bool {
+        self.search.as_mut().is_some_and(Search::close_menu)
     }
 
     /// Back to the shown Folder's list, on the Thread selected before the

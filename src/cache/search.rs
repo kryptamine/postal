@@ -4,12 +4,14 @@
 use std::{
     collections::{HashMap, hash_map::Entry},
     fmt::Write,
+    ops::ControlFlow,
 };
 
-use rusqlite::{Row, params, params_from_iter, types::Type};
+use rusqlite::{Row, params, types::Type};
 
 use super::{
     Cache, Error,
+    query_sql::Select,
     scope::{self, Scope},
     window,
 };
@@ -18,6 +20,7 @@ use crate::{
     domain::message::Message,
     domain::per_account::{AccountId, PerAccount},
     domain::pool::Pool,
+    domain::query::Query,
     domain::thread::Key,
 };
 
@@ -66,19 +69,12 @@ macro_rules! ranked_text {
     };
 }
 
-/// Every Message, newest first, with the text it is ranked by.
-const CANDIDATES: &str = concat!(
-    "SELECT m.account, m.mailbox, m.body_key, m.thread, m.rowid, ",
+/// What `candidates` reads of a row: its key, its rowid and the text it is
+/// ranked by.
+const CANDIDATE: &str = concat!(
+    "m.account, m.mailbox, m.body_key, m.thread, m.rowid, ",
     ranked_text!(),
-    ", m.root FROM message m ORDER BY m.rowid DESC"
-);
-
-/// The Messages matching `?1`, newest first, with the text they are ranked by.
-const MATCHING: &str = concat!(
-    "SELECT m.account, m.mailbox, m.body_key, m.thread, m.rowid, ",
-    ranked_text!(),
-    ", m.root FROM message_text JOIN message m ON m.rowid = message_text.rowid
-     WHERE message_text MATCH ?1 ORDER BY message_text.rowid DESC"
+    ", m.root"
 );
 
 /// A Message whose words start with the Query's.
@@ -95,13 +91,13 @@ pub struct Candidates {
     pub more: bool,
 }
 
-/// The newest `limit` Messages of every Folder but Trash and Spam whose
-/// words start with each word of `query`, every Message for no words; of
-/// each, the row of the copy `scope` ranks first.
+/// The newest `limit` Messages of `scope`'s Folders matching `query`,
+/// every one for a Query of no terms; of each, the row of the copy `scope`
+/// ranks first. A flag term also lets in the rows `kept` names.
 pub fn candidates(
     caches: &PerAccount<Cache>,
     scope: &Scope,
-    query: &str,
+    (query, kept): (&Query, Option<&[i64]>),
     limit: usize,
 ) -> Result<Candidates, Error> {
     let mut found = Candidates {
@@ -113,36 +109,27 @@ pub fn candidates(
         return Ok(found);
     };
 
-    let terms = terms(query);
-    let sql = if terms.is_empty() {
-        CANDIDATES
-    } else {
-        MATCHING
-    };
-
-    let connection = cache.connection();
-    let mut statement = connection.prepare_cached(sql)?;
-    let mut rows = statement.query(params_from_iter((!terms.is_empty()).then_some(&terms)))?;
+    let select = Select::new(CANDIDATE, query, &scope.places(caches), kept);
     // Each Message's best copy so far, and where it is among the found.
     let mut seen: HashMap<(AccountId, BodyKey), (usize, Option<usize>)> = HashMap::new();
     // The arrival second of the first Message past `limit`: the copies of
     // one Message arrived together, so a better one may follow in it.
     let mut cutoff = None;
-    while let Some(row) = rows.next()? {
+    select.rows(&cache.connection(), |row| {
         let rowid: i64 = row.get(4)?;
         if cutoff.is_some_and(|second| rowid >> 24 < second) {
-            break;
+            return Ok(ControlFlow::Break(()));
         }
 
         let email = text(row, 0)?;
         let Some((account, folders)) =
             (scope.accounts.iter()).find(|(account, _)| caches[*account].email() == email)
         else {
-            continue;
+            return Ok(ControlFlow::Continue(()));
         };
 
         let Some(rank) = scope::rank(folders, text(row, 1)?) else {
-            continue;
+            return Ok(ControlFlow::Continue(()));
         };
 
         let (account, body) = (*account, row.get::<_, BodyKey>(2)?);
@@ -167,7 +154,9 @@ pub fn candidates(
                 });
             }
         }
-    }
+
+        Ok(ControlFlow::Continue(()))
+    })?;
 
     Ok(found)
 }
@@ -298,22 +287,6 @@ fn lists(account: AccountId, wanted: &[(Key, i64)], scope: &mut Scope) -> bool {
     }
 
     any
-}
-
-/// The Query as `FTS5` terms: each word a quoted prefix, all required, cut
-/// as `unicode61` cuts the text, so no input reaches the query syntax.
-pub(super) fn terms(query: &str) -> String {
-    let mut terms = String::new();
-    for word in query
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|word| !word.is_empty())
-    {
-        let gap = if terms.is_empty() { "" } else { " " };
-        // Writing to a `String` cannot fail.
-        write!(terms, "{gap}\"{word}\"*").ok();
-    }
-
-    terms
 }
 
 fn text<'r>(row: &'r Row<'_>, index: usize) -> rusqlite::Result<&'r str> {
