@@ -8,7 +8,6 @@ local checks = require("postal.checks")
 local colors = require("postal.colors")
 local config = require("postal.config")
 local contacts = require("postal.contacts")
-local fold = require("postal.fold")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
 local links = require("postal.links")
@@ -162,7 +161,6 @@ function M.setup(opts)
 			pattern = kind.pattern,
 			callback = function(event)
 				agent.close(event.buf)
-				fold.forget(event.buf)
 				if kind.unload then
 					kind.unload(event.buf)
 				end
