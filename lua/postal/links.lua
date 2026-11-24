@@ -29,29 +29,17 @@ local function under()
 	end
 end
 
---- Opens the link of the marker under the cursor; elsewhere, the key does
---- what `fallback`, its mapping before, does.
-local function opener(fallback)
-	return function()
-		local url = under()
-		if url then
-			vim.ui.open(url)
-			return
-		end
+-- Opens the link of the marker under the cursor, or the URL under it.
+local function open()
+	local url = under()
+	if not url and vim.fn.expand("<cfile>"):match("^%a[%w+.-]*://") then
+		url = vim.fn.expand("<cfile>")
+	end
 
-		local function feed(typed)
-			vim.api.nvim_feedkeys(vim.keycode(typed), fallback.noremap == 1 and "n" or "m", false)
-		end
-
-		if fallback.callback then
-			-- An `<expr>` callback gives the keys; any other does the work.
-			local typed = fallback.callback()
-			if fallback.expr == 1 and type(typed) == "string" then
-				feed(typed)
-			end
-		elseif fallback.rhs then
-			feed(fallback.expr == 1 and vim.api.nvim_eval(fallback.rhs) or fallback.rhs)
-		end
+	if url then
+		vim.ui.open(url)
+	else
+		vim.notify("postal: no link under the cursor", vim.log.levels.INFO)
 	end
 end
 
@@ -73,12 +61,10 @@ end
 
 --- Maps the key over Message buffer `buf`, and `:PostalLinks`.
 function M.watch(buf)
-	local lhs = keys.lhs.link
-	if lhs then
-		local fallback = vim.fn.maparg(lhs, "n", false, true)
-		local key = { name = "link", desc = "open the link of the [n] under the cursor", run = opener(fallback) }
-		keys.map(buf, keys.bound({ key }))
-	end
+	keys.map(
+		buf,
+		keys.bound({ { name = "link", desc = "open the link of the [n] or the URL under the cursor", run = open } })
+	)
 
 	vim.api.nvim_buf_create_user_command(buf, "PostalLinks", function()
 		M.show(buf)
