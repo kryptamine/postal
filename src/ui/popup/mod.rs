@@ -10,6 +10,7 @@ mod picker_layer;
 mod picker_popup;
 pub mod settings;
 mod settings_layer;
+pub mod settings_mode;
 mod settings_popup;
 pub mod settings_section;
 pub mod settings_value;
