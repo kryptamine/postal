@@ -105,7 +105,13 @@ impl ServerHandler for Server {
         std::future::ready(match called {
             Some(command) => {
                 let arguments = request.arguments.unwrap_or_default();
-                Ok(result((command.answer)(arguments)).into())
+                // On a thread of its own: a command may block on a runtime of
+                // its own, which cannot start on this one's thread.
+                let answered = std::thread::scope(|scope| {
+                    scope.spawn(|| result((command.answer)(arguments))).join()
+                });
+                let panicked = || CallToolResult::error(vec![ContentBlock::text("it panicked")]);
+                Ok(answered.unwrap_or_else(|_panic| panicked()).into())
             }
             None => Err(ErrorData::invalid_params(
                 format!("no tool {}", request.name),
