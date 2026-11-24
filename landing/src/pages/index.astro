@@ -22,6 +22,10 @@ const budget = [
 const also = [
   ['All inboxes', 'The inboxes of all your accounts in one list, newest first.'],
   ['Undo', 'u undoes a delete, an archive, a move or a discarded draft.'],
+  [
+    'Act on several at once',
+    'J and K pick a run of threads to delete, archive or move together. One u brings them all back.',
+  ],
   ['Archive and move', 'e archives a message. m moves it to a folder you find by typing.'],
   ['Attachments', 'Open or save an attachment by typing its label, no mouse needed.'],
   ['Notifications', 'A desktop notification for new mail while the terminal is in the background.'],
@@ -31,6 +35,10 @@ const also = [
     "Postal uses your terminal's colour scheme, and Nerd Font icons if your font has them.",
   ],
   ['Signatures', 'One per account, added to every message you send from it.'],
+  [
+    'Mail for your agents',
+    'postal mcp serves your cached mail to any MCP client, read-only: folders, threads, messages and search.',
+  ],
 ];
 
 const install = `curl -fsSL ${site.url}/install.sh | sh`;
@@ -151,18 +159,23 @@ const providers = [
       label="Search"
       title="Search all your mail as you type"
       video="search"
-      shows="A search narrowing the message list one keystroke at a time"
+      shows="A search narrowed by is:unread and has:attachment, each completed from a menu"
       keys={[
         ['/', 'start a search'],
+        ['Tab', 'complete an operator from the menu'],
         ['Esc', 'close it and stay on the selected message'],
       ]}
     >
       <p>
-        Each keystroke narrows the list to the matching threads, best match first. The search covers
-        every cached folder in every account.
+        Each keystroke narrows the list to the matching threads, best match first. A word matches
+        the body of a message too: Postal downloads your folders in the background and indexes them
+        on your computer, across every account.
       </p>
       <p>
-        It runs on the local cache, so results appear within a frame, with or without a connection.
+        Gmail's operators work as well: <code>from:</code>, <code>is:unread</code>,{' '}
+        <code>has:attachment</code>, <code>in:</code>, <code>before:</code> and more, with a menu
+        that completes names, folders and values. Results appear within a frame, with or without a
+        connection.
       </p>
     </Feature>
 
@@ -202,6 +215,24 @@ const providers = [
       <p>
         Postal does not include an agent. You bring your own, and it sees a message only when you
         ask it to.
+      </p>
+    </Feature>
+
+    <Feature
+      label="Settings"
+      title="Every setting says what it does"
+      video="settings"
+      shows="Settings in tabs: accounts, icons, notifications, each value with what it does"
+      keys={[
+        [',', 'open Settings'],
+        ['Tab', 'next tab'],
+        ['Enter', 'apply the selected value'],
+      ]}
+    >
+      <p>
+        Settings opens on <kbd>,</kbd> as a row of tabs: accounts and their signatures, icons,
+        notifications, your name and where secrets are kept. Each tab says what it sets, and lists
+        every value with what it does.
       </p>
     </Feature>
   </div>
@@ -272,7 +303,8 @@ const providers = [
       <h2 id="install-title">Install</h2>
       <p class="prose-font">
         On macOS or Linux, arm64 or x86_64, the script puts the binary in <code>~/.local/bin</code>.
-        The <a href={`${site.repo}#neovim`}>Neovim plugin</a> installs through your plugin manager.
+        <code>postal update</code> later replaces it with the latest release. The
+        <a href={`${site.repo}#neovim`}>Neovim plugin</a> installs through your plugin manager.
       </p>
     </div>
     <div class="steps">
