@@ -32,9 +32,21 @@ pub const HELP: &[Binding] = &[
         group: "Settings",
         modes: SETTINGS,
         signed_out: false,
+        keys: &[Key::Tab, Key::BackTab],
+        aliases: &[Key::Char("l"), Key::Char("h")],
+        description: "next / previous section",
+        hint: Some(Hint {
+            keys: "tab",
+            description: "section",
+        }),
+    },
+    Binding {
+        group: "Settings",
+        modes: SETTINGS,
+        signed_out: false,
         keys: &[Key::Enter],
         aliases: &[],
-        description: "change the setting, edit a Signature, or add an Account",
+        description: "apply the value, edit a Signature or the Name, add an Account",
         hint: Some(Hint {
             keys: "Enter",
             description: "change",

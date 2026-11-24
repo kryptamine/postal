@@ -12,9 +12,18 @@ use crate::{
     account::provider::Provider,
     account::sign_in::smtp_key,
     ui::onboarding::field::{self, Edit},
+    ui::popup::settings_section::Section,
 };
 
-/// One row of Settings the selection can rest on.
+pub const ICONS: [IconChoice; 3] = [IconChoice::Auto, IconChoice::Nerd, IconChoice::None];
+pub const NOTIFY: [NotifyChoice; 3] = [
+    NotifyChoice::Unfocused,
+    NotifyChoice::Always,
+    NotifyChoice::Never,
+];
+pub const SECRETS: [SecretStore; 2] = [SecretStore::Keychain, SecretStore::File];
+
+/// One row of a Settings tab the selection can rest on.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Row {
     /// The Account at this place in `config.toml`.
@@ -22,10 +31,9 @@ pub enum Row {
     /// The signature of the Account at this place.
     Signature(usize),
     Add,
-    Icons,
-    Notify,
+    /// The value at this place in the tab's list of them.
+    Choice(usize),
     Name,
-    Secrets,
 }
 
 /// What a key in Settings leaves to the event loop.
@@ -56,6 +64,8 @@ pub struct Settings {
     pub notify: NotifyChoice,
     pub name: Option<String>,
     pub secrets: SecretStore,
+    section: Section,
+    /// Index into the tab's rows.
     selected: usize,
     /// The Name being typed, while it is.
     pub editing: Option<String>,
@@ -81,6 +91,7 @@ impl Settings {
             notify: config.notify,
             name: config.name,
             secrets: config.secrets,
+            section: Section::Accounts,
             selected: 0,
             editing: None,
             unlinking: None,
@@ -89,15 +100,57 @@ impl Settings {
         })
     }
 
+    pub const fn section(&self) -> Section {
+        self.section
+    }
+
+    /// The rows of the tab shown.
     pub fn rows(&self) -> impl Iterator<Item = Row> {
-        let accounts = 0..self.accounts.len();
+        self.rows_of(self.section)
+    }
+
+    /// The rows of `section`: its Accounts, or its values.
+    pub fn rows_of(&self, section: Section) -> impl Iterator<Item = Row> {
+        let accounts = if section == Section::Accounts {
+            0..self.accounts.len()
+        } else {
+            0..0
+        };
         let accounts =
             accounts.flat_map(|account| [Row::Account(account), Row::Signature(account)]);
-        accounts.chain([Row::Add, Row::Icons, Row::Notify, Row::Name, Row::Secrets])
+        let rest = match section {
+            Section::Icons => 0..ICONS.len(),
+            Section::Notify => 0..NOTIFY.len(),
+            Section::Secrets => 0..SECRETS.len(),
+            Section::Accounts | Section::Name => 0..0,
+        };
+        let last = match section {
+            Section::Accounts => Some(Row::Add),
+            Section::Name => Some(Row::Name),
+            _ => None,
+        };
+        accounts.chain(rest.map(Row::Choice)).chain(last)
     }
 
     pub fn selected(&self) -> Row {
         self.rows().nth(self.selected).unwrap_or(Row::Add)
+    }
+
+    /// The place of the value in effect among the tab's rows.
+    pub fn current(&self) -> Option<usize> {
+        match self.section {
+            Section::Icons => ICONS.iter().position(|&c| c == self.icons),
+            Section::Notify => NOTIFY.iter().position(|&c| c == self.notify),
+            Section::Secrets => SECRETS.iter().position(|&c| c == self.secrets),
+            Section::Accounts | Section::Name => None,
+        }
+    }
+
+    /// Shows the tab `step` places on, its value in effect selected.
+    fn switch(&mut self, step: isize) {
+        self.section = self.section.moved(step);
+        self.selected = self.current().unwrap_or(0);
+        self.failure = None;
     }
 
     pub fn key(&mut self, key: KeyEvent) -> Step {
@@ -132,8 +185,10 @@ impl Settings {
             return Step::Stay;
         }
 
-        let last = self.rows().count() - 1;
+        let last = self.rows().count().saturating_sub(1);
         match key.code {
+            KeyCode::Tab | KeyCode::Char('l') | KeyCode::Right => self.switch(1),
+            KeyCode::BackTab | KeyCode::Char('h') | KeyCode::Left => self.switch(-1),
             KeyCode::Char('j') | KeyCode::Down => self.selected = (self.selected + 1).min(last),
             KeyCode::Char('k') | KeyCode::Up => self.selected = self.selected.saturating_sub(1),
             KeyCode::Char('d') | KeyCode::Backspace => {
@@ -165,24 +220,41 @@ impl Settings {
                 }
             }
             Row::Add => return Step::AddAccount,
-            Row::Icons => {
-                let icons = self.icons.next();
-                if self.change(|settings| settings.write(|config| config.set_icons(icons))) {
+            Row::Name => self.editing = Some(self.name.clone().unwrap_or_default()),
+            Row::Choice(at) => return self.choose(at),
+        }
+
+        Step::Stay
+    }
+
+    /// Puts the value at `at` of the tab shown in effect.
+    fn choose(&mut self, at: usize) -> Step {
+        match self.section {
+            Section::Icons => {
+                let icons = ICONS[at];
+                if icons != self.icons
+                    && self.change(|settings| settings.write(|config| config.set_icons(icons)))
+                {
                     self.icons = icons;
                     return Step::Icons(icons);
                 }
             }
-            Row::Notify => {
-                let notify = self.notify.next();
-                if self.change(|settings| settings.write(|config| config.set_notify(notify))) {
+            Section::Notify => {
+                let notify = NOTIFY[at];
+                if notify != self.notify
+                    && self.change(|settings| settings.write(|config| config.set_notify(notify)))
+                {
                     self.notify = notify;
                     return Step::Notify(notify);
                 }
             }
-            Row::Name => self.editing = Some(self.name.clone().unwrap_or_default()),
-            Row::Secrets => {
-                self.change(Self::switch_store);
+            Section::Secrets => {
+                let store = SECRETS[at];
+                if store != self.secrets {
+                    self.change(|settings| settings.switch_store(store));
+                }
             }
+            Section::Accounts | Section::Name => {}
         }
 
         Step::Stay
@@ -215,10 +287,10 @@ impl Settings {
         Ok(())
     }
 
-    /// Copies every Account's secret to the other store, then names it in
+    /// Copies every Account's secret to `to`, then names it in
     /// `config.toml`, then deletes the old copies: no step loses a secret.
-    fn switch_store(&mut self) -> Result<(), Box<dyn Error>> {
-        let (from, to) = (self.secrets, self.secrets.other());
+    fn switch_store(&mut self, to: SecretStore) -> Result<(), Box<dyn Error>> {
+        let from = self.secrets;
         let dir = &self.dir;
         let keys: Vec<_> = self
             .accounts

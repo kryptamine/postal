@@ -238,15 +238,14 @@ fn notify_set_in_settings_takes_effect_at_once() {
     let notifier = Notifier::new();
     let mut t = idling(&server, builder(&home, &notifier));
     t.send(Key::Char(',')).unwrap();
-    t.wait_until(|s| s.contains("Notify") && s.contains("unfocused"))
-        .unwrap();
-    // The Account, its Signature, Add account, Icons, then Notify.
-    for _ in 0..4 {
-        t.send(Key::Char('j')).unwrap();
-    }
-
+    t.wait_until(|s| s.contains("Notify")).unwrap();
+    // Past the Accounts and Icons tabs.
+    t.send(Key::Tab).unwrap();
+    t.send(Key::Tab).unwrap();
+    t.wait_until(|s| s.contains("unfocused ✓")).unwrap();
+    t.send(Key::Char('j')).unwrap();
     t.send(Key::Enter).unwrap();
-    t.wait_until(|s| s.contains("always")).unwrap();
+    t.wait_until(|s| s.contains("always ✓")).unwrap();
     let config = fs::read_to_string(home.config_path()).unwrap();
     assert!(config.contains("notify = \"always\""), "{config}");
     t.send(Key::Esc).unwrap();
