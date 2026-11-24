@@ -7,8 +7,6 @@ local quote = require("postal.quote")
 
 local M = {}
 
-local NS = vim.api.nvim_create_namespace("postal-mention")
-
 -- The 0-based row and column of the first mention in `buf`'s own words.
 local function first(buf)
 	local own = quote.cut(body.get(buf))
@@ -24,7 +22,8 @@ local function first(buf)
 	end
 end
 
-function M.check(buf)
+--- The warning over Draft buffer `buf`, in a list of one or none.
+function M.diagnose(buf)
 	local attached = vim.iter(header.fields(buf)):any(function(field)
 		return field.name == "attach" and field.value ~= ""
 	end)
@@ -37,23 +36,10 @@ function M.check(buf)
 			col = col,
 			message = "mentions an attachment, and no Attach: line names a file",
 			severity = vim.diagnostic.severity.WARN,
-			source = "postal",
 		})
 	end
 
-	vim.diagnostic.set(NS, buf, diagnostics)
-end
-
---- Keeps Draft buffer `buf` checked in `augroup`.
-function M.watch(buf, augroup)
-	M.check(buf)
-	vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave" }, {
-		group = augroup,
-		buffer = buf,
-		callback = function()
-			M.check(buf)
-		end,
-	})
+	return diagnostics
 end
 
 return M

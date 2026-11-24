@@ -87,11 +87,16 @@ end
 
 -- A recipient a send would refuse is an error before the send, and one no
 -- mail holds says so once the Correspondents are in
-local addresses_ns = vim.api.nvim_get_namespaces()["postal-addresses"]
-local function diagnosed(ns)
-	return vim.tbl_map(function(d)
-		return { d.lnum, d.col, d.severity, d.message }
-	end, vim.diagnostic.get(0, { namespace = ns }))
+local function diagnosed(code)
+	local checks = vim.diagnostic.get(0, { namespace = vim.api.nvim_get_namespaces()["postal-checks"] })
+	return vim.tbl_map(
+		function(d)
+			return { d.lnum, d.col, d.severity, d.message }
+		end,
+		vim.tbl_filter(function(d)
+			return d.code == code
+		end, checks)
+	)
 end
 
 local want_diagnostics = {
@@ -100,22 +105,22 @@ local want_diagnostics = {
 }
 
 if not vim.wait(5000, function()
-	return vim.deep_equal(diagnosed(addresses_ns), want_diagnostics)
+	return vim.deep_equal(diagnosed("address"), want_diagnostics)
 end) then
-	fail("the recipients are diagnosed " .. vim.inspect(diagnosed(addresses_ns)))
+	fail("the recipients are diagnosed " .. vim.inspect(diagnosed("address")))
 end
 
 vim.api.nvim_buf_set_lines(0, 1, 2, false, { 'Cc: "Ada <ada@example.com>, petr@example.com' })
 vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
-if diagnosed(addresses_ns)[2][4] ~= "a quote is not closed" then
-	fail("an open quote is diagnosed " .. vim.inspect(diagnosed(addresses_ns)))
+if diagnosed("address")[2][4] ~= "a quote is not closed" then
+	fail("an open quote is diagnosed " .. vim.inspect(diagnosed("address")))
 end
 
 -- A recipient folded over two lines is one, as Postal joins them
 vim.api.nvim_buf_set_lines(0, 1, 2, false, { "Cc: Ada Lovelace", "  <ada@example.com>" })
 vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
-if #diagnosed(addresses_ns) ~= 1 then
-	fail("a folded recipient is diagnosed " .. vim.inspect(diagnosed(addresses_ns)))
+if #diagnosed("address") ~= 1 then
+	fail("a folded recipient is diagnosed " .. vim.inspect(diagnosed("address")))
 end
 
 vim.api.nvim_buf_set_lines(0, 1, 3, false, { "Cc: Ada Lovelace <ada@example.com>, pet" })
@@ -211,11 +216,10 @@ vim.env.HOME = real_home
 
 -- Words that mention an attachment warn while no Attach: names a file; the
 -- Quote's are someone else's
-local mention_ns = vim.api.nvim_get_namespaces()["postal-mention"]
 local function mentioned(lines)
 	vim.api.nvim_buf_set_lines(0, 3, -1, false, lines)
 	vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
-	return diagnosed(mention_ns)
+	return diagnosed("mention")
 end
 
 local warned = mentioned({ "", "pet", "The report is Attached." })
