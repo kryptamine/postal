@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Write, path::Path, time::Duration};
+use std::{borrow::Cow, error::Error, path::Path, time::Duration};
 
 use serde::Serialize;
 
@@ -26,38 +26,66 @@ use crate::{
 /// IMAP command times out on its own, and a TUI waits on the lock meanwhile.
 const PATIENCE: Duration = Duration::from_secs(5 * 60);
 
-/// One Folder synced, or one Account not, in `--json`, whose fields only
-/// grow (ADR 0017).
-#[derive(Serialize)]
-struct Row {
-    account: String,
-    /// Decoded from modified UTF-7; `null` for an Account not synced.
-    folder: Option<String>,
-    /// `null` for an Account not synced.
-    new: Option<usize>,
-    outcome: Outcome,
-    /// What failed, for `failed`.
-    error: Option<String>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
+/// How one Account's sync ended.
 enum Outcome {
-    Synced,
+    Synced {
+        folder: FolderName,
+        new: usize,
+    },
     /// A TUI is open and keeps the Cache live itself.
     Open,
     SignedOut,
-    Failed,
+    Failed(String),
 }
 
-impl Row {
-    fn unsynced(account: &str, outcome: Outcome, error: Option<String>) -> Self {
-        Self {
-            account: account.to_owned(),
-            folder: None,
-            new: None,
+/// One Account of `--json`, whose fields only grow (ADR 0017).
+#[derive(Serialize)]
+struct Row<'a> {
+    account: &'a str,
+    /// Decoded from modified UTF-7; `null` unless synced.
+    folder: Option<Cow<'a, str>>,
+    /// `null` unless synced.
+    new: Option<usize>,
+    /// `synced`, `open`, `signed-out` or `failed`.
+    outcome: &'static str,
+    /// What failed, for `failed`.
+    error: Option<&'a str>,
+}
+
+impl Outcome {
+    const fn failed(&self) -> bool {
+        matches!(self, Self::SignedOut | Self::Failed(_))
+    }
+
+    fn row<'a>(&'a self, account: &'a str) -> Row<'a> {
+        let (outcome, folder, new, error) = match self {
+            Self::Synced { folder, new } => {
+                let folder = modified_utf7::decode(folder.as_str());
+                ("synced", Some(folder), Some(*new), None)
+            }
+            Self::Open => ("open", None, None, None),
+            Self::SignedOut => ("signed-out", None, None, None),
+            Self::Failed(error) => ("failed", None, None, Some(error.as_str())),
+        };
+
+        Row {
+            account,
+            folder,
+            new,
             outcome,
             error,
+        }
+    }
+
+    fn line(&self, account: &str) -> String {
+        match self {
+            Self::Synced { folder, new } => {
+                let folder = modified_utf7::decode(folder.as_str());
+                format!("{account} {folder}: {new} new\n")
+            }
+            Self::Open => format!("{account}: Postal is open and keeps it live\n"),
+            Self::SignedOut => format!("{account}: signed out; open Postal to sign in\n"),
+            Self::Failed(error) => format!("{account}: {error}\n"),
         }
     }
 }
@@ -67,30 +95,26 @@ impl Row {
 /// steps aside for it (ADR 0033).
 impl Answers for FolderSync {
     fn answer(&self) -> Result<Answer, Box<dyn Error>> {
-        // The MCP server answers on its own runtime, which cannot block on another.
-        let rows = std::thread::scope(|scope| {
-            scope
-                .spawn(|| self.rows().map_err(|error| error.to_string()))
-                .join()
-        })
-        .map_err(|_panic| "the sync panicked")??;
-        let mut answer = Answer::new(&rows, table(&rows))?;
-        answer.failed = rows
-            .iter()
-            .any(|row| matches!(row.outcome, Outcome::SignedOut | Outcome::Failed));
+        let synced = self.sync()?;
+        let rows: Vec<_> = (synced.iter())
+            .map(|(account, outcome)| outcome.row(account))
+            .collect();
+        let text = (synced.iter())
+            .map(|(account, outcome)| outcome.line(account))
+            .collect();
+        let mut answer = Answer::new(&rows, text)?;
+        answer.failed = synced.iter().any(|(_, outcome)| outcome.failed());
         Ok(answer)
     }
 }
 
 impl FolderSync {
-    fn rows(&self) -> Result<Vec<Row>, Box<dyn Error>> {
+    /// Each wanted Account by its address, with how its sync ended.
+    fn sync(&self) -> Result<Vec<(String, Outcome)>, Box<dyn Error>> {
         let wanted = accounts::named(self.account.as_deref())?;
         let dir = xdg::cache_dir()?;
         let Some(_lock) = SyncLock::try_take(&dir)? else {
-            return Ok(wanted
-                .iter()
-                .map(|account| Row::unsynced(account, Outcome::Open, None))
-                .collect());
+            return Ok(wanted.into_iter().map(|a| (a, Outcome::Open)).collect());
         };
 
         let config_dir = xdg::config_dir()?;
@@ -101,23 +125,26 @@ impl FolderSync {
         let caches = Cache::open(&dir, &configs.map(|config| config.email.as_str()))?;
         let places = self.places(&dir, &configs, &wanted)?;
         let outbox = Outbox::new(xdg::data_dir().ok());
-        let accounts = Accounts {
+        let syncing = Syncing {
             configs: &configs,
             config_dir: &config_dir,
             caches: &caches,
             outbox: &outbox,
         };
 
-        let work = (places.into_iter()).map(|(account, folder)| accounts.sync(account, folder));
+        let work = (places.into_iter()).map(|(account, folder)| async move {
+            let email = syncing.configs[account].email.to_lowercase();
+            (email, syncing.account(account, folder).await)
+        });
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
-        let rows = runtime.block_on(futures::future::join_all(work));
+        let synced = runtime.block_on(futures::future::join_all(work));
         cache::settle(&dir);
-        Ok(rows)
+        Ok(synced)
     }
 
-    /// The Folders each wanted Account syncs: its Inbox, else the one
+    /// The Folder each wanted Account syncs: its Inbox, else the one
     /// `--folder` names, which only the Folders a TUI listed can answer.
     fn places(
         &self,
@@ -153,23 +180,21 @@ impl FolderSync {
 }
 
 /// What a sync of each Account takes.
-struct Accounts<'a> {
+#[derive(Clone, Copy)]
+struct Syncing<'a> {
     configs: &'a PerAccount<Config>,
     config_dir: &'a Path,
     caches: &'a PerAccount<Cache>,
     outbox: &'a Outbox,
 }
 
-impl Accounts<'_> {
-    async fn sync(&self, account: AccountId, folder: FolderName) -> Row {
+impl Syncing<'_> {
+    async fn account(self, account: AccountId, folder: FolderName) -> Outcome {
         let config = &self.configs[account];
-        let email = config.email.to_lowercase();
         let sign_in = match SignIn::stored(config, self.config_dir) {
             Ok(Some(sign_in)) => sign_in,
-            Ok(None) => return Row::unsynced(&email, Outcome::SignedOut, None),
-            Err(error) => {
-                return Row::unsynced(&email, Outcome::Failed, Some(error.to_string()));
-            }
+            Ok(None) => return Outcome::SignedOut,
+            Err(error) => return Outcome::Failed(error.to_string()),
         };
 
         let sender = Sender {
@@ -181,45 +206,10 @@ impl Accounts<'_> {
 
         let synced = folder_sync::sync(&self.caches[account], sender, &folder);
         match tokio::time::timeout(PATIENCE, synced).await {
-            Ok(Ok(new)) => Row {
-                account: email,
-                folder: Some(modified_utf7::decode(folder.as_str()).into_owned()),
-                new: Some(new),
-                outcome: Outcome::Synced,
-                error: None,
-            },
-            Ok(Err(error)) if error.signed_out() => Row::unsynced(&email, Outcome::SignedOut, None),
-            Ok(Err(error)) => Row::unsynced(&email, Outcome::Failed, Some(error.to_string())),
-            Err(_elapsed) => {
-                let error = format!("timed out after {} s", PATIENCE.as_secs());
-                Row::unsynced(&email, Outcome::Failed, Some(error))
-            }
+            Ok(Ok(new)) => Outcome::Synced { folder, new },
+            Ok(Err(error)) if error.signed_out() => Outcome::SignedOut,
+            Ok(Err(error)) => Outcome::Failed(error.to_string()),
+            Err(_elapsed) => Outcome::Failed(format!("timed out after {} s", PATIENCE.as_secs())),
         }
     }
-}
-
-/// A line each: the Account and Folder with its new Messages, or what kept
-/// the Account from syncing.
-fn table(rows: &[Row]) -> String {
-    let mut text = String::new();
-    // Writing to a `String` cannot fail.
-    for row in rows {
-        match (row.outcome, &row.folder, row.new) {
-            (Outcome::Synced, Some(folder), Some(new)) => {
-                writeln!(text, "{} {folder}: {new} new", row.account).ok();
-            }
-            (Outcome::Open, ..) => {
-                writeln!(text, "{}: Postal is open and keeps it live", row.account).ok();
-            }
-            (Outcome::SignedOut, ..) => {
-                writeln!(text, "{}: signed out; open Postal to sign in", row.account).ok();
-            }
-            _ => {
-                let error = row.error.as_deref().unwrap_or("failed");
-                writeln!(text, "{}: {error}", row.account).ok();
-            }
-        }
-    }
-
-    text
 }
