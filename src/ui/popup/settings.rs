@@ -12,6 +12,7 @@ use crate::{
     account::provider::Provider,
     account::sign_in::smtp_key,
     ui::onboarding::field::{self, Edit},
+    ui::popup::settings_mode::Mode,
     ui::popup::settings_section::Section,
     ui::popup::settings_value::Value,
 };
@@ -59,10 +60,7 @@ pub struct Settings {
     section: Section,
     /// Index into the tab's rows.
     selected: usize,
-    /// The Name being typed, while it is.
-    pub editing: Option<String>,
-    /// The Account `d` asked to unlink, until `y` or `n`.
-    pub unlinking: Option<usize>,
+    mode: Mode,
     /// Why the last change was not made.
     pub failure: Option<String>,
     reload: bool,
@@ -85,11 +83,14 @@ impl Settings {
             secrets: config.secrets,
             section: Section::Accounts,
             selected: 0,
-            editing: None,
-            unlinking: None,
+            mode: Mode::Browsing,
             failure: None,
             reload: false,
         })
+    }
+
+    pub const fn mode(&self) -> &Mode {
+        &self.mode
     }
 
     pub const fn section(&self) -> Section {
@@ -144,26 +145,27 @@ impl Settings {
             return Step::Quit;
         }
 
-        if let Some(typed) = &mut self.editing {
-            match field::edit(typed, key) {
-                Edit::Submit => {
-                    let name = Some(typed.trim().to_owned()).filter(|name| !name.is_empty());
-                    self.editing = None;
-                    self.change(|settings| settings.rename(name));
+        match std::mem::replace(&mut self.mode, Mode::Browsing) {
+            Mode::Browsing => {}
+            Mode::Naming(mut typed) => {
+                match field::edit(&mut typed, key) {
+                    Edit::Submit => {
+                        let name = Some(typed.trim().to_owned()).filter(|name| !name.is_empty());
+                        self.change(|settings| settings.rename(name));
+                    }
+                    Edit::Back => {}
+                    Edit::Cancel => return Step::Quit,
+                    Edit::Changed | Edit::Ignored => self.mode = Mode::Naming(typed),
                 }
-                Edit::Back => self.editing = None,
-                Edit::Cancel => return Step::Quit,
-                Edit::Changed | Edit::Ignored => {}
+
+                return Step::Stay;
             }
-
-            return Step::Stay;
-        }
-
-        if let Some(account) = self.unlinking.take() {
-            return match (key.code, self.accounts.get(account)) {
-                (KeyCode::Char('y' | 'Y'), Some((email, _))) => Step::Unlink(email.clone()),
-                _ => Step::Stay,
-            };
+            Mode::Unlinking(email) => {
+                return match key.code {
+                    KeyCode::Char('y' | 'Y') => Step::Unlink(email),
+                    _ => Step::Stay,
+                };
+            }
         }
 
         if ctrl {
@@ -179,7 +181,7 @@ impl Settings {
             KeyCode::Char('d') | KeyCode::Backspace => {
                 if let Row::Account(account) = self.selected() {
                     self.failure = None;
-                    self.unlinking = Some(account);
+                    self.mode = Mode::Unlinking(self.accounts[account].0.clone());
                 }
             }
             KeyCode::Enter => return self.act(),
@@ -205,7 +207,7 @@ impl Settings {
                 }
             }
             Row::Add => return Step::AddAccount,
-            Row::Name => self.editing = Some(self.name.clone().unwrap_or_default()),
+            Row::Name => self.mode = Mode::Naming(self.name.clone().unwrap_or_default()),
             Row::Choice(value) => return self.choose(value),
         }
 

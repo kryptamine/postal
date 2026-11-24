@@ -9,6 +9,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::{
     ui::frame::theme::Theme,
     ui::popup::settings::{Row, Settings},
+    ui::popup::settings_mode::Mode,
     ui::popup::settings_section::Section,
     ui::popup::settings_value::Value,
     ui::widgets::{popup_area::popup_area, truncate},
@@ -134,10 +135,10 @@ impl SettingsPopup<'_> {
                 _ => ("  Signature", "none", muted),
             },
             Row::Add => ("+ Add account", "", style),
-            Row::Name => match (&settings.editing, &settings.name) {
-                (Some(typed), _) => (typed.as_str(), "", style),
-                (None, Some(name)) => (name.as_str(), "", style),
-                (None, None) => ("none", "", muted),
+            Row::Name => match (settings.mode(), &settings.name) {
+                (Mode::Naming(typed), _) => (typed.as_str(), "", style),
+                (_, Some(name)) => (name.as_str(), "", style),
+                (_, None) => ("none", "", muted),
             },
             Row::Choice(value) => return self.choice(buf, area, value, style),
         };
@@ -188,8 +189,8 @@ impl SettingsPopup<'_> {
         let settings = self.settings;
         let bottom = inner.bottom();
         let message = line(inner, bottom - 3);
-        if let Some(account) = settings.unlinking {
-            let email = settings.accounts.get(account).map_or("", |a| &a.0);
+        let naming = matches!(settings.mode(), Mode::Naming(_));
+        if let Mode::Unlinking(email) = settings.mode() {
             let question = format!("Unlink {email} and delete its Cache? y/n");
             truncate::draw(buf, message, &question, self.theme.warning);
         } else if let Some(failure) = &settings.failure {
@@ -197,18 +198,14 @@ impl SettingsPopup<'_> {
             truncate::draw(buf, message, first, self.theme.error);
         }
 
-        let keys = match (settings.editing.is_some(), settings.section()) {
+        let keys = match (naming, settings.section()) {
             (true, _) => "type the Name",
             (false, Section::Accounts) => "↑↓ select  tab section  d unlink",
             (false, _) => "↑↓ select  tab section",
         };
         truncate::draw(buf, line(inner, bottom - 2), keys, self.theme.muted);
 
-        let close = if settings.editing.is_some() {
-            CANCEL
-        } else {
-            CLOSE
-        };
+        let close = if naming { CANCEL } else { CLOSE };
         let primary = primary(settings);
         let width = |text: &str| u16::try_from(text.width()).unwrap_or(u16::MAX);
         let total = primary.map_or(0, |p| width(p) + GAP) + width(ESC) + 1 + width(close);
@@ -231,7 +228,9 @@ impl SettingsPopup<'_> {
 
     /// Where the terminal's cursor goes while the Name is typed: after it.
     pub fn cursor(&self, area: Rect) -> Option<Position> {
-        let typed = self.settings.editing.as_ref()?;
+        let Mode::Naming(typed) = self.settings.mode() else {
+            return None;
+        };
         let inner = inner(popup(area, self.settings));
         let typed = u16::try_from(typed.width()).unwrap_or(u16::MAX);
         let x = (inner.x + TEXT).saturating_add(typed);
@@ -245,7 +244,7 @@ impl SettingsPopup<'_> {
 fn primary(settings: &Settings) -> Option<&'static str> {
     match settings.selected() {
         Row::Account(_) => None,
-        Row::Name if settings.editing.is_some() => Some(" ↵ save "),
+        Row::Name if matches!(settings.mode(), Mode::Naming(_)) => Some(" ↵ save "),
         Row::Signature(_) | Row::Name => Some(" ↵ edit "),
         Row::Add => Some(" ↵ add "),
         Row::Choice(_) => Some(" ↵ apply "),
