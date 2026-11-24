@@ -7,6 +7,8 @@ import type { Still, Video } from '@app/media';
 
 type Props = (Still | Video) & {
   shows: string;
+  // Loads at once, for the image the first screen is measured by (LCP).
+  priority?: boolean;
 };
 
 const props = Astro.props;
@@ -24,6 +26,7 @@ const id = `zoom-${name.split('.', 1)[0]}`;
           alt={props.shows}
           widths={[800, 1600, 2400]}
           sizes="(min-width: 60rem) 60vw, 100vw"
+          priority={props.priority}
         />
       ) : (
         <video
