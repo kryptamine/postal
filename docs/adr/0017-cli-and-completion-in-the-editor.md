@@ -32,7 +32,9 @@ Folder but Trash and Spam, or among those All Mail held (ADR 0009). As the
 command never writes the Cache, opening a Reply in the TUI fetches every
 body of its Thread first; a body still missing is marked, not skipped. A
 Draft that answers nothing, a new mail, has an empty Thread: the command
-prints nothing and succeeds.
+prints nothing and succeeds. `--message <path>` names a Message `E`
+wrote for the editor, by the Account and the body key in its path, and
+prints its Thread the same way; only the bodies already cached are there.
 
 ## Considered options
 

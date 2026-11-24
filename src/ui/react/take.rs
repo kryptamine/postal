@@ -29,7 +29,7 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         Step::Attachment(wanted) => ui.screen.toast = Some(model.attachments.ask(wanted)),
         Step::Open(to) => {
             let tty = &mut model.tty;
-            ui.screen.toast = open_outside::open(to, tty, model.theme, world.caches, ui)?;
+            ui.screen.toast = open_outside::open(to, tty, model.theme, world, ui)?;
         }
         Step::Draft(drafting) => drafting::draft(drafting, &mut model.tty, ui, world)?,
         Step::Reply(to) => drafting::reply(to, &mut model.tty, ui, world, &model.replies)?,

@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, path::Path};
 
 use serde::Serialize;
 
@@ -12,6 +12,8 @@ use crate::{
     cli::plain_body::{self, MISSING},
     compose::notes::Notes,
     domain::answering::Answering,
+    domain::body_key::BodyKey,
+    domain::thread::Key,
     render::header_date,
 };
 
@@ -29,17 +31,14 @@ struct Row<'a> {
     body: Option<String>,
 }
 
-/// `postal thread show`: every Message of the Thread an ID names, or a
-/// Reply's Draft answers, oldest first, with its body as plain text; none
-/// for a Draft that answers nothing.
+/// `postal thread show`: every Message of the Thread an ID names, a Reply's
+/// Draft answers or a Message file is of, oldest first, each body as plain
+/// text; none for a Draft that answers nothing.
 impl Answers for ThreadShow {
     fn answer(&self) -> Result<Answer, Box<dyn Error>> {
-        let (account, thread) = match (&self.id, &self.draft) {
-            (Some(_), Some(_)) => {
-                return Err("name a Thread by its ID or by --draft, not both".into());
-            }
-            (Some(id), None) => named(id)?,
-            (None, Some(draft)) => {
+        let (account, thread) = match (&self.id, &self.draft, &self.message) {
+            (Some(id), None, None) => named(id)?,
+            (None, Some(draft), None) => {
                 let notes = Notes::read(draft)?.unwrap_or_default();
                 let account = match notes.account {
                     Some(account) => account.to_lowercase(),
@@ -56,7 +55,8 @@ impl Answers for ThreadShow {
 
                 (account, thread)
             }
-            (None, None) => return Err("name a Thread by its ID or by --draft".into()),
+            (None, None, Some(message)) => opened(message)?,
+            _ => return Err("name a Thread by one of its ID, --draft or --message".into()),
         };
 
         let rows: Vec<Row<'_>> = thread
@@ -85,6 +85,33 @@ fn named(id: &str) -> Result<(String, Vec<ThreadMessage>), Box<dyn Error>> {
     }
 
     Ok((key.account().clone(), thread))
+}
+
+/// The Account and the Thread of the Message file `path`, which the TUI
+/// names `<account>/<body key>.eml`: a body key alone is shared across
+/// Accounts whose servers number alike.
+fn opened(path: &Path) -> Result<(String, Vec<ThreadMessage>), Box<dyn Error>> {
+    let wrong = || format!("{} is no Message file", path.display());
+    let key = path
+        .file_stem()
+        .and_then(|stem| stem.to_str()?.parse().ok())
+        .map(BodyKey::from_stored)
+        .ok_or_else(wrong)?;
+    let named = path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .ok_or_else(wrong)?;
+    let account = accounts::emails()?
+        .into_iter()
+        .find(|email| email.eq_ignore_ascii_case(named))
+        .ok_or_else(|| format!("{named} is no Account set up"))?;
+    let reader = Reader::open(&xdg::cache_dir()?)?;
+    let kept = reader
+        .message(&account, key)?
+        .ok_or_else(|| format!("the Cache holds no Message for {}", path.display()))?;
+    let thread = reader.thread_of(&Key::new(account.clone(), kept.thread, kept.root, key))?;
+    Ok((account, thread))
 }
 
 /// The Thread `answering` names in `account`.
