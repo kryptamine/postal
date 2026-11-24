@@ -142,6 +142,11 @@ fn a_cache_of_schema_29_survives() {
     survives(29);
 }
 
+#[test]
+fn a_cache_of_schema_30_survives() {
+    survives(30);
+}
+
 // Not a check: writes the fixture of this Postal's schema, with `sqlite3`.
 // Run it before appending a migration, and add a test of that fixture.
 #[test]
@@ -158,7 +163,8 @@ fn write_the_fixture_of_this_schema() {
     drop(cache);
     let dump = Command::new("sqlite3")
         .arg(home.cache_path())
-        .arg(".dump")
+        // The index is keyed by rowid, which a plain `.dump` renumbers.
+        .arg(".dump --preserve-rowids")
         .output()
         .unwrap();
     assert!(dump.status.success());
