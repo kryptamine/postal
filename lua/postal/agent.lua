@@ -21,10 +21,9 @@ local MCP = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h") .. "
 local Chat = {}
 Chat.__index = Chat
 
---- Asks `postal thread show` for the Thread the mail answers or is of,
---- `flag` `--draft` or `--message`; until it answers, `self.thread` is
---- nil, then the text, or false for none.
-function Chat:fetch_thread(flag)
+--- Asks `postal thread show` for the Thread of the kind's mail; until it
+--- answers, `self.thread` is nil, then the text, or false for none.
+function Chat:fetch_thread()
 	local function done(result)
 		if result.code == 0 then
 			-- A new mail answers nothing, and its Thread is empty.
@@ -37,7 +36,7 @@ function Chat:fetch_thread(flag)
 		self:next()
 	end
 
-	local command = { config.options.cmd, "thread", "show", flag, self.path }
+	local command = { config.options.cmd, "thread", "show", self.kind.thread.flag, self.path }
 	local ok, failure = pcall(vim.system, command, { text = true }, function(result)
 		vim.schedule(function()
 			done(result)
@@ -65,6 +64,10 @@ function Chat:prompt(instruction)
 		self.prompted = true
 		table.insert(blocks, { type = "text", text = self.kind.rules })
 		vim.list_extend(blocks, self.kind.context(self))
+		if self.thread then
+			self.pane:dim("context", "Context: " .. self.kind.thread.says)
+			table.insert(blocks, self:resource("postal-thread://" .. self.path, self.thread))
+		end
 	end
 
 	vim.list_extend(blocks, self.kind.turn(self))
@@ -351,7 +354,12 @@ local function start(mail, name, ended)
 	end
 
 	self.conn = conn
-	kind.prepare(self)
+	if kind.thread then
+		self:fetch_thread()
+	else
+		self.thread = false
+	end
+
 	self:begin(cwd)
 	return self
 end

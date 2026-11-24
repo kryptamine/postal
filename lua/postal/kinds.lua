@@ -1,6 +1,6 @@
 -- What a chat is over each kind of mail buffer, by the name `postal_kind`
--- gives it: the agent's rules and tools, the pane's review keys,
--- and what goes in the first prompt and in every one.
+-- gives it: the agent's rules and tools, the pane's review keys, the
+-- Thread it asks Postal for, and what goes in the first prompt and every one.
 local body = require("postal.body")
 local review = require("postal.review")
 local tools = require("postal.tools")
@@ -20,16 +20,10 @@ You are helping the user write the email Draft open in their editor.
 	write = "write_draft",
 	noun = "Draft",
 	review = review.keys,
-	prepare = function(chat)
-		chat:fetch_thread("--draft")
-	end,
-	context = function(chat)
-		if not chat.thread then
-			return {}
-		end
-
-		chat.pane:dim("context", "Context: the Thread the Draft answers")
-		return { chat:resource("postal-thread://" .. chat.path, chat.thread) }
+	-- How `postal thread show` names the Thread, and how the pane does.
+	thread = { flag = "--draft", says = "the Thread the Draft answers" },
+	context = function()
+		return {}
 	end,
 	-- The body as it stands, which a write of the agent's is reviewed against.
 	turn = function(chat)
@@ -49,10 +43,6 @@ You are helping the user write the signature their email account ends its messag
 	write = "write_signature",
 	noun = "Signature",
 	review = review.keys,
-	prepare = function(chat)
-		-- A Signature answers no Message.
-		chat.thread = false
-	end,
 	context = function()
 		return {}
 	end,
@@ -70,17 +60,9 @@ You are helping the user read the email Message open in their editor: find thing
 - The Thread resource, when there is one, is the whole correspondence the Message is part of, oldest first, the Message among it.
 - It is read-only: you cannot change it, reply to it or send anything. Answer in the chat.]],
 	tools = tools.message,
-	prepare = function(chat)
-		chat:fetch_thread("--message")
-	end,
+	thread = { flag = "--message", says = "the Thread of the Message" },
 	context = function(chat)
-		local blocks = { chat:resource("postal-message://" .. chat.path, body.whole(chat.mail)) }
-		if chat.thread then
-			chat.pane:dim("context", "Context: the Thread of the Message")
-			table.insert(blocks, chat:resource("postal-thread://" .. chat.path, chat.thread))
-		end
-
-		return blocks
+		return { chat:resource("postal-message://" .. chat.path, body.whole(chat.mail)) }
 	end,
 	turn = function()
 		return {}
