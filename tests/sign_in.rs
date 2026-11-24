@@ -129,8 +129,9 @@ fn l_signs_in_again_and_restarts_sync() {
     t.wait_until(|s| s.contains("Hello")).unwrap();
     // `L` is neither active nor listed while signed in.
     t.send(Key::Char('?')).unwrap();
-    t.wait_until(|s| s.contains(" Help ")).unwrap();
-    assert!(!t.screen().contains("sign in"), "{:?}", t.screen());
+    t.send_str("/sign in").unwrap();
+    t.wait_until(|s| s.contains("no key matches")).unwrap();
+    t.send(Key::Enter).unwrap();
     t.send(Key::Char('?')).unwrap();
     t.send(Key::Char('L')).unwrap();
     // The popup opening proves `L` left the TUI where it was.
@@ -141,7 +142,9 @@ fn l_signs_in_again_and_restarts_sync() {
 
     sign_out(&mut t, &server);
     t.send(Key::Char('?')).unwrap();
+    t.send_str("/sign in").unwrap();
     t.wait_until(|s| s.contains("sign in again")).unwrap();
+    t.send(Key::Enter).unwrap();
     t.send(Key::Char('?')).unwrap();
     t.wait_until(|s| !s.contains(" Help ")).unwrap();
     server.recover();

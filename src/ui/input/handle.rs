@@ -4,7 +4,8 @@ use crossterm::event::{Event, KeyEvent};
 
 use crate::{
     ui::exit::Exit, ui::input::keymap, ui::input::pane_keys, ui::input::step::Step,
-    ui::popup::layer_act::Act, ui::run::Error, ui::state::screen::Screen, ui::state::ui::Ui,
+    ui::popup::help::Help, ui::popup::layer_act::Act, ui::run::Error, ui::state::screen::Screen,
+    ui::state::ui::Ui,
 };
 
 /// Acts on one input event, where the view alone can take it.
@@ -17,8 +18,12 @@ pub fn handle(
     match event {
         None => Ok(Step::Exit(Exit::Quit)),
         Some(Err(source)) => Err(Error::Terminal(source)),
-        Some(Ok(Event::Key(key))) if screen.help => {
-            screen.help = !keymap::closes_help(key);
+        Some(Ok(Event::Key(key))) if screen.help.is_some() => {
+            let open = !keymap::pressed(key) || screen.help.as_mut().is_some_and(|h| h.key(key));
+            if !open {
+                screen.help = None;
+            }
+
             Ok(Step::Stay)
         }
         Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
@@ -46,7 +51,7 @@ fn on_top(key: KeyEvent, screen: &mut Screen) -> Step {
     match layer.key(key) {
         Act::Stay => Step::Stay,
         Act::Help => {
-            screen.help = true;
+            screen.help = Some(Help::default());
             Step::Stay
         }
         Act::Close(step) => {

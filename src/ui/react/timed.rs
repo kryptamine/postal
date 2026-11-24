@@ -26,7 +26,7 @@ fn dwelling(ui: &Ui, previews: &Previews, text: Option<Rect>) -> Option<(Key, Bo
         && !screen.over.is_open::<FolderPicker>()
         && !screen.over.is_open::<LocalDrafts>()
         && !screen.over.is_open::<DraftPreview>();
-    let text = text.filter(|_| listed && !screen.help && view.selected_unread())?;
+    let text = text.filter(|_| listed && screen.help.is_none() && view.selected_unread())?;
     previews.get(view, text.width)?;
     Some((view.selected_key()?, view.selected_body()?))
 }

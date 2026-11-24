@@ -693,10 +693,3 @@ pub fn action(key: KeyEvent, mode: Mode) -> Option<Action> {
         _ => None,
     }
 }
-
-/// Whether `key` closes the `?` popup; while it is open, no other key acts.
-pub const fn closes_help(key: KeyEvent) -> bool {
-    pressed(key)
-        && !key.modifiers.contains(KeyModifiers::CONTROL)
-        && matches!(key.code, KeyCode::Char('?' | 'q') | KeyCode::Esc)
-}

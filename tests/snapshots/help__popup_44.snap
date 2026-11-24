@@ -5,19 +5,19 @@ expression: screen
 size: 44x18  cursor: hidden
 ┌ Help ────────────────────────────────────┐
 │                                          │
-│ Navigate                                 │
-│ j / k        ↓ / ↑        next / previou │
-│ g / G        Home / End   first / last M │
+│ / to filter by key or description        │
+│                                          │
+│ Navigate                               ▐ │
+│ j / k        ↓ / ↑        next / previo  │
+│ g / G        Home / End   first / last   │
 │                                          │
 │ Message                                  │
-│ ^d / ^u      PgDn / PgUp  scroll the Pre │
-│ Enter        l            read the Messa │
-│ |                         open the Messa │
-│ E                         open the Messa │
-│ J / K                     pick Threads d │
-│ U                         mark Unread, o │
-│ Backspace                 delete: move t │
-│ e                         archive        │
+│ ^d / ^u      PgDn / PgUp  scroll the Pr  │
+│ Enter        l            read the Mess  │
+│ |                         open the Mess  │
+│ E                         open the Mess  │
+│                                          │
+│ / filter · j/k scroll · esc close        │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help
