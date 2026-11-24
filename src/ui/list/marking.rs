@@ -4,6 +4,7 @@ use crate::{
     domain::per_account::AccountId,
     mail::steering::Ask,
     ui::list::folder_show::{relist, show},
+    ui::list::per_account::per_account,
     ui::run::Error,
     ui::state::toast::Toast,
     ui::state::ui::Ui,
@@ -26,8 +27,37 @@ pub fn mark_read(ui: &mut Ui, world: World) -> Result<(), Error> {
 }
 
 /// Mark Unread on the selected Thread's newest Message, or in Reading on
-/// the one at the cursor.
+/// the one at the cursor. On the Picks, Read when any is Unread, else
+/// Unread on each one's newest Message.
 pub fn mark_unread(ui: &mut Ui, world: World) -> Result<(), Error> {
+    if let Some(listing) = ui.view.picked_listing(world.caches)? {
+        let threads = listing.threads();
+        let unread = !threads.iter().any(|t| t.unread);
+        let marked = if unread {
+            per_account(&listing, |thread| listing.newest(thread).into_iter())
+        } else {
+            let each = |thread| listing.stack(Some(thread)).filter(|m| m.unread);
+            per_account(&listing, each)
+        };
+
+        let mut changed = false;
+        for (account, messages) in &marked {
+            changed |= mark(ui, world, *account, messages, unread)?;
+        }
+
+        ui.view.picks.clear();
+        if let Some(key) = ui.view.selected_key().filter(|_| unread) {
+            ui.screen.dwell.spare(key);
+        }
+
+        let done = if unread { "Unread" } else { "Read" };
+        if changed {
+            ui.screen.toast = Some(Toast::new(format!("{} marked {done}", threads.len())));
+        }
+
+        return Ok(());
+    }
+
     let Ui { view, screen } = &mut *ui;
     let message = screen.showing.reading().map_or_else(
         || view.selected_message(),

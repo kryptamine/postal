@@ -11,5 +11,7 @@ mod matched;
 pub mod message_list;
 pub mod moving;
 pub mod older_pages;
+mod per_account;
+pub mod picks;
 pub mod search;
 mod senders;

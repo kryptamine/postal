@@ -1,10 +1,14 @@
 use crate::{
     cache::Goal,
+    domain::body_key::BodyKey,
     domain::folder::{Folder, Role},
     domain::message::Message,
+    domain::message_ref::MessageRef,
+    domain::per_account::AccountId,
     mail::steering::Ask,
     ui::drafts::composing,
     ui::list::folder_show::{folders, relist, show},
+    ui::list::per_account::per_account,
     ui::popup::folder_picker::FolderPicker,
     ui::preview::link_hints::LinkHints,
     ui::run::Error,
@@ -38,7 +42,7 @@ pub fn archive(ui: &mut Ui, world: World) -> Result<(), Error> {
 }
 
 /// Opens the Folder Picker on the Folders of the selected Thread's Account,
-/// to move its Messages to the one picked.
+/// or of the Picks', to move their Messages to the Folder picked.
 pub fn pick(ui: &mut Ui, world: World) -> Result<(), Error> {
     let Ui { view, screen } = ui;
     if view.search.is_none() && view.folder.role() == Some(Role::All) {
@@ -46,7 +50,14 @@ pub fn pick(ui: &mut Ui, world: World) -> Result<(), Error> {
         return Ok(());
     }
 
-    let Some(account) = view.stack().next().map(|m| m.account) else {
+    let accounts = view.picked_accounts();
+    if accounts.len() > 1 {
+        screen.toast = Some(Toast::new("pick one Account's Threads to move"));
+        return Ok(());
+    }
+
+    let first = || view.stack().next().map(|m| m.account);
+    let Some(account) = accounts.into_iter().next().or_else(first) else {
         return Ok(());
     };
 
@@ -63,44 +74,75 @@ pub fn move_to(ui: &mut Ui, world: World, folder: &Folder) -> Result<(), Error> 
 }
 
 /// Takes the selected Thread's Messages, or in Reading the one at the
-/// cursor, to `goal`, for an Undo to bring back; `done` says so.
+/// cursor, or those of every Pick, to `goal`, for one Undo to bring back;
+/// `done` says so.
 fn take(ui: &mut Ui, world: World, goal: &Goal, done: &str) -> Result<(), Error> {
-    let (caches, Ui { view, screen }) = (world.caches, &mut *ui);
-    let cursor = screen.showing.reading().map(|reading| reading.cursor);
-    let messages: Vec<_> = view
-        .stack()
-        .filter(|m| cursor.is_none_or(|cursor| m.body_key == cursor))
-        .filter_map(Message::on_server)
-        .collect();
-    if messages.is_empty() {
-        if cursor.is_some() {
-            screen.toast = Some(Toast::new("only in another Folder"));
-        }
+    let caches = world.caches;
+    let picked = ui.view.picked_listing(caches)?;
+    let Ui { view, screen } = &mut *ui;
+    let (taken, threads) = if let Some(listing) = &picked {
+        let each = |thread| listing.stack(Some(thread));
+        (per_account(listing, each), Some(listing.threads().len()))
+    } else {
+        let cursor = screen.showing.reading().map(|reading| reading.cursor);
+        let Some(taken) = shown(view.stack(), cursor) else {
+            if cursor.is_some() {
+                screen.toast = Some(Toast::new("only in another Folder"));
+            }
 
+            return Ok(());
+        };
+
+        (vec![taken], None)
+    };
+
+    let mut batches = Vec::new();
+    for (account, messages) in &taken {
+        if let Some(batch) = caches[*account].move_to(messages, goal)? {
+            batches.push((*account, batch));
+        }
+    }
+
+    if batches.is_empty() {
+        screen.toast = Some(Toast::new("nothing to move"));
         return Ok(());
     }
 
-    // A Thread never spans Accounts.
-    let Some(account) = view.stack().next().map(|m| m.account) else {
-        return Ok(());
-    };
-
     let thread = view.selected_key();
-    let Some(batch) = caches[account].move_to(&messages, goal)? else {
-        screen.toast = Some(Toast::new("nothing to move"));
-        return Ok(());
-    };
-
-    screen.undo.push(Undo::Move(account, batch, thread));
+    view.picks.clear();
+    let accounts: Vec<_> = batches.iter().map(|&(account, _)| account).collect();
+    screen.undo.push(Undo::Move(batches, thread));
     show(view, caches, None)?;
     screen.over.close::<LinkHints>();
     screen.follow(view, thread);
 
     relist(ui, caches)?;
-    // Signed out, the move waits in the Cache.
-    world.asks.send(account, Ask::Changes);
-    ui.screen.toast = Some(Toast::new(format!("{done} · u to undo")));
+    for account in accounts {
+        // Signed out, the move waits in the Cache.
+        world.asks.send(account, Ask::Changes);
+    }
+
+    let toast = threads.map_or_else(
+        || format!("{done} · u to undo"),
+        |threads| format!("{threads} {done} · u to undo"),
+    );
+    ui.screen.toast = Some(Toast::new(toast));
     Ok(())
+}
+
+/// The Messages of `stack` on the server, or only the one at `cursor`,
+/// with their Account; `None` when there are none.
+fn shown<'a>(
+    stack: impl Iterator<Item = &'a Message> + Clone,
+    cursor: Option<BodyKey>,
+) -> Option<(AccountId, Vec<MessageRef>)> {
+    // A Thread never spans Accounts.
+    let account = stack.clone().next()?.account;
+    let messages: Vec<_> = stack
+        .filter(|m| cursor.is_none_or(|cursor| m.body_key == cursor))
+        .filter_map(Message::on_server)
+        .collect();
+    (!messages.is_empty()).then_some((account, messages))
 }
 
 /// Undo of the latest move not yet taken back, selecting its Thread, or
@@ -112,14 +154,21 @@ pub fn undo(ui: &mut Ui, world: World) -> Result<(), Error> {
             composing::restore(screen, path, text, notes);
             return Ok(());
         }
-        Some(Undo::Move(account, batch, thread)) => {
-            let folders = caches[account].undo(batch)?;
-            (!folders.is_empty()).then_some((account, folders, thread))
+        Some(Undo::Move(batches, thread)) => {
+            let mut restored = Vec::new();
+            for (account, batch) in batches {
+                let folders = caches[account].undo(batch)?;
+                if !folders.is_empty() {
+                    restored.push((account, folders));
+                }
+            }
+
+            (!restored.is_empty()).then_some((restored, thread))
         }
         None => None,
     };
 
-    let Some((account, folders, thread)) = folders else {
+    let Some((restored, thread)) = folders else {
         screen.toast = Some(Toast::new("nothing to undo"));
         return Ok(());
     };
@@ -132,18 +181,22 @@ pub fn undo(ui: &mut Ui, world: World) -> Result<(), Error> {
     }
 
     relist(ui, caches)?;
-    world.asks.send(account, Ask::Changes);
+    for (account, _) in &restored {
+        world.asks.send(*account, Ask::Changes);
+    }
+
     let Ui { view, screen } = ui;
-    let shown = view
-        .folder
-        .of(account)
-        .is_some_and(|shown| folders.iter().any(|f| f == shown));
+    let shown = restored.iter().any(|(account, folders)| {
+        let shown = view.folder.of(*account);
+        shown.is_some_and(|shown| folders.iter().any(|f| f == shown))
+    });
 
     let here = view.search.is_some() || shown;
     screen.toast = Some(if here {
         Toast::new("restored")
     } else {
-        let folder = caches[account].folder(&folders[0])?;
+        let (account, folders) = &restored[0];
+        let folder = caches[*account].folder(&folders[0])?;
         Toast::new(format!("restored to {}", folder.label()))
     });
     Ok(())

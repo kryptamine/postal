@@ -52,6 +52,10 @@ _Avoid_: mark seen, read receipt
 Making a Message Unread again with `U`: the newest of the selected Thread, or the one under the cursor in Reading. It shows at once, and no Dwell starts on that Thread until the selection leaves it and comes back.
 _Avoid_: unmark, keep unread
 
+**Pick**:
+A Thread of the Message List or a Search held for the next Delete, Archive, Move or `U` to act on with the others at once: `J` and `K` move the selection down and up, picking every Thread from where the first was pressed to the selection. Each picked card is marked at its left edge, and the hint line counts them. `Esc`, any other move, another Folder, a new Search or Reading drops them, as does the action. A Move takes only one Account's Picks; `U` makes them all Read while any is Unread, else Unread as a Mark Unread does. One Undo takes back the whole action.
+_Avoid_: selection (the selection is the cursor), mark, tag
+
 **Trash**:
 The Folder the server names for deleted Messages; Postal never erases a Message for good.
 _Avoid_: bin, deleted items

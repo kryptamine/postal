@@ -76,6 +76,11 @@ pub fn draw(
                     parsed: view.search.as_ref().map(Search::parsed),
                     capped: view.search.as_ref().is_some_and(Search::capped),
                     indexing: screen.index_progress(),
+                    picks: if keys == Mode::List {
+                        view.count_picked()
+                    } else {
+                        0
+                    },
                     now: Instant::now(),
                 };
 
