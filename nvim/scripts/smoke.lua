@@ -14,7 +14,7 @@ local function acp(arg)
 	return { cmd = { vim.v.progpath, "--clean", "-l", acp_stub, arg } }
 end
 
-require("postal").setup({
+local setup = {
 	cmd = os.getenv("POSTAL_BIN") or stub,
 	agents = {
 		stub = acp(agent_log),
@@ -23,7 +23,9 @@ require("postal").setup({
 		fetched = { cmd = { "postal-no-such-agent" }, npx = "postal-acp-package" },
 	},
 	agent = "stub",
-})
+	keys = { stop = "<C-q>", close = false },
+}
+require("postal").setup(setup)
 
 local drafts = vim.fn.tempname() .. "/postal/drafts"
 vim.fn.mkdir(drafts, "p")
@@ -282,6 +284,16 @@ end
 shows({ "hi bob", "see you" })
 left("2 hunks left")
 left("? keys")
+-- A key set in setup() maps as given, and one set to false maps nothing
+local pane_maps = {}
+for _, map in ipairs(vim.api.nvim_buf_get_keymap(pane_buf, "n")) do
+	pane_maps[map.lhs] = true
+end
+
+if not pane_maps["<C-Q>"] or pane_maps.q or pane_maps["<C-C>"] then
+	fail("the pane maps " .. vim.inspect(vim.tbl_keys(pane_maps)))
+end
+
 -- A narrow pane drops whole keys, never the count or the key list
 vim.api.nvim_win_set_width(vim.fn.bufwinid(pane_buf), 46)
 left("2 hunks left  \\a accept ")
@@ -400,7 +412,7 @@ end
 
 local input = #vim.api.nvim_buf_get_lines(pane_buf, 0, -1, false) - 2
 vim.api.nvim_buf_set_lines(pane_buf, input - 1, input, false, {})
-vim.cmd.normal("q")
+vim.cmd.normal(vim.keycode("<C-q>"))
 if not vim.wait(5000, function()
 	return said(pane_buf):find("Thinking no more.\n> Stopped.", 1, true) ~= nil
 end) then
@@ -436,6 +448,15 @@ local notified = {}
 vim.notify = function(msg)
 	table.insert(notified, msg)
 end
+
+-- A key setup() does not know is refused by name, not silently dropped
+require("postal").setup(vim.tbl_extend("force", setup, { keys = { nope = "x" } }))
+if not (notified[1] or ""):find("no key named nope", 1, true) then
+	fail("an unknown key passed: " .. vim.inspect(notified))
+end
+
+notified = {}
+require("postal").setup(setup)
 
 local function chat(name)
 	local file = drafts .. "/" .. name .. ".eml"

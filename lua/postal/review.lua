@@ -2,6 +2,7 @@
 -- marked over the buffer until the user accepts or rejects it (ADR 0019).
 local body = require("postal.body")
 local hunks = require("postal.hunks")
+local keys = require("postal.keys")
 
 local M = {}
 
@@ -17,13 +18,13 @@ local function all(accept)
 	end
 end
 
---- The keys a review maps in its Draft's buffer while it is open; `short`
---- names one in the pane's winbar.
+--- The keys a review maps in its Draft's buffer while it is open, by their
+--- name in `postal.keys`; `short` names one in the pane's winbar.
 M.keys = {
-	{ lhs = "<leader>a", short = "accept", desc = "accept the hunk under the cursor", run = under(true) },
-	{ lhs = "<leader>r", short = "reject", desc = "reject the hunk under the cursor", run = under(false) },
-	{ lhs = "<leader>A", short = "all", desc = "accept every hunk", run = all(true) },
-	{ lhs = "<leader>R", short = "none", desc = "reject every hunk", run = all(false) },
+	{ name = "accept", short = "accept", desc = "accept the hunk under the cursor", run = under(true) },
+	{ name = "reject", short = "reject", desc = "reject the hunk under the cursor", run = under(false) },
+	{ name = "accept_all", short = "all", desc = "accept every hunk", run = all(true) },
+	{ name = "reject_all", short = "none", desc = "reject every hunk", run = all(false) },
 }
 
 local NS = vim.api.nvim_create_namespace("postal-review")
@@ -190,17 +191,19 @@ function Review:watch()
 end
 
 function Review:map()
-	for _, key in ipairs(M.keys) do
-		vim.keymap.set("n", key.lhs, function()
-			key.run(self)
-		end, { buffer = self.draft, desc = key.desc })
-	end
+	self.mapped = keys.bound(vim.tbl_map(function(key)
+		return vim.tbl_extend("force", key, {
+			run = function()
+				key.run(self)
+			end,
+		})
+	end, M.keys))
+
+	keys.map(self.draft, self.mapped)
 end
 
 function Review:unmap()
-	for _, key in ipairs(M.keys) do
-		pcall(vim.keymap.del, "n", key.lhs, { buffer = self.draft })
-	end
+	keys.unmap(self.draft, self.mapped)
 end
 
 -- Takes the agent's lines, or the user's, for one hunk and drops its mark.

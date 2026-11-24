@@ -52,6 +52,7 @@ require("postal").setup({
   },
   agent = "claude",
   nerd_font = true,
+  keys = {},
 })
 ```
 
@@ -61,6 +62,21 @@ require("postal").setup({
 | `agents`    | ACP agents by name; `npx` runs the package when `cmd` is not on `PATH`      |
 | `agent`     | the one `:PostalAgent` starts; `:PostalAgent gemini` picks another          |
 | `nerd_font` | Nerd Font icons in the pane; on when `vim.g.have_nerd_font` is set          |
+| `keys`      | a key by name to another `lhs`, or to `false` to leave it unmapped          |
+
+| key           | default     |
+| ------------- | ----------- |
+| `send`        | `<CR>`      |
+| `send_insert` | `<C-s>`     |
+| `stop`        | `q`         |
+| `close`       | `<C-c>`     |
+| `help`        | `?`         |
+| `accept`      | `<leader>a` |
+| `reject`      | `<leader>r` |
+| `accept_all`  | `<leader>A` |
+| `reject_all`  | `<leader>R` |
+
+For example, `keys = { accept = "<leader>y", reject_all = false }`.
 
 `claude` is set up by default. The agent signs in through its own CLI
 (`claude /login`). `:checkhealth postal` says what is missing.

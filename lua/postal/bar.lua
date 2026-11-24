@@ -16,12 +16,18 @@ local function hint(key)
 end
 
 --- A winbar `width` wide: `summary` of a review unless nil, as many of
---- `keys` with a `short` as fit, in order, and `more` at the right.
+--- `keys` with a `short` as fit, in order, and `more` at the right
+--- unless nil.
 function M.winbar(width, keys, more, summary)
-	local right, wide = hint(more)
+	local right, room = "", width - 2
+	if more then
+		local wide
+		right, wide = hint(more)
+		-- The gap, `more` and a space at the right.
+		room = room - (2 + wide + 1)
+	end
+
 	local bar = { "  " }
-	-- The margin, then the gap, `more` and a space at the right.
-	local room = width - 2 - (2 + wide + 1)
 	if summary then
 		local glyph, group = icons.get("review")
 		local lead = glyph .. " " .. summary
