@@ -1,10 +1,10 @@
-use std::{cell::Cell, collections::VecDeque};
+use std::collections::VecDeque;
 
 use crate::{
     cache::Cache,
     domain::folder::{Folder, Role},
     domain::folder_name::FolderName,
-    mail::backfill::{self, Backfill},
+    mail::backfill,
     mail::imap::{MailServer, Mode},
     mail::sync::{self, Error},
     mail::update::Update,
@@ -16,13 +16,22 @@ const PAGE: u32 = 100;
 /// Brings every Folder but Trash and Spam whole into the Cache, a page a
 /// step, so the body pass reaches every Message: ADR 0032.
 pub struct FolderPass {
-    /// The Folders not yet whole; `None` until listed.
+    /// Every Folder the pass walks, empty until listed.
+    walked: Vec<FolderName>,
+    /// Those not yet whole; `None` until listed.
     left: Option<VecDeque<FolderName>>,
 }
 
 impl FolderPass {
     pub const fn new() -> Self {
-        Self { left: None }
+        Self {
+            walked: Vec::new(),
+            left: None,
+        }
+    }
+
+    pub fn walked(&self) -> &[FolderName] {
+        &self.walked
     }
 
     pub fn due(&self) -> bool {
@@ -40,7 +49,8 @@ impl FolderPass {
         if self.left.is_none() {
             cache.list_folders(&server.folders().await?)?;
             send(Update::Folders);
-            self.left = Some(walked(cache.folders()?));
+            self.walked = walked(cache.folders()?);
+            self.left = Some(self.walked.iter().cloned().collect());
         }
 
         let Some(left) = &mut self.left else {
@@ -59,9 +69,9 @@ impl FolderPass {
 
 /// On Gmail All Mail alone, which holds every label's Messages once; else
 /// every Folder but Trash and Spam.
-fn walked(folders: Vec<Folder>) -> VecDeque<FolderName> {
+fn walked(folders: Vec<Folder>) -> Vec<FolderName> {
     if let Some(all) = folders.iter().find(|f| f.role == Some(Role::All)) {
-        return VecDeque::from([all.name.clone()]);
+        return vec![all.name.clone()];
     }
 
     let kept = folders.into_iter();
@@ -79,7 +89,7 @@ async fn page(
 ) -> Result<bool, Error> {
     let fetched = if cache.state(folder)?.is_none() {
         // Examined: the sync connection's Mark Read never comes this way.
-        sync::resync_as(server, cache, folder, Mode::Examine, &|_| {})
+        sync::resync(server, cache, folder, Mode::Examine, &|_| {})
             .await
             .map(|_| true)
     } else if cache.oldest_uid(folder)?.is_none() {
@@ -105,25 +115,14 @@ async fn page(
     }
 }
 
-/// The page older than every cached one; whether more is left.
+/// The page older than every cached one; whether more is left. Nothing
+/// below means the server has nothing older, or the Folder is gone or
+/// renumbered: the sync connection's to refetch.
 async fn older(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &FolderName,
 ) -> Result<bool, Error> {
-    // `Paged` with a UID means the server has nothing older, or the Folder
-    // is gone or renumbered: the sync connection's to refetch.
-    let whole = Cell::new(false);
-    let report = |backfill| {
-        if let Backfill::Paged {
-            nothing_below: Some(_),
-            ..
-        } = backfill
-        {
-            whole.set(true);
-        }
-    };
-
-    backfill::page(server, cache, folder, PAGE, report).await?;
-    Ok(!whole.get())
+    let page = backfill::page(server, cache, folder, PAGE, |_, _| {}).await?;
+    Ok(page.nothing_below.is_none())
 }

@@ -8,6 +8,7 @@ pub mod folder;
 pub mod folder_name;
 pub mod html_text;
 pub mod inbox;
+pub mod indexing;
 pub mod listing;
 pub mod message;
 pub mod message_flags;

@@ -10,7 +10,7 @@ use crate::{
     mail::snippet,
     mail::snippets,
     mail::sync::Error,
-    mail::update::{Unindexed, Update},
+    mail::update::Update,
 };
 
 /// Messages per batch: a Preview asked for meanwhile waits on one batch.
@@ -19,10 +19,6 @@ const BATCH: usize = 20;
 /// The octets of a body indexed; what follows is mostly quoted history.
 const OCTETS: u32 = 32 * 1024;
 
-/// How often the screen is told how many bodies are left: counting them
-/// reads the whole partial index, 12 ms at 500,000.
-const COUNT_EVERY: Duration = Duration::from_secs(2);
-
 /// How long the pass rests once Gmail says the day's download is spent.
 const OVER_QUOTA: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -30,8 +26,6 @@ const OVER_QUOTA: Duration = Duration::from_secs(24 * 60 * 60);
 pub struct BodyPass {
     more: bool,
     resting_until: Option<Instant>,
-    last_count_at: Option<Instant>,
-    last_told: Option<Unindexed>,
 }
 
 /// How one batch ended.
@@ -46,8 +40,6 @@ impl BodyPass {
         Self {
             more: true,
             resting_until: None,
-            last_count_at: None,
-            last_told: None,
         }
     }
 
@@ -65,47 +57,20 @@ impl BodyPass {
             .is_some_and(|until| Instant::now() < until)
     }
 
-    /// One batch, telling the screen how many are left now and then, and
-    /// once none is; `fetching` while the Folder pass brings more rows.
     pub async fn step(
         &mut self,
         server: &mut impl MailServer,
         cache: &Cache,
-        fetching: bool,
         send: &impl Fn(Update),
     ) -> Result<(), Error> {
-        if self
-            .last_count_at
-            .is_none_or(|at| at.elapsed() >= COUNT_EVERY)
-        {
-            self.tell(cache, fetching, send)?;
-        }
-
         if self.resting() {
             return Ok(());
         }
 
         match batch(server, cache, send).await? {
             Batch::Indexed => {}
-            Batch::NoneLeft => {
-                self.more = false;
-                self.tell(cache, fetching, send)?;
-            }
+            Batch::NoneLeft => self.more = false,
             Batch::OverQuota => self.resting_until = Some(Instant::now() + OVER_QUOTA),
-        }
-
-        Ok(())
-    }
-
-    fn tell(&mut self, cache: &Cache, fetching: bool, send: &impl Fn(Update)) -> Result<(), Error> {
-        self.last_count_at = Some(Instant::now());
-        let now = Unindexed {
-            bodies: cache.unindexed_count()?,
-            fetching,
-        };
-        if self.last_told != Some(now) {
-            self.last_told = Some(now);
-            send(Update::Unindexed(now));
         }
 
         Ok(())
@@ -136,7 +101,7 @@ async fn batch(
     let raw = match snippets::parts(server, &parts, OCTETS).await {
         Err(Error::Imap(error)) if error.refusal().is_some() => {
             tracing::warn!("indexing bodies of {folder} was refused: {error}");
-            if error.to_string().to_ascii_lowercase().contains("overquota") {
+            if error.over_quota() {
                 return Ok(Batch::OverQuota);
             }
 

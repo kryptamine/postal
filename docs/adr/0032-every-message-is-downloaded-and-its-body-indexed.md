@@ -49,10 +49,20 @@ envelopes the Correspondents are learnt from (ADR 0031).
   another reason is indexed without its bodies, or the pass would ask for
   it forever. `[THROTTLED]` is an outage: the connection backs off and
   reconnects, and the passes start again from what the Cache holds.
-- Every 2 seconds at most, and once none is left, it counts the Messages
-  still without their body (12 ms at 500,000; 84 ms leaving Trash and Spam
-  out). A Search's hint line shows `N bodies to index` after the Query
-  while any is, and `downloading mail` while the Folder pass is under way.
+
+## Progress
+
+While a Search is open, its hint line shows how far the index is after the
+Query, `search index 37% (120,312 of 325,000)`, until it is whole. Indexed
+are the cached Messages with their body; the total adds to every cached
+Message what the server last counted in each walked Folder past the rows
+cached there, so the share does not fall back as the Folder pass brings
+rows. A Folder never synced counts once its first fetch counts it.
+
+Counting reads the partial index and every row's Folder once, 22 ms at
+500,000 (84 ms if Trash and Spam were left out of the body pass, which is
+why they are indexed as far as cached). So it is counted every 5 seconds
+at most while a pass runs, and at once when the passes end.
 
 ## Ranking a match in a body
 

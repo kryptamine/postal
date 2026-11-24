@@ -50,6 +50,13 @@ impl Error {
             if text.to_ascii_lowercase().contains("[authenticationfailed]"))
     }
 
+    /// Gmail spent the day's download allowance, as RFC 5530's `OVERQUOTA`
+    /// says; async-imap leaves the code in the text.
+    pub fn over_quota(&self) -> bool {
+        matches!(self, Self::Imap(async_imap::error::Error::No(text))
+            if text.to_ascii_lowercase().contains("[overquota]"))
+    }
+
     /// Only a new login helps: the server refused the credentials, or Google
     /// the refresh token.
     pub fn signed_out(&self) -> bool {

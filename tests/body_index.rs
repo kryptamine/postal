@@ -314,23 +314,27 @@ fn new_mail_arrives_by_idle_during_the_body_pass() {
     quit(t);
 }
 
-// A word not found yet may only be waiting for its body.
+// A word not found yet may only be waiting for its body, or its Message.
 #[test]
-fn the_hint_line_counts_the_bodies_left_while_a_search_is_open() {
-    let server = FakeImap::start(messages(100));
+fn the_hint_line_shows_how_far_the_index_is_while_a_search_is_open() {
+    let server = FakeImap::start(messages(600));
     let home = Home::for_server(&server);
     let mut t = started(&server, &home);
 
     server.stall(Stall::Part);
     t.send(Key::Char('/')).unwrap();
     t.send_str("zeppelin").unwrap();
+    // The 100 past the newest page count before they are cached.
     let screen = t
-        .snapshot_after(|s| hint_line(s).contains("bodies to index"))
+        .snapshot_after(|s| hint_line(s).contains(" of 600)"))
         .unwrap();
-    assert!(hint_line(&screen).contains("/zeppelin"), "{screen}");
+    assert!(
+        hint_line(&screen).contains("/zeppelin  search index "),
+        "{screen}"
+    );
 
     server.release();
-    t.wait_until(|s| hint_line(s).contains("/zeppelin") && !hint_line(s).contains("bodies"))
+    t.wait_until(|s| hint_line(s).contains("/zeppelin") && !hint_line(s).contains("index"))
         .unwrap();
     quit(t);
 }

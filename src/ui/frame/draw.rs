@@ -75,7 +75,7 @@ pub fn draw(
                     }),
                     parsed: view.search.as_ref().map(Search::parsed),
                     capped: view.search.as_ref().is_some_and(Search::capped),
-                    unindexed: screen.index_progress(),
+                    indexing: screen.index_progress(),
                     now: Instant::now(),
                 };
 

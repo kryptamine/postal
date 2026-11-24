@@ -284,9 +284,10 @@ impl Search {
     }
 
     fn rematch(&mut self) {
+        let ranked_words = self.parsed.ranked();
         // `Pattern::new` takes no fzf syntax; `parse` and `reparse` would.
         self.pattern = Pattern::new(
-            &self.parsed.ranked(),
+            &ranked_words,
             CaseMatching::Smart,
             Normalization::Smart,
             AtomKind::Fuzzy,
@@ -305,19 +306,23 @@ impl Search {
         // FTS5 found every Thread here. One nucleo cannot score, even ignoring
         // case, matched only in a body: it comes last. One it scores only
         // ignoring case failed smart case, and is dropped.
-        let ignoring = Pattern::new(
-            &self.parsed.ranked(),
-            CaseMatching::Ignore,
-            Normalization::Smart,
-            AtomKind::Fuzzy,
-        );
-        let unscored: Vec<_> = (self.haystacks.iter())
-            .filter(|(thread, _)| best[*thread].is_none())
-            .cloned()
-            .collect();
         let mut case_failed = vec![false; best.len()];
-        for (_, thread) in score(&ignoring, &unscored) {
-            case_failed[thread] = true;
+        if ranked_words.chars().any(char::is_uppercase) {
+            let ignoring = Pattern::new(
+                &ranked_words,
+                CaseMatching::Ignore,
+                Normalization::Smart,
+                AtomKind::Fuzzy,
+            );
+            for (thread, haystack) in &self.haystacks {
+                if best[*thread].is_none()
+                    && ignoring
+                        .score(haystack.slice(..), &mut self.matcher)
+                        .is_some()
+                {
+                    case_failed[*thread] = true;
+                }
+            }
         }
 
         let mut ranked: Vec<_> = (0..best.len())

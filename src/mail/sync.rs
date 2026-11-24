@@ -64,21 +64,11 @@ fn gone(error: imap::Error) -> Error {
     }
 }
 
-/// Brings the Cache up to the server's `folder` in one transaction, so the
-/// Message List never shows a half-applied resync. Returns what its `SELECT`
-/// saw and what it wrote; `report` follows the first fetch, then says `Live`.
+/// Brings the Cache up to the server's `folder`, opened as `mode`, in one
+/// transaction, so the Message List never shows a half-applied resync.
+/// Returns what its open saw and what it wrote; `report` follows the first
+/// fetch, then says `Live`.
 pub async fn resync(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    folder: &FolderName,
-    report: &dyn Fn(Status),
-) -> Result<(Examined, Changes), Error> {
-    // Selected, not examined, so a Mark Read can be stored: ADR 0011.
-    resync_as(server, cache, folder, Mode::Select, report).await
-}
-
-/// As `resync`, opening `folder` as `mode`.
-pub async fn resync_as(
     server: &mut impl MailServer,
     cache: &Cache,
     folder: &FolderName,
