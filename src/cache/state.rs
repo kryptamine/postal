@@ -45,9 +45,9 @@ impl Cache {
         Ok(uids)
     }
 
-    /// Whether the Cache, holding `cached` Messages of `folder`, holds as
-    /// many as the server last counted, by a resync or a `STATUS`: then the
-    /// server has nothing older than the Cache.
+    /// Whether the Cache, holding `cached` Messages of `folder`, held every
+    /// one when the server last counted them: then the server has nothing
+    /// older than the Cache.
     pub fn whole(&self, folder: &FolderName, cached: usize) -> Result<bool, Error> {
         let exists: Option<usize> = self
             .connection()
@@ -159,11 +159,13 @@ fn write_state(
     let state = &changes.state;
     connection.execute(
         "INSERT INTO mailbox
-             (account, name, uid_validity, uid_next, highest_modseq, unread, exists_count)
-         VALUES (?6, ?1, ?2, ?3, ?4, ?5, ?7)
+             (account, name, uid_validity, uid_next, highest_modseq, unread, exists_count,
+              messages)
+         VALUES (?6, ?1, ?2, ?3, ?4, ?5, ?7, ?7)
          ON CONFLICT (account, name) DO UPDATE SET uid_validity = excluded.uid_validity,
              uid_next = excluded.uid_next, highest_modseq = excluded.highest_modseq,
-             unread = excluded.unread, exists_count = excluded.exists_count",
+             unread = excluded.unread, exists_count = excluded.exists_count,
+             messages = excluded.messages",
         params![
             folder,
             state.uid_validity,

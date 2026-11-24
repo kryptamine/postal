@@ -7,7 +7,7 @@ impl Reader {
     pub fn folders(&self) -> Result<Vec<Folder<String>>, Error> {
         let mut statement = self
             .connection
-            .prepare("SELECT account, name, role, unread, exists_count FROM mailbox")?;
+            .prepare("SELECT account, name, role, unread, messages FROM mailbox")?;
         let rows = statement
             .query_map([], |row| {
                 let role: Option<String> = row.get(2)?;

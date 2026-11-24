@@ -10,7 +10,7 @@ impl Cache {
     pub fn folders(&self) -> Result<Vec<Folder>, Error> {
         let connection = self.connection();
         let mut statement = connection.prepare_cached(
-            "SELECT name, role, unread, exists_count FROM mailbox WHERE account = ?1",
+            "SELECT name, role, unread, messages FROM mailbox WHERE account = ?1",
         )?;
         let mut folders = statement
             .query_map([self.email()], |row| {
@@ -74,7 +74,7 @@ impl Cache {
         self.write(|connection| {
             connection
                 .prepare_cached(
-                    "UPDATE mailbox SET unread = ?2, exists_count = ?3 WHERE account = ?4 AND name = ?1",
+                    "UPDATE mailbox SET unread = ?2, messages = ?3 WHERE account = ?4 AND name = ?1",
                 )?
                 .execute(params![folder, counts.unread, counts.total, self.email()])
                 .map(drop)

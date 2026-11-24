@@ -438,7 +438,7 @@ fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
         .execute([id])?;
     connection
         .prepare_cached(
-            "UPDATE mailbox SET exists_count = exists_count + 1,
+            "UPDATE mailbox SET messages = messages + 1,
                  unread = unread + (SELECT unread FROM moved WHERE id = ?1)
              WHERE (account, name) = (SELECT account, mailbox FROM moved WHERE id = ?1)",
         )?
@@ -465,7 +465,7 @@ fn drop_rows(
 ) -> rusqlite::Result<()> {
     connection
         .prepare_cached(&format!(
-            "UPDATE mailbox SET exists_count = max(exists_count - 1, 0),
+            "UPDATE mailbox SET messages = max(messages - 1, 0),
                  unread = max(unread - EXISTS (SELECT 1 FROM message m WHERE ({rows})
                                                  AND m.account = mailbox.account
                                                  AND m.mailbox = mailbox.name AND m.unread), 0)

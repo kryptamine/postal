@@ -20,6 +20,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
+    picker::wait_picked,
     search::{hint_line, list, postal, quit, wait_selected},
 };
 use termlens::{Key, Terminal};
@@ -182,6 +183,36 @@ fn a_message_in_a_folder_never_opened_is_found_then_shown() {
     // Its body comes from the Folder it is in.
     t.wait_until(|s| s.contains("difference at the end"))
         .unwrap();
+    quit(t);
+}
+
+// The Picker's count of a Folder walked whole is newer than its rows, which
+// only a resync brings up to it: the index must not wait on that Message.
+#[test]
+fn a_folder_counted_after_its_walk_leaves_the_index_whole() {
+    let server = FakeImap::start(messages(1));
+    server.add_folder("Projects", &[], vec![plans()]);
+    let home = Home::for_server(&server);
+    let mut t = started(&server, &home);
+    wait_for(|| found(&home, "difference") == ["Engine plans"]);
+
+    server.deliver_to(
+        "Projects",
+        FakeMessage::new("Ada", "Later plans", "2024-02-02T09:00:00Z"),
+    );
+    wait_picked(&mut t, "Projects 2");
+    quit(t);
+
+    server.clear_commands();
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains("Subject")).unwrap();
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("zeppelin").unwrap();
+    // The walk lists the Folders, then counts how far the index is.
+    wait_for(|| server.commands().iter().any(|c| c.starts_with("LIST")));
+    let screen = t.wait_stable(Duration::from_secs(1)).unwrap();
+    assert!(hint_line(&screen).contains("/zeppelin"), "{screen}");
+    assert!(!hint_line(&screen).contains("index"), "{screen}");
     quit(t);
 }
 
