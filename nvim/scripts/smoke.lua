@@ -810,7 +810,9 @@ end
 
 vim.cmd("checkhealth postal")
 local health = said(0)
-for _, want in ipairs({ "runs `postal thread show`", hint, "npx fetches postal-acp-package" }) do
+-- A postal of another release than the plugin's is told
+local release = os.getenv("POSTAL_BIN") and ", as the plugin" or "is 0.0.1 and the plugin "
+for _, want in ipairs({ "runs `postal thread show`", hint, "npx fetches postal-acp-package", release }) do
 	if not health:find(want, 1, true) then
 		fail("checkhealth lacks " .. vim.inspect(want) .. " in " .. vim.inspect(health))
 	end

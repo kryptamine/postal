@@ -1,6 +1,12 @@
 #!/bin/sh
-# Stands in for `postal` in `make smoke`: `thread show` gives a Thread,
-# anything else the Correspondents tests/nvim.rs gives the real one.
+# Stands in for `postal` in `make smoke`: `--version` an old release,
+# `thread show` a Thread, anything else the Correspondents tests/nvim.rs
+# gives the real one.
+if [ "$1" = "--version" ]; then
+	echo 'postal 0.0.1'
+	exit 0
+fi
+
 if [ "$1 $2" = "thread show" ]; then
 	printf '%s\n' 'From: Bob <bob@example.com>' 'Recipients: me@example.com' 'Date: 2024-11-18 09:00' '' 'Shall we meet?'
 	exit 0
