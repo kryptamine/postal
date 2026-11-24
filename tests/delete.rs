@@ -16,7 +16,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, INBOX, Outage, Stall},
     home::Home,
-    picker::{picked, picker},
+    picker::{picked, picker, wait_picked},
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -372,8 +372,12 @@ fn an_undo_while_offline_takes_the_delete_back_unsent() {
     t.wait_until(|s| s.contains("Body of Newest")).unwrap();
     t.send(Key::Backspace).unwrap();
     t.wait_until(|s| !list(s).contains("Newest")).unwrap();
+    // Offline no count comes from the server: the Folder's total follows the
+    // Delete and its Undo at once.
+    wait_picked(&mut t, "Inbox 2");
     t.send(Key::Char('u')).unwrap();
     t.wait_until(|s| list(s).contains("Newest")).unwrap();
+    wait_picked(&mut t, "Inbox 3");
     quit(t);
 
     server.recover();

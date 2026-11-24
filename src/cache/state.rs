@@ -45,9 +45,9 @@ impl Cache {
         Ok(uids)
     }
 
-    /// Whether the Cache, holding `cached` Messages of `folder`, held every
-    /// one when the server last counted them: then the server has nothing
-    /// older than the Cache.
+    /// Whether the Cache, holding `cached` Messages of `folder`, holds as
+    /// many as the server last counted, by a resync or a `STATUS`: then the
+    /// server has nothing older than the Cache.
     pub fn whole(&self, folder: &FolderName, cached: usize) -> Result<bool, Error> {
         let exists: Option<usize> = self
             .connection()

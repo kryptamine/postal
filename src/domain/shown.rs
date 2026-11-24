@@ -11,6 +11,7 @@ pub enum Shown {
     /// Every Account's Inbox in one Message List.
     AllInboxes {
         unread: Option<usize>,
+        total: Option<usize>,
     },
     Folder(Folder),
     /// Postal's own Drafts and the Outbox, opened over the Message List.
@@ -19,7 +20,10 @@ pub enum Shown {
 
 impl Shown {
     pub const fn all_inboxes() -> Self {
-        Self::AllInboxes { unread: None }
+        Self::AllInboxes {
+            unread: None,
+            total: None,
+        }
     }
 
     /// The server Folder of `account` this shows: each Account's Inbox in
@@ -49,7 +53,7 @@ impl Shown {
             .is_some_and(|folder| folder.account == account && folder.name == *name)
     }
 
-    /// A Folder is known by Account and name; an Unread count never counts.
+    /// A Folder is known by Account and name; its counts never count.
     pub fn same(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::AllInboxes { .. }, Self::AllInboxes { .. })
@@ -69,8 +73,16 @@ impl Shown {
 
     pub const fn unread(&self) -> Option<usize> {
         match self {
-            Self::AllInboxes { unread } => *unread,
+            Self::AllInboxes { unread, .. } => *unread,
             Self::Folder(folder) => folder.unread,
+            Self::LocalDrafts => None,
+        }
+    }
+
+    pub const fn total(&self) -> Option<usize> {
+        match self {
+            Self::AllInboxes { total, .. } => *total,
+            Self::Folder(folder) => folder.total,
             Self::LocalDrafts => None,
         }
     }

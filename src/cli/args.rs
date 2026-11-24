@@ -67,7 +67,7 @@ pub enum Thread {
 
 #[derive(Subcommand)]
 pub enum Folder {
-    /// Every account's Folders, with their Unread counts
+    /// Every account's Folders, with their Message and Unread counts
     List(FolderList),
 }
 

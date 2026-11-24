@@ -935,6 +935,9 @@ fn answer_folders(
     let unseen = folder.messages.iter().filter(|m| !m.message.seen).count();
     let items = item_names.iter().filter_map(|name| match name {
         StatusDataItemName::Unseen => Some(StatusDataItem::Unseen(u32::try_from(unseen).unwrap())),
+        StatusDataItemName::Messages => Some(StatusDataItem::Messages(
+            u32::try_from(folder.messages.len()).unwrap(),
+        )),
         StatusDataItemName::UidNext => Some(StatusDataItem::UidNext(
             NonZeroU32::new(folder.uid_next).unwrap(),
         )),

@@ -48,7 +48,7 @@ fn titled(screen: &Screen, title: &str) -> Vec<String> {
         .collect()
 }
 
-/// The picker's Folder rows, each its label and its Unread count if shown,
+/// The picker's Folder rows, each its label and its counts if shown,
 /// the scrollbar left out; none while it says `no matches`, as before the
 /// Folders are listed. The first two rows are the Query and the rule.
 pub fn picked(screen: &Screen) -> Vec<String> {

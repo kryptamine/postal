@@ -64,6 +64,9 @@ pub struct Folder<A = AccountId> {
     pub role: Option<Role>,
     /// `None` until a resync or a `STATUS` counts it.
     pub unread: Option<usize>,
+    /// Every Message the server holds; `None` until a resync or a `STATUS`
+    /// counts it.
+    pub total: Option<usize>,
 }
 
 impl Folder {
@@ -84,6 +87,7 @@ impl<A> Folder<A> {
             name,
             role: if inbox { Some(Role::Inbox) } else { role },
             unread: None,
+            total: None,
         }
     }
 

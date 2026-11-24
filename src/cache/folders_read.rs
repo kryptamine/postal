@@ -7,7 +7,7 @@ impl Reader {
     pub fn folders(&self) -> Result<Vec<Folder<String>>, Error> {
         let mut statement = self
             .connection
-            .prepare("SELECT account, name, role, unread FROM mailbox")?;
+            .prepare("SELECT account, name, role, unread, exists_count FROM mailbox")?;
         let rows = statement
             .query_map([], |row| {
                 let role: Option<String> = row.get(2)?;
@@ -16,6 +16,7 @@ impl Reader {
                 let mut folder =
                     Folder::new(account, &name, role.as_deref().and_then(Role::from_label));
                 folder.unread = row.get(3)?;
+                folder.total = row.get(4)?;
                 Ok(folder)
             })?
             .collect::<Result<_, _>>()?;

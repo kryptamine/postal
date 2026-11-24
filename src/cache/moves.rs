@@ -389,8 +389,10 @@ fn drop_copies(
         "account = ?4 AND ((mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL))";
     connection
         .prepare_cached(&format!(
-            "UPDATE mailbox SET unread = max(unread - 1, 0) WHERE account = ?4
-               AND name IN (SELECT mailbox FROM message WHERE ({copies}) AND unread)"
+            "UPDATE mailbox SET exists_count = max(exists_count - 1, 0),
+                 unread = max(unread - EXISTS (SELECT 1 FROM message m WHERE ({copies})
+                                                 AND m.mailbox = mailbox.name AND m.unread), 0)
+               WHERE account = ?4 AND name IN (SELECT mailbox FROM message WHERE {copies})"
         ))?
         .execute(params![folder, uid, body_key, account])?;
     connection
@@ -444,22 +446,25 @@ fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
         .execute([id])?;
     connection
         .prepare_cached(
-            "UPDATE mailbox SET unread = unread + 1
-             WHERE (account, name) =
-                 (SELECT account, mailbox FROM moved WHERE id = ?1 AND unread)",
+            "UPDATE mailbox SET exists_count = exists_count + 1,
+                 unread = unread + (SELECT unread FROM moved WHERE id = ?1)
+             WHERE (account, name) = (SELECT account, mailbox FROM moved WHERE id = ?1)",
         )?
         .execute([id])?;
     Ok(())
 }
 
-/// Drops one row from the Message List, with its share of the Unread count.
+/// Drops one row from the Message List, with its share of the counts.
 fn drop_row(connection: &Connection, key: FolderKey<'_>, uid: Uid) -> rusqlite::Result<()> {
     let FolderKey { account, folder } = key;
     connection
         .prepare_cached(
-            "UPDATE mailbox SET unread = max(unread - 1, 0) WHERE account = ?3 AND name = ?1
-               AND EXISTS (SELECT 1 FROM message WHERE account = ?3 AND mailbox = ?1
-                             AND uid = ?2 AND unread)",
+            "UPDATE mailbox SET exists_count = max(exists_count - 1, 0),
+                 unread = max(unread - (SELECT unread FROM message WHERE account = ?3
+                                          AND mailbox = ?1 AND uid = ?2), 0)
+               WHERE account = ?3 AND name = ?1
+                 AND EXISTS (SELECT 1 FROM message WHERE account = ?3 AND mailbox = ?1
+                               AND uid = ?2)",
         )?
         .execute(params![folder, uid, account])?;
     connection

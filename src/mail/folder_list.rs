@@ -3,7 +3,7 @@ use crate::{
     mail::update::Update,
 };
 
-/// Lists the Folders into the Cache, then counts the Unread of each but
+/// Lists the Folders into the Cache, then counts the Messages of each but
 /// `shown` by `STATUS`, telling `send` after every write so the counts show
 /// as they come. Returns whether `shown` is still listed.
 pub async fn refresh(
@@ -17,11 +17,11 @@ pub async fn refresh(
     send(Update::Folders);
     // RFC 3501 advises against `STATUS` on the selected Folder: ADR 0008.
     for folder in listed.iter().filter(|f| f.name != *shown) {
-        match server.unread_in(&folder.name).await {
-            Ok(unread) => cache.write_unread(&folder.name, unread)?,
+        match server.counts_in(&folder.name).await {
+            Ok((unread, total)) => cache.write_counts(&folder.name, unread, total)?,
             Err(error) if error.refusal().is_some() => {
                 tracing::warn!(
-                    "counting the Unread of {} was refused: {error}",
+                    "counting the Messages of {} was refused: {error}",
                     folder.name
                 );
                 continue;

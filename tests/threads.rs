@@ -157,11 +157,11 @@ fn a_thread_is_unread_while_any_of_its_messages_is() {
     let mut t = ready(&server, &home, "Count me in");
     server.set_seen(104, true);
     t.wait_until(|s| !unread(s, "Alice, me, Bob")).unwrap();
-    wait_picked(&mut t, "Inbox");
+    wait_picked(&mut t, "Inbox 4");
 
     server.set_seen(101, false);
     t.wait_until(|s| unread(s, "Alice, me, Bob")).unwrap();
-    wait_picked(&mut t, "Inbox 1");
+    wait_picked(&mut t, "Inbox 1 / 4");
     quit(t);
 }
 

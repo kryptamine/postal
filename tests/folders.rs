@@ -109,7 +109,7 @@ fn title(screen: &Screen) -> String {
 }
 
 #[test]
-fn the_picker_lists_special_use_folders_first_then_the_rest_with_unread_counts() {
+fn the_picker_lists_special_use_folders_first_then_the_rest_with_their_counts() {
     let server = gmail();
     let home = Home::for_server(&server);
     let mut t = ready(&server, &home);
@@ -117,22 +117,23 @@ fn the_picker_lists_special_use_folders_first_then_the_rest_with_unread_counts()
 
     t.send(Key::Char('f')).unwrap();
     let screen = t
-        .snapshot_after(|s| picked(s).iter().any(|row| row == "Work 2"))
+        .snapshot_after(|s| picked(s).iter().any(|row| row == "Work/Clients 1 / 1"))
         .unwrap();
+    // A Folder with nothing Unread still shows it was counted.
     assert_eq!(
         picked(&screen),
         [
-            "Inbox 1",
-            "Starred",
-            "Sent",
-            "Drafts",
+            "Inbox 1 / 2",
+            "Starred 0",
+            "Sent 2",
+            "Drafts 0",
             "Local Drafts",
-            "All Mail",
-            "Spam",
-            "Trash",
-            "Archive",
-            "Work 2",
-            "Work/Clients 1",
+            "All Mail 0",
+            "Spam 0",
+            "Trash 1",
+            "Archive 0",
+            "Work 2 / 2",
+            "Work/Clients 1 / 1",
         ],
         "{screen}"
     );
@@ -191,7 +192,7 @@ fn many_folders_scroll_in_a_capped_picker() {
     t.wait_until(|s| s.contains("Inbox newest")).unwrap();
     t.send(Key::Char('f')).unwrap();
     let screen = t
-        .snapshot_after(|s| picked(s).iter().any(|row| row == "Label 00"))
+        .snapshot_after(|s| picked(s).iter().any(|row| row.starts_with("Label 00")))
         .unwrap();
     assert!(picker(&screen).len() < 30, "{screen}");
     assert!(
@@ -224,7 +225,10 @@ fn many_folders_scroll_in_a_capped_picker() {
     let screen = t
         .snapshot_after(|s| picked(s).iter().any(|r| r.contains("Label 39")))
         .unwrap();
-    assert!(!picked(&screen).iter().any(|r| r == "Inbox"), "{screen}");
+    assert!(
+        !picked(&screen).iter().any(|r| r.starts_with("Inbox")),
+        "{screen}"
+    );
     quit(t);
 }
 
@@ -261,7 +265,7 @@ fn a_query_narrows_the_picker_and_enter_shows_the_folder_live() {
     t.send(Key::Char('f')).unwrap();
     t.send_str("wrk").unwrap();
     let screen = t
-        .snapshot_after(|s| picked(s) == ["Work 2", "Work/Clients 1"])
+        .snapshot_after(|s| picked(s) == ["Work 2 / 2", "Work/Clients 1 / 1"])
         .unwrap();
     assert!(picker(&screen)[0].ends_with("wrk"), "{screen}");
     // `^n` and the arrows move; the selection is drawn in reverse video.
@@ -299,7 +303,7 @@ fn a_query_narrows_the_picker_and_enter_shows_the_folder_live() {
     );
     let screen = t.snapshot_after(|s| s.contains("Client reply")).unwrap();
     assert!(screen.contains("Client brief"), "{screen}");
-    wait_picked(&mut t, "Work/Clients 1");
+    wait_picked(&mut t, "Work/Clients 1 / 2");
 
     // Back to the Inbox by its label.
     show(&mut t, "inbox");
@@ -399,7 +403,7 @@ fn a_folder_gone_from_the_server_leaves_the_cache_and_the_inbox_shows() {
         t.snapshot_after(|s| s.contains("Inbox newest")).unwrap()
     };
     assert!(title(&screen).contains("Inbox"), "{screen}");
-    t.wait_until(|s| picked(s).iter().any(|row| row == "Work 2"))
+    t.wait_until(|s| picked(s).iter().any(|row| row == "Work 2 / 2"))
         .unwrap();
     let screen = t.snapshot_after(|s| !picked(s).is_empty()).unwrap();
     assert!(
@@ -421,7 +425,7 @@ fn offline_the_picker_and_a_cached_folder_come_from_the_cache() {
     t.wait_until(|s| s.contains("Work older")).unwrap();
     wait_for(|| cached_rows(&home, "Work") == 2);
     t.send(Key::Char('f')).unwrap();
-    t.wait_until(|s| picked(s).iter().any(|row| row == "Work/Clients 1"))
+    t.wait_until(|s| picked(s).iter().any(|row| row == "Work/Clients 1 / 1"))
         .unwrap();
     t.send(Key::Esc).unwrap();
     // A key read with `Esc` in one go is taken for Alt and the Esc is lost.
@@ -438,11 +442,11 @@ fn offline_the_picker_and_a_cached_folder_come_from_the_cache() {
 
     t.send(Key::Char('f')).unwrap();
     let screen = t
-        .snapshot_after(|s| picked(s).iter().any(|row| row == "Work/Clients 1"))
+        .snapshot_after(|s| picked(s).iter().any(|row| row == "Work/Clients 1 / 1"))
         .unwrap();
     assert_eq!(picked(&screen).len(), 11, "{screen}");
     t.send_str("work").unwrap();
-    t.wait_until(|s| picked(s).first().is_some_and(|f| f == "Work 2"))
+    t.wait_until(|s| picked(s).first().is_some_and(|f| f == "Work 2 / 2"))
         .unwrap();
     t.send(Key::Enter).unwrap();
     let screen = t

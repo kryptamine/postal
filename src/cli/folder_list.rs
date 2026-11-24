@@ -21,6 +21,8 @@ struct Row<'a> {
     role: Option<&'static str>,
     /// `null` until a sync counted it.
     unread: Option<usize>,
+    /// Every Message the server holds, `null` until a sync counted it.
+    total: Option<usize>,
 }
 
 /// `postal folder list`: every Account's Folders as the last sync left them.
@@ -38,14 +40,16 @@ impl Answers for FolderList {
                 name: &folder.path,
                 role: folder.role.map(Role::label),
                 unread: folder.unread,
+                total: folder.total,
             })
             .collect();
         Ok(Answer::new(&rows, table(&rows))?)
     }
 }
 
-/// A line each: the name, its Unread count when any, its role when the name
-/// is not it; the Account heads its Folders when there are several.
+/// A line each: the name, its role when the name is not it, its total once
+/// counted, its Unread count when not `0`; the Account heads its Folders
+/// when there are several.
 fn table(rows: &[Row<'_>]) -> String {
     let accounts: BTreeSet<&str> = rows.iter().map(|row| row.account).collect();
     let mut text = String::new();
@@ -63,8 +67,13 @@ fn table(rows: &[Row<'_>]) -> String {
             write!(text, " ({role})").ok();
         }
 
+        let gap = row.total.map_or("  ", |total| {
+            let noun = if total == 1 { "message" } else { "messages" };
+            write!(text, "  {total} {noun}").ok();
+            ", "
+        });
         if let Some(unread) = row.unread.filter(|&n| n > 0) {
-            write!(text, "  {unread} unread").ok();
+            write!(text, "{gap}{unread} unread").ok();
         }
 
         text.push('\n');

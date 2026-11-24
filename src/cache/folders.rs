@@ -8,8 +8,9 @@ impl Cache {
     /// Every Folder listed or shown so far, in the Folder Picker's order.
     pub fn folders(&self) -> Result<Vec<Folder>, Error> {
         let connection = self.connection();
-        let mut statement = connection
-            .prepare_cached("SELECT name, role, unread FROM mailbox WHERE account = ?1")?;
+        let mut statement = connection.prepare_cached(
+            "SELECT name, role, unread, exists_count FROM mailbox WHERE account = ?1",
+        )?;
         let mut folders = statement
             .query_map([self.email()], |row| {
                 let role: Option<String> = row.get(1)?;
@@ -20,6 +21,7 @@ impl Cache {
                 );
                 Ok(Folder {
                     unread: row.get(2)?,
+                    total: row.get(3)?,
                     ..folder
                 })
             })?
@@ -67,12 +69,19 @@ impl Cache {
         })
     }
 
-    /// The Unread count `STATUS` gave for `folder`; one no longer listed is ignored.
-    pub fn write_unread(&self, folder: &FolderName, unread: usize) -> Result<(), Error> {
+    /// The counts `STATUS` gave for `folder`; one no longer listed is ignored.
+    pub fn write_counts(
+        &self,
+        folder: &FolderName,
+        unread: usize,
+        total: usize,
+    ) -> Result<(), Error> {
         self.write(|connection| {
             connection
-                .prepare_cached("UPDATE mailbox SET unread = ?2 WHERE account = ?3 AND name = ?1")?
-                .execute(params![folder, unread, self.email()])
+                .prepare_cached(
+                    "UPDATE mailbox SET unread = ?2, exists_count = ?3 WHERE account = ?4 AND name = ?1",
+                )?
+                .execute(params![folder, unread, total, self.email()])
                 .map(drop)
         })
     }
