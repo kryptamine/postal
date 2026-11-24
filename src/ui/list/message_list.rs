@@ -37,6 +37,8 @@ const MIN_WIDTH_WITH_DATE: u16 = 29;
 /// The date, a `DateLabel` of at most 10 columns, and the gap before it.
 const DATE_ROOM: u16 = 11;
 pub const MIN_WIDTH: u16 = 20;
+/// Down the padding left of a picked card's text, on each of its rows.
+const PICKED: &str = "▌";
 
 /// How many cards a list `height` rows tall shows at most, its border and
 /// a cut last card included; Date Group headers can leave room for fewer.
@@ -129,6 +131,7 @@ fn draw_rows(
         }
 
         let selected = row == view.selected;
+        let picked = view.picked(row);
         let Some((messages, thread, matched)) = view.card(row) else {
             continue;
         };
@@ -139,6 +142,7 @@ fn draw_rows(
             messages,
             thread,
             selected,
+            picked,
         };
 
         cards.draw(&shown, card, buf);
@@ -195,6 +199,8 @@ struct Shown<'a> {
     messages: &'a [Message],
     thread: &'a Thread,
     selected: bool,
+    /// Held for the next action, as `J` or `K` picked it.
+    picked: bool,
 }
 
 impl Shown<'_> {
@@ -240,6 +246,12 @@ impl Cards<'_> {
 
         // The selection fills the whole card; only its text is padded.
         buf.set_style(card, base);
+        if shown.picked {
+            for y in card.y..card.bottom() {
+                buf.set_string(card.x, y, PICKED, tone(self.theme.marker));
+            }
+        }
+
         let text = text_area(card);
         if thread.unread {
             let style = strong.patch(tone(self.theme.marker));

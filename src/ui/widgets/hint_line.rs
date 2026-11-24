@@ -44,6 +44,8 @@ pub struct HintLine<'a> {
     pub capped: bool,
     /// How far the search index is from every Message.
     pub indexing: Indexing,
+    /// How many Threads are picked in the Message List.
+    pub picks: usize,
     /// What the Status's countdown counts from.
     pub now: Instant,
 }
@@ -135,6 +137,15 @@ impl HintLine<'_> {
         let mut x = row.x;
         if let Some(query) = self.query {
             x = self.query(buf, x, row, query).saturating_add(GAP);
+        }
+
+        if self.picks > 0 {
+            let mut picks = StackStr::<32>::new();
+            // The text fits, so the write cannot fail.
+            write!(picks, "{} picked", self.picks).ok();
+            let room = usize::from(row.right().saturating_sub(x));
+            let (end, _) = buf.set_stringn(x, row.y, picks.as_str(), room, self.theme.key);
+            x = end.saturating_add(GAP).min(row.right());
         }
 
         let used = usize::from(x - row.x);

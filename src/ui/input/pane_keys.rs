@@ -61,8 +61,8 @@ pub fn act(
             end_search(view, screen);
             Step::Stay
         }
-        Some(Action::Move(movement)) => {
-            view.apply(movement);
+        Some(action @ (Action::Move(_) | Action::Stretch(_))) => {
+            walk(action, view);
             Step::Stay
         }
         Some(Action::Scroll(scroll)) => {
@@ -77,9 +77,26 @@ pub fn act(
     }
 }
 
+/// Moves the selection, dropping the Picks, or stretches them with it.
+fn walk(action: Action, view: &mut InboxView) {
+    match action {
+        Action::Move(movement) => {
+            view.picks.clear();
+            view.apply(movement);
+        }
+        Action::Stretch(movement) => view.stretch(movement),
+        _ => {}
+    }
+}
+
 /// Closes the menu while the Query is typed, else ends the Search.
 fn end_search(view: &mut InboxView, screen: &mut Screen) {
     let typing = screen.showing.mode().typing();
+    if !typing && !view.picks.is_empty() {
+        view.picks.clear();
+        return;
+    }
+
     if typing && view.close_menu() {
         screen.showing = Showing::Query;
         return;
@@ -115,7 +132,7 @@ fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
 }
 
 /// Opens the selected Thread in Reading, or moves through it there.
-fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
+fn read(action: Action, view: &mut InboxView, screen: &mut Screen) -> Step {
     match (action, screen.showing.reading_mut()) {
         (Action::Read, _) => {
             let Some(reading) = Reading::open(view.stack()) else {
@@ -123,6 +140,7 @@ fn read(action: Action, view: &InboxView, screen: &mut Screen) -> Step {
             };
 
             screen.showing = Showing::Reading(reading);
+            view.picks.clear();
             // Gmail keeps Trash and Spam out of All Mail, and their Threads
             // apart; a Search never shows theirs.
             let apart = view.search.is_none()

@@ -115,6 +115,44 @@ impl FolderList {
             Ok(())
         })
     }
+
+    /// The Threads among `keys` its rows hold, read whole whether the
+    /// window holds them or not; `shown` names each Account's Folder.
+    pub fn listing_of(
+        &self,
+        caches: &PerAccount<Cache>,
+        shown: &Shown,
+        keys: &HashSet<Key>,
+    ) -> Result<Listing, cache::Error> {
+        let mut newest = self
+            .rows
+            .iter()
+            .filter(|row| keys.contains(&row.key))
+            .map(|row| row.newest.0);
+        let mut listing = Listing::empty();
+        let Some(first) = newest.next() else {
+            return Ok(listing);
+        };
+
+        let (from, to) = newest.fold((first, first), |(lo, hi), at| (lo.min(at), hi.max(at)));
+        let arrivals = Arrivals {
+            within: from..=to,
+            since: self.since.unwrap_or(i64::MIN),
+        };
+
+        let filled: Result<(), cache::Error> = listing.refill(|here, elsewhere| {
+            for (account, cache) in caches.iter() {
+                if let Some(folder) = shown.of(account) {
+                    let keep = |key| keys.contains(&key);
+                    cache.window(folder, &arrivals, keep, (&mut *here, &mut *elsewhere))?;
+                }
+            }
+
+            Ok(())
+        });
+
+        filled.map(|()| listing)
+    }
 }
 
 /// The rows of `all` a window around `selected` reads, for a list `screen`

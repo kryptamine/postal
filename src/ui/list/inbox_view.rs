@@ -19,6 +19,7 @@ use crate::{
     ui::input::keymap::{By, Direction, Move, Scroll},
     ui::list::folder_list::FolderList,
     ui::list::matched::Matched,
+    ui::list::picks::Picks,
     ui::list::search::Search,
 };
 
@@ -48,6 +49,7 @@ pub struct InboxView {
     pub preview_scroll: usize,
     /// How the Preview shows HTML mail, for every Message.
     pub html: View,
+    pub picks: Picks,
     /// The Messages shown with their Quote, by Account and body key.
     quoted: HashSet<(AccountId, BodyKey)>,
     /// The local offset as of the last `show`: chrono's `Local` rereads the
@@ -76,6 +78,7 @@ impl InboxView {
             offset: 0,
             preview_scroll: 0,
             html: View::default(),
+            picks: Picks::default(),
             quoted: HashSet::new(),
             zone: Utc.fix(),
             screen,
@@ -100,6 +103,7 @@ impl InboxView {
 
         if self.search.is_none() {
             self.keep_row(selected);
+            self.rebase();
             self.fill(caches, self.screen)?;
             self.scroll_back((selected, body));
         }
@@ -137,6 +141,7 @@ impl InboxView {
         if let Some(search) = &mut self.search {
             search.run(caches, &self.folder)?;
             self.keep_row(selected);
+            self.rebase();
             self.fill(caches, self.screen)?;
             self.scroll_back((selected, body));
         }
@@ -175,6 +180,7 @@ impl InboxView {
     /// `show`: any Search ends, and the newest Message will be selected.
     pub fn switch(&mut self, folder: Shown) {
         self.folder = folder;
+        self.picks.clear();
         self.list = None;
         self.search = None;
         self.selected = 0;
@@ -192,6 +198,7 @@ impl InboxView {
 
         let (before, body) = (self.selected_key(), self.selected_body());
         if self.search.is_none() {
+            self.picks.clear();
             self.search = Some(Search::new(caches, &self.folder, &self.accounts)?);
             self.offset = 0;
             self.keep_row(before);
@@ -224,6 +231,7 @@ impl InboxView {
 
         search.run(caches, &self.folder)?;
         self.selected = 0;
+        self.rebase();
         self.fill(caches, self.screen)?;
         if self.selected_body() != selected {
             self.preview_scroll = 0;
@@ -246,6 +254,7 @@ impl InboxView {
             return;
         };
 
+        self.picks.clear();
         let found = selected
             .filter(|_| !restore)
             .and_then(|key| self.position(key));
@@ -401,9 +410,75 @@ impl InboxView {
 
     /// The row that shows the Thread `key`.
     fn position(&self, key: Key) -> Option<usize> {
+        position(self.search.as_ref(), self.list.as_ref(), key)
+    }
+
+    fn key(&self, row: usize) -> Option<Key> {
         match &self.search {
-            Some(search) => search.find(key),
-            None => self.list.as_ref()?.find(key),
+            Some(search) => search.key(row),
+            None => self.list.as_ref()?.key(row),
         }
+    }
+
+    /// The Picks started again on the rows shown now.
+    fn rebase(&mut self) {
+        let (search, list) = (self.search.as_ref(), self.list.as_ref());
+        self.picks.rebase(|key| position(search, list, key));
+    }
+
+    /// Picks from the selected Thread on, or from where the Picks start,
+    /// to the Thread `movement` selects.
+    pub fn stretch(&mut self, movement: Move) {
+        if let Some(key) = self.selected_key() {
+            self.picks.start(key, self.selected);
+            self.apply(movement);
+        }
+    }
+
+    fn picked_keys(&self) -> impl Iterator<Item = Key> + '_ {
+        let rows = self.picks.range(self.selected).into_iter().flatten();
+        rows.filter_map(|row| self.key(row))
+    }
+
+    /// Whether the Thread at `row` is picked.
+    pub fn picked(&self, row: usize) -> bool {
+        let range = self.picks.range(self.selected);
+        range.is_some_and(|range| range.contains(&row))
+    }
+
+    pub fn count_picked(&self) -> usize {
+        self.picks.range(self.selected).map_or(0, Iterator::count)
+    }
+
+    /// The picked Threads shown now, read whole from the Cache: those
+    /// outside the window too. `None` with no Picks.
+    pub fn picked_listing(
+        &mut self,
+        caches: &PerAccount<Cache>,
+    ) -> Result<Option<Listing>, cache::Error> {
+        if self.picks.is_empty() {
+            return Ok(None);
+        }
+
+        let keys = self.picked_keys().collect();
+        let listing = match (&mut self.search, &self.list) {
+            (Some(search), _) => search.listing_of(caches, &keys)?,
+            (None, Some(list)) => list.listing_of(caches, &self.folder, &keys)?,
+            (None, None) => Listing::empty(),
+        };
+
+        Ok(Some(listing))
+    }
+
+    /// The Accounts of the picked Threads.
+    pub fn picked_accounts(&self) -> HashSet<AccountId> {
+        self.picked_keys().map(|key| *key.account()).collect()
+    }
+}
+
+fn position(search: Option<&Search>, list: Option<&FolderList>, key: Key) -> Option<usize> {
+    match search {
+        Some(search) => search.find(key),
+        None => list?.find(key),
     }
 }

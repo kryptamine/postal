@@ -14,10 +14,10 @@ size: 44x18  cursor: hidden
 │ Enter        l            read the Messa │
 │ |                         open the Messa │
 │ E                         open the Messa │
-│ U                         mark the Messa │
+│ J / K                     pick Threads d │
+│ U                         mark Unread, o │
 │ Backspace                 delete: move t │
 │ e                         archive        │
-│ m                         move to a Fold │
 │                                          │
 └──────────────────────────────────────────┘
  j/k move  ^d/^u scroll  ?: help

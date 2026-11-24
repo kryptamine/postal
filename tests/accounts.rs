@@ -354,6 +354,34 @@ fn a_delete_goes_to_the_trash_of_the_messages_account() {
     quit(t);
 }
 
+// A Pick of each Account's Thread moves each to its own Account's Trash,
+// and one Undo brings both back.
+#[test]
+fn picks_across_accounts_go_to_each_trash_and_back_in_one_undo() {
+    let two = two();
+    two.first.add_folder("[Gmail]/Trash", &["\\Trash"], vec![]);
+    let mut t = postal(&two);
+    t.wait_until(|s| s.contains("Alpha news") && s.contains("Bravo notes"))
+        .unwrap();
+    // Either Account's row may hold the selection as the other's arrives.
+    t.send_str("gJ").unwrap();
+    t.wait_until(|s| s.contains("2 picked")).unwrap();
+    t.send(Key::Char('m')).unwrap();
+    t.wait_until(|s| s.contains("pick one Account's Threads to move"))
+        .unwrap();
+
+    t.send(Key::Backspace).unwrap();
+    t.wait_until(|s| s.contains("2 deleted · u to undo"))
+        .unwrap();
+    wait_for(|| two.first.subjects("[Gmail]/Trash") == ["Alpha news"]);
+    wait_for(|| two.second.subjects("Deleted Messages") == ["Bravo notes"]);
+
+    t.send(Key::Char('u')).unwrap();
+    wait_for(|| two.first.subjects("INBOX") == ["Alpha news"]);
+    wait_for(|| two.second.subjects("INBOX") == ["Bravo notes"]);
+    quit(t);
+}
+
 #[test]
 fn a_search_matches_the_messages_of_every_account() {
     let two = two();

@@ -68,7 +68,7 @@ const MOVE: &[Action] = &[Action::Move(Move::Down), Action::Move(Move::Up)];
 
 /// The panes' keymap and the keys every layer shares, as the hint line and
 /// the `?` popup show them and `action` reads them.
-const PANES: [PaneKeys; 40] = [
+const PANES: [PaneKeys; 42] = [
     listed(
         Binding {
             group: "Navigate",
@@ -262,7 +262,31 @@ const PANES: [PaneKeys; 40] = [
     listed(
         Binding {
             group: "Message",
-            modes: BOTH,
+            modes: LIST,
+            signed_out: false,
+            keys: &[Key::Char("J"), Key::Char("K")],
+            aliases: &[],
+            description: "pick Threads down / up",
+            hint: None,
+        },
+        &[Action::Stretch(Move::Down), Action::Stretch(Move::Up)],
+    ),
+    listed(
+        Binding {
+            group: "Message",
+            modes: LIST,
+            signed_out: false,
+            keys: &[Key::Char("U")],
+            aliases: &[],
+            description: "mark Unread, or toggle the Picks",
+            hint: None,
+        },
+        &[Action::MarkUnread],
+    ),
+    listed(
+        Binding {
+            group: "Message",
+            modes: READING,
             signed_out: false,
             keys: &[Key::Char("U")],
             aliases: &[],
@@ -603,7 +627,7 @@ const PANES: [PaneKeys; 40] = [
             signed_out: false,
             keys: &[Key::Esc],
             aliases: &[],
-            description: "close the menu, or end the Search",
+            description: "drop the Picks, menu or Search",
             hint: None,
         },
         actions: &[Action::EndSearch],

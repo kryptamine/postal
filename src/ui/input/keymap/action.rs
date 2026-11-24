@@ -18,8 +18,11 @@ pub enum Action {
     /// The selected Message outside the TUI; in Reading, the one at the
     /// cursor.
     Open(Outside),
+    /// Moves the selection, picking every Thread it passes for the next
+    /// action.
+    Stretch(Move),
     /// Mark Unread: the selected Thread's newest Message, or in Reading the
-    /// one at the cursor.
+    /// one at the cursor; on the Picks, Read or Unread.
     MarkUnread,
     /// Delete: the selected Thread's Messages in their Folders, or in
     /// Reading the one at the cursor.

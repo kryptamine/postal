@@ -1,4 +1,11 @@
-use std::{collections::HashMap, num::NonZeroUsize, ops::Range, panic, sync::Arc, thread};
+use std::{
+    collections::{HashMap, HashSet},
+    num::NonZeroUsize,
+    ops::Range,
+    panic,
+    sync::Arc,
+    thread,
+};
 
 use chrono::Local;
 
@@ -236,6 +243,26 @@ impl Search {
         let (wanted, scope) = (&self.wanted, &mut self.scope);
         self.listing
             .refill(|here, elsewhere| cache::threads(caches, scope, wanted, (here, elsewhere)))
+    }
+
+    /// The Threads among `keys` it shows, read whole whether the window
+    /// holds them or not.
+    pub fn listing_of(
+        &mut self,
+        caches: &PerAccount<Cache>,
+        keys: &HashSet<Key>,
+    ) -> Result<Listing, cache::Error> {
+        let wanted: Vec<_> = self
+            .threads
+            .iter()
+            .filter(|(key, _)| keys.contains(key))
+            .copied()
+            .collect();
+        let mut listing = Listing::empty();
+        let scope = &mut self.scope;
+        listing
+            .refill(|here, elsewhere| cache::threads(caches, scope, &wanted, (here, elsewhere)))?;
+        Ok(listing)
     }
 
     /// The Messages and Thread of the card at `row`, with its matched units:
