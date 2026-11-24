@@ -5,6 +5,7 @@ local bar = require("postal.bar")
 local body = require("postal.body")
 local help = require("postal.help")
 local icons = require("postal.icons")
+local keys = require("postal.keys")
 
 local M = {}
 
@@ -25,30 +26,24 @@ function M.new(mail, kind, actions)
 		self:submit()
 	end
 
-	-- The key that lists every key, at the winbar's right.
-	self.more = {
-		modes = "n",
-		lhs = "?",
-		short = "keys",
-		desc = "list the keys",
-		run = function()
-			local groups = { { "Chat", self.keys } }
-			if kind.review then
-				table.insert(groups, { "Review, in the " .. kind.noun, kind.review })
-			end
+	local function list()
+		local groups = { { "Chat", self.keys } }
+		if kind.review then
+			table.insert(groups, { "Review, in the " .. kind.noun, keys.bound(kind.review) })
+		end
 
-			help.open(vim.api.nvim_get_current_win(), groups)
-		end,
-	}
+		help.open(vim.api.nvim_get_current_win(), groups)
+	end
 
-	-- `short` puts a key on the winbar.
-	self.keys = {
-		{ modes = "n", lhs = "<CR>", short = "send", desc = "send what is typed under the last Me", run = submit },
-		{ modes = { "n", "i" }, lhs = "<C-s>", desc = "send, from insert mode too", run = submit },
-		{ modes = "n", lhs = "q", short = "stop", desc = "stop the agent's turn", run = actions.stop },
-		{ modes = "n", lhs = "<C-c>", short = "end", desc = "end the chat and close the pane", run = actions.close },
-		self.more,
-	}
+	-- `short` puts a key on the winbar; the `help` one sits at its right.
+	self.keys = keys.bound({
+		{ name = "send", modes = "n", short = "send", desc = "send what is typed under the last Me", run = submit },
+		{ name = "send_insert", modes = { "n", "i" }, desc = "send, from insert mode too", run = submit },
+		{ name = "stop", modes = "n", short = "stop", desc = "stop the agent's turn", run = actions.stop },
+		{ name = "close", modes = "n", short = "end", desc = "end the chat and close the pane", run = actions.close },
+		{ name = "help", modes = "n", short = "keys", desc = "list the keys", run = list },
+	})
+	self.more = self.keys.help
 
 	self:status()
 	self:show()
@@ -85,9 +80,7 @@ function Pane:buffer()
 	-- The input's header: whatever the pane adds goes in above it.
 	self.input = vim.api.nvim_buf_set_extmark(self.buf, NS, 0, 0, { virt_lines = { RULE }, virt_lines_above = true })
 	self:label(0, ME, "me")
-	for _, key in ipairs(self.keys) do
-		vim.keymap.set(key.modes, key.lhs, key.run, { buffer = self.buf, desc = key.desc })
-	end
+	keys.map(self.buf, self.keys)
 
 	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
 		buffer = self.buf,
@@ -105,7 +98,8 @@ function Pane:placeholder()
 	local row = self:bottom() + 1
 	local lines = vim.api.nvim_buf_get_lines(self.buf, row, -1, false)
 	if #lines > 0 and vim.trim(table.concat(lines)) == "" then
-		local text = { { "Type here, <C-s> to send", "PostalDim" } }
+		local lhs = keys.lhs.send_insert or keys.lhs.send
+		local text = { { lhs and "Type here, " .. help.label(lhs) .. " to send" or "Type here", "PostalDim" } }
 		vim.api.nvim_buf_set_extmark(self.buf, HINT, row, 0, { virt_text = text, virt_text_pos = "overlay" })
 	end
 end
@@ -158,8 +152,8 @@ function M.winbar(buf)
 		return ""
 	end
 
-	local keys = self.summary and self.kind.review or self.keys
-	return bar.winbar(vim.api.nvim_win_get_width(0), keys, self.more, self.summary)
+	local shown = self.summary and keys.bound(self.kind.review) or self.keys
+	return bar.winbar(vim.api.nvim_win_get_width(0), shown, self.more, self.summary)
 end
 
 --- Names agent `who`, on the statusline and over what it says.

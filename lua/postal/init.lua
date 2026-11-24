@@ -6,6 +6,7 @@ local agent = require("postal.agent")
 local attach = require("postal.attach")
 local colors = require("postal.colors")
 local icons = require("postal.icons")
+local keys = require("postal.keys")
 local recipients = require("postal.recipients")
 
 local M = {}
@@ -62,9 +63,11 @@ end
 --- `opts.cmd` is the command Postal runs as, `postal` by default;
 --- `opts.agents` adds ACP agents by name, `{ cmd = { ... }, npx = "..." }`,
 --- `opts.agent` names the one `:PostalAgent` starts, and `opts.nerd_font`
---- draws the pane's icons from a Nerd Font.
+--- draws the pane's icons from a Nerd Font, and `opts.keys` maps a key of
+--- `postal.keys` by name to another `lhs`, or to false for none.
 function M.setup(opts)
 	opts = opts or {}
+	keys.set(opts.keys)
 	if opts.nerd_font ~= nil then
 		icons.nerd = opts.nerd_font
 	end
