@@ -94,6 +94,21 @@ fn settings_shows_a_tab_per_section() {
     settings(&mut t);
     let screen = t.snapshot_after(|s| s.contains("esc close")).unwrap();
     insta::assert_snapshot!("accounts_tab", screen);
+    // The tab shown and the row selected take the terminal's own yellow,
+    // ANSI 3, whatever its theme makes of it.
+    let yellow = |row: u16, col: u16| {
+        screen
+            .cell(row, col)
+            .is_some_and(|c| c.style().fg == termlens::Color::Indexed(3))
+    };
+    assert!(
+        yellow(8, 20) && screen.cell(8, 20).unwrap().style().reverse,
+        "{screen}"
+    );
+    assert!(
+        yellow(14, 21) && screen.cell(14, 21).unwrap().style().reverse,
+        "{screen}"
+    );
 
     t.send(Key::Char('l')).unwrap();
     t.wait_until(|s| s.contains("Nerd Font glyphs in the lists"))
