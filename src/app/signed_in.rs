@@ -2,9 +2,7 @@ use std::{error::Error, path::Path};
 
 use crate::{
     account::config::Config,
-    account::oauth::Tokens,
-    account::provider::Provider,
-    account::sign_in::{SignIn, smtp_key},
+    account::sign_in::SignIn,
     app::onboard::{onboard, onboarding_theme},
     domain::per_account::PerAccount,
     mail::login,
@@ -42,7 +40,7 @@ async fn signed_in(
     let mut left = None;
     for config in configs {
         loop {
-            if let Some(sign_in) = read_sign_in(&config, dir)? {
+            if let Some(sign_in) = SignIn::stored(&config, dir)? {
                 accounts.push((config, sign_in));
                 break;
             }
@@ -67,19 +65,4 @@ async fn signed_in(
     }
 
     Ok(accounts)
-}
-
-/// How `config` signs in, from its secret; `None` once that is lost.
-pub fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<dyn Error>> {
-    let Some(secret) = config.secrets.read(dir, &config.email)? else {
-        return Ok(None);
-    };
-
-    Ok(Some(match config.provider {
-        Provider::ICloud | Provider::Other => SignIn::Password {
-            password: secret,
-            smtp: config.secrets.read(dir, &smtp_key(&config.email))?,
-        },
-        Provider::Google => SignIn::OAuth(Tokens::stored(secret, config.oauth.token_url.clone())),
-    }))
 }
