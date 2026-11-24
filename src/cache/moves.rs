@@ -385,19 +385,11 @@ fn drop_copies(
     thread: Option<ThreadId>,
 ) -> rusqlite::Result<()> {
     let FolderKey { account, folder } = key;
-    let copies =
-        "account = ?4 AND ((mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL))";
-    connection
-        .prepare_cached(&format!(
-            "UPDATE mailbox SET exists_count = max(exists_count - 1, 0),
-                 unread = max(unread - EXISTS (SELECT 1 FROM message m WHERE ({copies})
-                                                 AND m.mailbox = mailbox.name AND m.unread), 0)
-               WHERE account = ?4 AND name IN (SELECT mailbox FROM message WHERE {copies})"
-        ))?
-        .execute(params![folder, uid, body_key, account])?;
-    connection
-        .prepare_cached(&format!("DELETE FROM message WHERE {copies}"))?
-        .execute(params![folder, uid, body_key, account])?;
+    drop_rows(
+        connection,
+        "account = ?4 AND ((mailbox = ?1 AND uid = ?2) OR (body_key = ?3 AND thread IS NOT NULL))",
+        params![folder, uid, body_key, account],
+    )?;
     if thread.is_some() {
         connection
             .prepare_cached("DELETE FROM thread_message WHERE account = ?2 AND key = ?1")?
@@ -454,21 +446,34 @@ fn restore(connection: &Connection, id: i64) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Drops one row from the Message List, with its share of the counts.
+/// Drops one row from the Message List.
 fn drop_row(connection: &Connection, key: FolderKey<'_>, uid: Uid) -> rusqlite::Result<()> {
     let FolderKey { account, folder } = key;
+    drop_rows(
+        connection,
+        "account = ?3 AND mailbox = ?1 AND uid = ?2",
+        params![folder, uid, account],
+    )
+}
+
+/// Deletes the message rows `rows` matches, each Folder's counts down by
+/// its share: one per Folder, as a Folder holds a Message once.
+fn drop_rows(
+    connection: &Connection,
+    rows: &str,
+    params: &[&dyn rusqlite::ToSql],
+) -> rusqlite::Result<()> {
     connection
-        .prepare_cached(
+        .prepare_cached(&format!(
             "UPDATE mailbox SET exists_count = max(exists_count - 1, 0),
-                 unread = max(unread - (SELECT unread FROM message WHERE account = ?3
-                                          AND mailbox = ?1 AND uid = ?2), 0)
-               WHERE account = ?3 AND name = ?1
-                 AND EXISTS (SELECT 1 FROM message WHERE account = ?3 AND mailbox = ?1
-                               AND uid = ?2)",
-        )?
-        .execute(params![folder, uid, account])?;
+                 unread = max(unread - EXISTS (SELECT 1 FROM message m WHERE ({rows})
+                                                 AND m.account = mailbox.account
+                                                 AND m.mailbox = mailbox.name AND m.unread), 0)
+               WHERE (account, name) IN (SELECT account, mailbox FROM message WHERE {rows})"
+        ))?
+        .execute(params)?;
     connection
-        .prepare_cached("DELETE FROM message WHERE account = ?3 AND mailbox = ?1 AND uid = ?2")?
-        .execute(params![folder, uid, account])?;
+        .prepare_cached(&format!("DELETE FROM message WHERE {rows}"))?
+        .execute(params)?;
     Ok(())
 }
