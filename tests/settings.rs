@@ -84,19 +84,39 @@ fn quit(mut t: Terminal) {
     assert!(t.wait_exit().unwrap().success());
 }
 
-// Icons change without leaving the screen, and stay changed next run.
+// A tab per Section, with a heading and what it sets, the keys and the
+// buttons for Enter and Esc; `l` and `h` move between the tabs too.
 #[test]
-fn icons_cycle_and_redraw_at_once() {
+fn settings_shows_a_tab_per_section() {
     let server = inbox();
     let home = Home::for_server(&server);
     let mut t = postal(&home, false);
     settings(&mut t);
-    // The Account, its Signature, Add account, then Icons.
-    t.send(Key::Down).unwrap();
-    t.send(Key::Down).unwrap();
+    let screen = t.snapshot_after(|s| s.contains("esc close")).unwrap();
+    insta::assert_snapshot!("accounts_tab", screen);
+
+    t.send(Key::Char('l')).unwrap();
+    t.wait_until(|s| s.contains("Nerd Font glyphs in the lists"))
+        .unwrap();
+    t.send(Key::Char('h')).unwrap();
+    t.wait_until(|s| s.contains("the Accounts Postal signs in to"))
+        .unwrap();
+    quit(t);
+}
+
+// Icons change without leaving the screen, and stay changed next run.
+#[test]
+fn icons_change_and_redraw_at_once() {
+    let server = inbox();
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, false);
+    settings(&mut t);
+    // The Icons tab opens on the value in effect.
+    t.send(Key::Tab).unwrap();
+    t.wait_until(|s| s.contains("auto ✓")).unwrap();
     t.send(Key::Down).unwrap();
     t.send(Key::Enter).unwrap();
-    t.wait_until(|s| s.contains("nerd")).unwrap();
+    t.wait_until(|s| s.contains("nerd ✓")).unwrap();
     assert!(
         config(&home).contains("icons = \"nerd\""),
         "{}",
@@ -116,8 +136,8 @@ fn the_name_is_typed_in_place() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, false);
     settings(&mut t);
-    for _ in 0..5 {
-        t.send(Key::Char('j')).unwrap();
+    for _ in 0..3 {
+        t.send(Key::Tab).unwrap();
     }
 
     t.send(Key::Enter).unwrap();
@@ -141,8 +161,7 @@ fn a_change_keeps_the_comments() {
     fs::write(home.config_path(), &seed).unwrap();
     let mut t = postal(&home, false);
     settings(&mut t);
-    t.send(Key::Down).unwrap();
-    t.send(Key::Down).unwrap();
+    t.send(Key::Tab).unwrap();
     t.send(Key::Down).unwrap();
     t.send(Key::Enter).unwrap();
     wait_for(|| config(&home).contains("icons = \"nerd\""));
@@ -152,7 +171,7 @@ fn a_change_keeps_the_comments() {
         config(&home)
     );
     // Back to the default, the key goes and the file is as it was.
-    t.send(Key::Enter).unwrap();
+    t.send(Key::Up).unwrap();
     t.send(Key::Enter).unwrap();
     wait_for(|| config(&home) == seed);
     quit(t);
@@ -166,10 +185,10 @@ fn a_refused_store_switch_changes_nothing() {
     let before = config(&home);
     let mut t = postal(&home, true);
     settings(&mut t);
-    for _ in 0..6 {
-        t.send(Key::Char('j')).unwrap();
-    }
-
+    // The Secrets tab is the last, one back from the first; the test
+    // Home keeps its secrets in files, so the keychain is the switch.
+    t.send(Key::BackTab).unwrap();
+    t.send(Key::Char('k')).unwrap();
     t.send(Key::Enter).unwrap();
     t.wait_until(|s| s.contains("keychain unavailable"))
         .unwrap();

@@ -1,0 +1,35 @@
+---
+source: tests/settings.rs
+expression: screen
+---
+size: 100x30  cursor: hidden
+┌─ 2024 ──────────────────────────┐┌ Inbox · 1/1 ──────────────────────────────────────────────────┐
+│ ● Ada                2024-11-18 ││ From    Ada <someone@example.com>      Mon, 18 Nov 2024 09:00 │
+│   Weekly notes                  ││ To                                                            │
+│   Notes                         ││ Subject Weekly notes                                          │
+│                                 │├───────────────────────────────────────────────────────────────┤
+│                 ┌──────────────────────────────────────────────────────────────┐                 │
+│                 │                                                              │                 │
+│                 │ Settings                                                     │                 │
+│                 │  Accounts   Icons   Notify   Name   Secrets                  │                 │
+│                 │ ──────────────────────────────────────────────────────────── │                 │
+│                 │                                                              │                 │
+│                 │ Accounts                                                     │                 │
+│                 │ the Accounts Postal signs in to, each with its Signature     │                 │
+│                 │                                                              │                 │
+│                 │  ▸ me@example.com                                    Google  │                 │
+│                 │      Signature                                         none  │                 │
+│                 │    + Add account                                             │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │ ↑↓ select  tab section  d unlink                             │                 │
+│                 │                          esc close                           │                 │
+│                 │                                                              │                 │
+│                 └──────────────────────────────────────────────────────────────┘                 │
+│                                 ││                                                               │
+│                                 ││                                                               │
+│                                 ││                                                               │
+│                                 ││                                                               │
+│                                 ││                                                               │
+└─────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
+ j/k move  tab section  Enter change  d unlink  q back  ?: help

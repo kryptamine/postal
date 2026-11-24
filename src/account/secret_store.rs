@@ -41,13 +41,6 @@ impl SecretStore {
         Ok(())
     }
 
-    pub const fn other(self) -> Self {
-        match self {
-            Self::Keychain => Self::File,
-            Self::File => Self::Keychain,
-        }
-    }
-
     pub const fn key(self) -> &'static str {
         match self {
             Self::Keychain => "keychain",

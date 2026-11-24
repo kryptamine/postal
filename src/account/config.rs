@@ -109,15 +109,6 @@ impl IconChoice {
             Self::None => "none",
         }
     }
-
-    /// The one after this, back to `auto` after `none`.
-    pub const fn next(self) -> Self {
-        match self {
-            Self::Auto => Self::Nerd,
-            Self::Nerd => Self::None,
-            Self::None => Self::Auto,
-        }
-    }
 }
 
 /// When new mail in an Inbox raises a desktop notification.
@@ -138,15 +129,6 @@ impl NotifyChoice {
             Self::Unfocused => "unfocused",
             Self::Always => "always",
             Self::Never => "never",
-        }
-    }
-
-    /// The one after this, back to `unfocused` after `never`.
-    pub const fn next(self) -> Self {
-        match self {
-            Self::Unfocused => Self::Always,
-            Self::Always => Self::Never,
-            Self::Never => Self::Unfocused,
         }
     }
 }

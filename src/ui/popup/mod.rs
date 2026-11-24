@@ -11,4 +11,5 @@ mod picker_popup;
 pub mod settings;
 mod settings_layer;
 mod settings_popup;
+pub mod settings_section;
 pub mod signature_edit;
