@@ -101,7 +101,6 @@ fn pending(server: &FakeImap, home: &Home) {
 
 /// The Cache of `version` holds a Delete open to an Undo and a flag change
 /// the server has not seen; this Postal sends both and keeps the List.
-#[expect(dead_code, reason = "no fixture until the first production release")]
 fn survives(version: i64) {
     let server = server();
     let home = Home::for_server(&server);
@@ -130,6 +129,11 @@ fn survives(version: i64) {
     assert_eq!(card(&screen, "Bob"), Some(false), "{screen}");
     let log = fs::read_to_string(home.log_path()).unwrap();
     assert!(!log.contains("cache rebuilt"), "{log}");
+}
+
+#[test]
+fn a_cache_of_schema_29_survives() {
+    survives(29);
 }
 
 // Not a check: writes the fixture of this Postal's schema, with `sqlite3`.
