@@ -17,9 +17,7 @@ type Props = {
 };
 
 const { title, description = site.description, noindex = false } = Astro.props;
-const fullTitle = title
-  ? `${title} · ${site.name}`
-  : `${site.name}: ${site.tagline.replace(/\.$/, '')}`;
+const fullTitle = title ? `${title} · ${site.name}` : site.title;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const preview = new URL(socialPreview.src, Astro.site);
@@ -41,6 +39,7 @@ const preview = new URL(socialPreview.src, Astro.site);
     <link rel="apple-touch-icon" href={appleTouch} />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content={site.name} />
+    <meta property="og:locale" content="en_GB" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
@@ -53,6 +52,7 @@ const preview = new URL(socialPreview.src, Astro.site);
     />
     <meta name="twitter:card" content="summary_large_image" />
     <Fonts />
+    <slot name="head" />
   </head>
   <body>
     <a class="skip" href="#main">

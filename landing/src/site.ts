@@ -2,6 +2,8 @@
 export const site = {
   name: 'Postal',
   tagline: 'Mail at terminal speed.',
+  // The home page's <title>: what people search for, ahead of the tagline.
+  title: 'Postal: a terminal mail client for Gmail, iCloud and IMAP',
   description:
     'A mail client for the terminal. Works with Gmail, iCloud and any IMAP server, shows HTML mail with its layout, and keeps everything on your computer.',
   url: 'https://postalmail.dev',
