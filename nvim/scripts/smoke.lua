@@ -78,6 +78,41 @@ if at(5, #"pet") ~= -3 then
 	fail("the body offered recipients")
 end
 
+-- A recipient a send would refuse is an error before the send, and one no
+-- mail holds says so once the Correspondents are in
+local addresses_ns = vim.api.nvim_get_namespaces()["postal-addresses"]
+local function diagnosed(ns)
+	return vim.tbl_map(function(d)
+		return { d.lnum, d.col, d.severity, d.message }
+	end, vim.diagnostic.get(0, { namespace = ns }))
+end
+
+local want_diagnostics = {
+	{ 0, 4, vim.diagnostic.severity.INFO, "no mail of the accounts is from or to bob@example.com" },
+	{ 1, #"Cc: Ada Lovelace <ada@example.com>, ", vim.diagnostic.severity.ERROR, "`pet` is not an address" },
+}
+
+if not vim.wait(5000, function()
+	return vim.deep_equal(diagnosed(addresses_ns), want_diagnostics)
+end) then
+	fail("the recipients are diagnosed " .. vim.inspect(diagnosed(addresses_ns)))
+end
+
+vim.api.nvim_buf_set_lines(0, 1, 2, false, { 'Cc: "Ada <ada@example.com>, petr@example.com' })
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+if diagnosed(addresses_ns)[2][4] ~= "a quote is not closed" then
+	fail("an open quote is diagnosed " .. vim.inspect(diagnosed(addresses_ns)))
+end
+
+-- A recipient folded over two lines is one, as Postal joins them
+vim.api.nvim_buf_set_lines(0, 1, 2, false, { "Cc: Ada Lovelace", "  <ada@example.com>" })
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+if #diagnosed(addresses_ns) ~= 1 then
+	fail("a folded recipient is diagnosed " .. vim.inspect(diagnosed(addresses_ns)))
+end
+
+vim.api.nvim_buf_set_lines(0, 1, 3, false, { "Cc: Ada Lovelace <ada@example.com>, pet" })
+
 -- `Attach:` completes as Postal reads it: a relative path is under $HOME
 local real_home = vim.env.HOME
 vim.env.HOME = vim.fn.tempname()
