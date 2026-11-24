@@ -120,6 +120,35 @@ end
 
 vim.api.nvim_buf_set_lines(0, 1, 3, false, { "Cc: Ada Lovelace <ada@example.com>, pet" })
 
+-- :PostalContacts adds the Correspondent picked to the header under the
+-- cursor, an empty one included, and to To: from the body
+local ui_select = vim.ui.select
+local picked = {}
+vim.ui.select = function(items, opts, choose)
+	table.insert(picked, opts.format_item(items[1]))
+	choose(items[1])
+end
+
+vim.api.nvim_buf_set_lines(0, 1, 2, false, { "Cc: " })
+vim.api.nvim_buf_set_lines(0, 0, 1, false, { "To: bob@example.com, " })
+for _, row in ipairs({ 2, 2, 5 }) do
+	vim.api.nvim_win_set_cursor(0, { row, 0 })
+	vim.cmd("PostalContacts")
+end
+
+vim.ui.select = ui_select
+local petr = "Petr Novak <petr@example.com>"
+local headers = vim.api.nvim_buf_get_lines(0, 0, 2, false)
+if not vim.deep_equal(headers, { "To: bob@example.com, " .. petr, "Cc: " .. petr .. ", " .. petr }) then
+	fail(":PostalContacts made the headers " .. vim.inspect(headers))
+end
+
+if picked[1] ~= petr .. "  me@example.com" then
+	fail(":PostalContacts offered " .. vim.inspect(picked))
+end
+
+vim.api.nvim_buf_set_lines(0, 0, 2, false, { "To: bob@example.com", "Cc: Ada Lovelace <ada@example.com>, pet" })
+
 -- `Attach:` completes as Postal reads it: a relative path is under $HOME
 local real_home = vim.env.HOME
 vim.env.HOME = vim.fn.tempname()
