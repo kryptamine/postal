@@ -32,4 +32,4 @@ size: 100x30  cursor: hidden
 │                                 ││                                                               │
 │                                 ││                                                               │
 └─────────────────────────────────┘└───────────────────────────────────────────────────────────────┘
- j/k move  tab section  Enter change  d unlink  q back  ?: help
+ j/k move  tab section  Enter change  q back  ?: help

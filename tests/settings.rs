@@ -111,8 +111,11 @@ fn settings_shows_a_tab_per_section() {
     );
 
     t.send(Key::Char('l')).unwrap();
-    t.wait_until(|s| s.contains("Nerd Font glyphs in the lists"))
+    let icons = t
+        .snapshot_after(|s| s.contains("Nerd Font glyphs in the lists"))
         .unwrap();
+    // `d` unlinks only on the Accounts tab, so no other tab offers it.
+    assert!(!icons.contains("unlink"), "{icons}");
     t.send(Key::Char('h')).unwrap();
     t.wait_until(|s| s.contains("the Accounts Postal signs in to"))
         .unwrap();

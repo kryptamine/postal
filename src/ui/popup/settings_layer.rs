@@ -59,10 +59,8 @@ pub const HELP: &[Binding] = &[
         keys: &[Key::Char("d")],
         aliases: &[Key::Backspace],
         description: "unlink the Account",
-        hint: Some(Hint {
-            keys: "d",
-            description: "unlink",
-        }),
+        // Only the Accounts tab unlinks: the popup's own footer says so there.
+        hint: None,
     },
     Binding {
         group: "Settings",
