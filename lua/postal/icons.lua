@@ -1,6 +1,8 @@
 -- The pane's looks: a glyph and the group it is drawn in. The glyph is a
--- Nerd Font one when `nerd` is on, else one any font has.
-local M = { nerd = vim.g.have_nerd_font == true }
+-- Nerd Font one when `nerd_font` is on, else one any font has.
+local config = require("postal.config")
+
+local M = {}
 
 local LOOKS = {
 	me = { "\u{f007}", "▍", "PostalMe" },
@@ -16,7 +18,7 @@ local LOOKS = {
 --- The glyph of `name`, and its group.
 function M.get(name)
 	local look = LOOKS[name]
-	return look[M.nerd and 1 or 2], look[3]
+	return look[config.options.nerd_font and 1 or 2], look[3]
 end
 
 return M

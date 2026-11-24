@@ -1,7 +1,6 @@
 -- `:checkhealth postal`: whether `postal` and each agent can run, and
 -- whether `postal` is the release the plugin came with.
-local agent = require("postal.agent")
-local recipients = require("postal.recipients")
+local config = require("postal.config")
 local requirements = require("postal.requirements")
 
 local M = {}
@@ -22,18 +21,18 @@ end
 local function versions()
 	local plugin = plugin_version()
 	local ok, result = pcall(function()
-		return vim.system({ recipients.cmd, "--version" }, { text = true }):wait()
+		return vim.system({ config.options.cmd, "--version" }, { text = true }):wait()
 	end)
 
 	local postal = ok and result.code == 0 and result.stdout:match("^postal (%S+)")
 	if not plugin or not postal then
-		vim.health.warn("cannot tell whether `" .. recipients.cmd .. "` is the plugin's release")
+		vim.health.warn("cannot tell whether `" .. config.options.cmd .. "` is the plugin's release")
 	elseif plugin == postal then
-		vim.health.ok("`" .. recipients.cmd .. "` is " .. postal .. ", as the plugin")
+		vim.health.ok("`" .. config.options.cmd .. "` is " .. postal .. ", as the plugin")
 	else
 		vim.health.warn(
 			("`%s` is %s and the plugin %s: install the plugin on the tag of the postal you run"):format(
-				recipients.cmd,
+				config.options.cmd,
 				postal,
 				plugin
 			)
@@ -44,19 +43,19 @@ end
 function M.check()
 	vim.health.start("postal")
 	local ok, result = pcall(function()
-		return vim.system({ recipients.cmd, "thread", "show", "--help" }, { text = true }):wait()
+		return vim.system({ config.options.cmd, "thread", "show", "--help" }, { text = true }):wait()
 	end)
 
 	if ok and result.code == 0 then
-		vim.health.ok("`" .. recipients.cmd .. "` runs `postal thread show`")
+		vim.health.ok("`" .. config.options.cmd .. "` runs `postal thread show`")
 	else
-		vim.health.error(requirements.thread(recipients.cmd, ok and result.stderr or tostring(result)))
+		vim.health.error(requirements.thread(config.options.cmd, ok and result.stderr or tostring(result)))
 	end
 
 	versions()
 
 	vim.health.start("postal agents")
-	for name, spec in vim.spairs(agent.agents) do
+	for name, spec in vim.spairs(config.options.agents) do
 		local start, missing = requirements.agent(name, spec)
 		if not start then
 			vim.health.error(missing)

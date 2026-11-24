@@ -1,11 +1,9 @@
 -- The recipients of a Postal Draft: where one starts under the cursor, and
 -- the Correspondents `postal correspondent list` offers for it.
+local config = require("postal.config")
 local header = require("postal.header")
 
 local M = {}
-
---- The command Postal runs as; `setup` may point it at a build.
-M.cmd = "postal"
 
 -- Each Draft's Correspondents once read, the asking still running, and
 -- the Drafts Postal could not answer for.
@@ -62,7 +60,7 @@ end
 --- answer is in by the first recipient typed; `done()` runs once it is.
 function M.ask(buf, done)
 	local path = vim.api.nvim_buf_get_name(buf)
-	local command = { M.cmd, "correspondent", "list", "--json", "--draft", path }
+	local command = { config.options.cmd, "correspondent", "list", "--json", "--draft", path }
 	local job
 	local ok, failure = pcall(vim.system, command, { text = true }, function(result)
 		vim.schedule(function()

@@ -4,22 +4,15 @@
 -- 0018, 0019, 0020).
 local acp = require("postal.acp")
 local body = require("postal.body")
+local config = require("postal.config")
 local kinds = require("postal.kinds")
 local pane = require("postal.pane")
 local quote = require("postal.quote")
-local recipients = require("postal.recipients")
 local requirements = require("postal.requirements")
 local review = require("postal.review")
 local tools = require("postal.tools")
 
 local M = {}
-
---- Each agent by name, `{ cmd = { ... }, npx = "..." }`, and the one a chat
---- starts with; `npx` names the package npx runs when `cmd` is not on PATH.
-M.agents = {
-	claude = { cmd = { "claude-agent-acp" }, npx = "@agentclientprotocol/claude-agent-acp" },
-}
-M.default = "claude"
 
 local chats = {}
 
@@ -38,13 +31,13 @@ function Chat:fetch_thread(flag)
 			self.thread = result.stdout ~= "" and result.stdout
 		else
 			self.thread = false
-			self.pane:notice("No Thread for the agent: " .. requirements.thread(recipients.cmd, result.stderr))
+			self.pane:notice("No Thread for the agent: " .. requirements.thread(config.options.cmd, result.stderr))
 		end
 
 		self:next()
 	end
 
-	local command = { recipients.cmd, "thread", "show", flag, self.path }
+	local command = { config.options.cmd, "thread", "show", flag, self.path }
 	local ok, failure = pcall(vim.system, command, { text = true }, function(result)
 		vim.schedule(function()
 			done(result)
@@ -318,7 +311,7 @@ local function start(mail, name, ended)
 
 	self.pane:title(name)
 	chats[mail] = self
-	local how, missing = requirements.agent(name, M.agents[name])
+	local how, missing = requirements.agent(name, config.options.agents[name])
 	if not how then
 		self:give_up(missing)
 		return self
@@ -373,8 +366,8 @@ function M.ask(mail, name, text)
 		return
 	end
 
-	name = name or (chat and chat.name) or M.default
-	if not M.agents[name] then
+	name = name or (chat and chat.name) or config.options.agent
+	if not config.options.agents[name] then
 		vim.notify("postal: no agent " .. name .. " in setup()", vim.log.levels.ERROR)
 		return
 	end

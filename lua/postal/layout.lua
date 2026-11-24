@@ -1,18 +1,16 @@
 -- How a mail buffer is laid out in its window, over what the `mail`
 -- ftplugin sets: paragraphs on long lines, wrapped where they are shown.
+local config = require("postal.config")
 local fold = require("postal.fold")
 
 local M = {}
-
---- Whether a Draft or a Signature is spell checked, in the user's `spelllang`.
-M.spell = false
 
 --- Lays out the current window on mail buffer `buf`.
 function M.apply(buf)
 	vim.wo[0][0].wrap = true
 	vim.wo[0][0].linebreak = true
 	vim.wo[0][0].breakindent = true
-	vim.wo[0][0].spell = M.spell and vim.bo[buf].modifiable
+	vim.wo[0][0].spell = config.options.spell and vim.bo[buf].modifiable
 	if vim.b[buf].postal_kind ~= "signature" then
 		fold.apply(buf)
 	end
