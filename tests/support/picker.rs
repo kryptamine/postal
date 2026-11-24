@@ -49,7 +49,8 @@ fn titled(screen: &Screen, title: &str) -> Vec<String> {
 }
 
 /// The picker's Folder rows, each its label and its Unread count if shown,
-/// the scrollbar left out. The first two rows are the Query and the rule.
+/// the scrollbar left out; none while it says `no matches`, as before the
+/// Folders are listed. The first two rows are the Query and the rule.
 pub fn picked(screen: &Screen) -> Vec<String> {
     rows(picker(screen))
 }
@@ -63,7 +64,7 @@ fn rows(popup: Vec<String>) -> Vec<String> {
     popup
         .into_iter()
         .skip(2)
-        .filter(|row| !row.is_empty())
+        .filter(|row| !row.is_empty() && row != "no matches")
         .map(|row| {
             let row = row.trim_end_matches('▐');
             row.split_whitespace().collect::<Vec<_>>().join(" ")
