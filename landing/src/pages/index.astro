@@ -31,11 +31,6 @@ const also = [
   ['Notifications', 'A desktop notification for new mail while the terminal is in the background.'],
   ['Works offline', 'Your mail loads from the local cache before the server answers.'],
   [
-    "Your terminal's colours",
-    "Postal uses your terminal's colour scheme, and Nerd Font icons if your font has them.",
-  ],
-  ['Signatures', 'One per account, added to every message you send from it.'],
-  [
     'Mail for your agents',
     'postal mcp serves your cached mail to any MCP client, read-only: folders, threads, messages and search.',
   ],
@@ -64,18 +59,20 @@ const providers = [
         Mail at <span>terminal speed.</span>
       </h1>
       <p class="lede prose-font">
-        Postal is a mail client that runs in your terminal. It works with Gmail, iCloud and any IMAP
-        server, shows HTML mail with its layout intact, starts in 100&nbsp;ms from a local copy of
-        your mail, and keeps everything on your computer.
+        Gmail, iCloud and any IMAP server in one keyboard-driven window. HTML mail keeps its layout,
+        the list opens in 100&nbsp;ms from a local copy of your mail, and nothing leaves your
+        computer except the mail you send.
       </p>
-      <div class="actions">
-        <a class="button primary" href="#install">
-          Install
-        </a>
-        <a class="button secondary" href={site.repo}>
-          Source on GitHub
-        </a>
+      <div class="command">
+        <pre><code><span class="p">$</span> {install}</code></pre>
+        <Copy text={install} />
       </div>
+      <p class="muted small">
+        Free and MIT-licensed. macOS&nbsp;13+ and Linux, arm64&nbsp;and&nbsp;x86_64.
+        <a class="nowrap" href={site.repo}>
+          Read the source
+        </a>
+      </p>
     </div>
     <div class="shot">
       <Media still={hero} shows="The message list next to a preview of an HTML mail" priority />
@@ -83,6 +80,15 @@ const providers = [
         <Postmark value="≤100" unit="MS" rim="POSTAL · COLD START · FROM THE CACHE ·" />
       </div>
     </div>
+  </section>
+
+  <section class="problem wrap" aria-labelledby="problem-title">
+    <h2 id="problem-title">You left the terminal to read your mail</h2>
+    <p class="prose-font muted">
+      Mail lives in a browser tab that takes seconds to load and wants the mouse. Terminal clients
+      fix the speed, then show a newsletter as a wall of table markup and ask for an evening of
+      config before the first message.
+    </p>
   </section>
 
   <section class="budget wrap" aria-labelledby="budget-title">
@@ -106,7 +112,7 @@ const providers = [
   <section id="features" class="html wrap" aria-labelledby="html-title">
     <div class="intro">
       <p class="eyebrow">HTML mail</p>
-      <h2 id="html-title">HTML mail keeps its layout</h2>
+      <h2 id="html-title">Postal reads mail the way a mail client does, in terminal cells</h2>
       <p class="prose-font">
         Postal runs an HTML and CSS layout engine and draws the result in terminal cells. Columns,
         buttons, coloured blocks and borders stay where the sender put them, and the mail's colours
@@ -301,8 +307,21 @@ const providers = [
   <section id="install" class="install wrap" aria-labelledby="install-title">
     <div class="intro">
       <h2 id="install-title">Install</h2>
-      <p class="prose-font">
-        On macOS or Linux, arm64 or x86_64, the script puts the binary in <code>~/.local/bin</code>.
+      <ol class="how prose-font">
+        <li>
+          <strong>Install.</strong> The script puts one binary in <code>~/.local/bin</code>, on
+          macOS or Linux, arm64 or x86_64.
+        </li>
+        <li>
+          <strong>Sign in.</strong> Run <code>postal</code>, pick Google, iCloud or another server,
+          and sign in. The token or password goes in your system keychain.
+        </li>
+        <li>
+          <strong>Read.</strong> The inbox loads while the rest of your mail downloads and is
+          indexed in the background. Press <kbd>?</kbd> to see every key.
+        </li>
+      </ol>
+      <p class="muted">
         <code>postal update</code> later replaces it with the latest release. The
         <a href={`${site.repo}#neovim`}>Neovim plugin</a> installs through your plugin manager.
       </p>
@@ -313,10 +332,6 @@ const providers = [
 <span class="p">$</span> postal</code></pre>
         <Copy text={install} />
       </div>
-      <p class="muted">
-        On first run, Postal asks you to pick a mail provider and sign in. Press <kbd>?</kbd> to see
-        every key.
-      </p>
       <Media still={onboarding} shows="The list of mail providers on first run" />
     </div>
   </section>
@@ -355,12 +370,6 @@ const providers = [
   .hero h1 span {
     color: var(--color-primary);
     white-space: nowrap;
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
   }
 
   .shot {
@@ -638,5 +647,32 @@ const providers = [
   pre .p {
     color: var(--color-primary);
     user-select: none;
+  }
+
+  .small {
+    font-size: var(--text-caption);
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+
+  /* Problem */
+  .problem {
+    display: grid;
+    gap: var(--space-2);
+    padding-block: 0 var(--space-8);
+  }
+
+  /* On the children: a max-width on .problem itself would override .wrap and centre it. */
+  .problem > * {
+    max-width: 46rem;
+  }
+
+  /* How it works */
+  .how {
+    display: grid;
+    gap: var(--space-2);
+    padding-left: var(--space-3);
   }
 </style>
