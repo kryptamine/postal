@@ -9,6 +9,7 @@ use crate::{
     domain::thread::Key,
     mail::status::Status,
     ui::list::inbox_view::InboxView,
+    ui::popup::help::Help,
     ui::popup::layer::Layer,
     ui::popup::over::Over,
     ui::preview::link_hints::LinkHints,
@@ -22,8 +23,9 @@ use crate::{
 /// What the main screen shows over and beside the panes.
 #[derive(Default)]
 pub struct Screen {
-    /// Over everything, `over` included, taking every key while open.
-    pub help: bool,
+    /// The `?` popup: over everything, `over` included, taking every key
+    /// while open.
+    pub help: Option<Help>,
     pub toast: Option<Toast>,
     /// Each Account's sync connection's.
     pub statuses: PerAccount<Status>,

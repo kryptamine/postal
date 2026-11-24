@@ -116,18 +116,22 @@ fn menu<'a>(theme: &'a Theme, search: &'a Search, hint: Rect) -> CompletionMenu<
 
 /// What shows over the panes in `body`, the layer taking the keys on top,
 /// then the `?` popup over any.
-fn popups(frame: &mut Frame, theme: &Theme, accounts: Accounts, body: Rect, screen: &Screen) {
+fn popups(frame: &mut Frame, theme: &Theme, accounts: Accounts, body: Rect, screen: &mut Screen) {
     for layer in screen.over.layers() {
         layer.draw(frame, theme, accounts, body);
     }
 
-    if screen.help {
+    let (mode, signed_out) = (screen.keys(), screen.signed_out().is_some());
+    if let Some(help) = &mut screen.help {
         let popup = HelpPopup {
             theme,
-            mode: screen.keys(),
-            signed_out: screen.signed_out().is_some(),
+            mode,
+            signed_out,
         };
 
-        frame.render_widget(popup, body);
+        frame.render_stateful_widget(popup, body, help);
+        if let Some(cursor) = help.cursor {
+            frame.set_cursor_position(cursor);
+        }
     }
 }

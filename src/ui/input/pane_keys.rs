@@ -5,6 +5,7 @@ use crate::{
     ui::input::keymap::Action,
     ui::input::step::{Drafting, Steer, Step},
     ui::list::inbox_view::InboxView,
+    ui::popup::help::Help,
     ui::preview::link_hints::LinkHints,
     ui::preview::reading::Reading,
     ui::state::screen::Screen,
@@ -49,7 +50,7 @@ pub fn act(
             Step::Stay
         }
         Some(Action::Help) => {
-            screen.help = true;
+            screen.help = Some(Help::default());
             Step::Stay
         }
         Some(Action::Search) => Step::Steer(Steer::Search),

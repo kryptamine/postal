@@ -50,7 +50,7 @@ fn hint_line(screen: &Screen) -> String {
 }
 
 fn popup_open(screen: &Screen) -> bool {
-    screen.contains(" Help ") && screen.contains("Navigate")
+    screen.contains(" Help ") && screen.contains("esc close")
 }
 
 fn quit(mut t: Terminal) {
@@ -107,11 +107,11 @@ fn hint_keys_are_bold_and_descriptions_dim() {
 fn the_help_popup_lists_the_keymap_by_group() {
     let server = FakeImap::start(two_messages());
     let home = Home::for_server(&server);
-    // The tall one has room for every group; the others cut the last.
+    // The tall one has room for every group; the others scroll to the last.
     let sizes = [
         ("popup_80", (80, 24)),
         ("popup_44", (44, 18)),
-        ("popup_tall", (80, 39)),
+        ("popup_tall", (80, 56)),
     ];
     for (name, size) in sizes {
         let mut t = postal(&home, size);
@@ -123,6 +123,78 @@ fn the_help_popup_lists_the_keymap_by_group() {
         t.wait_until(|s| !popup_open(s)).unwrap();
         quit(t);
     }
+}
+
+// The keymap outgrows a short terminal: the last group is reached by
+// scrolling rather than cut off.
+#[test]
+fn the_help_popup_scrolls_to_its_last_group() {
+    let server = FakeImap::start(two_messages());
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, (80, 24));
+    t.wait_until(loaded).unwrap();
+    t.send(Key::Char('?')).unwrap();
+    let screen = t.snapshot_after(popup_open).unwrap();
+    assert!(!screen.contains("settings and Accounts"), "{screen}");
+
+    t.send(Key::Char('G')).unwrap();
+    let screen = t
+        .snapshot_after(|s| s.contains("settings and Accounts"))
+        .unwrap();
+    assert!(!screen.contains("next / previous Message"), "{screen}");
+    t.send(Key::Char('g')).unwrap();
+    t.wait_until(|s| s.contains("next / previous Message"))
+        .unwrap();
+    t.send_str("jjj").unwrap();
+    t.wait_until(|s| !s.contains("Navigate") && popup_open(s))
+        .unwrap();
+    quit_from_help(t);
+}
+
+#[test]
+fn slash_filters_the_help_popup_and_esc_clears_the_filter() {
+    let server = FakeImap::start(two_messages());
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, (80, 24));
+    t.wait_until(loaded).unwrap();
+    t.send(Key::Char('?')).unwrap();
+    t.wait_until(popup_open).unwrap();
+
+    // `q` goes into the filter while it is typed, closing nothing.
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("ARCHIVE").unwrap();
+    let screen = t
+        .snapshot_after(|s| s.contains("/ARCHIVE") && !s.contains("Navigate"))
+        .unwrap();
+    assert!(screen.contains("archive"), "{screen}");
+    assert!(!screen.contains("move to a Folder"), "{screen}");
+    assert!(screen.contains("esc clear"), "{screen}");
+
+    t.send_str("q").unwrap();
+    t.wait_until(|s| s.contains("no key matches")).unwrap();
+    t.send(Key::Backspace).unwrap();
+    t.wait_until(|s| s.contains("archive") && !s.contains("no key matches"))
+        .unwrap();
+
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| s.contains("Navigate") && s.contains("to filter by key"))
+        .unwrap();
+
+    // Enter keeps the filter, and the popup's keys work over it again.
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("forward").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("/forward") && s.contains("esc close"))
+        .unwrap();
+    t.send(Key::Char('q')).unwrap();
+    t.wait_until(|s| !s.contains(" Help ")).unwrap();
+    quit(t);
+}
+
+fn quit_from_help(mut t: Terminal) {
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| !popup_open(s)).unwrap();
+    quit(t);
 }
 
 // `q` in the popup must not take the whole client down with it.

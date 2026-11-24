@@ -1,4 +1,5 @@
 pub mod folder_picker;
+pub mod help;
 pub mod help_popup;
 mod hints_layer;
 pub mod layer;
