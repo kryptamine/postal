@@ -15,13 +15,13 @@ use crate::{
     ui::widgets::{popup_area::popup_area, truncate},
 };
 
-const TITLE: &str = "Settings";
+const TITLE: &str = " Settings ";
 const WIDTH: u16 = 64;
 /// The border and a blank row or column inside it, each side.
 const FRAME: u16 = 4;
-/// The title, the tabs, the rule, then the tab's heading and description,
-/// each pair with a blank row after it.
-const HEADER: u16 = 7;
+/// The tabs and the rule, then the tab's heading and description, each
+/// pair with a blank row after it.
+const HEADER: u16 = 6;
 /// A blank row, the question or failure, the keys, the buttons.
 const FOOTER: u16 = 4;
 /// The fewest rows a tab's list takes, so a short one keeps the box.
@@ -50,19 +50,20 @@ impl Widget for SettingsPopup<'_> {
         Block::bordered()
             .border_style(self.theme.border)
             .render(popup, buf);
+        let room = usize::from(popup.width.saturating_sub(2));
+        buf.set_stringn(popup.x + 1, popup.y, TITLE, room, self.theme.title);
         let inner = inner(popup);
         if inner.height < HEADER + FOOTER + 1 || inner.width < 20 {
             return;
         }
 
-        truncate::draw(buf, line(inner, inner.y), TITLE, self.theme.title);
-        self.tabs(buf, line(inner, inner.y + 1));
+        self.tabs(buf, line(inner, inner.y));
         let rule = "─".repeat(usize::from(inner.width));
-        buf.set_string(inner.x, inner.y + 2, rule, self.theme.border);
+        buf.set_string(inner.x, inner.y + 1, rule, self.theme.border);
         let section = self.settings.section();
         let strong = Style::new().add_modifier(Modifier::BOLD);
-        truncate::draw(buf, line(inner, inner.y + 4), section.label(), strong);
-        let at = line(inner, inner.y + 5);
+        truncate::draw(buf, line(inner, inner.y + 3), section.label(), strong);
+        let at = line(inner, inner.y + 4);
         truncate::draw(buf, at, section.about(), self.theme.muted);
 
         let list = Rect {
