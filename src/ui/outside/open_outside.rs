@@ -1,8 +1,6 @@
 use crate::{
-    cache::Cache,
     compose::editor,
     domain::message::Message,
-    domain::per_account::PerAccount,
     render::preview_render::{self, Job},
     render::rendered_previews::PreviewKey,
     render::view::View,
@@ -14,6 +12,7 @@ use crate::{
     ui::state::toast::Toast,
     ui::state::ui::Ui,
     ui::terminal::tty::Tty,
+    ui::world::World,
 };
 
 /// Where a Message opens outside the TUI.
@@ -31,7 +30,7 @@ pub fn open(
     to: Outside,
     tty: &mut Tty,
     theme: &Theme,
-    caches: &PerAccount<Cache>,
+    world: World<'_>,
     ui: &Ui,
 ) -> Result<Option<Toast>, Error> {
     let (view, reading) = (&ui.view, ui.screen.showing.reading());
@@ -44,7 +43,7 @@ pub fn open(
         return Ok(None);
     };
 
-    let found = caches[message.account].body(message.body_key);
+    let found = world.caches[message.account].body(message.body_key);
     let Some(body) = found? else {
         return Ok(Some(Toast::new("not downloaded")));
     };
@@ -56,10 +55,11 @@ pub fn open(
             tty.outside(|| pager::page(&text))?;
         }
         Outside::Editor => {
-            let file = match MessageFile::write(message, &body) {
-                Ok(file) => file,
-                Err(error) => return Ok(Some(Toast::error(error.to_string()))),
-            };
+            let file =
+                match MessageFile::write(world.accounts.email(message.account), message, &body) {
+                    Ok(file) => file,
+                    Err(error) => return Ok(Some(Toast::error(error.to_string()))),
+                };
 
             tty.outside(|| editor::edit(file.path()))?;
         }

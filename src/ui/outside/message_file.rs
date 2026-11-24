@@ -14,17 +14,17 @@ use crate::{
     ui::preview::attachment_line,
 };
 
-/// A Message as a read-only file for the editor in
-/// `$XDG_CACHE_HOME/postal/messages`, removed when dropped. The plugin knows
-/// it by that directory.
+/// A Message as a read-only file for the editor, removed when dropped:
+/// `$XDG_CACHE_HOME/postal/messages/<account>/<body key>.eml`, which
+/// `thread show --message` reads the Message from.
 pub struct MessageFile {
     path: PathBuf,
 }
 
 impl MessageFile {
-    /// Writes `message` with its `raw` body: the header block, a blank line,
-    /// and the body as plain text, its Quote included.
-    pub fn write(message: &Message, raw: &[u8]) -> io::Result<Self> {
+    /// Writes `account`'s `message` with its `raw` body: the header block, a
+    /// blank line, and the body as plain text, its Quote included.
+    pub fn write(account: &str, message: &Message, raw: &[u8]) -> io::Result<Self> {
         let body = MessageParser::default()
             .parse(raw)
             .map(|parsed| body_text::plain(&parsed, WIDTH, Links::Footnotes))
@@ -45,7 +45,10 @@ impl MessageFile {
             body.trim_end()
         );
 
-        let dir = xdg::cache_dir().map_err(io::Error::other)?.join("messages");
+        let dir = xdg::cache_dir()
+            .map_err(io::Error::other)?
+            .join("messages")
+            .join(account.to_lowercase());
         fs::create_dir_all(&dir)?;
         let path = dir.join(format!("{}.eml", message.body_key));
         // One left by a run that crashed is read-only, so it cannot be
@@ -72,6 +75,11 @@ impl Drop for MessageFile {
     fn drop(&mut self) {
         if let Err(error) = fs::remove_file(&self.path) {
             tracing::warn!("removing {} failed: {error}", self.path.display());
+        }
+
+        // Only empty once no other Message of the Account is open.
+        if let Some(dir) = self.path.parent() {
+            fs::remove_dir(dir).ok();
         }
     }
 }

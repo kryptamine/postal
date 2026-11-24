@@ -543,7 +543,7 @@ vim.cmd("bwipeout! " .. fetched_buf)
 
 -- A Message opened to read cannot be changed, by the user or the agent,
 -- and the agent reads it whole
-local messages = vim.fn.tempname() .. "/postal/messages"
+local messages = vim.fn.tempname() .. "/postal/messages/me@example.com"
 vim.fn.mkdir(messages, "p")
 local message_text = { "From: Ada <ada@example.com>", "Subject: Weekly notes", "", "See you soon." }
 vim.fn.writefile(message_text, messages .. "/7.eml")

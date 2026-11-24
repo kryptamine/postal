@@ -85,11 +85,17 @@ pub enum Message {
 #[derive(clap::Args, Deserialize, JsonSchema)]
 pub struct ThreadShow {
     /// The Thread's ID, as a listing names it
-    #[arg(conflicts_with = "draft", required_unless_present = "draft")]
+    #[arg(
+        conflicts_with_all = ["draft", "message"],
+        required_unless_present_any = ["draft", "message"]
+    )]
     pub id: Option<String>,
     /// The Thread of the Message this Reply's Draft answers
-    #[arg(long, value_name = "PATH")]
+    #[arg(long, value_name = "PATH", conflicts_with = "message")]
     pub draft: Option<PathBuf>,
+    /// The Thread of the Message the TUI wrote to this file for the editor
+    #[arg(long, value_name = "PATH")]
+    pub message: Option<PathBuf>,
 }
 
 #[derive(clap::Args, Deserialize, JsonSchema)]

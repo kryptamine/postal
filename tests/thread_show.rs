@@ -1,7 +1,6 @@
-//! `postal thread show --draft` prints every Message of the Thread a
-//! Reply's Draft answers, oldest first, for an agent to read the whole
-//! correspondence. It only reads the Cache, so opening a Reply in the TUI
-//! fetches every body of its Thread first. See ADR 0017.
+//! `postal thread show` prints the Thread a Reply's Draft answers, or a
+//! Message `E` opened is of, oldest first, for an agent to read; it only
+//! reads the Cache, so a Reply fetches its Thread's bodies first (ADR 0017).
 
 #![allow(
     clippy::unwrap_used,
@@ -41,6 +40,10 @@ fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
 
 /// `$EDITOR` is `true`: a Reply's Draft stays as Postal prefilled it.
 fn postal(home: &Home) -> Terminal {
+    postal_editing(home, "true")
+}
+
+fn postal_editing(home: &Home, editor: &str) -> Terminal {
     Terminal::builder()
         .size(100, 30)
         .env_clear()
@@ -49,7 +52,7 @@ fn postal(home: &Home) -> Terminal {
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("EDITOR", "true")
+        .env("EDITOR", editor)
         .env("TZ", "UTC")
         .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
@@ -79,6 +82,19 @@ fn reply(home: &Home, keys: &[(&str, Key)]) -> PathBuf {
         .collect();
     assert_eq!(drafts.len(), 1);
     drafts.pop().unwrap()
+}
+
+/// The path `$EDITOR` was handed after `E` on the Message showing `shown`.
+fn opened(home: &Home, shown: &str) -> PathBuf {
+    let record = home.xdg_cache_home().join("opened");
+    let editor = format!("sh -c 'printf %s \"$1\" > {}' sh", record.display());
+    let mut t = postal_editing(home, &editor);
+    t.wait_until(|s| s.contains(shown)).unwrap();
+    t.send(Key::Char('E')).unwrap();
+    t.wait_until(|_| record.exists()).unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    PathBuf::from(fs::read_to_string(&record).unwrap())
 }
 
 fn show(home: &Home, args: &[&str]) -> Output {
@@ -172,6 +188,46 @@ fn a_reply_fetches_every_body_of_its_thread_and_shows_them_oldest_first() {
              From: Ada Lovelace <ada@example.com>\n"
         )),
         "{text}"
+    );
+}
+
+// The file is gone once the editor exits: its name alone names the Message.
+#[test]
+fn a_message_opened_in_the_editor_shows_its_whole_thread() {
+    let imap = FakeImap::start(vec![
+        from_ada("Weekly notes", "2024-11-17T09:00:00Z", "First notes"),
+        from_ada("Re: Weekly notes", "2024-11-18T09:00:00Z", "Second notes"),
+        mine(),
+    ]);
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let message = opened(&home, "My answer");
+
+    let output = show(&home, &["--message", message.to_str().unwrap(), "--json"]);
+    assert!(output.status.success(), "{output:?}");
+    let rows: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let dates: Vec<_> = rows
+        .iter()
+        .map(|row| row["date"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        dates,
+        [
+            "2024-11-17T09:00:00+00:00",
+            "2024-11-18T09:00:00+00:00",
+            "2024-11-19T09:00:00+00:00"
+        ]
+    );
+
+    let elsewhere = format!(
+        "/tmp/other@example.com/{}",
+        message.file_name().unwrap().display()
+    );
+    let output = show(&home, &["--message", &elsewhere]);
+    assert!(!output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap().trim_end(),
+        "postal: other@example.com is no Account set up"
     );
 }
 
