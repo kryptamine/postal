@@ -26,7 +26,10 @@ than delete what the step could not carry.
   state, `correspondence`, `sent_pass`, `envelope_pass`) and let the sync
   refill them.
 - **Rebuild is the fallback**, for a Cache that fails `quick_check` and one
-  at `PRE_RELEASE` or under, from before migrations.
+  at `PRE_RELEASE` or under, from before migrations. `quick_check` reads the
+  whole file, 0.8 s at 80 MB, so it runs only after a session that did not
+  end in order: an open Cache has `cache.open` beside it, which a session
+  removes as it ends, and a crash, a kill or an error leaves.
 - **`PRE_RELEASE` is frozen since 0.1.0.** Before it, a schema change edited
   the steps in place and raised `PRE_RELEASE`, rebuilding every Cache; with
   Postal in production, that would throw away a user's synced mail.

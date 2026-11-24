@@ -41,7 +41,7 @@ pub use forget::forget;
 pub use listed::Listed;
 pub use moves::{Destination, Goal, PendingMove};
 pub use reader::{Reader, Seen, ThreadMessage};
-pub use schema::delete;
+pub use schema::{delete, settle};
 pub use scope::Scope;
 pub use search::{candidates, threads};
 pub use store::Cache;

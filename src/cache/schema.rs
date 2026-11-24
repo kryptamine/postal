@@ -9,6 +9,10 @@ use super::{
 
 const FILE: &str = "cache.sqlite3";
 
+/// Beside the Cache while a session has it open: one that did not end in
+/// order leaves it, and the next open checks the Cache.
+const OPEN: &str = "cache.open";
+
 /// The columns of a `message` row but its Folder, UID and `bodied`, which
 /// `moved` keeps too; `open` checks both tables against it in a debug build.
 pub const MOVED_ROW: &str = "account, body_key, received, received_offset, unread, answered,
@@ -24,20 +28,24 @@ enum Unusable {
 
 /// Opens the Cache in `dir`, migrated to this schema. A corrupt one, or one
 /// from before migrations, is deleted and rebuilt; a newer one is left
-/// untouched for the Postal that wrote it. Says whether it replaced one.
+/// untouched. Says whether it replaced one; `settle` ends the session.
 pub fn open(dir: &Path) -> Result<(Connection, bool), Error> {
     let opened = open_unchecked(dir)?;
     debug_assert!(
         matches!(rows_match(&opened.0), Ok(true)),
         "`message` and `moved` disagree with MOVED_ROW"
     );
+    if let Err(error) = fs::write(dir.join(OPEN), []) {
+        tracing::warn!("marking the Cache as open failed: {error}");
+    }
+
     Ok(opened)
 }
 
 fn open_unchecked(dir: &Path) -> Result<(Connection, bool), Error> {
     fs::create_dir_all(dir)?;
     let path = dir.join(FILE);
-    let rebuilt = match existing(&path) {
+    let rebuilt = match existing(&path, dir.join(OPEN).exists()) {
         Ok((mut connection, version)) => {
             migrations::migrate(&mut connection, version)?;
             return Ok((connection, false));
@@ -103,6 +111,17 @@ pub fn open_read_only(dir: &Path) -> Result<Connection, Error> {
     Ok(connection)
 }
 
+/// The session on the Cache in `dir` ended in order: the next open trusts
+/// the Cache without checking it.
+pub fn settle(dir: &Path) {
+    match fs::remove_file(dir.join(OPEN)) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => {
+            tracing::warn!("marking the Cache as closed failed: {error}");
+        }
+        _ => {}
+    }
+}
+
 /// Deletes the Cache in `dir`, if there is one.
 pub fn delete(dir: &Path) -> Result<(), Error> {
     remove(&dir.join(FILE))
@@ -122,8 +141,10 @@ fn remove(path: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-/// The Cache at `path` with its `user_version`, once it checks out.
-fn existing(path: &Path) -> Result<(Connection, i64), Unusable> {
+/// The Cache at `path` with its `user_version`, once it checks out. The
+/// whole file is checked only when `unsettled`: 0.8 s at 80 MB, and SQLite
+/// damages nothing in a session that ends in order.
+fn existing(path: &Path, unsettled: bool) -> Result<(Connection, i64), Unusable> {
     if !path.exists() {
         return Err(Unusable::Missing);
     }
@@ -144,6 +165,11 @@ fn existing(path: &Path) -> Result<(Connection, i64), Unusable> {
     }
 
     configure(&connection).map_err(stale)?;
+    if !unsettled {
+        return Ok((connection, version));
+    }
+
+    tracing::info!("checking the Cache: the last session did not end in order");
     let check: String = connection
         .pragma_query_value(None, "quick_check", |row| row.get(0))
         .map_err(stale)?;
