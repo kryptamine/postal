@@ -6,6 +6,7 @@ local addresses = require("postal.addresses")
 local agent = require("postal.agent")
 local attach = require("postal.attach")
 local colors = require("postal.colors")
+local fold = require("postal.fold")
 local icons = require("postal.icons")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
@@ -136,6 +137,7 @@ function M.setup(opts)
 		pattern = { DRAFTS, MESSAGES, SIGNATURES },
 		callback = function(event)
 			agent.close(event.buf)
+			fold.forget(event.buf)
 		end,
 	})
 

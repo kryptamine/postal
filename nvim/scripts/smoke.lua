@@ -212,6 +212,19 @@ vim.fn.writefile(
 )
 vim.cmd.edit(reply)
 local draft_buf = vim.api.nvim_get_current_buf()
+-- The Quote folds away, the line naming whom it quotes in, the words above out
+if vim.fn.foldclosed(8) ~= 8 or vim.fn.foldclosedend(8) ~= 9 or vim.fn.foldclosed(6) ~= -1 then
+	fail(("the Quote folds %d to %d"):format(vim.fn.foldclosed(8), vim.fn.foldclosedend(8)))
+end
+
+-- A Quote the user opened stays open when the Draft shows again
+vim.cmd("8foldopen")
+vim.cmd.buffer(draft_one)
+vim.cmd.buffer(draft_buf)
+if vim.fn.foldclosed(8) ~= -1 then
+	fail("the opened Quote folded again")
+end
+
 local function body()
 	return vim.api.nvim_buf_get_lines(draft_buf, 2, -1, false)
 end
