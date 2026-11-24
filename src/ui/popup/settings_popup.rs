@@ -28,8 +28,9 @@ const LIST: u16 = 3;
 const GAP: u16 = 2;
 const MARKER: &str = "▸";
 const CURRENT: &str = "✓";
-const CLOSE: &str = " esc close ";
-const CANCEL: &str = " esc cancel ";
+const ESC: &str = "esc";
+const CLOSE: &str = "close";
+const CANCEL: &str = "cancel";
 
 /// Settings centred over `area`, a tab per Section: the tab's heading and
 /// what it sets, its rows, a line for a question or a failure, its keys,
@@ -77,7 +78,7 @@ impl SettingsPopup<'_> {
         let mut x = row.x;
         for section in Section::ALL {
             let style = if section == self.settings.section() {
-                self.theme.selected.add_modifier(Modifier::BOLD)
+                self.theme.chosen
             } else {
                 self.theme.muted
             };
@@ -98,7 +99,7 @@ impl SettingsPopup<'_> {
         for (row, y) in rows.zip(list.y..list.bottom()) {
             let chosen = row == selected;
             let style = if chosen {
-                self.theme.selected
+                self.theme.chosen
             } else {
                 Style::new()
             };
@@ -218,20 +219,22 @@ impl SettingsPopup<'_> {
         };
         let primary = primary(settings);
         let width = |text: &str| u16::try_from(text.width()).unwrap_or(u16::MAX);
-        let total = primary.map_or(0, |p| width(p) + GAP) + width(close);
+        let total = primary.map_or(0, |p| width(p) + GAP) + width(ESC) + 1 + width(close);
         let mut x = inner.x + inner.width.saturating_sub(total) / 2;
         let y = bottom - 1;
+        let mut put = |text: &str, style: Style| {
+            let room = usize::from(inner.right().saturating_sub(x));
+            (x, _) = buf.set_stringn(x, y, text, room, style);
+        };
         if let Some(primary) = primary {
-            let style = self.theme.selected.add_modifier(Modifier::BOLD);
-            (x, _) = buf.set_stringn(x, y, primary, usize::from(inner.right() - x), style);
-            x = x.saturating_add(GAP).min(inner.right());
+            put(primary, self.theme.chosen);
+            put("  ", Style::new());
         }
 
-        let style = self
-            .theme
-            .muted
-            .add_modifier(Modifier::REVERSED | Modifier::BOLD);
-        buf.set_stringn(x, y, close, usize::from(inner.right() - x), style);
+        // Plain beside the filled primary: a reversed dim one runs together.
+        put(ESC, self.theme.key);
+        put(" ", Style::new());
+        put(close, Style::new());
     }
 
     /// Where the terminal's cursor goes while the Name is typed: after it.

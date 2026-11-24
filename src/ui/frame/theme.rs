@@ -19,6 +19,8 @@ pub struct Theme {
     pub muted: Style,
     pub selected: Style,
     pub border: Style,
+    /// A Settings tab shown and the row selected in it.
+    pub chosen: Style,
     pub title: Style,
     /// A key on the hint line and in the `?` popup.
     pub key: Style,
@@ -65,6 +67,7 @@ impl Theme {
             muted: dim,
             selected: fg(Color::Blue).add_modifier(Modifier::REVERSED),
             border: dim,
+            chosen: fg(Color::Yellow).add_modifier(Modifier::REVERSED | Modifier::BOLD),
             title: fg(Color::Blue).add_modifier(Modifier::BOLD),
             key: fg(Color::Yellow).add_modifier(Modifier::BOLD),
             label: fg(Color::Yellow).add_modifier(Modifier::REVERSED | Modifier::BOLD),
