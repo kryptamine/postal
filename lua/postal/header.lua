@@ -25,4 +25,25 @@ function M.at(buf, row)
 	return name:lower(), header
 end
 
+--- Each header of `buf`, in order: its lowercased `name`, its `row`
+--- (1-based) and its `value`, a folded line joined on, as Postal reads it.
+function M.fields(buf)
+	local fields = {}
+	for row, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+		if line == "" then
+			break
+		end
+
+		local name, value = line:match("^([^:%s]+):(.*)$")
+		local last = fields[#fields]
+		if name then
+			table.insert(fields, { name = name:lower(), row = row, value = vim.trim(value) })
+		elseif last and line:match("^[ \t]") then
+			last.value = vim.trim(last.value .. " " .. vim.trim(line))
+		end
+	end
+
+	return fields
+end
+
 return M
