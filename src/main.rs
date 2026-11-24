@@ -27,9 +27,10 @@ fn main() -> ExitCode {
         Some(Command::Thread {
             verb: Thread::Show(show),
         }) => printed(&show, args.json),
-        Some(Command::Folder {
-            verb: Folder::List(list),
-        }) => printed(&list, args.json),
+        Some(Command::Folder { verb }) => match verb {
+            Folder::List(list) => printed(&list, args.json),
+            Folder::Sync(sync) => printed(&sync, args.json),
+        },
         Some(Command::Message { verb }) => match verb {
             Message::List(list) => printed(&list, args.json),
             Message::Show(show) => printed(&show, args.json),
@@ -55,9 +56,14 @@ fn main() -> ExitCode {
     }
 }
 
-/// A command's answer on stdout, as `--json` asks.
+/// A command's answer on stdout, as `--json` asks; 1 when part of it failed.
 fn printed(command: &impl cli::answer::Answers, json: bool) -> ExitCode {
-    answered(command.answer().and_then(|answer| Ok(answer.print(json)?)))
+    let mut failed = false;
+    let code = answered(command.answer().and_then(|answer| {
+        failed = answer.failed;
+        Ok(answer.print(json)?)
+    }));
+    if failed { ExitCode::FAILURE } else { code }
 }
 
 /// A command's end, its error on stderr.

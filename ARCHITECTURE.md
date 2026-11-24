@@ -31,8 +31,9 @@ Lowest first:
 - `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
   reconnecting, the sign-in check, the servers a domain publishes
   (autoconfig, DNS SRV), one Account's two connections
-  (`mail::serve`), and what they tell the screen (`Update`, `Status`,
-  `Steering`).
+  (`mail::serve`), one sync on demand (`mail::folder_sync`) and the lock
+  it shares with the TUI (`mail::sync_lock`), and what they tell the
+  screen (`Update`, `Status`, `Steering`).
 - `ui/`: the TUI. At its root the event loop (`run`) and what it hands
   each reaction (`World`); then `state/` (the Screen, what the panes show,
   the Mode, Toasts, Undo), `input/` (the keymap, a key's `Step`), `react/`
@@ -47,8 +48,8 @@ Lowest first:
   clipboard), `onboarding/`
   and `logging/`.
 - `cli/`: the commands beside the TUI: the arguments, `correspondent list`,
-  `folder list`, `message list`, `show` and `search`, `thread show`, the
-  IDs they hand out, `mcp`, which serves each command as an MCP tool,
+  `folder list` and `sync`, `message list`, `show` and `search`, `thread
+  show`, the IDs they hand out, `mcp`, which serves each command as an MCP tool,
   `update` and the releases it reads from GitHub.
 - `app/`: the TUI's run and `postal login`: the Accounts signed in, the
   Onboarding when one is not, each Account's connections and the screen

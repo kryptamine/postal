@@ -9,6 +9,7 @@ use crate::{
     app::signed_in::opened,
     cache,
     compose::forwarded,
+    mail::sync_lock::SyncLock,
     ui::attachment_file,
     ui::exit::Exit,
     ui::onboarding::{self, Outcome, Start},
@@ -18,6 +19,7 @@ use crate::{
 /// again after it; after Settings, with the Accounts the config names now.
 pub fn run() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
+    let _lock = sync_lock()?;
     attachment_file::clear();
     if let Err(error) = forwarded::sweep() {
         tracing::warn!("removing the files of forwards gone failed: {error}");
@@ -60,4 +62,20 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             (configs, sign_ins) = opened(slot, &dir).await?;
         }
     })
+}
+
+/// The lock a folder sync holds while it runs, waited for: it would send
+/// the Outbox too (ADR 0033).
+#[expect(
+    clippy::print_stderr,
+    reason = "the screen is not taken yet, so stderr reaches the user"
+)]
+fn sync_lock() -> Result<SyncLock, Box<dyn Error>> {
+    let dir = xdg::cache_dir()?;
+    if let Some(lock) = SyncLock::try_take(&dir)? {
+        return Ok(lock);
+    }
+
+    eprintln!("postal: waiting for a folder sync to finish");
+    Ok(SyncLock::take(&dir)?)
 }

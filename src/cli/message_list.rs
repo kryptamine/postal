@@ -6,8 +6,9 @@ use crate::{
     cli::accounts,
     cli::answer::{Answer, Answers},
     cli::args::{LIMIT, MessageList},
+    cli::named_folder::named,
     cli::thread_rows::{self, ThreadRows},
-    domain::folder::{Folder, INBOX},
+    domain::folder::INBOX,
 };
 
 /// `postal message list`: the newest Threads of a Folder, by default every
@@ -35,14 +36,4 @@ impl Answers for MessageList {
         let rows = threads.into_rows();
         Ok(Answer::new(&rows, thread_rows::table(&rows))?)
     }
-}
-
-/// The server's name of `account`'s Folder that `wanted` names: by that
-/// name first, else as people name it.
-fn named<'a>(folders: &'a [Folder<String>], account: &str, wanted: &str) -> Option<&'a str> {
-    let mine = || folders.iter().filter(|f| f.account == *account);
-    mine()
-        .find(|f| f.name.as_str() == wanted)
-        .or_else(|| mine().find(|f| f.answers_to(wanted)))
-        .map(|f| f.name.as_str())
 }

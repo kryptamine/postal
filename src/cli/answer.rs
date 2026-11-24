@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::cli::command_output;
 
-/// A command that reads mail, as the CLI and its MCP tool run it alike
+/// A command on mail, as the CLI and its MCP tool run it alike
 /// (ADR 0030); its arguments are the tool's parameters.
 pub trait Answers {
     fn answer(&self) -> Result<Answer, Box<dyn Error>>;
@@ -16,6 +16,8 @@ pub trait Answers {
 pub struct Answer {
     pub json: Value,
     pub text: String,
+    /// Part of the work failed, which the rows say: the command exits with 1.
+    pub failed: bool,
 }
 
 impl Answer {
@@ -23,6 +25,7 @@ impl Answer {
         Ok(Self {
             json: serde_json::to_value(rows)?,
             text,
+            failed: false,
         })
     }
 

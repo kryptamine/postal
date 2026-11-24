@@ -30,7 +30,8 @@ pub struct BodyPass {
 
 /// How one batch ended.
 enum Batch {
-    Indexed,
+    /// This many bodies.
+    Indexed(usize),
     NoneLeft,
     OverQuota,
 }
@@ -67,8 +68,8 @@ impl BodyPass {
             return Ok(());
         }
 
-        match batch(server, cache, send).await? {
-            Batch::Indexed => {}
+        match batch(server, cache, BATCH, send).await? {
+            Batch::Indexed(_) => {}
             Batch::NoneLeft => self.more = false,
             Batch::OverQuota => self.resting_until = Some(Instant::now() + OVER_QUOTA),
         }
@@ -77,14 +78,33 @@ impl BodyPass {
     }
 }
 
-/// Indexes the bodies of one batch of the newest Messages whose body the
-/// index lacks, a Folder at a time, cutting their Snippets too when missing.
+/// Indexes the bodies of the `count` newest Messages the index lacks, or of
+/// all of them when fewer lack it.
+pub async fn index_newest(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    count: usize,
+) -> Result<(), Error> {
+    let mut left = count;
+    while left > 0 {
+        match batch(server, cache, left.min(BATCH), &|_| {}).await? {
+            Batch::Indexed(indexed) => left = left.saturating_sub(indexed),
+            Batch::NoneLeft | Batch::OverQuota => return Ok(()),
+        }
+    }
+
+    Ok(())
+}
+
+/// Indexes the bodies of up to `limit` of the newest Messages whose body
+/// the index lacks, a Folder at a time, cutting their Snippets too when missing.
 async fn batch(
     server: &mut impl MailServer,
     cache: &Cache,
+    limit: usize,
     send: &impl Fn(Update),
 ) -> Result<Batch, Error> {
-    let Some((folder, pending)) = cache.unindexed_bodies(BATCH)? else {
+    let Some((folder, pending)) = cache.unindexed_bodies(limit)? else {
         return Ok(Batch::NoneLeft);
     };
 
@@ -127,5 +147,5 @@ async fn batch(
     cache.index_bodies(&folder, &indexed)?;
     tracing::info!("indexed {} bodies of {folder}", indexed.len());
     send(Update::Inbox);
-    Ok(Batch::Indexed)
+    Ok(Batch::Indexed(indexed.len()))
 }
