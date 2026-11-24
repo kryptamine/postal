@@ -8,6 +8,7 @@ local attach = require("postal.attach")
 local colors = require("postal.colors")
 local icons = require("postal.icons")
 local keys = require("postal.keys")
+local mention = require("postal.mention")
 local recipients = require("postal.recipients")
 
 local M = {}
@@ -65,7 +66,8 @@ end
 --- `opts.agents` adds ACP agents by name, `{ cmd = { ... }, npx = "..." }`,
 --- `opts.agent` names the one `:PostalAgent` starts, and `opts.nerd_font`
 --- draws the pane's icons from a Nerd Font, and `opts.keys` maps a key of
---- `postal.keys` by name to another `lhs`, or to false for none.
+--- `postal.keys` by name to another `lhs`, or to false for none;
+--- `opts.attachment_words` starts each word that mentions an attachment.
 function M.setup(opts)
 	opts = opts or {}
 	keys.set(opts.keys)
@@ -74,6 +76,7 @@ function M.setup(opts)
 	end
 
 	recipients.cmd = opts.cmd or recipients.cmd
+	mention.set(opts.attachment_words)
 	agent.agents = vim.tbl_deep_extend("force", agent.agents, opts.agents or {})
 	agent.default = opts.agent or agent.default
 	local group = vim.api.nvim_create_augroup("postal", { clear = true })
@@ -94,6 +97,7 @@ function M.setup(opts)
 			agent_command(event.buf, "Chat with an ACP agent about this Draft")
 			attach.watch(event.buf, group)
 			addresses.watch(event.buf, group)
+			mention.watch(event.buf, group)
 		end,
 	})
 

@@ -23,6 +23,7 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 | in                 | does                                                         |
 | ------------------ | ------------------------------------------------------------ |
 | a Draft            | completes `To:`, `Cc:` and `Attach:`; `:PostalAgent` edits the body |
+| a Draft's body     | warns when it mentions an attachment and no `Attach:` names a file |
 | `To:` and `Cc:`    | marks a recipient a send would refuse, and an address no mail holds |
 | an `Attach:` line  | shows the file's size, or that it is missing; `gf` edits the file    |
 | a Signature        | `:PostalAgent` edits the signature                           |
@@ -55,6 +56,7 @@ require("postal").setup({
   agent = "claude",
   nerd_font = true,
   keys = {},
+  attachment_words = { "attach", "enclos" },
 })
 ```
 
@@ -65,6 +67,7 @@ require("postal").setup({
 | `agent`     | the one `:PostalAgent` starts; `:PostalAgent gemini` picks another          |
 | `nerd_font` | Nerd Font icons in the pane; on when `vim.g.have_nerd_font` is set          |
 | `keys`      | a key by name to another `lhs`, or to `false` to leave it unmapped          |
+| `attachment_words` | how each word mentioning an attachment starts, case aside            |
 
 | key           | default     |
 | ------------- | ----------- |

@@ -7,9 +7,9 @@ function M.headless(buf)
 	return vim.b[buf].postal_kind == "signature"
 end
 
--- The 0-based row the body starts at, and whether the headers end in a
--- blank line; without one, the line count.
-local function start(buf)
+--- The 0-based row the body starts at, and whether the headers end in a
+--- blank line; without one, the line count.
+function M.start(buf)
 	if M.headless(buf) then
 		return 0, true
 	end
@@ -27,7 +27,7 @@ end
 --- The value of header `name`, in any case, or nil when there is none.
 function M.header(buf, name)
 	local prefix = name:lower() .. ":"
-	for _, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, (start(buf)), false)) do
+	for _, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, (M.start(buf)), false)) do
 		if line:sub(1, #prefix):lower() == prefix then
 			return vim.trim(line:sub(#prefix + 1))
 		end
@@ -40,7 +40,7 @@ function M.whole(buf)
 end
 
 function M.get(buf)
-	local lines = vim.api.nvim_buf_get_lines(buf, (start(buf)), -1, false)
+	local lines = vim.api.nvim_buf_get_lines(buf, (M.start(buf)), -1, false)
 	if #lines == 0 then
 		return ""
 	end
@@ -51,7 +51,7 @@ end
 --- Adds the blank line that ends the headers when there is none, and
 --- returns the 0-based row the body starts at and whether it added one.
 function M.row(buf)
-	local first, ended = start(buf)
+	local first, ended = M.start(buf)
 	if not ended then
 		vim.api.nvim_buf_set_lines(buf, first, first, false, { "" })
 		first = first + 1

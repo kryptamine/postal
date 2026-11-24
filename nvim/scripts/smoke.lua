@@ -173,6 +173,31 @@ end
 vim.api.nvim_buf_set_lines(0, 3, 7, false, {})
 vim.env.HOME = real_home
 
+-- Words that mention an attachment warn while no Attach: names a file; the
+-- Quote's are someone else's
+local mention_ns = vim.api.nvim_get_namespaces()["postal-mention"]
+local function mentioned(lines)
+	vim.api.nvim_buf_set_lines(0, 3, -1, false, lines)
+	vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+	return diagnosed(mention_ns)
+end
+
+local warned = mentioned({ "", "pet", "The report is Attached." })
+local want_warning = { 5, 14, vim.diagnostic.severity.WARN, "mentions an attachment, and no Attach: line names a file" }
+if not vim.deep_equal(warned, { want_warning }) then
+	fail("the mention is diagnosed " .. vim.inspect(warned))
+end
+
+if #mentioned({ "Attach: report.pdf", "", "The report is attached." }) ~= 0 then
+	fail("a mention warned with a file attached")
+end
+
+if #mentioned({ "", "pet", "", "On 1 Mar 2026, Bob <bob@example.com> wrote:", "> see the attachment" }) ~= 0 then
+	fail("a mention in the Quote warned")
+end
+
+mentioned({ "", "pet" })
+
 local reply = drafts .. "/2.eml"
 local said_by = "On 1 Mar 2026, Bob <bob@example.com> wrote:"
 vim.fn.writefile(
