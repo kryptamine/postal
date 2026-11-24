@@ -20,16 +20,17 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 
 ## Usage
 
-| in                 | does                                                         |
-| ------------------ | ------------------------------------------------------------ |
-| a Draft            | completes `To:`, `Cc:` and `Attach:`; `:PostalAgent` edits the body |
-| a Draft's body     | warns when it mentions an attachment and no `Attach:` names a file |
-| `To:` and `Cc:`    | `:PostalContacts` picks a Correspondent and adds it; marks a recipient a send would refuse, and an address no mail holds |
-| an `Attach:` line  | shows the file's size, or that it is missing; `gf` edits the file    |
-| a Message's `[1]`  | `gx` opens the link; `:PostalLinks` lists every link         |
-| a Reply's Quote    | folds away closed: `zo` opens it                             |
-| a Signature        | `:PostalAgent` edits the signature                           |
-| a Message (`E`)    | read-only; `:PostalAgent` answers questions about it and its Thread |
+| in                | does                                                                      |
+| ----------------- | ------------------------------------------------------------------------- |
+| a Draft           | completes `To:`, `Cc:` and `Attach:`; `:PostalAgent` edits the body       |
+| a Draft's body    | warns when it mentions an attachment and no `Attach:` names a file        |
+| `To:` and `Cc:`   | marks a recipient a send would refuse, and an address no mail holds       |
+| `:PostalContacts` | picks a Correspondent and adds it to `To:`, or the `Cc:` under the cursor |
+| an `Attach:` line | shows the file's size, or that it is missing; `gf` edits the file         |
+| a Message's `[1]` | `gx` opens the link; `:PostalLinks` lists every link                      |
+| a Reply's Quote   | folds away closed: `zo` opens it                                          |
+| a Signature       | `:PostalAgent` edits the signature                                        |
+| a Message (`E`)   | read-only; `:PostalAgent` answers questions about it and its Thread       |
 
 Completion goes through [blink.cmp](https://github.com/saghen/blink.cmp)
 when installed, Neovim's own menu otherwise.
@@ -41,8 +42,8 @@ names the agent too.
 
 In the chat pane, send with `<CR>` or `<C-s>`; `q` stops the agent's turn,
 `<C-c>` ends the chat, `<C-p>` and `<C-n>` bring back what you sent in any
-chat, `?` lists the keys. The agent reaches only the text,
-through an MCP server the plugin hands it: no headers, no commands, no
+chat, `?` lists the keys. The agent reaches only the text, through an MCP
+server the plugin hands it: no headers, no commands, no
 sending. Its edit lands in the buffer for review:
 
 | key         | does                             |
@@ -70,16 +71,16 @@ require("postal").setup({
 })
 ```
 
-| option      | is                                                                          |
-| ----------- | --------------------------------------------------------------------------- |
-| `cmd`       | the `postal` to run, such as `target/release/postal`                        |
-| `agents`    | ACP agents by name; `npx` runs the package when `cmd` is not on `PATH`      |
-| `agent`     | the one `:PostalAgent` starts; `:PostalAgent gemini` picks another          |
-| `nerd_font` | Nerd Font icons in the pane; on when `vim.g.have_nerd_font` is set          |
-| `keys`      | a key by name to another `lhs`, or to `false` to leave it unmapped          |
-| `prompts`   | instructions by name for `:PostalAgent <name>`; `false` drops a default     |
-| `spell`     | spell checks a Draft and a Signature, in your own `spelllang`               |
-| `attachment_words` | how each word mentioning an attachment starts, case aside            |
+| option             | is                                                                      |
+| ------------------ | ----------------------------------------------------------------------- |
+| `cmd`              | the `postal` to run, such as `target/release/postal`                    |
+| `agents`           | ACP agents by name; `npx` runs the package when `cmd` is not on `PATH`  |
+| `agent`            | the one `:PostalAgent` starts; `:PostalAgent gemini` picks another      |
+| `nerd_font`        | Nerd Font icons in the pane; on when `vim.g.have_nerd_font` is set      |
+| `keys`             | a key by name to another `lhs`, or to `false` to leave it unmapped      |
+| `prompts`          | instructions by name for `:PostalAgent <name>`; `false` drops a default |
+| `spell`            | spell checks a Draft and a Signature, in your own `spelllang`           |
+| `attachment_words` | how each word mentioning an attachment starts, case aside               |
 
 | key           | default     |
 | ------------- | ----------- |
@@ -100,8 +101,8 @@ require("postal").setup({
 For example, `keys = { accept = "<leader>y", reject_all = false }`.
 
 `claude` is set up by default. The agent signs in through its own CLI
-(`claude /login`). `:checkhealth postal` says what is missing, and whether `postal` is the
-release the plugin came with.
+(`claude /login`). `:checkhealth postal` says what is missing,
+and whether `postal` is the release the plugin came with.
 
 ## Development
 

@@ -85,12 +85,7 @@ local function agent_command(buf, desc)
 	end, { nargs = "*", complete = complete, desc = desc })
 end
 
---- `opts.cmd` is the command Postal runs as, `postal` by default;
---- `opts.agents` adds ACP agents by name, `{ cmd = { ... }, npx = "..." }`,
---- `opts.agent` names the one `:PostalAgent` starts, and `opts.nerd_font`
---- draws the pane's icons from a Nerd Font, and `opts.keys` maps a key of
---- `postal.keys` by name to another `lhs`, or to false for none;
---- `opts.attachment_words` starts each word that mentions an attachment.
+--- `opts` as the Configuration of nvim/README.md lists them.
 function M.setup(opts)
 	opts = opts or {}
 	keys.set(opts.keys)
