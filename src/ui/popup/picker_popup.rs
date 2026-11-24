@@ -81,7 +81,7 @@ impl Widget for PickerPopup<'_> {
 
             let row = Rect::new(popup.x + 1, y, popup.width.saturating_sub(2), 1);
             let style = if index == self.picker.selected() {
-                self.theme.selected
+                self.theme.chosen
             } else {
                 Style::new()
             };
