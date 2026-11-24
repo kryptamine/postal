@@ -1,4 +1,9 @@
-use crate::{account::credential::Credential, account::oauth::Tokens};
+use std::{error::Error, path::Path};
+
+use crate::{
+    account::config::Config, account::credential::Credential, account::oauth::Tokens,
+    account::provider::Provider,
+};
 
 /// How the Account signs in to its servers, as its Provider decides.
 pub enum SignIn {
@@ -12,6 +17,21 @@ pub enum SignIn {
 }
 
 impl SignIn {
+    /// How `config` signs in, from its secret; `None` once that is lost.
+    pub fn stored(config: &Config, dir: &Path) -> Result<Option<Self>, Box<dyn Error>> {
+        let Some(secret) = config.secrets.read(dir, &config.email)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(match config.provider {
+            Provider::ICloud | Provider::Other => Self::Password {
+                password: secret,
+                smtp: config.secrets.read(dir, &smtp_key(&config.email))?,
+            },
+            Provider::Google => Self::OAuth(Tokens::stored(secret, config.oauth.token_url.clone())),
+        }))
+    }
+
     /// What the secret store keeps: the refresh token, or the password.
     pub const fn secret(&self) -> &Credential {
         match self {

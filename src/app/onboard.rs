@@ -4,7 +4,6 @@ use crate::{
     account::config::Config,
     account::partial_config::PartialConfig,
     account::sign_in::SignIn,
-    app::signed_in::read_sign_in,
     mail::login,
     render::icons::Icons,
     render::rgb::Rgb,
@@ -46,7 +45,7 @@ pub async fn sign_in_again(
     let failed =
         match onboarding::run(tty.terminal, tty.events, &theme, dir, Start::Again(config)).await? {
             Outcome::SignedIn(_) => {
-                *sign_in = read_sign_in(config, dir)?;
+                *sign_in = SignIn::stored(config, dir)?;
                 sign_in.is_none()
             }
             Outcome::Quit(error) => {
