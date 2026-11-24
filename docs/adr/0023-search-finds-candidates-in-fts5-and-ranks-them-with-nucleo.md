@@ -65,6 +65,9 @@ What is lost against ADR 0007: a fuzzy match across a word's letters
 Within `N`, the best match still comes first; past it, a broad Query shows
 the newest candidates' best.
 
+A Thread matched only in a body, which nucleo cannot score, comes last:
+ADR 0032.
+
 ## Measured
 
 Release build, the reference machine, 500,000 Messages seeded in the

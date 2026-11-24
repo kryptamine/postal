@@ -9,6 +9,7 @@ pub mod discover;
 mod envelope_pass;
 mod flag_changes;
 mod folder_list;
+mod folder_pass;
 pub mod forward_fetch;
 mod header;
 mod idle;

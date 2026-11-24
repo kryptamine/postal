@@ -13,6 +13,7 @@ use crate::{
     domain::query::Query,
     mail::outage::Outage,
     mail::status::Status,
+    mail::update::Unindexed,
     render::icons::Icons,
     render::stack_str::StackStr,
     ui::frame::theme::Theme,
@@ -41,6 +42,8 @@ pub struct HintLine<'a> {
     pub parsed: Option<&'a Query>,
     /// The Query matched more than a Search reads.
     pub capped: bool,
+    /// How far the search index is from every Message.
+    pub unindexed: Unindexed,
     /// What the Status's countdown counts from.
     pub now: Instant,
 }
@@ -151,7 +154,8 @@ impl HintLine<'_> {
     }
 
     /// Draws `/` and `query` from `x`, then whether it matched more than is
-    /// shown, cut at the row's end; returns where they end.
+    /// shown and how many bodies are not searched yet, cut at the row's
+    /// end; returns where they end.
     fn query(&self, buf: &mut Buffer, x: u16, row: Rect, query: &str) -> u16 {
         let room = |x: u16| usize::from(row.right().saturating_sub(x));
         let (x, _) = buf.set_stringn(x, row.y, "/", room(x), self.theme.key);
@@ -166,15 +170,29 @@ impl HintLine<'_> {
             buf.set_style(Rect::new(from, row.y, to - from, 1), self.theme.key);
         }
 
-        if !self.capped {
+        let mut notice = StackStr::<96>::new();
+        // The texts fit, so the writes cannot fail.
+        if self.capped {
+            write!(notice, "newest {LIMIT} matches only: type more").ok();
+        }
+
+        let Unindexed { bodies, fetching } = self.unindexed;
+        if fetching {
+            separate(&mut notice);
+            notice.write_str("downloading mail").ok();
+        }
+
+        if bodies > 0 {
+            separate(&mut notice);
+            write!(notice, "{bodies} bodies to index").ok();
+        }
+
+        if notice.as_str().is_empty() {
             return x;
         }
 
-        let mut capped = StackStr::<64>::new();
-        // The text fits, so the write cannot fail.
-        write!(capped, "newest {LIMIT} matches only: type more").ok();
         let x = x.saturating_add(GAP).min(row.right());
-        buf.set_stringn(x, row.y, capped.as_str(), room(x), self.theme.muted)
+        buf.set_stringn(x, row.y, notice.as_str(), room(x), self.theme.muted)
             .0
     }
 
@@ -185,6 +203,13 @@ impl HintLine<'_> {
         let (x, _) = buf.set_stringn(x, row.y, " ", room(x), self.theme.muted);
         buf.set_stringn(x, row.y, hint.description, room(x), self.theme.muted)
             .0
+    }
+}
+
+/// Parts what `notice` holds from what comes next.
+fn separate(notice: &mut StackStr<96>) {
+    if !notice.as_str().is_empty() {
+        notice.write_str(" · ").ok();
     }
 }
 

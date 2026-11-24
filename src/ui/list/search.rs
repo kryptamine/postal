@@ -302,8 +302,27 @@ impl Search {
             best[thread] = best[thread].max(Some(score));
         }
 
+        // FTS5 found every Thread here. One nucleo cannot score, even ignoring
+        // case, matched only in a body: it comes last. One it scores only
+        // ignoring case failed smart case, and is dropped.
+        let ignoring = Pattern::new(
+            &self.parsed.ranked(),
+            CaseMatching::Ignore,
+            Normalization::Smart,
+            AtomKind::Fuzzy,
+        );
+        let unscored: Vec<_> = (self.haystacks.iter())
+            .filter(|(thread, _)| best[*thread].is_none())
+            .cloned()
+            .collect();
+        let mut case_failed = vec![false; best.len()];
+        for (_, thread) in score(&ignoring, &unscored) {
+            case_failed[thread] = true;
+        }
+
         let mut ranked: Vec<_> = (0..best.len())
-            .filter_map(|thread| Some((best[thread]?, thread)))
+            .filter(|&thread| best[thread].is_some() || !case_failed[thread])
+            .map(|thread| (best[thread], thread))
             .collect();
         // Threads are newest first, so a tie goes to the newer Thread.
         ranked.sort_unstable_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));

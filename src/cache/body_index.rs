@@ -1,11 +1,15 @@
 use rusqlite::params;
 
 use super::{Cache, Error, snippets::text_part};
-use crate::{domain::folder_name::FolderName, domain::text_part::TextPart, domain::uid::Uid};
+use crate::{
+    domain::body_key::BodyKey, domain::folder_name::FolderName, domain::text_part::TextPart,
+    domain::uid::Uid,
+};
 
 /// A Message whose body the index lacks.
 pub struct Unindexed {
     pub uid: Uid,
+    pub key: BodyKey,
     /// `None` with no text part: there is nothing to fetch.
     pub part: Option<TextPart>,
     pub snippet_missing: bool,
@@ -14,14 +18,16 @@ pub struct Unindexed {
 /// What one Message's body gives the index.
 pub struct Indexed {
     pub uid: Uid,
+    /// The row's key when it was read: a row since replaced is left alone.
+    pub key: BodyKey,
     pub text: Option<String>,
     /// Written only to a row still without one.
     pub snippet: Option<String>,
 }
 
 impl Cache {
-    /// The Folder of the newest Message whose body the index lacks, outside
-    /// Trash and Spam, and up to `limit` of its such Messages, newest first.
+    /// The Folder of the newest Message whose body the index lacks, and up
+    /// to `limit` of its such Messages, newest first.
     pub fn unindexed_bodies(
         &self,
         limit: usize,
@@ -30,11 +36,8 @@ impl Cache {
         let connection = self.connection();
         let folder: Option<FolderName> = connection
             .prepare_cached(
-                "SELECT m.mailbox FROM message m INDEXED BY message_unbodied
-                 WHERE m.account = ?1 AND m.bodied = 0 AND NOT EXISTS
-                   (SELECT 1 FROM mailbox b WHERE b.account = m.account AND b.name = m.mailbox
-                    AND b.role IN ('Trash', 'Spam'))
-                 ORDER BY m.rowid DESC LIMIT 1",
+                "SELECT mailbox FROM message INDEXED BY message_unbodied
+                 WHERE account = ?1 AND bodied = 0 ORDER BY rowid DESC LIMIT 1",
             )?
             .query_map(params![self.email()], |row| row.get(0))?
             .next()
@@ -44,7 +47,8 @@ impl Cache {
         };
 
         let mut statement = connection.prepare_cached(
-            "SELECT uid, text_section, text_encoding, text_charset, text_html, snippet IS NULL
+            "SELECT uid, text_section, text_encoding, text_charset, text_html, snippet IS NULL,
+                 body_key
              FROM message INDEXED BY message_unbodied
              WHERE account = ?1 AND bodied = 0 AND mailbox = ?2
              ORDER BY rowid DESC LIMIT ?3",
@@ -55,6 +59,7 @@ impl Cache {
                     uid: row.get(0)?,
                     part: text_part(row, 1)?,
                     snippet_missing: row.get(5)?,
+                    key: row.get(6)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -62,45 +67,65 @@ impl Cache {
         Ok(Some((folder, pending)))
     }
 
-    /// Indexes each body in `folder`, in every Folder holding that Message,
-    /// in one transaction; a UID no longer cached is ignored.
+    /// The Messages whose body the index lacks.
+    pub fn unindexed_count(&self) -> Result<usize, Error> {
+        let count = self
+            .connection()
+            .prepare_cached(
+                "SELECT count(*) FROM message INDEXED BY message_unbodied
+                 WHERE account = ?1 AND bodied = 0",
+            )?
+            .query_row(params![self.email()], |row| row.get(0))?;
+        Ok(count)
+    }
+
+    /// Indexes each body in `folder` in one transaction, on Gmail in every
+    /// Folder holding that Message; a row no longer cached as it was read
+    /// is left alone.
     pub fn index_bodies(&self, folder: &FolderName, bodies: &[Indexed]) -> Result<(), Error> {
         self.write(|connection| {
             let transaction = connection.unchecked_transaction()?;
+            // Elsewhere a body key repeats across Folders that share a
+            // UIDVALIDITY, so only Gmail's, `X-GM-MSGID`, names copies.
+            let mut copies = transaction.prepare_cached(
+                "SELECT rowid FROM message WHERE account = ?1 AND body_key = ?4
+                   AND (thread IS NOT NULL OR (mailbox = ?2 AND uid = ?3))
+                   AND EXISTS (SELECT 1 FROM message WHERE account = ?1 AND mailbox = ?2
+                               AND uid = ?3 AND body_key = ?4)",
+            )?;
             // Rewriting the Snippet indexes the row anew, so it goes first.
             let mut snippet = transaction.prepare_cached(
-                "UPDATE message SET snippet = ?4
-                 WHERE account = ?1 AND mailbox = ?2 AND uid = ?3 AND snippet IS NULL",
+                "UPDATE message SET snippet = ?2 WHERE rowid = ?1 AND snippet IS NULL",
             )?;
-            let mut forget = transaction.prepare_cached(
-                "DELETE FROM message_text WHERE rowid IN (SELECT rowid FROM message
-                 WHERE account = ?1 AND body_key = (SELECT body_key FROM message
-                 WHERE account = ?1 AND mailbox = ?2 AND uid = ?3))",
-            )?;
+            let mut forget =
+                transaction.prepare_cached("DELETE FROM message_text WHERE rowid = ?1")?;
             let mut index = transaction.prepare_cached(
                 "INSERT INTO message_text
                      (rowid, sender, subject, snippet, recipients, from_line, to_line, body)
                  SELECT rowid, sender, subject, snippet, iif(from_me, to_line, NULL),
-                     from_line, to_line, ?4
-                 FROM message WHERE account = ?1 AND body_key = (SELECT body_key FROM message
-                 WHERE account = ?1 AND mailbox = ?2 AND uid = ?3)",
+                     from_line, to_line, ?2
+                 FROM message WHERE rowid = ?1",
             )?;
-            let mut mark = transaction.prepare_cached(
-                "UPDATE message SET bodied = 1 WHERE account = ?1 AND body_key =
-                 (SELECT body_key FROM message WHERE account = ?1 AND mailbox = ?2 AND uid = ?3)",
-            )?;
+            let mut mark =
+                transaction.prepare_cached("UPDATE message SET bodied = 1 WHERE rowid = ?1")?;
             for body in bodies {
-                let row = params![self.email(), folder, body.uid];
-                if let Some(text) = &body.snippet {
-                    snippet.execute(params![self.email(), folder, body.uid, text])?;
-                }
+                let rowids: Vec<i64> = copies
+                    .query_map(params![self.email(), folder, body.uid, body.key], |row| {
+                        row.get(0)
+                    })?
+                    .collect::<Result<_, _>>()?;
+                for rowid in rowids {
+                    if let Some(text) = &body.snippet {
+                        snippet.execute(params![rowid, text])?;
+                    }
 
-                forget.execute(row)?;
-                index.execute(params![self.email(), folder, body.uid, body.text])?;
-                mark.execute(row)?;
+                    forget.execute([rowid])?;
+                    index.execute(params![rowid, body.text])?;
+                    mark.execute([rowid])?;
+                }
             }
 
-            drop((snippet, forget, index, mark));
+            drop((copies, snippet, forget, index, mark));
             transaction.commit()
         })
     }

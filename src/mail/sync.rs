@@ -74,7 +74,18 @@ pub async fn resync(
     report: &dyn Fn(Status),
 ) -> Result<(Examined, Changes), Error> {
     // Selected, not examined, so a Mark Read can be stored: ADR 0011.
-    let examined = reopen(server, folder, Mode::Select).await?;
+    resync_as(server, cache, folder, Mode::Select, report).await
+}
+
+/// As `resync`, opening `folder` as `mode`.
+pub async fn resync_as(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    folder: &FolderName,
+    mode: Mode,
+    report: &dyn Fn(Status),
+) -> Result<(Examined, Changes), Error> {
+    let examined = reopen(server, folder, mode).await?;
     let unread = server.unread_count().await?;
     let known = cache.state(folder)?;
     let cached = cache.uids(folder)?;

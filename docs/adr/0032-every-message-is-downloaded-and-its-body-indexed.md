@@ -1,4 +1,4 @@
-# Every Message's body is indexed, in the background
+# Every Message is downloaded, and its body indexed
 
 A Search matched only what the Cache held of a Message: sender, subject,
 Snippet and recipients (ADR 0023). A word past the Snippet found nothing,
@@ -7,13 +7,35 @@ Thunderbird, Apple Mail, download the mailbox and index it themselves;
 Postal does the same, so a Search stays in process (ADR 0007), matches
 bodies, and works offline. Issue #157.
 
+## Three passes in turn
+
+Once the pass over Sent is done, the fetch connection's `SpareWork` runs
+three long passes, a step each in turn, so none waits on another to end:
+every Folder whole into the Cache, the bodies the index lacks, and the
+envelopes the Correspondents are learnt from (ADR 0031).
+
+## The Folder pass
+
+- On its first step it lists the Folders. On Gmail it walks All Mail
+  alone, which holds every label's Messages once, and leaves out Trash and
+  Spam as a Search does (ADR 0010); elsewhere it walks every Folder but
+  Trash and Spam.
+- A Folder never synced gets its newest 500 Messages as the first sync
+  does, `EXAMINE`d: this connection never stores a flag.
+- Then, a step at a time, the 100 Messages older than every cached one, as
+  a Backfill does, until the server has nothing older. A Preview waits on
+  one such page at most, or on that first fetch of a Folder.
+- A Folder the server refuses to give is passed over.
+- It runs once per connection; only the shown Folder is kept fresh after,
+  by IDLE (ADR 0008). Moves and expunges in another Folder reach the Cache
+  and the index when it is next shown.
+
 ## The body pass
 
-The fetch connection indexes bodies as `SpareWork`, taking turns with the
-pass over envelopes once the pass over Sent is done:
-
 - A batch is the 20 newest Messages whose body the index lacks, all in the
-  Folder of the newest one, outside Trash and Spam. Their text parts (ADR
+  Folder of the newest one. Trash and Spam are indexed too, as far as they
+  are cached, so counting what is left reads the partial index alone; a
+  Search still reads them only for an `in:`. Their text parts (ADR
   0024) are fetched with `BODY.PEEK[n]<0.32768>`: past 32 KiB a body is
   mostly quoted history. Attachments are never fetched.
 - Each batch is one Cache write, in its own transaction, so the sync
@@ -23,8 +45,23 @@ pass over envelopes once the pass over Sent is done:
 - A Message still without a Snippet gets it cut from the same fetch.
 - Once no body is left, the pass looks again every 5 seconds, for mail
   IDLE brought, a Backfill or a resync wrote.
-- A server refusing a fetch (`NO`, as Gmail's `[OVERQUOTA]`) ends the pass
-  until that recheck.
+- Gmail's `[OVERQUOTA]` rests the pass for a day. A batch refused for
+  another reason is indexed without its bodies, or the pass would ask for
+  it forever. `[THROTTLED]` is an outage: the connection backs off and
+  reconnects, and the passes start again from what the Cache holds.
+- Every 2 seconds at most, and once none is left, it counts the Messages
+  still without their body (12 ms at 500,000; 84 ms leaving Trash and Spam
+  out). A Search's hint line shows `N bodies to index` after the Query
+  while any is, and `downloading mail` while the Folder pass is under way.
+
+## Ranking a match in a body
+
+FTS5 finds the candidates and nucleo ranks them by the card's text (ADR
+0023), and what nucleo did not match was dropped. A Message matched only in
+its body has no card text to match, so a Thread nucleo cannot score now
+comes after every scored one, newest first. Smart case still holds: a
+Thread nucleo matches ignoring case, but not as typed, is dropped. Case is
+not known of a body, so `Zeppelin` also finds `zeppelin` there.
 
 ## The index
 
@@ -38,9 +75,15 @@ entry holds it:
   a UIDVALIDITY change) leaves it without the body and `bodied` at 0, and
   the pass fetches the body again.
 - A Message Gmail files under several labels shares one body key (ADR 0005),
-  and each copy is indexed from one fetch.
+  `X-GM-MSGID`, and each copy is indexed from one fetch. Elsewhere the key
+  is UIDVALIDITY and UID, which two Folders may share, so only the row
+  fetched is indexed.
+- A row replaced while its batch was on the wire, with another body key,
+  is left for the next batch.
 - `message_unbodied`, a partial index, finds the next batch without
   reading the indexed rows.
+
+A negated word, `-word`, now leaves out a Message with it in its body too.
 
 The `prefix` indexes now hold one and two characters, not up to four: a
 word of three or more is a range scan of the terms.
