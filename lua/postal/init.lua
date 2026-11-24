@@ -11,6 +11,7 @@ local icons = require("postal.icons")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
 local mention = require("postal.mention")
+local prompts = require("postal.prompts")
 local recipients = require("postal.recipients")
 
 local M = {}
@@ -52,16 +53,34 @@ local function native(buf)
 	vim.bo[buf].completeopt = "menuone,noselect"
 end
 
-local function complete_agent(typed)
-	return vim.tbl_filter(function(name)
-		return vim.startswith(name, typed)
-	end, vim.tbl_keys(agent.agents))
-end
-
+-- `:PostalAgent [agent] [prompt]`, each by its name in setup().
 local function agent_command(buf, desc)
+	local function named()
+		return prompts.over(vim.b[buf].postal_kind)
+	end
+
+	local function complete(typed)
+		local names = vim.list_extend(vim.tbl_keys(agent.agents), vim.tbl_keys(named()))
+		return vim.tbl_filter(function(name)
+			return vim.startswith(name, typed)
+		end, names)
+	end
+
 	vim.api.nvim_buf_create_user_command(buf, "PostalAgent", function(command)
-		agent.ask(buf, command.fargs[1])
-	end, { nargs = "?", complete = complete_agent, desc = desc })
+		local texts, name, text = named(), nil, nil
+		for _, word in ipairs(command.fargs) do
+			if agent.agents[word] and not name and not text then
+				name = word
+			elseif texts[word] and not text then
+				text = texts[word]
+			else
+				vim.notify("postal: no agent or prompt " .. word .. " in setup()", vim.log.levels.ERROR)
+				return
+			end
+		end
+
+		agent.ask(buf, name, text)
+	end, { nargs = "*", complete = complete, desc = desc })
 end
 
 --- `opts.cmd` is the command Postal runs as, `postal` by default;
@@ -73,6 +92,7 @@ end
 function M.setup(opts)
 	opts = opts or {}
 	keys.set(opts.keys)
+	prompts.set(opts.prompts)
 	if opts.nerd_font ~= nil then
 		icons.nerd = opts.nerd_font
 	end

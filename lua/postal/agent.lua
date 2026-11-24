@@ -363,8 +363,9 @@ local function start(mail, name, ended)
 end
 
 --- Opens mail buffer `mail`'s chat, the cursor in its input, starting
---- agent `name`, or the default, when none chats about it yet.
-function M.ask(mail, name)
+--- agent `name`, or the default, when none chats about it yet; sends
+--- `text` when given.
+function M.ask(mail, name, text)
 	local chat = chats[mail]
 	if chat and not chat.ended and name and name ~= chat.name then
 		vim.notify("postal: this mail already chats with " .. chat.name, vim.log.levels.WARN)
@@ -382,6 +383,9 @@ function M.ask(mail, name)
 	end
 
 	chat.pane:show(true)
+	if text and not chat.ended then
+		chat.pane:post(text)
+	end
 end
 
 --- Sends `text` to mail buffer `mail`'s agent, starting it again when it

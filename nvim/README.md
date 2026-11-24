@@ -33,6 +33,11 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 Completion goes through [blink.cmp](https://github.com/saghen/blink.cmp)
 when installed, Neovim's own menu otherwise.
 
+`:PostalAgent shorter` opens the chat and sends a prompt set up by name:
+`proofread`, `shorter` and `formal` are there by default over a Draft or a
+Signature, `summary` over a Message, and `:PostalAgent gemini shorter`
+names the agent too.
+
 In the chat pane, send with `<CR>` or `<C-s>`; `q` stops the agent's turn,
 `<C-c>` ends the chat, `<C-p>` and `<C-n>` bring back what you sent in any
 chat, `?` lists the keys. The agent reaches only the text,
@@ -60,6 +65,7 @@ require("postal").setup({
   keys = {},
   attachment_words = { "attach", "enclos" },
   spell = false,
+  prompts = {},
 })
 ```
 
@@ -70,6 +76,7 @@ require("postal").setup({
 | `agent`     | the one `:PostalAgent` starts; `:PostalAgent gemini` picks another          |
 | `nerd_font` | Nerd Font icons in the pane; on when `vim.g.have_nerd_font` is set          |
 | `keys`      | a key by name to another `lhs`, or to `false` to leave it unmapped          |
+| `prompts`   | instructions by name for `:PostalAgent <name>`; `false` drops a default     |
 | `spell`     | spell checks a Draft and a Signature, in your own `spelllang`               |
 | `attachment_words` | how each word mentioning an attachment starts, case aside            |
 

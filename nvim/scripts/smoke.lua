@@ -25,6 +25,7 @@ local setup = {
 	agent = "stub",
 	keys = { stop = "<C-q>", close = false },
 	spell = true,
+	prompts = { shout = "Write it in capitals.", formal = false },
 }
 require("postal").setup(setup)
 
@@ -691,10 +692,18 @@ home()
 vim.cmd.edit(signatures .. "/1.txt")
 local signature_buf = vim.api.nvim_get_current_buf()
 local before_signature = #prompts()
-vim.cmd("PostalAgent")
+-- A prompt set up by name is sent as the user's own; a name neither an
+-- agent nor a prompt is refused, a default set to false among them, and
+-- one for another kind of mail
+for _, word in ipairs({ "formal", "summary" }) do
+	vim.cmd("PostalAgent " .. word)
+	if not (notified[#notified] or ""):find("no agent or prompt " .. word, 1, true) then
+		fail("the prompt " .. word .. " passed over a Signature: " .. vim.inspect(notified))
+	end
+end
+
+vim.cmd("PostalAgent stub shout")
 local signature_pane = vim.api.nvim_get_current_buf()
-vim.api.nvim_buf_set_lines(0, -2, -1, false, { "shout" })
-vim.cmd.normal(vim.keycode("<CR>"))
 local function signature()
 	return vim.api.nvim_buf_get_lines(signature_buf, 0, -1, false)
 end
@@ -709,7 +718,12 @@ then
 end
 
 local signing = prompts()[before_signature + 1].params.prompt
-if not signing[1].text:find("write_signature", 1, true) or signing[2].resource.text ~= "Ada Lovelace\nLondon\n" then
+if
+	not signing[1].text:find("write_signature", 1, true)
+	or signing[2].resource.text ~= "Ada Lovelace\nLondon\n"
+	or signing[3].text ~= "Write it in capitals."
+	or not said(signature_pane):find("## Me\n\nWrite it in capitals.\n", 1, true)
+then
 	fail("the Signature's prompt holds " .. vim.inspect(signing))
 end
 
