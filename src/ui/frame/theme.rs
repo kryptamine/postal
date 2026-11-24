@@ -19,7 +19,7 @@ pub struct Theme {
     pub muted: Style,
     pub selected: Style,
     pub border: Style,
-    /// A Settings tab shown and the row selected in it.
+    /// A Settings tab shown, and the row selected in Settings or the Folder Picker.
     pub chosen: Style,
     pub title: Style,
     /// A key on the hint line and in the `?` popup.
