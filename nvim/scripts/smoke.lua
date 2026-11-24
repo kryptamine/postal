@@ -24,6 +24,7 @@ local setup = {
 	},
 	agent = "stub",
 	keys = { stop = "<C-q>", close = false },
+	spell = true,
 }
 require("postal").setup(setup)
 
@@ -38,6 +39,11 @@ vim.fn.writefile({
 	"pet",
 }, draft)
 vim.cmd.edit(draft)
+
+-- The ftplugin's `textwidth` would cut each paragraph into hard lines
+if vim.bo.textwidth ~= 0 or vim.bo.formatoptions:find("t", 1, true) or not vim.wo.spell then
+	fail(("the Draft has textwidth=%d formatoptions=%s"):format(vim.bo.textwidth, vim.bo.formatoptions))
+end
 
 if vim.bo.omnifunc ~= "v:lua.require'postal'.omnifunc" then
 	fail("omnifunc not set, it is " .. vim.inspect(vim.bo.omnifunc))
@@ -610,7 +616,7 @@ vim.fn.writefile(message_text, messages .. "/7.eml")
 home()
 vim.cmd.edit(messages .. "/7.eml")
 local message_buf = vim.api.nvim_get_current_buf()
-if vim.bo.modifiable or not vim.bo.readonly or not vim.wo.wrap then
+if vim.bo.modifiable or not vim.bo.readonly or not vim.wo.wrap or vim.wo.spell then
 	fail("the Message can be changed, or is not wrapped")
 end
 

@@ -8,6 +8,7 @@ local attach = require("postal.attach")
 local colors = require("postal.colors")
 local icons = require("postal.icons")
 local keys = require("postal.keys")
+local layout = require("postal.layout")
 local mention = require("postal.mention")
 local recipients = require("postal.recipients")
 
@@ -77,6 +78,7 @@ function M.setup(opts)
 
 	recipients.cmd = opts.cmd or recipients.cmd
 	mention.set(opts.attachment_words)
+	layout.spell = opts.spell or false
 	agent.agents = vim.tbl_deep_extend("force", agent.agents, opts.agents or {})
 	agent.default = opts.agent or agent.default
 	local group = vim.api.nvim_create_augroup("postal", { clear = true })
@@ -124,11 +126,8 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd("BufWinEnter", {
 		group = group,
 		pattern = { DRAFTS, MESSAGES, SIGNATURES },
-		callback = function()
-			-- Mail is paragraphs on long lines, whatever `wrap` is globally.
-			vim.wo[0][0].wrap = true
-			vim.wo[0][0].linebreak = true
-			vim.wo[0][0].breakindent = true
+		callback = function(event)
+			layout.apply(event.buf)
 		end,
 	})
 

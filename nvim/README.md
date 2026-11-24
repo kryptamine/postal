@@ -57,6 +57,7 @@ require("postal").setup({
   nerd_font = true,
   keys = {},
   attachment_words = { "attach", "enclos" },
+  spell = false,
 })
 ```
 
@@ -67,6 +68,7 @@ require("postal").setup({
 | `agent`     | the one `:PostalAgent` starts; `:PostalAgent gemini` picks another          |
 | `nerd_font` | Nerd Font icons in the pane; on when `vim.g.have_nerd_font` is set          |
 | `keys`      | a key by name to another `lhs`, or to `false` to leave it unmapped          |
+| `spell`     | spell checks a Draft and a Signature, in your own `spelllang`               |
 | `attachment_words` | how each word mentioning an attachment starts, case aside            |
 
 | key           | default     |
