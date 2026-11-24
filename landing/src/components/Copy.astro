@@ -36,10 +36,11 @@ const { text } = Astro.props;
 <style>
   .copy {
     position: absolute;
-    top: var(--space-2);
+    top: 50%;
     right: var(--space-2);
-    min-height: 0;
-    padding: calc(var(--cell) * 0.5) calc(var(--cell) * 1.5);
+    translate: 0 -50%;
+    min-height: 44px;
+    padding: 0 calc(var(--cell) * 1.5);
     background: var(--code-bg);
     font-size: var(--text-caption);
   }
