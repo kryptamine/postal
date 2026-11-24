@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/kryptamine/postal/compare/v0.4.0...v0.5.0) (2026-11-24)
+
+
+### Features
+
+* **landing:** add a not-found page kept out of the index ([5c45c65](https://github.com/kryptamine/postal/commit/5c45c650d53f9c2330ba03f9a6c976629963ffbd))
+* **landing:** add robots.txt and a sitemap ([046357b](https://github.com/kryptamine/postal/commit/046357bb18fd80c950dd533641f3c7902c0a0e85))
+* **landing:** name what postal is in the title, h1 and json-ld ([57ee7d6](https://github.com/kryptamine/postal/commit/57ee7d6ca68c029f85abdcd3865028a381e1a147))
+
+
+### Performance Improvements
+
+* **cache:** check the whole cache only after a session that broke off ([54ef895](https://github.com/kryptamine/postal/commit/54ef8956780f60b12d388ba52506b8518b4a970d))
+* **oauth:** buy the access token on the first connection, not at start ([a344723](https://github.com/kryptamine/postal/commit/a3447238b38fa8acb39616f8cfc5d904ab0defe7))
+
 ## [0.4.0](https://github.com/kryptamine/postal/compare/v0.3.0...v0.4.0) (2026-11-24)
 
 
