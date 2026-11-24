@@ -39,16 +39,16 @@ impl Answers for FolderList {
                 account: &folder.account,
                 name: &folder.path,
                 role: folder.role.map(Role::label),
-                unread: folder.unread,
-                total: folder.total,
+                unread: folder.counts.map(|c| c.unread),
+                total: folder.counts.map(|c| c.total),
             })
             .collect();
         Ok(Answer::new(&rows, table(&rows))?)
     }
 }
 
-/// A line each: the name, its role when the name is not it, its total once
-/// counted, its Unread count when not `0`; the Account heads its Folders
+/// A line each: the name, its role when the name is not it, its counts once
+/// counted, the Unread only when not `0`; the Account heads its Folders
 /// when there are several.
 fn table(rows: &[Row<'_>]) -> String {
     let accounts: BTreeSet<&str> = rows.iter().map(|row| row.account).collect();
@@ -67,13 +67,12 @@ fn table(rows: &[Row<'_>]) -> String {
             write!(text, " ({role})").ok();
         }
 
-        let gap = row.total.map_or("  ", |total| {
+        if let Some((total, unread)) = row.total.zip(row.unread) {
             let noun = if total == 1 { "message" } else { "messages" };
             write!(text, "  {total} {noun}").ok();
-            ", "
-        });
-        if let Some(unread) = row.unread.filter(|&n| n > 0) {
-            write!(text, "{gap}{unread} unread").ok();
+            if unread > 0 {
+                write!(text, ", {unread} unread").ok();
+            }
         }
 
         text.push('\n');

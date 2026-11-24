@@ -1,4 +1,5 @@
 use crate::domain::{
+    counts::Counts,
     folder::{Folder, Role},
     folder_name::FolderName,
     per_account::AccountId,
@@ -10,8 +11,7 @@ use crate::domain::{
 pub enum Shown {
     /// Every Account's Inbox in one Message List.
     AllInboxes {
-        unread: Option<usize>,
-        total: Option<usize>,
+        counts: Option<Counts>,
     },
     Folder(Folder),
     /// Postal's own Drafts and the Outbox, opened over the Message List.
@@ -20,10 +20,7 @@ pub enum Shown {
 
 impl Shown {
     pub const fn all_inboxes() -> Self {
-        Self::AllInboxes {
-            unread: None,
-            total: None,
-        }
+        Self::AllInboxes { counts: None }
     }
 
     /// The server Folder of `account` this shows: each Account's Inbox in
@@ -71,18 +68,10 @@ impl Shown {
         }
     }
 
-    pub const fn unread(&self) -> Option<usize> {
+    pub const fn counts(&self) -> Option<Counts> {
         match self {
-            Self::AllInboxes { unread, .. } => *unread,
-            Self::Folder(folder) => folder.unread,
-            Self::LocalDrafts => None,
-        }
-    }
-
-    pub const fn total(&self) -> Option<usize> {
-        match self {
-            Self::AllInboxes { total, .. } => *total,
-            Self::Folder(folder) => folder.total,
+            Self::AllInboxes { counts } => *counts,
+            Self::Folder(folder) => folder.counts,
             Self::LocalDrafts => None,
         }
     }

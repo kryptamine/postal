@@ -23,6 +23,7 @@ use crate::{
     account::config::Config,
     account::sign_in::SignIn,
     domain::correspondence::Correspondence,
+    domain::counts::Counts,
     domain::flag,
     domain::folder::{Folder, INBOX, Role},
     domain::folder_name::FolderName,
@@ -92,7 +93,7 @@ pub trait MailServer {
 
     /// The Unread and all Messages in a Folder other than the examined one,
     /// by one `STATUS`.
-    async fn counts_in(&mut self, folder: &FolderName) -> Result<(usize, usize), Error>;
+    async fn counts_in(&mut self, folder: &FolderName) -> Result<Counts, Error>;
 
     /// The `UIDNEXT` of a Folder other than the examined one, by `STATUS`.
     async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error>;
@@ -435,10 +436,13 @@ impl MailServer for ImapSession {
         Ok(folders)
     }
 
-    async fn counts_in(&mut self, folder: &FolderName) -> Result<(usize, usize), Error> {
+    async fn counts_in(&mut self, folder: &FolderName) -> Result<Counts, Error> {
         let status = self.session.status(folder, "(UNSEEN MESSAGES)").await?;
         let count = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
-        Ok((status.unseen.map_or(0, count), count(status.exists)))
+        Ok(Counts {
+            unread: status.unseen.map_or(0, count),
+            total: count(status.exists),
+        })
     }
 
     async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error> {

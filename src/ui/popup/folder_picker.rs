@@ -6,6 +6,7 @@ use nucleo_matcher::{
 };
 
 use crate::{
+    domain::counts::Counts,
     domain::folder::{Folder, Role},
     domain::per_account::{AccountId, PerAccount},
     domain::shown::Shown,
@@ -239,12 +240,11 @@ impl FolderPicker {
     }
 }
 
-/// All Inboxes, each count the sum of the Inboxes' counted.
+/// All Inboxes, its counts the sum of the Inboxes' counted.
 fn counted_all_inboxes(folders: &[Folder]) -> Shown {
-    let inboxes = || folders.iter().filter(|f| f.role == Some(Role::Inbox));
+    let inboxes = folders.iter().filter(|f| f.role == Some(Role::Inbox));
     Shown::AllInboxes {
-        unread: inboxes().filter_map(|f| f.unread).reduce(|a, b| a + b),
-        total: inboxes().filter_map(|f| f.total).reduce(|a, b| a + b),
+        counts: inboxes.filter_map(|f| f.counts).reduce(Counts::plus),
     }
 }
 

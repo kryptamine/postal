@@ -1,4 +1,4 @@
-use super::{Error, Reader};
+use super::{Error, Reader, folders};
 use crate::domain::folder::{Folder, Role};
 
 impl Reader {
@@ -15,8 +15,7 @@ impl Reader {
                 let name: String = row.get(1)?;
                 let mut folder =
                     Folder::new(account, &name, role.as_deref().and_then(Role::from_label));
-                folder.unread = row.get(3)?;
-                folder.total = row.get(4)?;
+                folder.counts = folders::counts(row.get(3)?, row.get(4)?);
                 Ok(folder)
             })?
             .collect::<Result<_, _>>()?;
