@@ -80,13 +80,6 @@ pub fn read_sign_in(config: &Config, dir: &Path) -> Result<Option<SignIn>, Box<d
             password: secret,
             smtp: config.secrets.read(dir, &smtp_key(&config.email))?,
         },
-        Provider::Google => match Tokens::refreshed(secret, config.oauth.token_url.clone()) {
-            Ok(tokens) => SignIn::OAuth(tokens),
-            Err(error) if error.signed_out() => {
-                tracing::warn!("{error}");
-                return Ok(None);
-            }
-            Err(error) => return Err(error.into()),
-        },
+        Provider::Google => SignIn::OAuth(Tokens::stored(secret, config.oauth.token_url.clone())),
     }))
 }

@@ -1,5 +1,6 @@
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{rc::Rc, time::Duration};
 
+use futures::lock::Mutex;
 use tokio::time::Instant;
 
 use super::{
@@ -16,8 +17,9 @@ const MARGIN: Duration = Duration::from_secs(60);
 pub struct Tokens {
     refresh: Credential,
     token_url: String,
-    /// `None` until a refresh succeeds.
-    access: RefCell<Option<Access>>,
+    /// `None` until a refresh succeeds. Locked through a refresh, so
+    /// connections opening together buy one access token between them.
+    access: Mutex<Option<Access>>,
 }
 
 struct Access {
@@ -30,27 +32,18 @@ impl Tokens {
         Self {
             refresh,
             token_url,
-            access: RefCell::new(Some(Access::from(access))),
+            access: Mutex::new(Some(Access::from(access))),
         }
     }
 
-    /// Trades `refresh` for a first access token, blocking on the network.
-    /// Offline, the first connection tries again.
-    pub fn refreshed(refresh: Credential, token_url: String) -> Result<Self, Error> {
-        let access = match token_endpoint::refresh(&token_url, &refresh) {
-            Ok(access) => Some(Access::from(access)),
-            Err(Error::Http(reason)) => {
-                tracing::warn!("cannot refresh the access token at start: {reason}");
-                None
-            }
-            Err(error) => return Err(error),
-        };
-
-        Ok(Self {
+    /// The refresh token the secret store kept: the first connection buys
+    /// the access token, so starting waits on no network.
+    pub const fn stored(refresh: Credential, token_url: String) -> Self {
+        Self {
             refresh,
             token_url,
-            access: RefCell::new(access),
-        })
+            access: Mutex::new(None),
+        }
     }
 
     pub const fn refresh_token(&self) -> &Credential {
@@ -58,14 +51,16 @@ impl Tokens {
     }
 
     /// The access token, refreshed first once it nears its expiry.
+    #[expect(
+        clippy::significant_drop_tightening,
+        reason = "the lock is held through the refresh, so a second connection waits for its token"
+    )]
     pub async fn access(&self) -> Result<Rc<Credential>, Error> {
+        let mut access = self.access.lock().await;
+        if let Some(access) = access.as_ref()
+            && Instant::now() + MARGIN < access.expires
         {
-            let access = self.access.borrow();
-            if let Some(access) = access.as_ref()
-                && Instant::now() + MARGIN < access.expires
-            {
-                return Ok(Rc::clone(&access.token));
-            }
+            return Ok(Rc::clone(&access.token));
         }
 
         tracing::info!("refreshing the OAuth access token");
@@ -77,7 +72,7 @@ impl Tokens {
                 .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))?;
         let fresh = Access::from(fresh);
         let token = Rc::clone(&fresh.token);
-        *self.access.borrow_mut() = Some(fresh);
+        *access = Some(fresh);
         Ok(token)
     }
 }
