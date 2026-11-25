@@ -331,9 +331,6 @@ impl PartialConfig {
             signature: self.signature(account),
             secrets: self.secrets,
             oauth: self.oauth.clone(),
-            icons: self.icons,
-            notify: self.notify,
-            contacts: self.contacts,
         }
     }
 }

@@ -23,9 +23,6 @@ pub struct Config {
     pub smtp: Smtp,
     pub secrets: SecretStore,
     pub oauth: Endpoints,
-    pub icons: IconChoice,
-    pub notify: NotifyChoice,
-    pub contacts: ContactsChoice,
 }
 
 /// `send-delay` when `config.toml` sets none.
