@@ -266,6 +266,10 @@ const fn status_icon(icons: Icons, status: Status) -> Option<&'static str> {
             outage: Outage::Busy,
             ..
         } => Some("\u{f051f}"),
+        Status::Retrying {
+            outage: Outage::Failed,
+            ..
+        } => Some("\u{f0028}"),
         Status::SignedOut => Some("\u{f033e}"),
     }
 }
