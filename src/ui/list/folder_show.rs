@@ -93,12 +93,15 @@ pub fn start_search(
 }
 
 /// Edits the Query as typed, which leaves the menu, asks the Cache for it
-/// anew, and suggests for its last word.
+/// anew, and suggests for its last word. The menu goes before the Cache
+/// is asked, so a failed read leaves none suggested for the Query before.
 pub fn type_query(
     ui: &mut Ui,
     caches: &PerAccount<Cache>,
     edit: impl FnOnce(&mut Search) -> bool,
 ) -> Result<(), Error> {
+    ui.view.close_menu();
+    ui.screen.showing = Showing::Query;
     ui.view.edit_query(caches, edit)?;
     accept(ui, caches)
 }
