@@ -271,6 +271,33 @@ fn an_undo_in_another_folder_restores_to_where_the_delete_was() {
     quit(t);
 }
 
+/// The subjects the Cache holds in `folder`, oldest first.
+fn cached_subjects(home: &Home, folder: &str) -> Vec<String> {
+    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
+    let mut statement = cache
+        .prepare("SELECT subject FROM message WHERE mailbox = ?1 ORDER BY uid")
+        .unwrap();
+    let rows = statement.query_map([folder], |row| row.get(0));
+    rows.unwrap().map(Result::unwrap).collect()
+}
+
+// A Trash synced before shows a deleted Message on opening, not only
+// after the resync its opening starts.
+#[test]
+fn a_delete_reaches_a_cached_trash_before_it_is_opened() {
+    let server = server();
+    server.deliver_to(TRASH, message("Eve", "Junked", "2024-01-01T09:00:00Z"));
+    let home = Home::for_server(&server);
+    let mut t = ready(&server, &home, "Newest");
+    show(&mut t, "trash", " Trash · ", "Body of Junked");
+    show(&mut t, "inbox", " Inbox · ", "Body of Newest");
+
+    t.send(Key::Backspace).unwrap();
+    t.wait_until(|s| !list(s).contains("Newest")).unwrap();
+    wait_for(|| cached_subjects(&home, TRASH) == ["Junked", "Newest"]);
+    quit(t);
+}
+
 #[test]
 fn delete_in_trash_does_nothing() {
     let server = server();
