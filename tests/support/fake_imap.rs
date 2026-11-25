@@ -181,8 +181,8 @@ struct Inbox {
     /// The user name `LOGIN` takes with `APP_PASSWORD`.
     login_user: &'static str,
     stall: Option<Stall>,
-    /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
-    /// a Message it cannot serve.
+    /// UIDs whose body, whole or any section of it, a `UID FETCH` is answered
+    /// `NO` for, as Gmail does for a Message it cannot serve.
     refused: Vec<u32>,
     refusal: Option<Refusal>,
     outage: Option<Outage>,
