@@ -299,3 +299,43 @@ fn without_a_cache_each_command_says_so() {
         );
     }
 }
+
+// Some senders put HTML into the plain part: what a command shows, and so
+// a reply quotes, is its text, from the HTML twin when there is one.
+#[test]
+fn a_plain_part_carrying_html_is_shown_as_text() {
+    let document = "<!DOCTYPE html><html><body><p>Hi&nbsp;there</p></body></html>\r\n";
+    let cases = [
+        (
+            FakeBody::multipart(
+                "alternative",
+                vec![
+                    FakeBody::plain(&format!("Like summer.\r\n\r\n{document}")),
+                    FakeBody::text("html", "7bit", "<p>Summer is <b>over</b></p>"),
+                ],
+            ),
+            "Summer is over",
+        ),
+        (
+            FakeBody::plain(&format!("Tom & Jerry, 2 < 3.\r\n\r\n{document}")),
+            "Tom & Jerry, 2 < 3.\n\nHi there",
+        ),
+    ];
+    for (body, expected) in cases {
+        let server = FakeImap::start(vec![
+            from_ada("Markup", "2024-11-17T09:00:00Z", "").body(body),
+        ]);
+        let home = Home::for_server(&server);
+        let mut t = home.terminal().spawn(env!("CARGO_BIN_EXE_postal")).unwrap();
+        // Only the Preview shows either, once the body is cached.
+        t.wait_until(|s| s.contains("Summer is over") || s.contains("<!DOCTYPE"))
+            .unwrap();
+        t.send(Key::Ctrl('c')).unwrap();
+        assert!(t.wait_exit().unwrap().success());
+
+        let listed = json(&home, &["message", "list"]);
+        let id = listed[0]["message"].as_str().unwrap();
+        let shown = json(&home, &["message", "show", id]);
+        assert_eq!(shown[0]["body"], expected);
+    }
+}
