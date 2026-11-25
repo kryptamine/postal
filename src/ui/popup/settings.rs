@@ -1,6 +1,7 @@
 use std::{
     error::Error,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -63,8 +64,7 @@ pub struct Settings {
     pub icons: IconChoice,
     pub notify: NotifyChoice,
     pub name: Option<String>,
-    /// In seconds.
-    pub send_delay: u64,
+    pub send_delay: Duration,
     pub secrets: SecretStore,
     pub terminal: Terminal,
     pub contacts: ContactsChoice,
@@ -247,7 +247,8 @@ impl Settings {
                 self.mode = Mode::Typing(Field::Name, self.name.clone().unwrap_or_default());
             }
             Row::SendDelay => {
-                self.mode = Mode::Typing(Field::SendDelay, self.send_delay.to_string());
+                let seconds = self.send_delay.as_secs().to_string();
+                self.mode = Mode::Typing(Field::SendDelay, seconds);
             }
             Row::TerminalCommand => {
                 let command = match &self.terminal {
@@ -331,15 +332,17 @@ impl Settings {
 
     /// `typed` whole seconds, or the default for none.
     fn set_send_delay(&mut self, typed: Option<&str>) -> Result<(), Box<dyn Error>> {
-        let seconds = match typed {
-            Some(typed) => typed
-                .parse()
-                .map_err(|error| format!("the delay is whole seconds: {error}"))?,
+        let delay = match typed {
+            Some(typed) => Duration::from_secs(
+                typed
+                    .parse()
+                    .map_err(|error| format!("the delay is whole seconds: {error}"))?,
+            ),
             None => config::SEND_DELAY,
         };
 
-        self.write(|config| config.set_send_delay(seconds))?;
-        self.send_delay = seconds;
+        self.write(|config| config.set_send_delay(delay))?;
+        self.send_delay = delay;
         // The Outbox holds each Send for the delay it opened with.
         self.reload = true;
         Ok(())

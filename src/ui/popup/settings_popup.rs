@@ -130,7 +130,8 @@ impl SettingsPopup<'_> {
     fn row(&self, buf: &mut Buffer, area: Rect, row: Row, style: Style) {
         let settings = self.settings;
         let muted = style.patch(self.theme.muted);
-        let delay = format!("{} seconds", settings.send_delay);
+        // Written only for the Send row, so no other row allocates it.
+        let delay;
         let (label, detail, detail_style) = match row {
             Row::Account(account) => {
                 let (email, provider) = &settings.accounts[account];
@@ -148,8 +149,11 @@ impl SettingsPopup<'_> {
             },
             Row::SendDelay => match settings.mode() {
                 Mode::Typing(Field::SendDelay, typed) => (typed.as_str(), "", style),
-                _ if settings.send_delay == 0 => ("0 seconds", "a Send leaves at once", muted),
-                _ => (delay.as_str(), "", style),
+                _ if settings.send_delay.is_zero() => ("0 seconds", "a Send leaves at once", muted),
+                _ => {
+                    delay = format!("{} seconds", settings.send_delay.as_secs());
+                    (delay.as_str(), "", style)
+                }
             },
             Row::Handler if settings.handler => ("Postal opens mailto: links", "on", style),
             Row::Handler => ("Postal opens mailto: links", "off", muted),

@@ -1,6 +1,7 @@
 use std::{
     io,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use toml_edit::{
@@ -208,13 +209,13 @@ impl ConfigFile {
         }
     }
 
-    /// `send-delay` in seconds; the default leaves the key out.
-    pub fn set_send_delay(&mut self, seconds: u64) {
+    /// `send-delay` in whole seconds; the default leaves the key out.
+    pub fn set_send_delay(&mut self, delay: Duration) {
         let root = self.document.as_table_mut();
-        if seconds == SEND_DELAY {
+        if delay == SEND_DELAY {
             root.remove("send-delay");
         } else {
-            let seconds = i64::try_from(seconds).unwrap_or(i64::MAX);
+            let seconds = i64::try_from(delay.as_secs()).unwrap_or(i64::MAX);
             set(root, "send-delay", seconds.into());
         }
     }

@@ -38,8 +38,8 @@ pub struct PartialConfig {
     pub notify: NotifyChoice,
     pub terminal: Terminal,
     pub contacts: ContactsChoice,
-    /// In seconds.
-    pub send_delay: u64,
+    /// How long a Send is held before it leaves, for `u` to take it back.
+    pub send_delay: Duration,
 }
 
 #[derive(Deserialize)]
@@ -70,8 +70,9 @@ struct RawConfig {
     terminal: Terminal,
     #[serde(default)]
     contacts: ContactsChoice,
-    #[serde(rename = "send-delay", default = "send_delay")]
-    send_delay: u64,
+    /// In whole seconds.
+    #[serde(rename = "send-delay")]
+    send_delay: Option<u64>,
     #[serde(default)]
     account: Vec<RawAccount>,
 }
@@ -153,10 +154,6 @@ impl RawSmtp {
             username: self.username.clone().or_else(|| base.username.clone()),
         }
     }
-}
-
-const fn send_delay() -> u64 {
-    SEND_DELAY
 }
 
 /// Undocumented: only a test points Postal at a fake Google.
@@ -266,7 +263,7 @@ impl PartialConfig {
             notify: raw.notify,
             terminal: raw.terminal,
             contacts: raw.contacts,
-            send_delay: raw.send_delay,
+            send_delay: raw.send_delay.map_or(SEND_DELAY, Duration::from_secs),
         })
     }
 
@@ -337,7 +334,6 @@ impl PartialConfig {
             icons: self.icons,
             notify: self.notify,
             contacts: self.contacts,
-            send_delay: Duration::from_secs(self.send_delay),
         }
     }
 }
