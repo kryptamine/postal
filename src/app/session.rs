@@ -3,7 +3,7 @@ use std::{error::Error, path::Path, time::Duration};
 use futures::TryFutureExt;
 
 use crate::{
-    account::config::{self, Config, ContactsChoice, IconChoice, NotifyChoice},
+    account::config::Config,
     account::partial_config::PartialConfig,
     account::sign_in::SignIn,
     account::xdg,
@@ -49,7 +49,8 @@ pub async fn session(
     let emails = configs.map(|config| config.email.as_str());
     let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
     // Without one, Compose says so when it is used.
-    let outbox = Outbox::new(xdg::data_dir().ok(), send_delay(dir)?);
+    let shared = PartialConfig::load(&dir.join("config.toml"))?;
+    let outbox = Outbox::new(xdg::data_dir().ok(), send_delay(&shared));
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (mut asks, mut requests, mut works) = (Vec::new(), Vec::new(), Vec::new());
     for (account, config) in configs.iter() {
@@ -85,9 +86,7 @@ pub async fn session(
     let forwards = ForwardFetch::new(requests.clone(), configs.map(|_| false));
     let attachments = WantedAttachments::new(requests.clone(), configs.map(|_| false));
     let (tty, background) = slot.take()?;
-    let first = configs.values().next();
-    let icons = first.map_or(IconChoice::Auto, |config| config.icons);
-    let mut theme = Theme::from_env(background, Icons::choose(icons));
+    let mut theme = Theme::from_env(background, Icons::choose(shared.icons));
     let mut previews = Previews::start(requests, configs, sender, theme.mail_look());
     let background = Background {
         work: futures::future::try_join_all(works).map_ok(drop),
@@ -103,22 +102,19 @@ pub async fn session(
         failure: opening.failure,
         link: opening.link,
         config_dir: dir,
-        notify: first.map_or_else(NotifyChoice::default, |config| config.notify),
-        contacts: first.map_or_else(ContactsChoice::default, |config| config.contacts),
+        notify: shared.notify,
+        contacts: shared.contacts,
     };
 
     Ok(run::run(tty, &mut theme, &caches, &mut previews, background).await?)
 }
 
-/// `send-delay` from the config in `dir`. Tests set `POSTAL_SEND_DELAY` in
-/// seconds, a fraction too: the config takes whole ones.
-fn send_delay(dir: &Path) -> Result<Duration, config::Error> {
+/// `send-delay` from `config`. Tests set `POSTAL_SEND_DELAY` in seconds, a
+/// fraction too: the config takes whole ones.
+fn send_delay(config: &PartialConfig) -> Duration {
     let set = std::env::var("POSTAL_SEND_DELAY").ok();
     let test = set.and_then(|secs| Duration::try_from_secs_f64(secs.parse().ok()?).ok());
-    match test {
-        Some(delay) => Ok(delay),
-        None => Ok(PartialConfig::load(&dir.join("config.toml"))?.send_delay),
-    }
+    test.unwrap_or(config.send_delay)
 }
 
 /// The Status an Account starts in.
