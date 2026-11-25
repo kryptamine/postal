@@ -36,9 +36,8 @@ the link again one element: Ghostty with `-e`, kitty as its program,
 WezTerm with `start --`. `terminal = { command = "..." }` names a program of
 the user's own in its place, run with the path of `postal` and the link; it
 is one path, never split into words, so a wrapper script holds any flags the
-terminal needs. Matcha writes `matcha '<url>'` into a `.command` file, so a
-`'` in a link from a web page runs a command; Postal never puts the link in
-a script.
+terminal needs. Postal never puts the link in a script, where a `'` in a
+link from a web page would run a command.
 
 **Terminal.app and iTerm2** take no command as arguments, only a file to
 run, or an AppleScript `do script`, whose text a shell parses. Each link
