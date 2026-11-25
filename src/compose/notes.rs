@@ -49,12 +49,16 @@ impl Notes {
 
 /// Removes the file `message` and its notes, if it has any.
 pub fn remove_message(message: &Path) -> io::Result<()> {
-    match std::fs::remove_file(path(message)) {
-        Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
-        _ => {}
-    }
-
+    remove_notes(message)?;
     std::fs::remove_file(message)
+}
+
+/// Removes the notes of `message`, if it has any.
+pub fn remove_notes(message: &Path) -> io::Result<()> {
+    match std::fs::remove_file(path(message)) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        result => result,
+    }
 }
 
 fn path(message: &Path) -> PathBuf {

@@ -155,29 +155,17 @@ impl Outbox {
     /// Takes the Message queued at `path` back to `drafts/`, unless SMTP
     /// has it already: `None` then.
     pub fn take_back(&self, path: &Path) -> io::Result<Option<TakenBack>> {
-        // The rename is the claim: the sync connection takes the file by one too.
-        let taken = path.with_extension("undone");
-        match std::fs::rename(path, &taken) {
+        let draft = self
+            .dir("drafts")?
+            .join(path.file_name().unwrap_or_default());
+        // The rename is the claim, as the sync connection's is: one alone wins.
+        // A crash after it leaves a Draft holding the Message as it went out.
+        match std::fs::rename(path, &draft) {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             result => result?,
         }
 
-        let restored = self.restore(path, &taken);
-        if restored.is_err()
-            && let Err(error) = std::fs::rename(&taken, path)
-        {
-            tracing::error!("putting {} back failed: {error}", path.display());
-        }
-
-        restored.map(Some)
-    }
-
-    /// The Draft the Message `taken` was, written back to `drafts/`.
-    fn restore(&self, path: &Path, taken: &Path) -> io::Result<TakenBack> {
-        let notes = Notes::read(taken)?.unwrap_or_default();
-        let draft = self
-            .dir("drafts")?
-            .join(path.file_name().unwrap_or_default());
+        let notes = Notes::read(path)?.unwrap_or_default();
         let text = notes.draft.unwrap_or_default();
         let notes = DraftNotes {
             account: notes.account,
@@ -185,15 +173,15 @@ impl Outbox {
         };
 
         draft_file::restore(&draft, &text, &notes)?;
-        if let Err(error) = notes::remove_message(taken) {
-            tracing::error!("removing a Send taken back failed: {error}");
+        if let Err(error) = notes::remove_notes(path) {
+            tracing::error!("removing the notes of a Send taken back failed: {error}");
         }
 
-        Ok(TakenBack {
+        Ok(Some(TakenBack {
             path: draft,
             text,
             notes,
-        })
+        }))
     }
 }
 
