@@ -24,8 +24,8 @@ pub enum Error {
 }
 
 impl Error {
-    /// The outage this error stands for; `None` when retrying would fail
-    /// the same way, as a refused login does.
+    /// The network or a busy server, when this error stands for either;
+    /// `None` for anything else, as a refused command or login.
     pub fn outage(&self) -> Option<Outage> {
         use async_imap::error::Error as Imap;
         match self {

@@ -24,11 +24,11 @@ pub enum Error {
 }
 
 impl Error {
-    /// `None` when retrying would fail the same way.
-    pub fn outage(&self) -> Option<Outage> {
+    /// Why the connection's work stopped; a fresh connection starts it over.
+    pub fn outage(&self) -> Outage {
         match self {
-            Self::Imap(source) => source.outage(),
-            Self::Cache(_) | Self::Gone(_) => None,
+            Self::Imap(source) => source.outage().unwrap_or(Outage::Failed),
+            Self::Cache(_) | Self::Gone(_) => Outage::Failed,
         }
     }
 
