@@ -1,0 +1,66 @@
+From: Bob Stone <bob@contoso.com>
+To: me@example.com
+Subject: Quarterly review
+Date: Mon, 30 Nov 2026 18:00:00 +0000
+X-Postal-Case: An Outlook invitation names its zone the Windows way and puts the Teams link in its description; the card maps the zone and offers the link, as the body has neither the time nor an answer.
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset="utf-8"
+
+Let's go over the numbers.
+
+________________________________________________________________________________
+Microsoft Teams Need help?
+Join the meeting now <https://teams.microsoft.com/l/meetup-join/19%3ameeting_NjM2%40thread.v2/0?context=%7b%22Tid%22%3a%22abc%22%7d>
+Meeting ID: 123 456 789
+________________________________________________________________________________
+
+--alt
+Content-Type: text/calendar; charset="utf-8"; method=REQUEST
+Content-Transfer-Encoding: 7bit
+
+BEGIN:VCALENDAR
+METHOD:REQUEST
+PRODID:Microsoft Exchange Server 2010
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Pacific Standard Time
+BEGIN:STANDARD
+DTSTART:16010101T020000
+TZOFFSETFROM:-0700
+TZOFFSETTO:-0800
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=1SU;BYMONTH=11
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:-0800
+TZOFFSETTO:-0700
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=2SU;BYMONTH=3
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+ORGANIZER;CN=Bob Stone:mailto:bob@contoso.com
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=me@example
+ .com:mailto:me@example.com
+DESCRIPTION;LANGUAGE=en-US:Let's go over the numbers.\n\n___________________
+ _____________________________________________________________\nMicrosoft T
+ eams Need help?\nJoin the meeting now <https://teams.microsoft.com/l/meetup
+ -join/19%3ameeting_NjM2%40thread.v2/0?context=%7b%22Tid%22%3a%22abc%22%7d>
+ \nMeeting ID: 123 456 789\n
+UID:040000008200E00074C5B7101A82E00800000000
+SUMMARY;LANGUAGE=en-US:Quarterly review
+DTSTART;TZID=Pacific Standard Time:20261208T090000
+DTEND;TZID=Pacific Standard Time:20261208T103000
+CLASS:PUBLIC
+PRIORITY:5
+DTSTAMP:20261130T180000Z
+TRANSP:OPAQUE
+STATUS:CONFIRMED
+SEQUENCE:0
+LOCATION;LANGUAGE=en-US:Microsoft Teams Meeting
+END:VEVENT
+END:VCALENDAR
+
+--alt--

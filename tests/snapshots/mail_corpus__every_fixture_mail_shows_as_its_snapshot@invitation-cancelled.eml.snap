@@ -1,0 +1,29 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 61
+description: A cancelled event shows its card marked cancelled.
+input_file: tests/fixtures/invitation-cancelled.eml
+---
+── rendered ──
+From    Alice Doe <alice@example.com>  Wed, 2 Dec 2026 09:00
+To      me@example.com
+Subject Cancelled event: Project sync @ Thu 3 Dec 2026 15:00 - 16:00 (CET)
+
+Cancelled  Project sync
+When       Thu, 3 Dec 2026 14:00–15:00
+Organizer  Alice Doe <alice@example.com>
+You        not answered yet
+
+This event has been cancelled.
+
+── text ──
+From    Alice Doe <alice@example.com>  Wed, 2 Dec 2026 09:00
+To      me@example.com
+Subject Cancelled event: Project sync @ Thu 3 Dec 2026 15:00 - 16:00 (CET)
+
+Cancelled  Project sync
+When       Thu, 3 Dec 2026 14:00–15:00
+Organizer  Alice Doe <alice@example.com>
+You        not answered yet
+
+This event has been cancelled.

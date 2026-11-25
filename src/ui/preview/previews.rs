@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::mpsc,
+    sync::{Arc, mpsc},
     thread,
 };
 
@@ -58,6 +58,8 @@ pub struct Previews {
     /// The placeholder of each body the server refused, until a reconnect.
     refused: HashMap<Uid, String>,
     links: PerAccount<Link>,
+    /// Each Account's address, for the invitations its Previews show.
+    emails: PerAccount<Arc<str>>,
     look: MailLook,
     requests: Routes<Request>,
     jobs: mpsc::Sender<Job>,
@@ -95,6 +97,7 @@ impl Previews {
             offline: HashSet::new(),
             refused: HashMap::new(),
             links: accounts.map(|_| Link::Starting),
+            emails: accounts.map(|config| Arc::from(config.email.as_str())),
             look,
             requests,
             jobs,
@@ -300,6 +303,7 @@ impl Previews {
             key,
             body,
             look: self.look,
+            own: Arc::clone(&self.emails[key.account]),
         };
 
         // The send fails only once the render thread is gone.

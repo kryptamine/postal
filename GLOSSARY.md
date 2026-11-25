@@ -96,6 +96,10 @@ _Avoid_: plain mode, raw view
 A file a Message carries beside its text: a part sent as an attachment, or a non-text part with a file name; an image the HTML shows by `cid:` is none, and an attached Message counts as one. A row of the Message List whose Thread has one is marked left of its subject, and the Preview, Reading, `$PAGER` and the editor `E` opens name each with its size under the header. `a` opens one in the program the desktop picks for it, `s` saves one to the download directory; either fetches it from the server each time, as it is never cached.
 _Avoid_: file, enclosure
 
+**Invitation**:
+A meeting a Message carries in a calendar part, inline or attached. Its card sits over the body in the Preview, Reading and `$PAGER`: the title, when in the local zone (and in the event's own when that differs), how it repeats, where, the link to join by, the organizer and the user's own answer. A cancelled one is marked so; an answer to the user's own invitation is one line, `Alice accepted`. Postal does not answer one: the RSVP links the sender puts in the body do, through Hint mode.
+_Avoid_: event, meeting request, calendar invite
+
 **Snippet**:
 The first words of a Message's body, shown under its subject in the Message List.
 _Avoid_: preview, excerpt, summary

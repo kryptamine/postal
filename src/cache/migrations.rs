@@ -11,6 +11,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("migrations/3.sql"),
     include_str!("migrations/4.sql"),
     include_str!("migrations/5.sql"),
+    include_str!("migrations/6.sql"),
 ];
 
 /// The `user_version` of the last schema before migrations; a Cache at or

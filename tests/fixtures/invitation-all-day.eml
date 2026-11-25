@@ -1,0 +1,32 @@
+From: Alice Doe <alice@example.com>
+To: me@example.com
+Subject: Invitation: Offsite
+Date: Thu, 3 Dec 2026 09:00:00 +0000
+X-Postal-Case: An all-day event of several days shows its first and last day, without times.
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset="UTF-8"
+
+Team offsite.
+
+--alt
+Content-Type: text/calendar; charset="UTF-8"; method=REQUEST
+
+BEGIN:VCALENDAR
+VERSION:2.0
+METHOD:REQUEST
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261216
+DTEND;VALUE=DATE:20261219
+DTSTAMP:20261203T090000Z
+ORGANIZER;CN=Alice Doe:mailto:alice@example.com
+UID:offsite@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:me@example.com
+SUMMARY:Offsite
+LOCATION:Lisbon
+END:VEVENT
+END:VCALENDAR
+
+--alt--

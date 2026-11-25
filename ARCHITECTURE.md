@@ -26,7 +26,7 @@ Lowest first:
   system's mailto: handler that hands links to Postal (`account::mailto_handler`).
 - `render/`: an HTML part as Preview lines (html2text) or as the rendered View
   (litehtml in its layout process, the cell grid), Quotes, signatures, wrapping,
-  the glyphs the font has, how a date reads.
+  the glyphs the font has, how a date reads, the card of an Invitation.
 - `compose/`: Drafts and their notes, Replies, Forwards and the files they
   attach, the `mailto:` link a Draft is filled from, the Outbox on disk, the
   editor, the Account a Message goes out from, its signature in the editor.

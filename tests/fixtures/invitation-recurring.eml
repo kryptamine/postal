@@ -1,0 +1,41 @@
+From: Alice Doe <alice@example.com>
+To: me@example.com
+Subject: Invitation: Standup
+Date: Thu, 3 Dec 2026 09:30:00 +0000
+X-Postal-Case: A recurring event shows its rule as one plain line; a zone at the local offset is not repeated beside the time.
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset="UTF-8"
+
+Daily-ish standup.
+
+--alt
+Content-Type: text/calendar; charset="UTF-8"; method=REQUEST
+
+BEGIN:VCALENDAR
+VERSION:2.0
+METHOD:REQUEST
+BEGIN:VEVENT
+DTSTART;TZID=Europe/London:20261207T093000
+DTEND;TZID=Europe/London:20261207T094500
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20270301T000000Z
+DTSTAMP:20261203T093000Z
+ORGANIZER;CN=Alice Doe:mailto:alice@example.com
+UID:standup@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:mailto:me@example.com
+SUMMARY:Standup
+LOCATION:https://zoom.us/j/123456789?pwd=abc
+END:VEVENT
+BEGIN:VEVENT
+RECURRENCE-ID;TZID=Europe/London:20261209T093000
+DTSTART;TZID=Europe/London:20261209T100000
+DTEND;TZID=Europe/London:20261209T101500
+DTSTAMP:20261203T093000Z
+UID:standup@example.com
+SUMMARY:Standup (moved)
+END:VEVENT
+END:VCALENDAR
+
+--alt--

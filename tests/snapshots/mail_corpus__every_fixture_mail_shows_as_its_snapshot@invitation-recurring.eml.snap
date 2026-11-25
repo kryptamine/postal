@@ -1,0 +1,33 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 61
+description: A recurring event shows its rule as one plain line; a zone at the local offset is not repeated beside the time.
+input_file: tests/fixtures/invitation-recurring.eml
+---
+── rendered ──
+From    Alice Doe <alice@example.com>  Thu, 3 Dec 2026 09:30
+To      me@example.com
+Subject Invitation: Standup
+
+Invitation Standup
+When       Mon, 7 Dec 2026 09:30–09:45
+Repeats    weekly on Mon, Wed until 1 Mar 2027
+Join       https://zoom.us/j/123456789?pwd=abc
+Organizer  Alice Doe <alice@example.com>
+You        accepted
+
+Daily-ish standup.
+
+── text ──
+From    Alice Doe <alice@example.com>  Thu, 3 Dec 2026 09:30
+To      me@example.com
+Subject Invitation: Standup
+
+Invitation Standup
+When       Mon, 7 Dec 2026 09:30–09:45
+Repeats    weekly on Mon, Wed until 1 Mar 2027
+Join       https://zoom.us/j/123456789?pwd=abc
+Organizer  Alice Doe <alice@example.com>
+You        accepted
+
+Daily-ish standup.
