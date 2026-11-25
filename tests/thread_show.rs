@@ -84,12 +84,23 @@ fn reply(home: &Home, keys: &[(&str, Key)]) -> PathBuf {
     drafts.pop().unwrap()
 }
 
-/// The path `$EDITOR` was handed after `E` on the Message showing `shown`.
+/// Whether the Preview, right of the Message List, shows `text`.
+fn in_preview(screen: &Screen, text: &str) -> bool {
+    (0..screen.rows()).any(|row| {
+        let line = screen.row_text(row);
+        line.split_once("││")
+            .is_some_and(|(_, preview)| preview.contains(text))
+    })
+}
+
+/// The path `$EDITOR` was handed after `E` on the Message whose Preview
+/// shows `shown`.
 fn opened(home: &Home, shown: &str) -> PathBuf {
     let record = home.xdg_cache_home().join("opened");
     let editor = format!("sh -c 'printf %s \"$1\" > {}' sh", record.display());
     let mut t = postal_editing(home, &editor);
-    t.wait_until(|s| s.contains(shown)).unwrap();
+    // The card's Snippet shows it before the body is in: `E` is then refused.
+    t.wait_until(|s| in_preview(s, shown)).unwrap();
     t.send(Key::Char('E')).unwrap();
     t.wait_until(|_| record.exists()).unwrap();
     t.send(Key::Ctrl('c')).unwrap();
