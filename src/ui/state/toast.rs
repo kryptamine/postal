@@ -11,21 +11,24 @@ const LASTING: Duration = Duration::from_secs(600);
 /// A short notice in the hint line's right slot. There is no queue: a new
 /// Toast replaces the one shown.
 pub struct Toast {
-    pub text: Cow<'static, str>,
+    pub text: Text,
     pub until: Instant,
     /// Drawn in the error colour rather than the default foreground.
     pub error: bool,
-    /// A Send held until then, which the text counts down to.
-    held: bool,
+}
+
+pub enum Text {
+    Said(Cow<'static, str>),
+    /// A Send held until the Toast goes, counted down while `u` takes it back.
+    Held,
 }
 
 impl Toast {
     pub fn new(text: impl Into<Cow<'static, str>>) -> Self {
         Self {
-            text: text.into(),
+            text: Text::Said(text.into()),
             until: Instant::now() + SHOWN_FOR,
             error: false,
-            held: false,
         }
     }
 
@@ -44,31 +47,28 @@ impl Toast {
         }
     }
 
-    /// A Send held until `until`, counted down while `u` takes it back.
-    pub fn held(until: Instant) -> Self {
+    /// A Send held until `until`.
+    pub const fn held(until: Instant) -> Self {
         Self {
+            text: Text::Held,
             until,
-            held: true,
-            ..Self::new("")
+            error: false,
         }
     }
 
-    /// The countdown of a held Send at `now`; `None` for any other Toast.
-    pub fn countdown(&self, now: Instant) -> Option<StackStr<48>> {
-        if !self.held {
-            return None;
-        }
-
+    /// The countdown of a held Send, as of `now`.
+    pub fn countdown(&self, now: Instant) -> StackStr<48> {
         let left = seconds_left(self.until, now);
         let mut text = StackStr::new();
         // Any u64 fits, so the write cannot fail.
         write!(text, "sent in {left}s · u to undo").ok();
-        Some(text)
+        text
     }
 
-    /// When the countdown next shows a second less.
+    /// When a countdown next shows a second less.
     pub fn ticks_at(&self, now: Instant) -> Option<Instant> {
         let left = seconds_left(self.until, now);
-        (self.held && left > 1).then(|| self.until - Duration::from_secs(left - 1))
+        let held = matches!(self.text, Text::Held);
+        (held && left > 1).then(|| self.until - Duration::from_secs(left - 1))
     }
 }

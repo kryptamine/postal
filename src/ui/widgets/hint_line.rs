@@ -20,7 +20,7 @@ use crate::{
     ui::input::keymap::{self, HELP_HINT, Hint},
     ui::list::search::LIMIT,
     ui::state::mode::Mode,
-    ui::state::toast::Toast,
+    ui::state::toast::{Text, Toast},
 };
 
 const GAP: u16 = 2;
@@ -58,14 +58,18 @@ impl Widget for HintLine<'_> {
         }
 
         let status = self.status_text();
-        let countdown = self.toast.and_then(|toast| toast.countdown(self.now));
-        let (right, style) = match (self.toast, &countdown) {
-            (Some(_), Some(countdown)) => (countdown.as_str(), Style::new()),
-            (Some(toast), None) if toast.error => (&*toast.text, self.theme.error),
-            (Some(toast), None) => (&*toast.text, Style::new()),
-            (None, _) if self.status == Status::SignedOut => (status.as_str(), self.theme.error),
-            (None, _) if self.status.warns() => (status.as_str(), self.theme.warning),
-            (None, _) => (status.as_str(), self.theme.muted),
+        // Written only while a held Send counts down.
+        let countdown;
+        let (right, style) = match self.toast.map(|toast| (toast, &toast.text)) {
+            Some((toast, Text::Said(text))) if toast.error => (text.as_ref(), self.theme.error),
+            Some((_, Text::Said(text))) => (text.as_ref(), Style::new()),
+            Some((toast, Text::Held)) => {
+                countdown = toast.countdown(self.now);
+                (countdown.as_str(), Style::new())
+            }
+            None if self.status == Status::SignedOut => (status.as_str(), self.theme.error),
+            None if self.status.warns() => (status.as_str(), self.theme.warning),
+            None => (status.as_str(), self.theme.muted),
         };
 
         let reserved = if right.is_empty() {
