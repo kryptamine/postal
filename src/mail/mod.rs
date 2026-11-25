@@ -25,6 +25,7 @@ pub mod outage;
 pub mod outbox_flush;
 mod queued;
 mod reconnect;
+pub mod refresh;
 pub mod reply_fetch;
 mod role_folder;
 pub mod routes;

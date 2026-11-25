@@ -67,6 +67,8 @@ pub enum Action {
     EndSearch,
     /// The login flow again, while signed out.
     SignIn,
+    /// The shown Folders resynced now, the Accounts offline reconnected now.
+    Refresh,
     Settings,
     Folders,
     Quit,

@@ -14,6 +14,8 @@ pub enum Ask {
     Changes,
     /// The Outbox holds a Message to send.
     Send,
+    /// A resync of the shown Folder now.
+    Refresh,
 }
 
 /// What the asks waiting came to.
@@ -71,6 +73,7 @@ impl Steering {
                 Some(Some(Ask::Thread(id))) => asked.thread = Some(id),
                 Some(Some(Ask::Changes)) => asked.changes = true,
                 Some(Some(Ask::Send)) => asked.send = true,
+                Some(Some(Ask::Refresh)) => asked.switched = true,
             }
         }
     }

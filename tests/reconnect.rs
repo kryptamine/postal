@@ -241,3 +241,29 @@ fn the_status_says_connecting_then_syncing_dimmed() {
         assert_eq!(cell.style().fg, Color::Default, "{screen}");
     }
 }
+
+// ^r cuts the backoff short for both connections, the sync's and the
+// body connection's, each reconnecting before its countdown ends.
+#[test]
+fn ctrl_r_while_offline_reconnects_at_once() {
+    let server = FakeImap::start(two_messages());
+    let home = Home::for_server(&server);
+    let mut t = idling(&server, &home);
+
+    server.fail(Outage::Offline);
+    t.wait_until(|s| countdown(s).is_some_and(|n| n >= 3))
+        .unwrap();
+    server.recover();
+    let pressed = Instant::now();
+    t.send(Key::Ctrl('r')).unwrap();
+    let kicked = || {
+        log(&home)
+            .matches("a refresh was asked: reconnecting")
+            .count()
+    };
+    wait_for(|| kicked() == 2);
+    t.wait_until(|s| countdown(s).is_none()).unwrap();
+    let waited = pressed.elapsed();
+    quit(t);
+    assert!(waited < Duration::from_secs(2), "{waited:?}");
+}

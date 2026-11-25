@@ -1,4 +1,5 @@
 use crate::{
+    mail::refresh,
     mail::steering::Ask,
     ui::input::keymap::Direction,
     ui::input::step::Steer,
@@ -50,6 +51,13 @@ pub fn steer(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
         Steer::Pick => moving::pick(ui, world)?,
         Steer::MoveTo(folder) => moving::move_to(ui, world, &folder)?,
         Steer::Undo => undoing::undo(ui, world)?,
+        Steer::Refresh => {
+            for account in caches.ids() {
+                asks.send(account, Ask::Refresh);
+            }
+
+            refresh::ask();
+        }
         Steer::Search => start_search(ui, caches, world.contacts)?,
         Steer::Type(c) => type_query(ui, caches, |search| search.push(c))?,
         Steer::Erase => type_query(ui, caches, Search::pop)?,

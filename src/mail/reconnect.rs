@@ -2,12 +2,14 @@ use std::cell::Cell;
 
 use tokio::time::Instant;
 
-use crate::{mail::backoff::Backoff, mail::status::Status, mail::sync::Error, mail::wake};
+use crate::{
+    mail::backoff::Backoff, mail::refresh, mail::status::Status, mail::sync::Error, mail::wake,
+};
 
 /// Runs `attempt` on a fresh connection after every outage, waiting out the
 /// backoff first, until it fails for good, reporting `SignedOut` for a
 /// refused Account. `attempt` reports `Live` once through, which restarts
-/// the backoff; a wake from sleep retries at once.
+/// the backoff; a wake from sleep or a Refresh retries at once.
 pub async fn retry(
     mut attempt: impl AsyncFnMut(&dyn Fn(Status)) -> Result<(), Error>,
     report: impl Fn(Status),
@@ -53,6 +55,10 @@ pub async fn retry(
             () = tokio::time::sleep_until(retry) => {}
             () = wake::woke() => {
                 tracing::info!("woke from sleep: reconnecting");
+                backoff = Backoff::default();
+            }
+            () = refresh::asked() => {
+                tracing::info!("a refresh was asked: reconnecting");
                 backoff = Backoff::default();
             }
         }

@@ -241,3 +241,22 @@ fn a_burst_past_what_the_library_keeps_still_removes_every_row() {
     quit(t);
     assert!(!screen.contains("Message 151 "), "{screen}");
 }
+
+// Online, ^r resyncs the shown Folder instead of waiting for IDLE to
+// announce a change.
+#[test]
+fn ctrl_r_resyncs_the_shown_folder() {
+    let server = FakeImap::start(four_messages());
+    let home = Home::for_server(&server);
+    let mut t = idling(&server, &home);
+    t.wait_until(|s| s.contains("Body of Newest")).unwrap();
+    server.clear_commands();
+
+    t.send(Key::Ctrl('r')).unwrap();
+    wait_for(|| idles(&server) > 0);
+    quit(t);
+    let commands = server.commands();
+    let select = commands.iter().position(|c| c == "SELECT \"INBOX\"");
+    let idle = commands.iter().position(|c| c == "IDLE");
+    assert!(select.is_some() && select < idle, "{commands:#?}");
+}

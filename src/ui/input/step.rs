@@ -62,6 +62,7 @@ pub enum Steer {
     Pick,
     MoveTo(Folder),
     Undo,
+    Refresh,
 }
 
 /// What a Draft goes through: the editor, the Outbox, Local Drafts or a
