@@ -17,7 +17,7 @@ use std::{
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FakeImap, FakeMessage, Outage, Stall},
+    fake_imap::{FakeImap, FakeMessage, Outage, Refusal, Stall},
     home::Home,
 };
 use termlens::{Color, Key, Screen, Terminal};
@@ -202,12 +202,12 @@ fn a_refused_command_reconnects_instead_of_quitting() {
     let home = Home::for_server(&server);
     let mut t = idling(&server, &home);
 
-    server.refuse_fetches(true);
+    server.refuse(Refusal::Fetch);
     // The fetch of it after IDLE announces it is the refused command.
     server.deliver(FakeMessage::new("Cyd", "Arrived", "2024-11-19T09:00:00Z"));
     t.wait_until(|s| status(s, "error · retry in").is_some())
         .unwrap();
-    server.refuse_fetches(false);
+    server.accept();
     t.wait_until(|s| s.contains("Arrived") && status(s, "retry").is_none())
         .unwrap();
     quit(t);
@@ -218,6 +218,24 @@ fn a_refused_command_reconnects_instead_of_quitting() {
             .any(|l| l.contains("WARN") && l.contains("Internal error")),
         "{log}"
     );
+}
+
+// async-imap read a refused `UID SEARCH` as one matching nothing, so the
+// Unread count after a new Message fell to 0 without a word.
+#[test]
+fn a_refused_search_is_retried_not_read_as_matching_nothing() {
+    let server = FakeImap::start(two_messages());
+    let home = Home::for_server(&server);
+    let mut t = idling(&server, &home);
+
+    server.refuse(Refusal::Search);
+    server.deliver(FakeMessage::new("Cyd", "Arrived", "2024-11-19T09:00:00Z"));
+    t.wait_until(|s| status(s, "error · retry in").is_some())
+        .unwrap();
+    server.accept();
+    t.wait_until(|s| s.contains("Arrived") && status(s, "retry").is_none())
+        .unwrap();
+    quit(t);
 }
 
 // Starting without a network must not end Postal: the Cache is shown and

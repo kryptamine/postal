@@ -1,8 +1,9 @@
 use async_imap::{
-    imap_proto::{AttributeValue, MailboxDatum, Response},
+    imap_proto::{MailboxDatum, Response},
     types::UnsolicitedResponse,
 };
 
+use super::attributes;
 use crate::{domain::message_flags::MessageFlags, domain::uid::Uid};
 
 /// A change the server announced on its own, by sequence number.
@@ -27,23 +28,11 @@ impl Pushed {
         match *response {
             Response::MailboxData(MailboxDatum::Exists(count)) => Some(Self::Exists(count)),
             Response::Expunge(sequence) => Some(Self::Expunge(sequence)),
-            Response::Fetch(sequence, ref attributes) => {
-                let flags = attributes.iter().find_map(|a| match a {
-                    AttributeValue::Flags(flags) => Some(flags),
-                    _ => None,
-                })?;
-
-                let uid = attributes.iter().find_map(|a| match a {
-                    AttributeValue::Uid(uid) => Some(Uid::new(*uid)),
-                    _ => None,
-                });
-
-                Some(Self::Flags {
-                    sequence,
-                    uid,
-                    flags: MessageFlags::from_names(flags.iter().map(|f| &**f)),
-                })
-            }
+            Response::Fetch(sequence, ref answer) => Some(Self::Flags {
+                sequence,
+                uid: attributes::uid(answer),
+                flags: attributes::flags(answer)?,
+            }),
             _ => None,
         }
     }

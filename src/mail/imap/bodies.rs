@@ -4,7 +4,7 @@ use async_imap::{
 };
 
 use super::{
-    Error,
+    Error, attributes,
     body_plan::{self, Plan, Sections},
     connect::Transport,
     tagged,
@@ -61,19 +61,9 @@ pub async fn fetch(
     Ok(bodies)
 }
 
-fn uid(attributes: &[AttributeValue<'_>]) -> Option<Uid> {
-    attributes.iter().find_map(|a| match a {
-        AttributeValue::Uid(uid) => Some(Uid::new(*uid)),
-        _ => None,
-    })
-}
-
 fn plan(attributes: &[AttributeValue<'_>]) -> Option<(Uid, Plan)> {
-    let plan = attributes.iter().find_map(|a| match a {
-        AttributeValue::BodyStructure(structure) => Some(Plan::of(structure)),
-        _ => None,
-    })?;
-    Some((uid(attributes)?, plan))
+    let plan = Plan::of(attributes::structure(attributes)?);
+    Some((attributes::uid(attributes)?, plan))
 }
 
 fn sections(attributes: &[AttributeValue<'_>]) -> Option<(Uid, Sections)> {
@@ -88,5 +78,5 @@ fn sections(attributes: &[AttributeValue<'_>]) -> Option<(Uid, Sections)> {
             _ => None,
         })
         .collect();
-    Some((uid(attributes)?, sections))
+    Some((attributes::uid(attributes)?, sections))
 }

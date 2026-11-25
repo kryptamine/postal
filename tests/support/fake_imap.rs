@@ -78,6 +78,13 @@ pub enum Outage {
     Revoked,
 }
 
+/// Which commands `FakeImap::refuse` answers with a plain `NO`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    Fetch,
+    Search,
+}
+
 struct Stored {
     uid: u32,
     msgid: u64,
@@ -177,8 +184,7 @@ struct Inbox {
     /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
     /// a Message it cannot serve.
     refused: Vec<u32>,
-    /// Every `FETCH` is answered with a plain `NO`.
-    refuse_fetches: bool,
+    refusal: Option<Refusal>,
     outage: Option<Outage>,
     /// Bumped to drop every connection open before.
     cut: u64,
@@ -229,7 +235,7 @@ impl FakeImap {
             stall: None,
             outage: None,
             refused: Vec::new(),
-            refuse_fetches: false,
+            refusal: None,
             cut: 0,
             open: Vec::new(),
             appended: Vec::new(),
@@ -512,8 +518,13 @@ impl FakeImap {
         self.inbox.lock().unwrap().refused.push(uid);
     }
 
-    pub fn refuse_fetches(&self, refuse: bool) {
-        self.inbox.lock().unwrap().refuse_fetches = refuse;
+    /// Answers every command `refusal` names with a plain `NO`, until `accept`.
+    pub fn refuse(&self, refusal: Refusal) {
+        self.inbox.lock().unwrap().refusal = Some(refusal);
+    }
+
+    pub fn accept(&self) {
+        self.inbox.lock().unwrap().refusal = None;
     }
 }
 
@@ -892,7 +903,10 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
             examine(server, folder, tag, opened.writable);
         }
-        CommandBody::Fetch { .. } if inbox.refuse_fetches => {
+        CommandBody::Fetch { .. } if inbox.refusal == Some(Refusal::Fetch) => {
+            server.enqueue_status(Status::no(tag, None, "Internal error").unwrap());
+        }
+        CommandBody::Search { .. } if inbox.refusal == Some(Refusal::Search) => {
             server.enqueue_status(Status::no(tag, None, "Internal error").unwrap());
         }
         CommandBody::Search {
