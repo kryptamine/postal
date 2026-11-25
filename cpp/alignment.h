@@ -10,6 +10,9 @@ namespace cg
 // glyphs is padded with whole cells, and so is centred text in a list
 // item, which stood apart from its marker.
 void left_align_spread(const litehtml::element::ptr& root);
+// Before layout: a block or table under `align=center` or `<center>`, on
+// its parent or further up, stands centred in its container, as in Blink.
+void align_blocks(const litehtml::element::ptr& root);
 // After layout: a centred block whose words wrap onto three lines or more
 // is a paragraph, hard to read from a ragged left edge. Each is set left;
 // true when one was, and the layout must run again.

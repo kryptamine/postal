@@ -131,6 +131,8 @@ namespace litehtml
         void             set_position(element_position mElPosition);
 
         text_align get_text_align() const;
+        // Postal: the value with its `-webkit-` prefix kept.
+        text_align get_specified_text_align() const { return m_text_align; }
         void       set_text_align(text_align mTextAlign);
 
         overflow get_overflow() const;

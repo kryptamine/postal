@@ -249,6 +249,23 @@ fn a_table_under_an_align_attribute_is_set_left() {
     );
 }
 
+// `align=center` on a row, or further up, centres the narrow card a cell
+// holds, as in Blink: a security alert's card stood at the pane's left.
+#[test]
+fn a_narrow_table_under_an_align_attribute_stands_centred() {
+    let body = html(
+        "<table width=\"100%\"><tr><td>Edge</td></tr><tr align=\"center\"><td><div>\
+         <table style=\"max-width:240px\"><tr><td>Card</td></tr></table>\
+         </div></td></tr></table>",
+    );
+    let screen = preview(body, &DEFAULT, "Card");
+    assert!(
+        at(&screen, "Card").1 > at(&screen, "Edge").1 + 20,
+        "{}",
+        screen.text()
+    );
+}
+
 // Legal lines set small under the body read as its footer; small text
 // above the body's last words is a caption and reads as the body.
 #[test]
