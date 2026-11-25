@@ -19,7 +19,7 @@ use crate::{
     domain::per_account::{AccountId, PerAccount},
     mail::folder_sync,
     mail::outbox_flush::Sender,
-    mail::sync_lock::SyncLock,
+    mail::sync_lock::{Kind, SyncLock},
 };
 
 /// How long one Account's sync may take before it counts as failed: no
@@ -113,7 +113,7 @@ impl FolderSync {
     fn sync(&self) -> Result<Vec<(String, Outcome)>, Box<dyn Error>> {
         let wanted = accounts::named(self.account.as_deref())?;
         let dir = xdg::cache_dir()?;
-        let Some(_lock) = SyncLock::try_take()? else {
+        let Some(_lock) = SyncLock::try_take(Kind::Sync)? else {
             return Ok(wanted.into_iter().map(|a| (a, Outcome::Open)).collect());
         };
 

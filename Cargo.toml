@@ -34,7 +34,7 @@ rusqlite = { version = "0.43", features = ["backup", "bundled", "fallible_uint"]
 serde = { version = "1.0.229", features = ["derive", "rc"] }
 serde_json = "1.0.154"
 thiserror = "2"
-tokio = { version = "1.54.1", features = ["rt", "macros", "net", "time", "io-util"] }
+tokio = { version = "1.54.1", features = ["rt", "macros", "net", "time", "io-util", "signal", "sync"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 toml = "1.2.2"
 toml_edit = "0.25"

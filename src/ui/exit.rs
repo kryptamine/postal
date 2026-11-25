@@ -12,4 +12,6 @@ pub enum Exit {
     Unlink(String),
     /// Settings changed what the Accounts read at start.
     Reload,
+    /// A TUI in another terminal took the session over.
+    Moved,
 }
