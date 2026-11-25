@@ -68,7 +68,7 @@ const MOVE: &[Action] = &[Action::Move(Move::Down), Action::Move(Move::Up)];
 
 /// The panes' keymap and the keys every layer shares, as the hint line and
 /// the `?` popup show them and `action` reads them.
-const PANES: [PaneKeys; 42] = [
+const PANES: [PaneKeys; 43] = [
     listed(
         Binding {
             group: "Navigate",
@@ -462,6 +462,18 @@ const PANES: [PaneKeys; 42] = [
             }),
         },
         &[Action::SignIn],
+    ),
+    listed(
+        Binding {
+            group: "App",
+            modes: BOTH,
+            signed_out: false,
+            keys: &[Key::Ctrl("r")],
+            aliases: &[],
+            description: "fetch new mail now",
+            hint: None,
+        },
+        &[Action::Refresh],
     ),
     listed(
         Binding {

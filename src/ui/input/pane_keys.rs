@@ -41,6 +41,7 @@ pub fn act(
         Some(Action::SignIn) => screen
             .signed_out()
             .map_or(Step::Stay, |account| Step::Exit(Exit::SignIn(account))),
+        Some(Action::Refresh) => Step::Steer(Steer::Refresh),
         Some(Action::Settings) => Step::Settings,
         Some(Action::Links) => Step::Links,
         Some(Action::Attachments(purpose)) => Step::Attachments(purpose),

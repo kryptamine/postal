@@ -29,7 +29,7 @@ size: 80x56  cursor: hidden
 └───────│ |                         open the Message in $PAGER      ▐ │────────┘
 ┌ Inbox │ E                         open the Message in $EDITOR     ▐ │────────┐
 │ From  │ J / K                     pick Threads down / up          ▐ │4 09:00 │
-│ To    │ U                         mark Unread, or toggle the Picks▐ │        │
+│ To    │ U                         mark Unread, or toggle the Picks  │        │
 │ Subjec│ Backspace                 delete: move to Trash             │        │
 ├───────│ e                         archive                           │────────┤
 │ Newer │ m                         move to a Folder                  │        │
