@@ -10,9 +10,9 @@ use ratatui::{
 
 use crate::{
     compose::accounts::Accounts, compose::local_draft::LocalDraft,
-    compose::local_drafts::LocalDrafts, render::stack_str::StackStr, ui::frame::layout::PADDING,
-    ui::frame::theme::Theme, ui::widgets::border, ui::widgets::centred::centred,
-    ui::widgets::truncate,
+    compose::local_drafts::LocalDrafts, mail::status::whole_seconds, render::stack_str::StackStr,
+    ui::frame::layout::PADDING, ui::frame::theme::Theme, ui::widgets::border,
+    ui::widgets::centred::centred, ui::widgets::truncate,
 };
 
 /// The kind of a row, a word or an icon, and a gap after it.
@@ -114,10 +114,9 @@ impl LocalDraftsPane<'_> {
         let subject_width = held_x.saturating_sub(area.x).saturating_sub(1);
         truncate::draw(buf, cell(area.x, subject_width), &row.subject, style);
         if let Some(left) = left {
-            let seconds = left.as_secs() + u64::from(left.subsec_nanos() > 0);
             let mut text = StackStr::<24>::new();
             // Any u64 fits, so the write cannot fail.
-            write!(text, "in {seconds}s").ok();
+            write!(text, "in {}s", whole_seconds(left)).ok();
             truncate::draw(buf, cell(held_x, HELD_WIDTH), text.as_str(), muted);
         }
 
