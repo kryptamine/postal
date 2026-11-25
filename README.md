@@ -37,7 +37,8 @@ git clone https://github.com/kryptamine/postal && cd postal
 make install
 ```
 
-`make install` puts `postal` in `~/.cargo/bin`.
+`make install` puts `postal` in `~/.cargo/bin`, and over the `postal` found
+first on `PATH` when that is another, as `install.sh`'s is.
 
 ## Neovim
 
