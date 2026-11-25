@@ -15,6 +15,7 @@ use std::{fs, process::Output};
 
 use serde_json::{Value, json};
 use support::{
+    editor::sending,
     fake_body::FakeBody,
     fake_imap::{EMAIL, FakeImap, FakeMessage, Outage},
     fake_oauth,
@@ -130,13 +131,11 @@ fn a_sync_sends_the_message_the_tui_left_in_the_outbox() {
     fs::write(&written, "To: bob@example.com\nSubject: Plans\n\nHi Bob\n").unwrap();
     let mut t = (home.terminal())
         .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("EDITOR", format!("cp '{}'", written.display()))
+        .env("EDITOR", sending(&format!("cp '{}'", written.display())))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     t.wait_until(|s| s.contains("Invoice 1042")).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains("y send")).unwrap();
-    t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("1 outbox")).unwrap();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());

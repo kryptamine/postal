@@ -13,6 +13,7 @@ mod support;
 use std::{fs, time::Duration};
 
 use support::{
+    editor::sending,
     fake_imap::{EMAIL, FakeImap, FakeMessage, Outage},
     fake_oauth,
     fake_smtp::FakeSmtp,
@@ -36,7 +37,7 @@ fn home(icons: &str, imap: &FakeImap, smtp: &FakeSmtp) -> Home {
 }
 
 /// Run under `terminal` as `TERM_PROGRAM`, or none; `$EDITOR` writes a
-/// Draft to Bob.
+/// Draft to Bob and sends it.
 fn postal(home: &Home, terminal: Option<&str>) -> Terminal {
     let next = home.xdg_config_home().join("next");
     fs::write(&next, "To: bob@example.com\nSubject: Plans\n\nHi Bob\n").unwrap();
@@ -48,7 +49,7 @@ fn postal(home: &Home, terminal: Option<&str>) -> Terminal {
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("EDITOR", format!("cp '{}'", next.display()))
+        .env("EDITOR", sending(&format!("cp '{}'", next.display())))
         .env("TZ", "UTC")
         .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10));
@@ -140,8 +141,6 @@ fn nerd_marks_an_outbox_message_and_an_outage() {
     let mut t = postal(&home, None);
     t.wait_until(|s| s.contains("Weekly notes")).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains("y send")).unwrap();
-    t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("1 outbox")).unwrap();
 
     t.send(Key::Char('f')).unwrap();
@@ -202,8 +201,6 @@ fn nerd_marks_a_thread_answered_on_the_server_or_by_a_sent_reply() {
     assert_eq!(answered(&screen), ["Cy"], "{screen}");
 
     t.send(Key::Char('r')).unwrap();
-    t.wait_until(|s| s.contains("y send")).unwrap();
-    t.send(Key::Char('y')).unwrap();
     let screen = t
         .snapshot_after(|s| s.contains("Sent") && answered(s).len() == 2)
         .unwrap();

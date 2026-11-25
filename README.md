@@ -43,7 +43,8 @@ first on `PATH` when that is another, as `install.sh`'s is.
 ## Neovim
 
 Postal opens a Draft in `$EDITOR`. In Neovim 0.10+, the
-[plugin](nvim/) completes `To:`, `Cc:` and `Attach:` as you type, and
+[plugin](nvim/) completes `To:`, `Cc:` and `Attach:` as you type,
+`:PostalSend` sends the Draft without leaving the editor, and
 `:PostalAgent` lets an [ACP](https://agentclientprotocol.com) agent edit the
 Draft for you to review hunk by hunk. The plugin is optional, and calls
 `postal`: keep it on the latest release with `postal update`.

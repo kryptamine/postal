@@ -2,6 +2,7 @@
 
 pub mod browser;
 pub mod client_config;
+pub mod editor;
 pub mod fake_autoconfig;
 pub mod fake_body;
 pub mod fake_dns;

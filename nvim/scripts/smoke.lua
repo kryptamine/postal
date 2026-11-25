@@ -46,6 +46,11 @@ if vim.bo.textwidth ~= 0 or vim.bo.formatoptions:find("t", 1, true) or not vim.w
 	fail(("the Draft has textwidth=%d formatoptions=%s"):format(vim.bo.textwidth, vim.bo.formatoptions))
 end
 
+-- Postal alone waits for `:PostalSend`'s exit, and says so in the env
+if vim.fn.exists(":PostalSend") == 2 then
+	fail(":PostalSend without $POSTAL_SEND_STATUS")
+end
+
 if vim.bo.omnifunc ~= "v:lua.require'postal'.omnifunc" then
 	fail("omnifunc not set, it is " .. vim.inspect(vim.bo.omnifunc))
 end
@@ -830,8 +835,14 @@ vim.fn.writefile({
 	"On Mon, Ada wrote:",
 	"> # not mine",
 }, markdown_draft)
+vim.env.POSTAL_SEND_STATUS = "100"
 vim.cmd.split(markdown_draft)
 vim.env.POSTAL_COMPOSE_FORMAT = nil
+vim.env.POSTAL_SEND_STATUS = nil
+if vim.fn.exists(":PostalSend") ~= 2 then
+	fail("no :PostalSend in a Draft Postal opened")
+end
+
 local parser = vim.treesitter.get_parser(0, nil, { error = false })
 local first, last
 if parser then

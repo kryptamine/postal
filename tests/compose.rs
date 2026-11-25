@@ -1,6 +1,7 @@
-//! Compose with `c` writes a Draft and opens `$EDITOR` on it; its preview
-//! sends it with `y` to the fake SMTP server, edits it again with `e`, or
-//! discards it with `q`, which `u` takes back.
+//! Compose with `c` writes a Draft and opens `$EDITOR` on it, which sends
+//! it to the fake SMTP server as `:PostalSend` does, or only saves it; its
+//! preview sends it with `y`, edits it again with `e`, or discards it with
+//! `q`, which `u` takes back.
 
 #![allow(
     clippy::unwrap_used,
@@ -19,10 +20,12 @@ use std::{
 
 use mail_parser::{Address, MessageParser};
 use support::{
+    editor::{preview_newest, saved, sending},
     fake_imap::{ACCESS_TOKEN, EMAIL, FakeImap, FakeMessage, xoauth2},
     fake_oauth,
     fake_smtp::FakeSmtp,
     home::Home,
+    picker::picked,
 };
 use tempfile::TempDir;
 use termlens::{Key, Screen, Terminal};
@@ -60,6 +63,11 @@ impl Editor {
 
     fn command(&self) -> String {
         format!("cp '{}'", self.next().display())
+    }
+
+    /// The editor ended with `:PostalSend`.
+    fn sends(&self) -> String {
+        sending(&self.command())
     }
 }
 
@@ -112,20 +120,44 @@ fn inbox() -> FakeImap {
 }
 
 fn listed(screen: &Screen) -> bool {
-    screen.contains("Weekly notes") && !screen.contains(" Draft ")
+    screen.contains("Weekly notes") && !screen.contains(" Draft ") && !local(screen)
+}
+
+fn local(screen: &Screen) -> bool {
+    screen.contains(" Local Drafts ")
 }
 
 fn previewed(screen: &Screen) -> bool {
     screen.contains(" Draft ") && screen.contains("y send")
 }
 
-/// Started on the Message List, then `c` and the editor, on the preview.
-fn composed(home: &Home, editor: &Editor) -> Terminal {
-    let mut t = postal(home, &editor.command());
+/// Started on the Message List, then `c` and the editor `command`.
+fn composed(home: &Home, command: &str) -> Terminal {
+    let mut t = postal(home, command);
     t.wait_until(listed).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
     t
+}
+
+/// [`composed`] with an editor that only saves, then the Draft's preview.
+fn previewing(home: &Home, editor: &Editor) -> Terminal {
+    let mut t = composed(home, &editor.command());
+    preview_newest(&mut t);
+    t
+}
+
+fn open_local(t: &mut Terminal) {
+    t.send(Key::Char('f')).unwrap();
+    t.send_str("local").unwrap();
+    t.wait_until(|s| picked(s).first().is_some_and(|f| f == "Local Drafts"))
+        .unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(local).unwrap();
+}
+
+fn quit_saved(mut t: Terminal) {
+    t.wait_until(saved).unwrap();
+    quit(t);
 }
 
 fn quit(mut t: Terminal) {
@@ -177,14 +209,11 @@ fn a_sent_draft_reaches_the_server_as_written_with_the_headers_postal_adds() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp);
     let editor = Editor::writing(WRITTEN);
-    let mut t = composed(&home, &editor);
-    let screen = t.screen();
-    assert!(screen.contains(&format!("{NAME} <{EMAIL}>")), "{screen:?}");
-    assert!(screen.contains("Café plans"), "{screen:?}");
-    assert_eq!(drafts(&home).len(), 1);
-
+    let mut t = postal(&home, &editor.sends());
+    t.wait_until(listed).unwrap();
     imap.clear_commands();
-    t.send(Key::Char('y')).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    // Straight from the editor: no preview on the way.
     t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
     // The Message shows in Sent only once a sync has read it there.
     wait_for(|| imap.commands().iter().any(|c| c.starts_with("SELECT ")));
@@ -242,24 +271,27 @@ fn without_a_name_from_is_the_bare_address() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = named_home(&imap, &smtp, "");
     let editor = Editor::writing(WRITTEN);
-    let mut t = composed(&home, &editor);
+    let mut t = previewing(&home, &editor);
     let screen = t.screen();
     assert!(screen.contains(&format!("From    {EMAIL}")), "{screen:?}");
 
     t.send(Key::Char('y')).unwrap();
-    t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
+    t.wait_until(|s| s.contains("Sent") && local(s)).unwrap();
     quit(t);
 
     assert_eq!(smtp.received().len(), 1);
 }
 
-/// `y` on a Draft written as `text`, whose preview shows `error`: nothing
-/// reaches the server, and the file stays as written.
+/// The editor's Send of a Draft written as `text` opens its preview, which
+/// shows `error`, and so does `y` there: nothing reaches the server, and
+/// the file stays as written.
 fn refused(text: &str, error: &str) {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp);
     let editor = Editor::writing(text);
-    let mut t = composed(&home, &editor);
+    let mut t = composed(&home, &editor.sends());
+    t.wait_until(|s| s.contains("the Draft does not parse") && previewed(s))
+        .unwrap();
     let screen = t.screen();
     assert!(screen.contains(error), "{screen:?}");
 
@@ -312,9 +344,10 @@ fn e_opens_the_editor_again_on_the_same_draft() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp);
     let editor = Editor::writing("To: \nSubject: Hello\n\n");
-    let mut t = composed(&home, &editor);
+    let mut t = previewing(&home, &editor);
     assert!(t.screen().contains("`To` is empty"));
 
+    // An editor that only saves comes back to the preview it left.
     editor.write(WRITTEN);
     t.send(Key::Char('e')).unwrap();
     t.wait_until(|s| previewed(s) && s.contains("Café plans"))
@@ -328,15 +361,36 @@ fn e_opens_the_editor_again_on_the_same_draft() {
 }
 
 #[test]
+fn the_editor_opened_by_e_sends_the_draft_too() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let home = home(&imap, &smtp);
+    let editor = Editor::writing(WRITTEN);
+    let t = composed(&home, &editor.command());
+    quit_saved(t);
+
+    let mut t = postal(&home, &editor.sends());
+    t.wait_until(listed).unwrap();
+    open_local(&mut t);
+    t.send(Key::Enter).unwrap();
+    t.wait_until(previewed).unwrap();
+    t.send(Key::Char('e')).unwrap();
+    t.wait_until(|s| s.contains("Sent") && local(s) && !previewed(s))
+        .unwrap();
+    quit(t);
+    assert_eq!(smtp.received().len(), 1);
+    assert_eq!(drafts(&home), Vec::<(PathBuf, String)>::new());
+}
+
+#[test]
 fn q_discards_the_draft_and_u_brings_it_back() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp);
     let editor = Editor::writing(WRITTEN);
-    let mut t = composed(&home, &editor);
+    let mut t = previewing(&home, &editor);
     let path = drafts(&home)[0].0.clone();
 
     t.send(Key::Char('q')).unwrap();
-    t.wait_until(|s| s.contains("Discarded · u undo") && listed(s))
+    t.wait_until(|s| s.contains("Discarded · u undo") && local(s))
         .unwrap();
     assert_eq!(drafts(&home), Vec::<(PathBuf, String)>::new());
 
@@ -347,9 +401,24 @@ fn q_discards_the_draft_and_u_brings_it_back() {
 
     // The Draft brought back sends as any other.
     t.send(Key::Char('y')).unwrap();
-    t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
+    t.wait_until(|s| s.contains("Sent") && local(s)).unwrap();
     quit(t);
     assert_eq!(smtp.received().len(), 1);
+}
+
+// The user read the mail while writing it: the editor's plain exit keeps
+// the Draft for Local Drafts, and shows it no second time.
+#[test]
+fn an_editor_that_only_saves_keeps_the_draft_with_no_preview() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let home = home(&imap, &smtp);
+    let editor = Editor::writing(WRITTEN);
+    let mut t = composed(&home, &editor.command());
+    t.wait_until(|s| saved(s) && listed(s)).unwrap();
+    quit(t);
+
+    assert!(smtp.received().is_empty());
+    assert_eq!(drafts(&home)[0].1, WRITTEN);
 }
 
 #[test]
@@ -362,7 +431,7 @@ fn compose_works_from_reading_too() {
     t.send(Key::Enter).unwrap();
     t.wait_until(|s| s.contains("n/p next")).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
+    t.wait_until(saved).unwrap();
     quit(t);
     assert_eq!(drafts(&home).len(), 1);
 }

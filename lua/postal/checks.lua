@@ -6,7 +6,7 @@ local mention = require("postal.mention")
 
 local M = {}
 
-local NS = vim.api.nvim_create_namespace("postal-checks")
+M.NS = vim.api.nvim_create_namespace("postal-checks")
 
 -- Each by the `code` its diagnostics carry.
 local CHECKS = { address = addresses.diagnose, mention = mention.diagnose }
@@ -19,7 +19,7 @@ function M.run(buf)
 		end
 	end
 
-	vim.diagnostic.set(NS, buf, diagnostics)
+	vim.diagnostic.set(M.NS, buf, diagnostics)
 	attach.mark(buf)
 end
 

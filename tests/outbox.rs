@@ -1,4 +1,5 @@
-//! `y` moves a Draft to the Outbox, which the sync connection sends: a
+//! The editor's Send, as `:PostalSend` ends it, moves a Draft to the
+//! Outbox, which the sync connection sends: a
 //! Message waits there while the fake SMTP server is down, goes back to the
 //! Drafts when refused, and is never sent twice once accepted. A Send is
 //! held for `send-delay` first, and `u` takes it back inside that window.
@@ -20,6 +21,7 @@ use std::{
 
 use mail_parser::MessageParser;
 use support::{
+    editor::sending,
     fake_imap::{EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     fake_smtp::FakeSmtp,
@@ -32,7 +34,7 @@ const WRITTEN: &str = "To: Bob Example <bob@example.com>\nSubject: Plans\n\nHi B
 
 const REFUSAL: &str = "554 5.7.1 Message rejected by policy";
 
-/// `$EDITOR`, copying `WRITTEN` over the Draft.
+/// `$EDITOR`, copying `WRITTEN` over the Draft and asking for its Send.
 struct Editor {
     dir: TempDir,
 }
@@ -48,7 +50,7 @@ impl Editor {
     }
 
     fn command(&self) -> String {
-        format!("cp '{}'", self.dir.path().join("next").display())
+        sending(&format!("cp '{}'", self.dir.path().join("next").display()))
     }
 }
 
@@ -95,18 +97,16 @@ fn listed(screen: &Screen) -> bool {
     screen.contains("Weekly notes") && !screen.contains(" Draft ")
 }
 
-/// Started on the Message List, a Draft written and `y` sent on its preview.
+/// Started on the Message List, a Draft written and sent from the editor.
 fn sent(home: &Home, editor: &Editor) -> Terminal {
     send(postal(home, editor))
 }
 
-/// `y` on a Draft written in `t`, started on the Message List.
+/// A Draft written in `t` and sent from the editor, started on the
+/// Message List.
 fn send(mut t: Terminal) -> Terminal {
     t.wait_until(listed).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
-        .unwrap();
-    t.send(Key::Char('y')).unwrap();
     t
 }
 
@@ -271,6 +271,7 @@ fn u_inside_the_window_gives_the_draft_back_and_nothing_is_sent() {
     let (home, editor) = (home(&imap, &smtp), Editor::new());
     let mut t = send(holding(&home, &editor, "2"));
     t.wait_until(held).unwrap();
+    // Sent from the editor, it comes back to a preview all the same.
     t.send(Key::Char('u')).unwrap();
     t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
         .unwrap();

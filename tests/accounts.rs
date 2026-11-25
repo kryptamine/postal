@@ -18,6 +18,7 @@ use std::{
 };
 
 use support::{
+    editor::{saved, sending},
     fake_body::FakeBody,
     fake_imap::{APP_PASSWORD, EMAIL, FIRST_UID, FakeImap, FakeMessage, Outage},
     fake_oauth,
@@ -93,7 +94,19 @@ fn two_with(first: Vec<FakeMessage>, second: Vec<FakeMessage>) -> Two {
 }
 
 fn postal(two: &Two) -> Terminal {
-    let editor = format!("cp '{}'", two.editor.path().join("next").display());
+    spawn(two, &copying(two))
+}
+
+/// [`postal`] with an editor that ends with `:PostalSend`.
+fn sending_postal(two: &Two) -> Terminal {
+    spawn(two, &sending(&copying(two)))
+}
+
+fn copying(two: &Two) -> String {
+    format!("cp '{}'", two.editor.path().join("next").display())
+}
+
+fn spawn(two: &Two, editor: &str) -> Terminal {
     Terminal::builder()
         .size(120, 30)
         .env_clear()
@@ -225,17 +238,15 @@ fn all_inboxes_shows_new_mail_to_each_account_live() {
 #[test]
 fn compose_in_all_inboxes_goes_out_from_the_account_of_the_selected_thread() {
     let two = two();
-    let mut t = postal(&two);
+    let mut t = sending_postal(&two);
     t.wait_until(|s| s.contains("Alpha news") && s.contains("Bravo notes"))
         .unwrap();
     // Bravo notes, the second Account's, is the second row.
     t.send(Key::Char('j')).unwrap();
     t.wait_until(|s| s.contains("Body of Bravo notes")).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ") && s.contains(OTHER))
-        .unwrap();
-    t.send(Key::Char('y')).unwrap();
     wait_for(|| two.smtp.1.received().len() == 1);
+    assert_eq!(two.smtp.1.received()[0].mail_from, OTHER);
     assert!(two.smtp.0.received().is_empty());
     quit(t);
 }
@@ -405,16 +416,12 @@ fn a_search_matches_the_messages_of_every_account() {
 #[test]
 fn compose_and_reply_go_out_from_the_account_of_the_shown_folder() {
     let two = two();
-    let mut t = postal(&two);
+    let mut t = sending_postal(&two);
     second_inbox(&mut t);
     for (sent, key) in [(1, 'c'), (2, 'r')] {
         t.send(Key::Char(key)).unwrap();
-        t.wait_until(|s| s.contains(" Draft ") && s.contains(OTHER))
-            .unwrap();
-        t.send(Key::Char('y')).unwrap();
         // The first Send's Toast may still show while the second goes out.
         wait_for(|| two.smtp.1.received().len() == sent);
-        t.wait_until(|s| !s.contains(" Draft ")).unwrap();
     }
 
     let received = two.smtp.1.received();
@@ -435,9 +442,7 @@ fn a_draft_of_an_account_gone_from_the_config_sends_from_the_first() {
     let mut t = postal(&two);
     second_inbox(&mut t);
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ")).unwrap();
-    t.send(Key::Char('d')).unwrap();
-    t.wait_until(|s| s.contains("Saved to Drafts")).unwrap();
+    t.wait_until(saved).unwrap();
     quit(t);
 
     let config = fs::read_to_string(two.home.config_path()).unwrap();
@@ -467,8 +472,7 @@ fn local_drafts_names_the_sender_of_each_draft() {
     let mut t = postal(&two);
     second_inbox(&mut t);
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ")).unwrap();
-    t.send(Key::Char('d')).unwrap();
+    t.wait_until(saved).unwrap();
     t.send(Key::Char('f')).unwrap();
     t.wait_until(both_listed).unwrap();
     t.send_str("local").unwrap();

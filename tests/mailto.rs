@@ -88,10 +88,6 @@ fn listed(screen: &Screen) -> bool {
     screen.contains("Weekly notes") && !screen.contains(" Draft ") && !local(screen)
 }
 
-fn previewed(screen: &Screen) -> bool {
-    screen.contains(" Draft ") && screen.contains("y send")
-}
-
 fn local(screen: &Screen) -> bool {
     screen.contains(" Local Drafts ")
 }
@@ -221,16 +217,13 @@ fn with_no_tui_open_a_link_starts_one_on_its_draft() {
     let seen = home.xdg_config_home().join("seen");
     let link = "mailto:bob@example.com?subject=Plans&bcc=mallory@example.com";
     let mut t = tui(&home, Some(link), &seen);
-    t.wait_until(|s| previewed(s) && s.contains("Plans") && s.contains("Bcc is dropped"))
+    // The editor's plain exit keeps the Draft, the dropped Bcc said over it.
+    t.wait_until(|s| s.contains("Bcc is dropped") && !s.contains("y send"))
         .unwrap();
     assert_eq!(
         fs::read_to_string(&seen).unwrap(),
         format!("To: bob@example.com\nCc: \nSubject: Plans\n\n\n{SIGNATURE}")
     );
-
-    t.send(Key::Char('d')).unwrap();
-    t.wait_until(|s| s.contains("Saved to Drafts") && listed(s))
-        .unwrap();
     quit(t);
     assert_eq!(drafts(&home).len(), 1);
 }

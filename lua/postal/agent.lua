@@ -419,6 +419,12 @@ function M.serve(mail, name, args)
 	return tools.run(chat, name, args)
 end
 
+--- Whether an edit of the agent's to mail buffer `mail` waits for review.
+function M.reviewing(mail)
+	local chat = chats[mail]
+	return chat ~= nil and chat.review ~= nil
+end
+
 --- Ends mail buffer `mail`'s chat and closes its pane.
 function M.close(mail)
 	local chat = chats[mail]

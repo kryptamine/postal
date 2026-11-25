@@ -19,6 +19,7 @@ use std::{
 
 use support::{
     client_config::{client_config, incoming, outgoing},
+    editor::sending,
     fake_autoconfig::{self, FakeAutoconfig},
     fake_dns::FakeDns,
     fake_imap::{APP_PASSWORD, EMAIL, FIRST_UID, FakeImap, FakeMessage},
@@ -73,14 +74,15 @@ fn signed_in(imap: &FakeImap, smtp_port: u16) -> Home {
 
 const WRITTEN: &str = "To: Bob Example <bob@example.com>\nSubject: Plans\n\nHi Bob\n";
 
-/// `$EDITOR` copies `WRITTEN` over the Draft, from a file beside the config.
+/// `$EDITOR` copies `WRITTEN` over the Draft, from a file beside the config,
+/// and sends it as `:PostalSend` does.
 fn spawn(home: &Home, args: &[&str]) -> Terminal {
     let written = home.xdg_config_home().join("written.eml");
     fs::write(&written, WRITTEN).unwrap();
     home.terminal()
         .size(100, 30)
         .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("EDITOR", format!("cp '{}'", written.display()))
+        .env("EDITOR", sending(&format!("cp '{}'", written.display())))
         .args(args)
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
@@ -179,9 +181,6 @@ fn type_password(t: &mut Terminal, password: &str) {
 /// Writes a Draft and sends it, from the Message List.
 fn send_one(t: &mut Terminal) {
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
-        .unwrap();
-    t.send(Key::Char('y')).unwrap();
 }
 
 #[test]
