@@ -37,11 +37,12 @@ impl Sender<'_> {
     /// Whether `queued` goes out from this Account; one whose notes do not
     /// read is left to the first.
     fn sends(self, queued: &Queued) -> bool {
-        let notes = Notes::read(&queued.path).ok().flatten();
+        let account = queued
+            .notes
+            .as_ref()
+            .and_then(|notes| notes.account.as_ref());
         let email = &self.outgoing.config.email;
-        notes
-            .and_then(|notes| notes.account)
-            .map_or(self.first, |account| account.eq_ignore_ascii_case(email))
+        account.map_or(self.first, |account| account.eq_ignore_ascii_case(email))
     }
 }
 
@@ -109,20 +110,26 @@ async fn submit(
     queued: &mut Queued,
     send: &impl Fn(Update),
 ) -> Result<Submitted, Error> {
-    let read = claimed(queued);
-    let _sending = held::Sending::start();
-    let (message, Some(notes)) = (match read {
-        Ok(None) => return Ok(Submitted::Held),
-        Ok(Some(read)) => read,
-        Err(error) => {
-            tracing::error!("reading {} failed: {error}", queued.path.display());
-            return Ok(Submitted::Unread);
-        }
-    }) else {
+    if queued.hold_until() > Some(Utc::now()) {
+        return Ok(Submitted::Held);
+    }
+
+    let Some(notes) = queued.notes.take() else {
         // Without the Draft it was, a refusal would have nothing to give back.
         tracing::error!("{} has no notes", queued.path.display());
         return Ok(Submitted::Unread);
     };
+
+    let message = match claimed(queued) {
+        Ok(Some(message)) => message,
+        Ok(None) => return Ok(Submitted::Held),
+        Err(error) => {
+            tracing::error!("reading {} failed: {error}", queued.path.display());
+            return Ok(Submitted::Unread);
+        }
+    };
+
+    let _sending = held::Sending::start();
 
     let text = notes.draft.clone().unwrap_or_default();
     let parsed =
@@ -171,20 +178,14 @@ async fn submit(
     Ok(Submitted::Refused)
 }
 
-/// The Message and its notes once claimed for SMTP; `None` while it is
-/// held, or once an Undo took it.
-fn claimed(queued: &mut Queued) -> io::Result<Option<(Vec<u8>, Option<Notes>)>> {
-    let notes = Notes::read(&queued.path)?;
-    if notes.as_ref().and_then(|notes| notes.hold_until) > Some(Utc::now()) {
-        return Ok(None);
-    }
-
+/// The Message once claimed for SMTP; `None` once an Undo took it.
+fn claimed(queued: &mut Queued) -> io::Result<Option<Vec<u8>>> {
     // Claimed before it is read, so an Undo after this finds it gone.
     if !queued.claim()? {
         return Ok(None);
     }
 
-    Ok(Some((std::fs::read(&queued.path)?, notes)))
+    std::fs::read(&queued.path).map(Some)
 }
 
 /// Everyone `draft` went out to, under the `Message-ID` Postal gave

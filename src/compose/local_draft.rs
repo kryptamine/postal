@@ -54,16 +54,11 @@ pub fn list(outbox: &Outbox) -> io::Result<Vec<LocalDraft>> {
     }
 
     for queued in outbox.queued()?.into_iter().filter(|q| !q.sent) {
-        match Notes::read(&queued.path) {
-            Ok(notes) => {
-                let notes = notes.unwrap_or_default();
-                let text = notes.draft.unwrap_or_default();
-                let mut row = LocalDraft::new(queued.path, true, &text, notes.account);
-                row.hold_until = notes.hold_until;
-                rows.push(row);
-            }
-            Err(error) => tracing::warn!("reading {} failed: {error}", queued.path.display()),
-        }
+        let notes = queued.notes.unwrap_or_default();
+        let text = notes.draft.unwrap_or_default();
+        let mut row = LocalDraft::new(queued.path, true, &text, notes.account);
+        row.hold_until = notes.hold_until;
+        rows.push(row);
     }
 
     // A file's name starts with the time its Draft was made.
