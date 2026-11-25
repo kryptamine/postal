@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0](https://github.com/kryptamine/postal/compare/v0.6.0...v0.7.0) (2026-11-25)
+
+
+### Features
+
+* **nvim:** send a Draft from the editor with :PostalSend ([17180e9](https://github.com/kryptamine/postal/commit/17180e936be366352eac9e2893d377ba881633af)), closes [#218](https://github.com/kryptamine/postal/issues/218)
+* **ui:** unfold a Message that joins the open Thread, marked new ([2ef4111](https://github.com/kryptamine/postal/commit/2ef4111e6264c5e63ad1cd696cac908b35ee5eb5)), closes [#222](https://github.com/kryptamine/postal/issues/222)
+
+
+### Bug Fixes
+
+* **cli:** show the text of a plain part that carries HTML ([a66bb28](https://github.com/kryptamine/postal/commit/a66bb2868a94071a05b43488e5da42c549896ae2))
+* **imap:** cut a Snippet without the HTML a plain part carries ([b32a062](https://github.com/kryptamine/postal/commit/b32a062dee46cb9aa67c492a2bd7b840d84d8fba))
+* **imap:** show a Message IDLE brings in once its Snippet is cut ([9a4d59d](https://github.com/kryptamine/postal/commit/9a4d59d66e70217ab5fee7e76b4cba0dc7dab639)), closes [#222](https://github.com/kryptamine/postal/issues/222)
+* **ui:** close a Draft's preview with q or Esc, discard it with d ([b0479d2](https://github.com/kryptamine/postal/commit/b0479d2f3f4b89e8778d839bd446ea8557ef6f1e))
+
 ## [0.6.0](https://github.com/kryptamine/postal/compare/v0.5.0...v0.6.0) (2026-11-25)
 
 
