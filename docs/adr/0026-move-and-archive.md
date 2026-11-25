@@ -29,7 +29,10 @@ then depends on the account's IMAP settings, up to erasing it for good. So:
 The other Folders of a Thread show what Gmail does. A move to a label leaves
 the Message's rows under its other labels, and its place in the Thread, as
 they are; only a move to Trash or Spam drops every copy, as a Delete did.
-The Folder moved to gets the row only on its own resync, as Trash does.
+The Folder moved to gets the row from a resync of it once the server made
+the move, when the Cache holds it already; one never synced waits for its
+own opening. Writing the row under the UID `COPYUID` names instead would make
+the next resync skip mail that reached the Folder meanwhile under a lower UID.
 
 An Undo the server has not made yet, of a Message it still has where a
 first move took it, makes the Message hold still for a move to another

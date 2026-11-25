@@ -23,6 +23,7 @@ pub async fn send(
 
     let copies = Copies::of(server, cache)?;
     let mut found: Vec<(Role, Option<FolderName>)> = Vec::new();
+    let mut landed: Vec<FolderName> = Vec::new();
     for group in pending.chunk_by(|a, b| (&a.from, &a.to) == (&b.from, &b.to)) {
         let first = &group[0];
         let to = destination(server, cache, &first.to, &mut found, send).await?;
@@ -70,10 +71,38 @@ pub async fn send(
         if !record(cache, group, &to, &moved)? {
             send(Update::Unrestored);
         }
+
+        if !landed.contains(&to) {
+            landed.push(to);
+        }
+    }
+
+    for folder in &landed {
+        resync(server, cache, folder).await?;
     }
 
     send(Update::Inbox);
     Ok(())
+}
+
+/// Brings a cached Folder moved into up to the server, so the Messages
+/// show there before it is opened; one never synced waits for its opening.
+async fn resync(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    folder: &FolderName,
+) -> Result<(), Error> {
+    if cache.state(folder)?.is_none() {
+        return Ok(());
+    }
+
+    match sync::resync(server, cache, folder, Mode::Examine, &|_| {}).await {
+        Err(Error::Gone(error)) => {
+            tracing::warn!("{folder} is gone since the move into it: {error}");
+            Ok(())
+        }
+        result => result.map(drop),
+    }
 }
 
 /// On Gmail a move out of All Mail but to Trash or Spam is a copy:
