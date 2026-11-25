@@ -1,4 +1,4 @@
-/// Why a connection is down for now and worth trying again.
+/// Why a connection is down, to be opened afresh after the backoff.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Outage {
     /// The network: no route, refused, or the connection dropped.

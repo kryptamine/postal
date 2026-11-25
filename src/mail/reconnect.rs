@@ -3,8 +3,7 @@ use std::cell::Cell;
 use tokio::time::Instant;
 
 use crate::{
-    mail::backoff::Backoff, mail::outage::Outage, mail::refresh, mail::status::Status,
-    mail::sync::Error, mail::wake,
+    mail::backoff::Backoff, mail::refresh, mail::status::Status, mail::sync::Error, mail::wake,
 };
 
 /// Runs `attempt` on a fresh connection after every failure, after the
@@ -46,7 +45,7 @@ pub async fn retry(
             return Err(error);
         }
 
-        let outage = error.outage().unwrap_or(Outage::Failed);
+        let outage = error.outage();
 
         let wait = backoff.next();
         tracing::warn!("{error}: retrying in {} ms", wait.as_millis());
