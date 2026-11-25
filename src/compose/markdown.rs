@@ -116,8 +116,9 @@ fn written(text: &str) -> String {
             continue;
         }
 
-        let text = escape(text);
-        writeln!(html, "<pre style=\"{WRITTEN}\">{text}</pre>").ok();
+        write!(html, "<pre style=\"{WRITTEN}\">").ok();
+        comrak::html::escape(&mut html, text).ok();
+        html.push_str("</pre>\n");
     }
 
     html.push_str(&"</blockquote>\n".repeat(open));
@@ -133,19 +134,4 @@ fn level(mut line: &str) -> (usize, &str) {
     }
 
     (level, line)
-}
-
-fn escape(text: &str) -> String {
-    let mut escaped = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => escaped.push_str("&amp;"),
-            '<' => escaped.push_str("&lt;"),
-            '>' => escaped.push_str("&gt;"),
-            '"' => escaped.push_str("&quot;"),
-            _ => escaped.push(c),
-        }
-    }
-
-    escaped
 }
