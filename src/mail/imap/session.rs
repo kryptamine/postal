@@ -382,8 +382,9 @@ impl MailServer for ImapSession {
         // SILENT: the server need not echo the flags just set.
         let sign = if added { '+' } else { '-' };
         let query = format!("{sign}FLAGS.SILENT ({})", flag.name());
+        // What other clients changed may come along: it goes to `pushed`.
         let command = format!("UID STORE {} {query}", uid_set(uids));
-        self.run(command, |r| matches!(r, Response::Fetch(..))).await?;
+        self.run(command, |_| false).await?;
         tracing::info!("stored {query} on {} Messages", uids.len());
         Ok(())
     }
@@ -398,7 +399,7 @@ impl MailServer for ImapSession {
         if !self.listed.moves {
             // The copy, flag and expunge a `MOVE` stands for (RFC 6851 3.3).
             let command = format!("UID STORE {set} +FLAGS.SILENT (\\Deleted)");
-            self.run(command, |r| matches!(r, Response::Fetch(..))).await?;
+            self.run(command, |_| false).await?;
             if self.listed.uidplus {
                 self.run(format!("UID EXPUNGE {set}"), |_| false).await?;
             } else {
