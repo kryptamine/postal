@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.6.0](https://github.com/kryptamine/postal/compare/v0.5.0...v0.6.0) (2026-11-25)
+
+
+### Features
+
+* **cli:** register postal as the mailto: handler ([0341a0e](https://github.com/kryptamine/postal/commit/0341a0e016839a5d730b45a2e1a41848d94a71cf)), closes [#190](https://github.com/kryptamine/postal/issues/190)
+* **cli:** show the Thread of a Message file with thread show --message ([3ae5f69](https://github.com/kryptamine/postal/commit/3ae5f69b6bbd1ca4f5bddb67c8e9c3b324f755ce)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **cli:** sync a Folder from the CLI and MCP with no TUI open ([d49ad32](https://github.com/kryptamine/postal/commit/d49ad32e4bd4f5e17158f375aaa5340af6d6669f)), closes [#184](https://github.com/kryptamine/postal/issues/184) [#69](https://github.com/kryptamine/postal/issues/69)
+* **compose:** open a Draft from a mailto: link ([3b022c0](https://github.com/kryptamine/postal/commit/3b022c0f227131718f4740b0ec0eaf39d2496fac)), closes [#189](https://github.com/kryptamine/postal/issues/189)
+* **compose:** send a Markdown Draft's HTML beside its text ([0c33304](https://github.com/kryptamine/postal/commit/0c3330480fdb35647462b0b0534a1a221bd7499c)), closes [#197](https://github.com/kryptamine/postal/issues/197)
+* **contacts:** read macOS Contacts as a source of Correspondents ([8c11913](https://github.com/kryptamine/postal/commit/8c11913e8639682f0cfe7c2bc0b7594d62d874e1)), closes [#191](https://github.com/kryptamine/postal/issues/191)
+* **nvim:** add a Correspondent to a Draft with :PostalContacts ([19f5fc6](https://github.com/kryptamine/postal/commit/19f5fc6174f04795f498a022766489e5a66860fd)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** bring back what was sent to an agent with &lt;C-p&gt; and &lt;C-n&gt; ([307e77c](https://github.com/kryptamine/postal/commit/307e77c2b629bbc1b5d22182890dd71f39aa4be6)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** diagnose a Draft's To: and Cc: as they are written ([5ecca3a](https://github.com/kryptamine/postal/commit/5ecca3a98d2135fa388797321c9047422733d4cf)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** fold the Quote a Draft or a Message ends in ([00d743a](https://github.com/kryptamine/postal/commit/00d743a7c6cd91124998c4bdc6b6ddcc1fb8c900)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** hand the agent a Message's Thread with the Message ([8e683ad](https://github.com/kryptamine/postal/commit/8e683add52b864c2dcd980735cd7434e82f4914b)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** keep a typed paragraph on one line, and spell check on ask ([539fe21](https://github.com/kryptamine/postal/commit/539fe21a87761848316de02845fdf783632f7be8)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** let setup() map each key of the pane and the review ([20962ba](https://github.com/kryptamine/postal/commit/20962ba4e715145c0551cbfb52b642fe32153e4c))
+* **nvim:** open a Message's link from its [n] marker with gx ([ded8310](https://github.com/kryptamine/postal/commit/ded8310093f8c593906c7abc2003d9553e7e3789)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** parse a Markdown Draft's body as Markdown ([4af579c](https://github.com/kryptamine/postal/commit/4af579caeb5ef30f06b8794895422749c3bdf816)), closes [#197](https://github.com/kryptamine/postal/issues/197)
+* **nvim:** send a prompt set up by name with :PostalAgent &lt;name&gt; ([ab55ad1](https://github.com/kryptamine/postal/commit/ab55ad1c9835ef6bcfc5d37ddec28d886c2c62de)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** show each Attach: file's size and open it with gf ([d5402ac](https://github.com/kryptamine/postal/commit/d5402ac5c246ac48e86abe7a2195add272114de0))
+* **nvim:** tell in checkhealth a postal of another release than the plugin ([aaeeb77](https://github.com/kryptamine/postal/commit/aaeeb77363c0607bc77e58bd7f9df57ed7e97a48)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **nvim:** warn of an attachment the body mentions and nothing attaches ([451338d](https://github.com/kryptamine/postal/commit/451338d9ddccfde22f7c086fc42f73c3c1584bfc)), closes [#181](https://github.com/kryptamine/postal/issues/181)
+* **preview:** show a meeting invitation as a card ([d77402d](https://github.com/kryptamine/postal/commit/d77402d822d18a3c96453a7de622e89bdffd50e0)), closes [#196](https://github.com/kryptamine/postal/issues/196)
+* **send:** hold a Send for a few seconds so u can take it back ([9229243](https://github.com/kryptamine/postal/commit/9229243939950527cbd198f8488e952d1b99c785)), closes [#195](https://github.com/kryptamine/postal/issues/195)
+* **ui:** fetch new mail now with ^r ([39062c4](https://github.com/kryptamine/postal/commit/39062c4cee078c479ba57e12c5b0ca0ac97b1e41))
+* **ui:** take the session over from a TUI open in another terminal ([0335c2a](https://github.com/kryptamine/postal/commit/0335c2a22cd4921f946ba867d066ff958217bff4)), closes [#201](https://github.com/kryptamine/postal/issues/201)
+
+
+### Bug Fixes
+
+* **cli:** keep the sync lock beside the Outbox it guards ([0d3cd9c](https://github.com/kryptamine/postal/commit/0d3cd9c769be94b41fc8e1ddecab8ed5e14c91cf)), closes [#201](https://github.com/kryptamine/postal/issues/201)
+* **imap:** number a refused page of older Messages again ([2afb729](https://github.com/kryptamine/postal/commit/2afb72990ee4a264ad5352611753df1069131a7e))
+* **imap:** read UID FETCH, STORE and SEARCH by hand ([a6e17b7](https://github.com/kryptamine/postal/commit/a6e17b79a2698710fa3373d79fe986d8d3f1b3b1)), closes [#213](https://github.com/kryptamine/postal/issues/213)
+* **imap:** reconnect after any failure but a refused Account ([27865e6](https://github.com/kryptamine/postal/commit/27865e6889c95434a345ca60dfdfca82290c0c13))
+* **imap:** resync a cached Folder once a move lands in it ([30f0e44](https://github.com/kryptamine/postal/commit/30f0e448a4b1a70d1e70a9036241d213490c2c3d))
+* **imap:** take in the flag changes a STORE's answer carries ([6c74c42](https://github.com/kryptamine/postal/commit/6c74c42f113518b0d66083052732d54fbacf8c3d))
+* **rendered:** centre a narrow block under an inherited align=center ([fe2e9f5](https://github.com/kryptamine/postal/commit/fe2e9f58a8d5c00ca6f9f405e68ce88b32ebaa8d))
+* **ui:** keep the render thread alive through a panic on one mail ([358a580](https://github.com/kryptamine/postal/commit/358a5803817373fabd74a2fea961cb941935bcb5))
+* **ui:** toast a cache error in answer to an event instead of exiting ([7fb9807](https://github.com/kryptamine/postal/commit/7fb980716e5c986d754b365adc6ecb8d15adc6ab))
+
 ## [0.5.0](https://github.com/kryptamine/postal/compare/v0.4.0...v0.5.0) (2026-11-24)
 
 
