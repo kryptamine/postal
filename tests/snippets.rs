@@ -194,6 +194,39 @@ fn shows_a_snippet_for_each_kind_of_text_part() {
     }
 }
 
+// Some senders put HTML into the plain part: its markup must not reach the
+// card, nor touch the plain words and bracketed links before it.
+#[test]
+fn a_plain_part_carrying_html_shows_its_text() {
+    let server = FakeImap::start(vec![
+        message(
+            "Document in plain",
+            2,
+            FakeBody::plain(
+                "Tom & Jerry, 2 < 3.\r\n\r\n<!DOCTYPE html><HTML><head><style>p { color: red }\
+                 </style></head><body><p>Hi&nbsp;there</p></body></html>\r\n",
+            ),
+        ),
+        message(
+            "Fragment in plain",
+            1,
+            FakeBody::plain(
+                "See <https://example.com/>, ask <me@example.com>.\r\n\
+                 <!--[if mso]><table><tr><td><![endif]-->\r\n<p style=\"margin: 0\">Hello&nbsp;<b>you</b></p>\r\n",
+            ),
+        ),
+    ]);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, &[]);
+    t.wait_until(|s| {
+        snippet(s, "Document in plain").as_deref() == Some("Tom & Jerry, 2 < 3. Hi there")
+            && snippet(s, "Fragment in plain").as_deref()
+                == Some("See <https://example.com/>, ask <me@example.com>. Hello you")
+    })
+    .unwrap();
+    quit(t);
+}
+
 #[test]
 fn a_long_part_is_cut_on_a_character_boundary() {
     let server = FakeImap::start(vec![
