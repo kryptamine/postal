@@ -197,6 +197,30 @@ fn idle_removes_an_expunged_backfilled_row() {
     quit(t);
 }
 
+// Another connection's expunge between a page's numbering and its fetch
+// made the server refuse the numbers, and Postal quit on the refusal.
+#[test]
+fn a_page_renumbered_by_an_expunge_is_fetched_again() {
+    let server = FakeImap::start(messages(700));
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    place(&mut t, "1/500");
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+
+    server.stall(Stall::Sequence);
+    t.send(Key::Char('G')).unwrap();
+    let page = format!("FETCH 1:200 {ITEMS}");
+    wait_for(|| server.commands().contains(&page));
+    // Message 201, the oldest cached, and Message 200 below it are left.
+    server.expunge_range(FIRST_UID..=FIRST_UID + 198);
+    server.expunge_range(FIRST_UID + 201..=FIRST_UID + 699);
+    server.release();
+
+    let below = "SELECT count(*) FROM message WHERE subject = 'Message 200'";
+    wait_for(|| cached(&home, below) == 1);
+    quit(t);
+}
+
 fn snippet_fetches(server: &FakeImap) -> usize {
     let commands = server.commands();
     commands
