@@ -1,0 +1,62 @@
+From: Ada Lovelace <ada@example.com>
+To: bob@example.com
+Subject: Plan
+Date: Mon, 18 Nov 2024 09:00:00 +0000
+X-Postal-Case: The HTML a Markdown Draft is sent as: a list, links, struck
+ text, a code block, a table and escaped raw HTML lay out as a client shows them.
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="fqaH7oKrPAyaowleaQ2bMiOxcOLkbvrvEaEDkEMt"
+
+--fqaH7oKrPAyaowleaQ2bMiOxcOLkbvrvEaEDkEMt
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Hi Ada,
+the plan, line by line:
+
+- a **list** with [a link](https://example.com/plan)
+- ~~struck~~ and https://example.com/bare
+
+```
+let x = 1;
+```
+
+| name | due |
+| ---- | --: |
+| Ada  | Mon |
+
+<script>alert(1)</script>
+
+--fqaH7oKrPAyaowleaQ2bMiOxcOLkbvrvEaEDkEMt
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<!DOCTYPE html>
+<html><body>
+<p>Hi Ada,<br />
+the plan, line by line:</p>
+<ul>
+<li>a <strong>list</strong> with <a href="https://example.com/plan">a link</a></li>
+<li><del>struck</del> and <a href="https://example.com/bare">https://example.com/bare</a></li>
+</ul>
+<pre style="font-family:monospace"><code style="font-family:monospace">let x = 1;
+</code></pre>
+<table style="border-collapse:collapse">
+<thead>
+<tr>
+<th style="padding:2px 6px;border-bottom:1px solid #ccc">name</th>
+<th style="padding:2px 6px;border-bottom:1px solid #ccc" align="right">due</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="padding:2px 6px">Ada</td>
+<td style="padding:2px 6px" align="right">Mon</td>
+</tr>
+</tbody>
+</table>
+&lt;script&gt;alert(1)&lt;/script&gt;
+</body></html>
+
+--fqaH7oKrPAyaowleaQ2bMiOxcOLkbvrvEaEDkEMt--

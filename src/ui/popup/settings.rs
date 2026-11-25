@@ -7,7 +7,9 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    account::config::{self, ContactsChoice, IconChoice, NotifyChoice, SecretStore, Terminal},
+    account::config::{
+        self, ComposeFormat, ContactsChoice, IconChoice, NotifyChoice, SecretStore, Terminal,
+    },
     account::config_file::ConfigFile,
     account::mailto_handler::{self, CHOOSES_TERMINAL},
     account::partial_config::PartialConfig,
@@ -68,6 +70,7 @@ pub struct Settings {
     pub secrets: SecretStore,
     pub terminal: Terminal,
     pub contacts: ContactsChoice,
+    pub compose_format: ComposeFormat,
     /// Whether the system hands mailto: links to Postal.
     pub handler: bool,
     section: Section,
@@ -97,6 +100,7 @@ impl Settings {
             secrets: config.secrets,
             terminal: config.terminal,
             contacts: config.contacts,
+            compose_format: config.compose_format,
             handler: mailto_handler::is_set_up(),
             section: Section::Accounts,
             selected: 0,
@@ -153,6 +157,7 @@ impl Settings {
             Value::Secrets(store) => store == self.secrets,
             Value::Terminal(app) => self.terminal == Terminal::App(app),
             Value::Contacts(contacts) => contacts == self.contacts,
+            Value::Compose(format) => format == self.compose_format,
         }
     }
 
@@ -292,6 +297,9 @@ impl Settings {
             Value::Terminal(app) => {
                 self.change(|settings| settings.set_terminal(Terminal::App(app)));
             }
+            Value::Compose(format) => {
+                self.change(|settings| settings.set_compose_format(format));
+            }
             Value::Contacts(contacts) => {
                 if self.change(|settings| settings.write(|config| config.set_contacts(contacts))) {
                     self.contacts = contacts;
@@ -344,6 +352,14 @@ impl Settings {
         self.write(|config| config.set_send_delay(delay))?;
         self.send_delay = delay;
         // The Outbox holds each Send for the delay it opened with.
+        self.reload = true;
+        Ok(())
+    }
+
+    fn set_compose_format(&mut self, format: ComposeFormat) -> Result<(), Box<dyn Error>> {
+        self.write(|config| config.set_compose_format(format))?;
+        self.compose_format = format;
+        // Each Account read its format at start.
         self.reload = true;
         Ok(())
     }

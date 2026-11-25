@@ -62,7 +62,7 @@ pub fn compose(
         tracing::error!("noting the Account of a Draft failed: {error}");
     }
 
-    tty.outside(|| editor::edit(&path))?;
+    in_editor(tty, accounts, &path, notes.account.as_deref())?;
     if link.is_some_and(|link| link.dropped_bcc) {
         screen.toast = Some(Toast::new("the link's Bcc is dropped: a Draft has none"));
     }
@@ -116,7 +116,7 @@ pub fn reply(
     screen.forwarding = None;
     let message = &awaited.message;
     if let Some(path) = answered_by(message, world.accounts) {
-        return edit(tty, screen, path, DraftNotes::default());
+        return edit(tty, screen, world.accounts, path, DraftNotes::default());
     }
 
     let cache = &world.caches[message.account];
@@ -222,7 +222,7 @@ fn answer(
         tracing::error!("noting what a Draft answers failed: {error}");
     }
 
-    tty.outside(|| editor::edit(&path))?;
+    in_editor(tty, accounts, &path, notes.account.as_deref())?;
     // After the editor, where a Toast would have run out; a Draft that
     // does not read says so over it.
     toast_unread(screen, &signature);
@@ -248,11 +248,28 @@ fn create(screen: &mut Screen, text: &str) -> Option<PathBuf> {
 pub fn edit(
     tty: &mut Tty,
     screen: &mut Screen,
+    accounts: Accounts,
     path: PathBuf,
     notes: DraftNotes,
 ) -> Result<(), Error> {
-    tty.outside(|| editor::edit(&path))?;
+    // Without notes given, those in the file beside the Draft name its Account.
+    let beside = || Notes::read(&path).ok().flatten().and_then(|n| n.account);
+    let account = notes.account.clone().or_else(beside);
+    in_editor(tty, accounts, &path, account.as_deref())?;
     preview(screen, path, notes);
+    Ok(())
+}
+
+/// The editor on the Draft at `path`, told the format of the Account
+/// `account` names, as Send places it.
+pub fn in_editor(
+    tty: &mut Tty,
+    accounts: Accounts,
+    path: &Path,
+    account: Option<&str>,
+) -> Result<(), Error> {
+    let format = accounts.format(account);
+    tty.outside(|| editor::edit_draft(path, format))?;
     Ok(())
 }
 

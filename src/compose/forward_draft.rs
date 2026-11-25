@@ -7,6 +7,9 @@ use crate::{
     render::header_date, render::html_preview::Links,
 };
 
+/// The line a Forward's Draft sets the original under.
+pub const FORWARDED: &str = "---------- Forwarded message ---------";
+
 /// The Draft a Forward of `original` opens on, from its body `raw`: no
 /// recipient yet, an `Attach:` line for each file in `attached`, then the
 /// `signature` above the original under a forwarded-message header.
@@ -60,8 +63,7 @@ pub fn forward(
 
     let signed = signature.map_or_else(String::new, |signature| format!("{signature}\n"));
     format!(
-        "To: \nCc: \nSubject: {}\n{attach}\n\n{signed}---------- Forwarded message ---------\n\
-         {header}\n{}\n",
+        "To: \nCc: \nSubject: {}\n{attach}\n\n{signed}{FORWARDED}\n{header}\n{}\n",
         self::subject(subject),
         text.trim_end(),
     )

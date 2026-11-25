@@ -2,8 +2,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Frame, layout::Rect};
 
 use crate::{
+    account::config::ComposeFormat,
     compose::accounts::Accounts,
-    ui::drafts::draft_pane::DraftPane,
+    render::view::View,
+    ui::drafts::draft_pane::{self, DraftPane},
     ui::drafts::draft_preview::DraftPreview,
     ui::exit::Exit,
     ui::frame::theme::Theme,
@@ -21,6 +23,8 @@ enum DraftKey {
     /// Closes the preview, the Draft kept in Local Drafts.
     Keep,
     Discard,
+    /// The HTML of a Markdown Draft as sent, or its text.
+    SwitchView,
     Help,
     Quit,
 }
@@ -86,6 +90,15 @@ pub const HELP: &[Binding] = &[
         }),
     },
     Binding {
+        group: "Draft",
+        modes: DRAFT,
+        signed_out: false,
+        keys: &[Key::Char("v")],
+        aliases: &[],
+        description: "a Markdown Draft's HTML as sent / its text",
+        hint: None,
+    },
+    Binding {
         group: "Outbox",
         modes: &[Mode::Queued],
         signed_out: false,
@@ -100,7 +113,7 @@ pub const HELP: &[Binding] = &[
 ];
 
 /// A Draft's preview takes every key, and an Outbox Message's.
-pub const fn key(preview: &DraftPreview, key: KeyEvent) -> Act {
+pub const fn key(preview: &mut DraftPreview, key: KeyEvent) -> Act {
     if preview.queued {
         return match queued(key) {
             Some(QueuedKey::Close) => Act::Close(Step::Stay),
@@ -117,6 +130,10 @@ pub const fn key(preview: &DraftPreview, key: KeyEvent) -> Act {
         Some(DraftKey::Edit) => Act::Step(Step::Draft(Drafting::Edit)),
         Some(DraftKey::Keep) => Act::Step(Step::Draft(Drafting::Keep)),
         Some(DraftKey::Discard) => Act::Step(Step::Draft(Drafting::Discard)),
+        Some(DraftKey::SwitchView) => {
+            preview.view = preview.view.other();
+            Act::Stay
+        }
         None => Act::Stay,
     }
 }
@@ -147,10 +164,17 @@ pub fn draw(
             .map_or_else(|_bad| email(), |from| from.to_string())
     });
 
+    let markdown = accounts.format(preview.account.as_deref()) == ComposeFormat::Markdown;
+    let width = draft_pane::text_width(body);
+    // An Outbox Message was built already, perhaps in another format.
+    let laid_out = (markdown && !preview.queued && preview.view == View::Rendered)
+        .then(|| preview.laid_out(width, theme.mail_look()))
+        .flatten();
     let pane = DraftPane {
         theme,
         preview,
         from: from.as_deref().unwrap_or_default(),
+        rendered: laid_out.as_deref(),
     };
 
     frame.render_widget(pane, body);
@@ -173,6 +197,7 @@ const fn draft(key: KeyEvent) -> Option<DraftKey> {
         KeyCode::Char('e') => Some(DraftKey::Edit),
         KeyCode::Char('d') => Some(DraftKey::Keep),
         KeyCode::Char('q') => Some(DraftKey::Discard),
+        KeyCode::Char('v') => Some(DraftKey::SwitchView),
         KeyCode::Char('?') => Some(DraftKey::Help),
         _ => None,
     }

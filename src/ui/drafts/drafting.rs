@@ -22,7 +22,7 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
                     answering: preview.answering,
                 };
 
-                composing::edit(tty, screen, preview.path, notes)?;
+                composing::edit(tty, screen, world.accounts, preview.path, notes)?;
             }
         }
         Drafting::Send => composing::send(screen, world),

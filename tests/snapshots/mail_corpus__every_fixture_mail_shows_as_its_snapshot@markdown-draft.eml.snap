@@ -1,0 +1,41 @@
+---
+source: tests/mail_corpus.rs
+description: "The HTML a Markdown Draft is sent as: a list, links, struck text, a code block, a table and escaped raw HTML lay out as a client shows them."
+input_file: tests/fixtures/markdown-draft.eml
+---
+── rendered ──
+From    Ada Lovelace <ada@example.com>  Mon, 18 Nov 2024 09:00
+To      bob@example.com
+Subject Plan
+
+ Hi Ada,
+ the plan, line by line:
+
+    • a list with a link
+    • struck and https://example.com/bare
+
+ let x = 1;
+
+  name  due
+ ───────────
+  Ada   Mon
+ <script>alert(1)</script>
+
+── text ──
+From    Ada Lovelace <ada@example.com>  Mon, 18 Nov 2024 09:00
+To      bob@example.com
+Subject Plan
+
+Hi Ada,
+the plan, line by line:
+• a list with a link[1]
+• s̶t̶r̶u̶c̶k̶ and https://example.com/bare[2]
+
+let x = 1;
+
+name due
+Ada  Mon
+<script>alert(1)</script>
+
+[1] https://example.com/plan
+[2] https://example.com/bare

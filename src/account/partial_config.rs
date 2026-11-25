@@ -12,8 +12,8 @@ use toml::Spanned;
 use crate::{
     account::autoconfig::Autoconfig,
     account::config::{
-        Config, ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY, SecretStore,
-        Smtp, Terminal,
+        ComposeFormat, Config, ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY,
+        SecretStore, Smtp, Terminal,
     },
     account::oauth::Endpoints,
     account::provider::Provider,
@@ -38,6 +38,8 @@ pub struct PartialConfig {
     pub notify: NotifyChoice,
     pub terminal: Terminal,
     pub contacts: ContactsChoice,
+    /// The format of every Account that sets none of its own.
+    pub compose_format: ComposeFormat,
     /// How long a Send is held before it leaves, for `u` to take it back.
     pub send_delay: Duration,
 }
@@ -70,6 +72,8 @@ struct RawConfig {
     terminal: Terminal,
     #[serde(default)]
     contacts: ContactsChoice,
+    #[serde(default, rename = "compose-format")]
+    compose_format: ComposeFormat,
     /// In whole seconds.
     #[serde(rename = "send-delay")]
     send_delay: Option<u64>,
@@ -88,6 +92,8 @@ struct RawAccount {
     signature: Option<String>,
     #[serde(rename = "signature-file")]
     signature_file: Option<Spanned<String>>,
+    #[serde(rename = "compose-format")]
+    compose_format: Option<ComposeFormat>,
     #[serde(default)]
     imap: RawImap,
     #[serde(default)]
@@ -194,6 +200,7 @@ impl PartialConfig {
                 notify: NotifyChoice::default(),
                 terminal: Terminal::default(),
                 contacts: ContactsChoice::default(),
+                compose_format: ComposeFormat::default(),
                 send_delay: SEND_DELAY,
             }),
             Err(source) => Err(Error::Read {
@@ -242,6 +249,7 @@ impl PartialConfig {
             name: None,
             signature: raw.signature,
             signature_file: raw.signature_file,
+            compose_format: None,
             imap: RawImap::default(),
             smtp: RawSmtp::default(),
         });
@@ -263,6 +271,7 @@ impl PartialConfig {
             notify: raw.notify,
             terminal: raw.terminal,
             contacts: raw.contacts,
+            compose_format: raw.compose_format,
             send_delay: raw.send_delay.map_or(SEND_DELAY, Duration::from_secs),
         })
     }
@@ -284,6 +293,7 @@ impl PartialConfig {
             name: None,
             signature: None,
             signature_file: None,
+            compose_format: None,
             imap: RawImap::default(),
             smtp: RawSmtp::default(),
         };
@@ -329,6 +339,7 @@ impl PartialConfig {
             provider,
             name: account.name.clone().or_else(|| self.name.clone()),
             signature: self.signature(account),
+            compose_format: account.compose_format.unwrap_or(self.compose_format),
             secrets: self.secrets,
             oauth: self.oauth.clone(),
         }

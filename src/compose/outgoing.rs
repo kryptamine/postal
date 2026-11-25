@@ -34,7 +34,8 @@ impl Outgoing<'_> {
     /// `draft` as it is sent and every retry sends it again, its `Date`
     /// and `Message-ID` fixed now.
     pub fn build(self, draft: &Draft, answering: Option<&Answering>) -> Result<Vec<u8>, String> {
-        let message = draft.message(self.from()?, self.message_id(), answering)?;
+        let format = self.config.compose_format;
+        let message = draft.message(self.from()?, self.message_id(), answering, format)?;
         Ok(message.formatted())
     }
 

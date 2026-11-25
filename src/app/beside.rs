@@ -52,7 +52,7 @@ fn compose(link: &Mailto) -> Result<(), Box<dyn Error>> {
     };
 
     draft_file::note(&path, &notes)?;
-    editor::edit(&path)?;
+    editor::edit_draft(&path, accounts.format(notes.account.as_deref()))?;
     if let Err(error) = &signature {
         eprintln!("postal: could not read the signature: {error}");
     }

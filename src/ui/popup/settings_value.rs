@@ -1,5 +1,7 @@
 use crate::{
-    account::config::{ContactsChoice, IconChoice, NotifyChoice, SecretStore, TerminalApp},
+    account::config::{
+        ComposeFormat, ContactsChoice, IconChoice, NotifyChoice, SecretStore, TerminalApp,
+    },
     account::mailto_handler::CHOOSES_TERMINAL,
     ui::popup::settings_section::Section,
 };
@@ -12,6 +14,7 @@ pub enum Value {
     Secrets(SecretStore),
     Terminal(TerminalApp),
     Contacts(ContactsChoice),
+    Compose(ComposeFormat),
 }
 
 impl Value {
@@ -43,7 +46,11 @@ impl Value {
                 Self::Contacts(ContactsChoice::None),
                 Self::Contacts(ContactsChoice::Macos),
             ],
-            Section::Accounts | Section::Name | Section::Send | Section::Mailto => &[],
+            Section::Send => &[
+                Self::Compose(ComposeFormat::Plain),
+                Self::Compose(ComposeFormat::Markdown),
+            ],
+            Section::Accounts | Section::Name | Section::Mailto => &[],
         }
     }
 
@@ -54,6 +61,7 @@ impl Value {
             Self::Secrets(store) => store.key(),
             Self::Terminal(terminal) => terminal.key(),
             Self::Contacts(contacts) => contacts.key(),
+            Self::Compose(format) => format.key(),
         }
     }
 
@@ -74,6 +82,10 @@ impl Value {
             Self::Terminal(TerminalApp::Wezterm) => "in WezTerm",
             Self::Terminal(TerminalApp::Iterm2) => "in iTerm2",
             Self::Contacts(ContactsChoice::None) => "Correspondents come from mail alone",
+            Self::Compose(ComposeFormat::Plain) => "the text as written, one plain part",
+            Self::Compose(ComposeFormat::Markdown) => {
+                "the text, and its Markdown as HTML beside it"
+            }
             Self::Contacts(ContactsChoice::Macos) => {
                 "Contacts too: an agent through MCP sees them too"
             }

@@ -11,6 +11,7 @@ pub mod forwarded;
 pub mod local_draft;
 pub mod local_drafts;
 pub mod mailto;
+pub mod markdown;
 pub mod notes;
 pub mod outbox;
 pub mod outgoing;
