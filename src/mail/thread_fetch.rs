@@ -63,7 +63,8 @@ async fn fetched(
     }
 
     let keys: HashMap<Uid, BodyKey> = found.iter().map(|m| (m.row.uid, m.row.body_key)).collect();
-    let bodies: Vec<_> = bodies(server, &missing)
+    let fetched = one_by_one::fetch(&missing, "body", async |uids| server.bodies(uids).await);
+    let bodies: Vec<_> = fetched
         .await?
         .into_iter()
         .filter_map(|(uid, raw)| Some((*keys.get(&uid)?, raw)))
@@ -112,13 +113,4 @@ fn all<A>(folders: Vec<Folder<A>>) -> Option<FolderName> {
         .into_iter()
         .find(|f| f.role == Some(Role::All))
         .map(|f| f.name)
-}
-
-/// The bodies of `uids`, but those the server refuses.
-async fn bodies(server: &mut impl MailServer, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
-    if uids.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    one_by_one::fetch(uids, "body", async |uids| server.bodies(uids).await).await
 }
