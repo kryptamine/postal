@@ -24,6 +24,7 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 | ----------------- | ------------------------------------------------------------------------- |
 | a Draft           | completes `To:`, `Cc:` and `Attach:`; `:PostalAgent` edits the body       |
 | a Draft's body    | warns when it mentions an attachment and no `Attach:` names a file        |
+| a Markdown Draft  | parses what you write as Markdown: render-markdown.nvim renders it        |
 | `To:` and `Cc:`   | marks a recipient a send would refuse, and an address no mail holds       |
 | `:PostalContacts` | picks a Correspondent and adds it to `To:`, or the `Cc:` under the cursor |
 | an `Attach:` line | shows the file's size, or that it is missing; `gf` edits the file         |
@@ -31,6 +32,14 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 | a Reply's Quote   | folds away closed: `zo` opens it                                          |
 | a Signature       | `:PostalAgent` edits the signature                                        |
 | a Message (`E`)   | read-only; `:PostalAgent` answers questions about it and its Thread       |
+
+A Draft is Markdown when its Account sets `compose-format = "markdown"`,
+which Postal tells the editor in `$POSTAL_COMPOSE_FORMAT`. Its filetype is
+then `mail.markdown`, and Neovim's own Markdown parser reads the body up to
+the signature, a Forward's original or the Quote, which Postal sends as
+written. [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim)
+renders it when installed, with no setting; without it, the Markdown is
+highlighted and its marks hidden off the cursor's line.
 
 Completion goes through [blink.cmp](https://github.com/saghen/blink.cmp)
 when installed, Neovim's own menu otherwise.

@@ -1,5 +1,5 @@
--- `:checkhealth postal`: whether `postal` and each agent can run, and
--- whether `postal` is the release the plugin came with.
+-- `:checkhealth postal`: whether `postal` and each agent can run, whether
+-- `postal` is the plugin's release, and what shows a Markdown Draft.
 local config = require("postal.config")
 local requirements = require("postal.requirements")
 local version = require("postal.version")
@@ -40,6 +40,15 @@ function M.check()
 	end
 
 	versions()
+
+	vim.health.start("postal markdown")
+	if not vim.treesitter.language.add("markdown") then
+		vim.health.warn("no treesitter parser for markdown: a Markdown Draft shows as plain text")
+	elseif pcall(require, "render-markdown") then
+		vim.health.ok("render-markdown.nvim renders a Markdown Draft's body")
+	else
+		vim.health.ok("a Markdown Draft's body is highlighted; render-markdown.nvim would render it")
+	end
 
 	vim.health.start("postal agents")
 	for name, spec in vim.spairs(config.options.agents) do

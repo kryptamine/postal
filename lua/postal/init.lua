@@ -1,7 +1,6 @@
--- Completes a Postal Draft's recipients from its Correspondents and its
--- `Attach:` paths as they are typed (blink.cmp, else Neovim's own menu), and
--- chats with an ACP agent about a Draft, a Signature or a Message through
--- `:PostalAgent`.
+-- Completes a Postal Draft's recipients and `Attach:` paths as they are
+-- typed, parses a Markdown Draft's body as Markdown, and chats with an ACP
+-- agent about a Draft, a Signature or a Message through `:PostalAgent`.
 local agent = require("postal.agent")
 local attach = require("postal.attach")
 local checks = require("postal.checks")
@@ -11,6 +10,7 @@ local contacts = require("postal.contacts")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
 local links = require("postal.links")
+local markdown = require("postal.markdown")
 local prompts = require("postal.prompts")
 local recipients = require("postal.recipients")
 
@@ -36,6 +36,7 @@ local function blink()
 		registered = true
 		cmp.add_source_provider("postal", { name = "Postal", module = "postal.blink" })
 		cmp.add_filetype_source("mail", "postal")
+		cmp.add_filetype_source("mail.markdown", "postal")
 	end
 
 	return true
@@ -90,6 +91,7 @@ local KINDS = {
 		quoted = true,
 		desc = "Chat with an ACP agent about this Draft",
 		setup = function(buf, group)
+			markdown.attach(buf, group)
 			vim.bo[buf].omnifunc = "v:lua.require'postal'.omnifunc"
 			recipients.ask(buf, function()
 				checks.run(buf)
