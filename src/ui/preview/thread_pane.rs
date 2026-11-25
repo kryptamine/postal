@@ -32,6 +32,8 @@ use crate::{
 const GAP: u16 = 2;
 /// The bar left of every row of the Message at the cursor.
 const CURSOR: &str = "▎";
+/// On the bottom border while a Message marked `new` is below the window.
+const BELOW: &str = " new below · G ";
 
 /// Reading: the selected Thread's stack inside a border titled with the
 /// cursor's place in it. In hint mode, `hints` labels the links, and
@@ -56,8 +58,9 @@ impl StatefulWidget for ThreadPane<'_> {
         stack::settle(self.view, self.previews, reading, (text.width, height));
         let window = reading.scroll..reading.scroll + height;
         let count = self.view.stack().count();
-        let mut cursor = 0;
+        let (mut cursor, mut below) = (0, false);
         for placed in stack::placed(self.view, self.previews, reading, text.width) {
+            below |= placed.top >= window.end && reading.fresh(placed.message.body_key);
             // A Thread of one has nothing else to point at.
             let at_cursor = placed.message.body_key == reading.cursor && count > 1;
             if at_cursor {
@@ -72,18 +75,29 @@ impl StatefulWidget for ThreadPane<'_> {
             for row in rows {
                 let y = text.y + u16::try_from(row - window.start).unwrap_or(u16::MAX);
                 let line = Rect::new(text.x, y, text.width, 1);
-                self.row(buf, line, &placed, row - placed.top);
+                self.row(buf, line, (&placed, reading), row - placed.top);
                 if at_cursor && text.x > area.x + 1 {
                     buf.set_string(text.x - 1, y, CURSOR, self.theme.title);
                 }
             }
 
-            self.pin(buf, area, &placed, placed.pinned(&window));
+            self.pin(buf, area, (&placed, reading), placed.pinned(&window));
         }
 
         let mut place = StackStr::<24>::new();
         write!(place, " {}/{count} ", cursor + 1).ok();
         self.title(buf, area, place.as_str());
+        if below {
+            let width = u16::try_from(BELOW.width()).unwrap_or(u16::MAX);
+            let x = area.right().saturating_sub(1 + width).max(area.x + 1);
+            border::label(
+                buf,
+                area,
+                (x, area.bottom() - 1),
+                [BELOW],
+                self.theme.marker,
+            );
+        }
     }
 }
 
@@ -116,7 +130,13 @@ impl ThreadPane<'_> {
     }
 
     /// Row `offset` of the Message `placed`, from its top.
-    fn row(&self, buf: &mut Buffer, row: Rect, placed: &Placed<'_>, offset: usize) {
+    fn row(
+        &self,
+        buf: &mut Buffer,
+        row: Rect,
+        (placed, reading): (&Placed<'_>, &Reading),
+        offset: usize,
+    ) {
         let body = match &placed.shape {
             Shape::Run(count) => {
                 let mut earlier = StackStr::<32>::new();
@@ -130,7 +150,14 @@ impl ThreadPane<'_> {
         let Some(index) = offset.checked_sub(placed.header()) else {
             let message = placed.message;
             let labels = self.attachment_hints.and_then(|h| h.labels(message));
-            return message_header::draw_stacked(self.theme, buf, row, (message, offset), labels);
+            let fresh = reading.fresh(message.body_key);
+            return message_header::draw_stacked(
+                self.theme,
+                buf,
+                row,
+                (message, offset),
+                (labels, fresh),
+            );
         };
 
         match body {
@@ -151,7 +178,13 @@ impl ThreadPane<'_> {
 
     /// Draws the last `rows` rows of the header of `placed` over the top of
     /// the text of `pane`, the last of them a rule across it as in the Preview.
-    fn pin(&self, buf: &mut Buffer, pane: Rect, placed: &Placed<'_>, rows: usize) {
+    fn pin(
+        &self,
+        buf: &mut Buffer,
+        pane: Rect,
+        (placed, reading): (&Placed<'_>, &Reading),
+        rows: usize,
+    ) {
         let text = preview_pane::text_area(pane);
         let header = placed.header();
         let first = header - rows;
@@ -161,7 +194,7 @@ impl ThreadPane<'_> {
             if offset + 1 == header {
                 border::rule(buf, pane, y, self.theme.border);
             } else {
-                self.row(buf, line, placed, offset);
+                self.row(buf, line, (placed, reading), offset);
             }
         }
     }

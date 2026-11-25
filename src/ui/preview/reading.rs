@@ -11,6 +11,9 @@ use crate::{
 /// folded to a line or unfolded to its header and body.
 pub struct Reading {
     unfolded: HashSet<BodyKey>,
+    /// Messages from others that joined the open Thread, marked `new`
+    /// until the cursor reaches them.
+    fresh: HashSet<BodyKey>,
     /// Every Message on a line of its own, from the first fold on.
     whole: bool,
     /// The body key of the Message at the cursor, which tells apart Messages
@@ -38,6 +41,7 @@ impl Reading {
         Some(Self {
             cursor: oldest.unwrap_or(newest).body_key,
             unfolded: unread.chain([newest]).map(|m| m.body_key).collect(),
+            fresh: HashSet::new(),
             whole: false,
             scroll: 0,
             reveal: true,
@@ -48,6 +52,26 @@ impl Reading {
 
     pub fn unfolded(&self, key: BodyKey) -> bool {
         self.unfolded.contains(&key)
+    }
+
+    pub fn fresh(&self, key: BodyKey) -> bool {
+        self.fresh.contains(&key)
+    }
+
+    /// Messages joined the stack: each Unread one from someone else unfolds
+    /// and is marked `new`, and the top of the window stays where it was.
+    pub fn joined<'a>(&mut self, joined: impl Iterator<Item = &'a Message>) {
+        for message in joined.filter(|m| m.unread && !m.from_me) {
+            self.unfolded.insert(message.body_key);
+            self.fresh.insert(message.body_key);
+        }
+
+        self.hold = true;
+    }
+
+    /// The cursor has reached its Message: it is `new` no longer.
+    pub fn reached(&mut self) {
+        self.fresh.remove(&self.cursor);
     }
 
     /// Each line of `stack`: until the first fold, a run of two or more
