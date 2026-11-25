@@ -42,6 +42,7 @@ use crate::{
     ui::react::take::take,
     ui::react::timed::{expire, next_change},
     ui::state::screen::Screen,
+    ui::state::toast::Toast,
     ui::state::ui::Ui,
     ui::takeover::leaving::Leaving,
     ui::terminal::tty::Tty,
@@ -82,6 +83,16 @@ pub struct Background<'a, W, U> {
     pub link: Option<Mailto>,
     pub notify: NotifyChoice,
     pub contacts: ContactsChoice,
+}
+
+/// What the event loop woke to.
+enum Woken {
+    /// The screen changes on its own: a Toast goes, a Dwell ends.
+    Due,
+    Leaving,
+    Finished(Result<(), sync::Error>),
+    Update(Option<(AccountId, Update)>),
+    Input(Option<io::Result<Event>>),
 }
 
 /// The screen, with the terminal, the look, the Previews and the network
@@ -149,29 +160,29 @@ pub async fn run(
         let text = model.frame()?;
         alloc_count::report(frame_start);
         let change = next_change(&mut model.ui, model.previews, text);
-        tokio::select! {
-            () = tokio::time::sleep_until(change.unwrap_or_else(Instant::now)), if change.is_some() => {
-                frame_start = alloc_count::count();
-                expire(&mut model.ui, world)?;
+        let woken = tokio::select! {
+            () = tokio::time::sleep_until(change.unwrap_or_else(Instant::now)), if change.is_some() => Woken::Due,
+            () = leaving.woken() => Woken::Leaving,
+            result = &mut work, if !work.is_terminated() => Woken::Finished(result),
+            update = updates.next(), if listening => Woken::Update(update),
+            event = model.tty.events.next() => Woken::Input(event),
+        };
+
+        frame_start = alloc_count::count();
+        let step = match woken {
+            Woken::Due => expire(&mut model.ui, world).map(|()| None),
+            Woken::Leaving => Ok(None),
+            Woken::Finished(result) => finished(result).map(|()| None),
+            Woken::Update(Some((account, update))) => model.arrive(account, update).map(|()| None),
+            Woken::Update(None) => {
+                listening = false;
+                Ok(None)
             }
-            () = leaving.woken() => frame_start = alloc_count::count(),
-            result = &mut work, if !work.is_terminated() => {
-                frame_start = alloc_count::count();
-                finished(result)?;
-            }
-            update = updates.next(), if listening => {
-                frame_start = alloc_count::count();
-                match update {
-                    Some((account, update)) => model.arrive(account, update)?,
-                    None => listening = false,
-                }
-            }
-            event = model.tty.events.next() => {
-                frame_start = alloc_count::count();
-                if let Some(exit) = model.input(event, text)? {
-                    return Ok(exit);
-                }
-            }
+            Woken::Input(event) => model.input(event, text),
+        };
+
+        if let Some(exit) = survive(step, &mut model.ui.screen)? {
+            return Ok(exit);
         }
     }
 }
@@ -287,6 +298,19 @@ impl Model<'_> {
 /// Rows a half-page scroll moves the Preview `text` by.
 fn half_page(text: Option<Rect>) -> usize {
     text.map_or(1, |t| usize::from(t.height / 2).max(1))
+}
+
+/// A Cache error in answer to one event is toasted and the session goes
+/// on. One in the frame ends it, as it would recur on every frame.
+fn survive(step: Result<Option<Exit>, Error>, screen: &mut Screen) -> Result<Option<Exit>, Error> {
+    match step {
+        Err(Error::Cache(error)) => {
+            tracing::error!("{error}");
+            screen.toast = Some(Toast::error("cache error"));
+            Ok(None)
+        }
+        step => step,
+    }
 }
 
 /// The background work's end; signed out, the screen stays usable.

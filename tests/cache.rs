@@ -306,18 +306,7 @@ fn a_cache_damaged_under_a_killed_session_is_checked_and_rebuilt() {
     t.signal(Signal::Kill).unwrap();
     t.wait_exit().unwrap();
     // The schema's pages stay, so only the check finds the damage.
-    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
-    let root: usize = cache
-        .query_row(
-            "SELECT rootpage FROM sqlite_master WHERE name = 'message'",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap();
-    drop(cache);
-    let mut bytes = fs::read(home.cache_path()).unwrap();
-    bytes[(root - 1) * 4096..root * 4096].fill(0xff);
-    fs::write(home.cache_path(), bytes).unwrap();
+    damage(&home, "message");
 
     let mut t = postal(&home);
     t.wait_until(|s| s.contains(" · 1/") && hint_line(s).ends_with("cache rebuilt"))
@@ -325,6 +314,23 @@ fn a_cache_damaged_under_a_killed_session_is_checked_and_rebuilt() {
     quit(t);
     let log = fs::read_to_string(home.log_path()).unwrap();
     assert!(log.contains("checking the Cache"), "{log}");
+}
+
+/// Overwrites the root page of `table` in the closed Cache with garbage.
+fn damage(home: &Home, table: &str) {
+    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
+    let (root, size): (usize, usize) = cache
+        .query_row(
+            "SELECT rootpage, (SELECT page_size FROM pragma_page_size) \
+             FROM sqlite_master WHERE name = ?1",
+            [table],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    drop(cache);
+    let mut bytes = fs::read(home.cache_path()).unwrap();
+    bytes[(root - 1) * size..root * size].fill(0xff);
+    fs::write(home.cache_path(), bytes).unwrap();
 }
 
 #[test]
@@ -471,4 +477,33 @@ fn a_failed_cache_write_keeps_the_session_in_memory_and_is_toasted_once() {
         .query_row("SELECT count(*) FROM message", [], |row| row.get(0))
         .unwrap();
     assert_eq!(on_disk, 4);
+}
+
+// A read the Cache fails in answer to a key must not end Postal: the error
+// is toasted and the screen stays usable.
+#[test]
+fn a_failed_cache_read_is_toasted_and_the_session_goes_on() {
+    let server = FakeImap::start(four_messages());
+    let home = Home::for_server(&server);
+    first_run(&home, &server);
+    damage(&home, "message_text_data");
+
+    // Synced mail would write to the damaged index before the Search.
+    server.stall(Stall::Greeting);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains(" Inbox · 1/4 ")).unwrap();
+    t.send(Key::Char('/')).unwrap();
+    t.send_str("old").unwrap();
+    let screen = t
+        .snapshot_after(|s| hint_line(s).ends_with("cache error"))
+        .unwrap();
+    assert!(toast_is_red(&screen, "cache error"), "{screen}");
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| !hint_line(s).contains("/old")).unwrap();
+    t.send(Key::Char('j')).unwrap();
+    t.wait_until(|s| s.contains(" Inbox · 2/4 ")).unwrap();
+    quit(t);
+
+    let log = fs::read_to_string(home.log_path()).unwrap();
+    assert!(log.contains("malformed"), "{log}");
 }
