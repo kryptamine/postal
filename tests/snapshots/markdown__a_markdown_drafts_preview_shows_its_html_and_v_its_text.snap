@@ -32,4 +32,4 @@ size: 100x30  cursor: hidden
 │                                                                                                  │
 │                                                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
- y send  e edit  q discard  d keep  ?: help
+ y send  e edit  q keep  d discard  ?: help

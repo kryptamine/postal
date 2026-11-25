@@ -398,7 +398,7 @@ fn a_sent_reply_flags_the_original_answered() {
     assert!(!imap.answered(INBOX, FIRST_UID));
 
     // Discarded, then brought back, the Draft still answers the Message.
-    t.send(Key::Char('q')).unwrap();
+    t.send(Key::Char('d')).unwrap();
     t.wait_until(|s| s.contains("Discarded · u undo")).unwrap();
     t.send(Key::Char('u')).unwrap();
     t.wait_until(previewed).unwrap();

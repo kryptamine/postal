@@ -161,7 +161,7 @@ The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `sig
 _Avoid_: footer, sign-off
 
 **Draft**:
-A Message being written, kept on this machine until it is sent or discarded (ADR 0013); the editor's exit after Compose, Reply or Forward, or `d` in its preview, keeps it for later. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox. With `compose-format = "markdown"` in `config.toml`, at the top level or in an `[[account]]`, the body is Markdown: Send adds its HTML beside the text as written, the signature, a Quote and a Forward's original kept as written, and the preview shows that HTML in the Rendered View, `v` the text (ADR 0036).
+A Message being written, kept on this machine until it is sent or discarded (ADR 0013); the editor's exit after Compose, Reply or Forward, or `q` or Esc in its preview, keeps it for later; `d` there discards it. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox. With `compose-format = "markdown"` in `config.toml`, at the top level or in an `[[account]]`, the body is Markdown: Send adds its HTML beside the text as written, the signature, a Quote and a Forward's original kept as written, and the preview shows that HTML in the Rendered View, `v` the text (ADR 0036).
 _Avoid_: unsent mail, composition
 
 **Local Drafts**:

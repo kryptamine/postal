@@ -382,14 +382,14 @@ fn the_editor_opened_by_e_sends_the_draft_too() {
 }
 
 #[test]
-fn q_discards_the_draft_and_u_brings_it_back() {
+fn d_discards_the_draft_and_u_brings_it_back() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let home = home(&imap, &smtp);
     let editor = Editor::writing(WRITTEN);
     let mut t = previewing(&home, &editor);
     let path = drafts(&home)[0].0.clone();
 
-    t.send(Key::Char('q')).unwrap();
+    t.send(Key::Char('d')).unwrap();
     t.wait_until(|s| s.contains("Discarded · u undo") && local(s))
         .unwrap();
     assert_eq!(drafts(&home), Vec::<(PathBuf, String)>::new());
