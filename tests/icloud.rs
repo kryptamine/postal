@@ -18,6 +18,7 @@ use std::{
 
 use support::{
     browser::Browser,
+    editor::sending,
     fake_imap::{APP_PASSWORD, EMAIL, FakeImap, FakeMessage, LOGIN_USER},
     fake_smtp::FakeSmtp,
     home::Home,
@@ -65,7 +66,7 @@ fn icloud() -> FakeImap {
     server
 }
 
-/// `$EDITOR`, copying `WRITTEN` over the Draft.
+/// `$EDITOR`, copying `WRITTEN` over the Draft and sending it.
 struct Editor {
     dir: TempDir,
 }
@@ -81,7 +82,7 @@ impl Editor {
     }
 
     fn command(&self) -> String {
-        format!("cp '{}'", self.dir.path().join("next").display())
+        sending(&format!("cp '{}'", self.dir.path().join("next").display()))
     }
 }
 
@@ -306,9 +307,6 @@ fn a_message_goes_out_with_the_password_and_is_saved_to_sent_messages() {
     let mut t = spawn(&home, &browser, &editor, &[]);
     t.wait_until(|s| s.contains("Weekly notes")).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
-        .unwrap();
-    t.send(Key::Char('y')).unwrap();
 
     wait_for(|| !server.appended().is_empty());
     quit(t);
@@ -331,9 +329,6 @@ fn smtp_asks_for_starttls_before_it_signs_in() {
     let mut t = spawn(&home, &browser, &editor, &[]);
     t.wait_until(|s| s.contains("Weekly notes")).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
-        .unwrap();
-    t.send(Key::Char('y')).unwrap();
 
     wait_for(|| smtp.starttls() > 0);
     quit(t);

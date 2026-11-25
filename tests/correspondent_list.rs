@@ -23,6 +23,7 @@ use std::{
 
 use serde_json::Value;
 use support::{
+    editor::sending,
     fake_imap::{APP_PASSWORD, EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     fake_smtp::FakeSmtp,
@@ -50,7 +51,7 @@ fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
     ))
 }
 
-/// The TUI, with `$EDITOR` copying `draft` over each Draft.
+/// The TUI, with `$EDITOR` copying `draft` over each Draft and sending it.
 fn postal(home: &Home, draft: &str) -> (Terminal, TempDir) {
     let editor = tempfile::tempdir().unwrap();
     let next = editor.path().join("next");
@@ -63,7 +64,7 @@ fn postal(home: &Home, draft: &str) -> (Terminal, TempDir) {
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("EDITOR", format!("cp '{}'", next.display()))
+        .env("EDITOR", sending(&format!("cp '{}'", next.display())))
         .env("TZ", "UTC")
         .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10))
@@ -206,8 +207,6 @@ fn whom_a_send_went_to_is_listed_at_once() {
     );
     t.wait_until(|s| s.contains("Notes")).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ")).unwrap();
-    t.send(Key::Char('y')).unwrap();
     wait_for(|| smtp.received().len() == 1);
     wait_for(|| log_says(&home, "SMTP accepted"));
     quit(t);

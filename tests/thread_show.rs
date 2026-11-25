@@ -20,6 +20,7 @@ use std::{
 
 use serde_json::Value;
 use support::{
+    editor::saved,
     fake_body::FakeBody,
     fake_imap::{EMAIL, FIRST_UID, FakeImap, FakeMessage},
     fake_oauth,
@@ -59,10 +60,6 @@ fn postal_editing(home: &Home, editor: &str) -> Terminal {
         .unwrap()
 }
 
-fn previewed(screen: &Screen) -> bool {
-    screen.contains(" Draft ") && screen.contains("y send")
-}
-
 /// Each key once the screen shows its text, the last opening a Reply: the
 /// path of its Draft, left unsent.
 fn reply(home: &Home, keys: &[(&str, Key)]) -> PathBuf {
@@ -72,7 +69,7 @@ fn reply(home: &Home, keys: &[(&str, Key)]) -> PathBuf {
         t.send(key).unwrap();
     }
 
-    t.wait_until(previewed).unwrap();
+    t.wait_until(saved).unwrap();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
     let mut drafts: Vec<_> = fs::read_dir(home.drafts_dir())

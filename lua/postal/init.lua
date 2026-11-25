@@ -1,6 +1,7 @@
 -- Completes a Postal Draft's recipients and `Attach:` paths as they are
--- typed, parses a Markdown Draft's body as Markdown, and chats with an ACP
--- agent about a Draft, a Signature or a Message through `:PostalAgent`.
+-- typed, parses a Markdown Draft's body as Markdown, sends it with
+-- `:PostalSend`, and chats with an ACP agent about it, a Signature or a
+-- Message through `:PostalAgent`.
 local agent = require("postal.agent")
 local attach = require("postal.attach")
 local checks = require("postal.checks")
@@ -13,6 +14,7 @@ local links = require("postal.links")
 local markdown = require("postal.markdown")
 local prompts = require("postal.prompts")
 local recipients = require("postal.recipients")
+local send = require("postal.send")
 
 local M = {}
 
@@ -104,6 +106,7 @@ local KINDS = {
 				contacts.pick(buf)
 			end, { desc = "Add a Correspondent to the Draft's To: or Cc:" })
 			attach.map(buf)
+			send.command(buf)
 			checks.watch(buf, group)
 		end,
 		unload = recipients.forget,

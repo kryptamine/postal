@@ -130,8 +130,8 @@ fn open(
         tracing::error!("noting the Account of a Draft failed: {error}");
     }
 
-    composing::in_editor(tty, accounts, &path, notes.account.as_deref())?;
+    let exit = composing::in_editor(tty, accounts, &path, notes.account.as_deref())?;
+    composing::written(screen, world, path, notes, exit);
     composing::toast_unread(screen, &signature);
-    composing::preview(screen, path, notes);
     Ok(())
 }

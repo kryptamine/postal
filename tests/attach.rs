@@ -15,6 +15,7 @@ use std::{fs, path::Path, time::Duration};
 
 use mail_parser::{MessageParser, MimeHeaders};
 use support::{
+    editor::{saved, sending},
     fake_imap::{EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     fake_smtp::FakeSmtp,
@@ -69,7 +70,7 @@ fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
     ))
 }
 
-fn postal(home: &Home, desk: &Desk) -> Terminal {
+fn postal(home: &Home, desk: &Desk, editor: &str) -> Terminal {
     Terminal::builder()
         .size(100, 30)
         .env_clear()
@@ -79,7 +80,7 @@ fn postal(home: &Home, desk: &Desk) -> Terminal {
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("EDITOR", desk.editor())
+        .env("EDITOR", editor)
         .env("TZ", "UTC")
         .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10))
@@ -105,12 +106,12 @@ fn previewed(screen: &Screen) -> bool {
     screen.contains(" Draft ") && screen.contains("y send")
 }
 
-/// Started on the Message List, a Draft written with `c`, on its preview.
+/// Started on the Message List, a Draft written with `c` and sent from
+/// the editor.
 fn composed(home: &Home, desk: &Desk) -> Terminal {
-    let mut t = postal(home, desk);
+    let mut t = postal(home, desk, &sending(&desk.editor()));
     t.wait_until(listed).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
     t
 }
 
@@ -142,7 +143,6 @@ fn a_draft_with_two_attach_lines_sends_both_files_byte_for_byte() {
     desk.write(TWO);
     let home = home(&imap, &smtp);
     let mut t = composed(&home, &desk);
-    t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
     quit(t);
 
@@ -180,7 +180,6 @@ fn a_retry_after_the_file_is_deleted_sends_the_message_as_queued() {
     desk.write(TWO);
     let home = home(&imap, &smtp);
     let mut t = composed(&home, &desk);
-    t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| listed(s) && s.contains("1 outbox"))
         .unwrap();
     fs::remove_file(desk.path().join("Documents/report.pdf")).unwrap();
@@ -212,7 +211,7 @@ fn a_missing_file_is_refused_with_its_line_named_before_anything_is_sent() {
     desk.write("To: bob@example.com\nSubject: Report\nAttach: ~/gone.pdf\n\nHi\n");
     let home = home(&imap, &smtp);
     let mut t = composed(&home, &desk);
-    t.wait_until(|s| s.contains("`Attach: ~/gone.pdf`"))
+    t.wait_until(|s| previewed(s) && s.contains("`Attach: ~/gone.pdf`"))
         .unwrap();
     t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("the Draft does not parse"))
@@ -229,7 +228,8 @@ fn files_over_25_mb_together_are_refused_before_sending() {
     desk.write("To: bob@example.com\nAttach: big.bin\nAttach: big.bin\n\nHi\n");
     let home = home(&imap, &smtp);
     let mut t = composed(&home, &desk);
-    t.wait_until(|s| s.contains("over 25 MB")).unwrap();
+    t.wait_until(|s| previewed(s) && s.contains("over 25 MB"))
+        .unwrap();
     t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("the Draft does not parse"))
         .unwrap();
@@ -244,7 +244,6 @@ fn a_refused_message_goes_back_to_the_drafts_with_its_attach_lines() {
     desk.write(TWO);
     let home = home(&imap, &smtp);
     let mut t = composed(&home, &desk);
-    t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| listed(s) && s.contains("back in Drafts"))
         .unwrap();
     quit(t);
@@ -263,11 +262,10 @@ fn local_drafts_counts_the_files_a_draft_attaches() {
     let (imap, smtp, desk) = (inbox(), FakeSmtp::start(), Desk::new());
     desk.write(TWO);
     let home = home(&imap, &smtp);
-    let mut t = composed(&home, &desk);
-    assert!(t.screen().contains("Attach  заметки.txt"));
-    t.send(Key::Char('d')).unwrap();
-    t.wait_until(|s| s.contains("Saved to Drafts") && listed(s))
-        .unwrap();
+    let mut t = postal(&home, &desk, &desk.editor());
+    t.wait_until(listed).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    t.wait_until(|s| saved(s) && listed(s)).unwrap();
     t.send(Key::Char('f')).unwrap();
     t.send_str("local").unwrap();
     t.wait_until(|s| picked(s).first().is_some_and(|f| f == "Local Drafts"))
@@ -281,5 +279,8 @@ fn local_drafts_counts_the_files_a_draft_attaches() {
         .find(|line| line.contains("Report"))
         .unwrap();
     assert!(row.trim_end_matches([' ', '│']).ends_with("+ 2"), "{row}");
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| previewed(s) && s.contains("Attach  заметки.txt"))
+        .unwrap();
     quit(t);
 }

@@ -20,6 +20,7 @@ use std::{
 };
 
 use support::{
+    editor::sending,
     fake_imap::{EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     fake_smtp::FakeSmtp,
@@ -80,10 +81,10 @@ impl Editor {
     }
 }
 
-fn postal(home: &Home, editor: &Editor) -> Terminal {
+fn postal(home: &Home, editor: &str) -> Terminal {
     (home.terminal())
         .size(100, 30)
-        .env("EDITOR", editor.command())
+        .env("EDITOR", editor)
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }
@@ -124,10 +125,10 @@ fn drafts(home: &Home) -> Vec<PathBuf> {
 fn a_second_postal_takes_the_session_over_and_the_first_says_where_it_went() {
     let (imap, smtp, editor) = (inbox(), FakeSmtp::start(), Editor::new());
     let home = home(&imap, &smtp);
-    let mut first = postal(&home, &editor);
+    let mut first = postal(&home, &editor.command());
     first.wait_until(listed).unwrap();
 
-    let mut second = postal(&home, &editor);
+    let mut second = postal(&home, &editor.command());
     let asked = second.wait_until_for(|s| s.contains(ASKED), Duration::from_secs(10));
     asked.unwrap();
     assert!(second.screen().contains("Postal is open in /dev/"));
@@ -144,10 +145,10 @@ fn a_second_postal_takes_the_session_over_and_the_first_says_where_it_went() {
 fn declining_the_move_leaves_the_first_running() {
     let (imap, smtp, editor) = (inbox(), FakeSmtp::start(), Editor::new());
     let home = home(&imap, &smtp);
-    let mut first = postal(&home, &editor);
+    let mut first = postal(&home, &editor.command());
     first.wait_until(listed).unwrap();
 
-    let mut second = postal(&home, &editor);
+    let mut second = postal(&home, &editor.command());
     second.wait_until(|s| s.contains(ASKED)).unwrap();
     second.send(Key::Char('n')).unwrap();
     assert!(second.wait_exit().unwrap().success());
@@ -165,16 +166,12 @@ fn a_send_under_way_finishes_before_the_move_and_goes_out_once() {
     smtp.stall(Duration::from_secs(2));
     editor.go();
     let home = home(&imap, &smtp);
-    let mut first = postal(&home, &editor);
+    let mut first = postal(&home, &sending(&editor.command()));
     first.wait_until(listed).unwrap();
     first.send(Key::Char('c')).unwrap();
-    first
-        .wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
-        .unwrap();
-    first.send(Key::Char('y')).unwrap();
     wait_for(|| smtp.received().len() == 1);
 
-    let mut second = postal(&home, &editor);
+    let mut second = postal(&home, &editor.command());
     moved_here(&mut second);
     let text = left(&mut first);
     assert!(text.contains("postal moved to"), "{text}");
@@ -190,12 +187,12 @@ fn a_send_under_way_finishes_before_the_move_and_goes_out_once() {
 fn with_the_editor_open_the_session_moves_at_once_and_the_draft_follows() {
     let (imap, smtp, editor) = (inbox(), FakeSmtp::start(), Editor::new());
     let home = home(&imap, &smtp);
-    let mut first = postal(&home, &editor);
+    let mut first = postal(&home, &editor.command());
     first.wait_until(listed).unwrap();
     first.send(Key::Char('c')).unwrap();
     wait_for(|| drafts(&home).len() == 1);
 
-    let mut second = postal(&home, &editor);
+    let mut second = postal(&home, &editor.command());
     second.wait_until(|s| s.contains(ASKED)).unwrap();
     assert!(
         second
@@ -256,7 +253,7 @@ fn a_tui_that_does_not_answer_is_offered_to_be_forced_out() {
     let home = home(&imap, &smtp);
     let mut stuck = holder(&home, "tui");
 
-    let mut second = postal(&home, &editor);
+    let mut second = postal(&home, &editor.command());
     moved_here(&mut second);
     let offered = |s: &Screen| s.contains("is not responding") && s.contains("Force quit it?");
     second
@@ -277,7 +274,7 @@ fn a_folder_sync_holding_the_lock_is_waited_for_and_never_signalled() {
     let home = home(&imap, &smtp);
     let mut sync = holder(&home, "sync");
 
-    let mut second = postal(&home, &editor);
+    let mut second = postal(&home, &editor.command());
     second
         .wait_until(|s| s.contains("Waiting for a folder sync to finish"))
         .unwrap();
@@ -294,7 +291,7 @@ fn a_folder_sync_holding_the_lock_is_waited_for_and_never_signalled() {
 fn a_sigterm_no_takeover_sent_quits_without_naming_a_terminal() {
     let (imap, smtp, editor) = (inbox(), FakeSmtp::start(), Editor::new());
     let home = home(&imap, &smtp);
-    let mut first = postal(&home, &editor);
+    let mut first = postal(&home, &editor.command());
     first.wait_until(listed).unwrap();
     first.signal(Signal::Term).unwrap();
     let text = left(&mut first);

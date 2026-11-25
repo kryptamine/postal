@@ -15,13 +15,14 @@ use std::{fs, path::PathBuf, time::Duration};
 
 use mail_parser::{MessageParser, MimeHeaders};
 use support::{
+    editor::{preview_newest, saved},
     fake_body::FakeBody,
     fake_imap::{EMAIL, FakeImap, FakeMessage, Stall},
     fake_oauth,
     fake_smtp::{FakeSmtp, Received},
     home::Home,
 };
-use termlens::{Key, Screen, Terminal};
+use termlens::{Key, Terminal};
 
 const DATE: &str = "2024-11-18T09:00:00Z";
 
@@ -73,10 +74,6 @@ fn from_ada(subject: &str, body: FakeBody) -> FakeMessage {
     .body(body)
 }
 
-fn previewed(screen: &Screen) -> bool {
-    screen.contains(" Draft ") && screen.contains("y send")
-}
-
 /// The one Draft's path in the data directory.
 fn draft_path(home: &Home) -> PathBuf {
     let drafts: Vec<PathBuf> = fs::read_dir(home.drafts_dir())
@@ -96,14 +93,15 @@ fn draft(home: &Home) -> (String, PathBuf) {
     (fs::read_to_string(&path).unwrap(), forwarded)
 }
 
-/// `F` on the Message shown once `shown` holds, the Draft as Postal wrote
-/// it, and what the server received once it is sent.
+/// `F` on the Message shown once `shown` holds, the Draft as the editor
+/// saved it, and what the server received once its preview sends it.
 fn forwarded(home: &Home, smtp: &FakeSmtp, shown: &str) -> ((String, PathBuf), Received) {
     let mut t = postal(home);
     t.wait_until(|s| s.contains(shown)).unwrap();
     t.send(Key::Char('F')).unwrap();
-    t.wait_until(previewed).unwrap();
+    t.wait_until(saved).unwrap();
     let file = draft(home);
+    preview_newest(&mut t);
     t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("Sent") && !s.contains(" Draft "))
         .unwrap();
@@ -291,10 +289,10 @@ fn a_forward_opens_its_draft_once_the_attachments_are_in() {
     t.send(Key::Char('F')).unwrap();
     t.wait_until(|s| s.contains("fetching the Message…"))
         .unwrap();
-    assert!(!previewed(&t.screen()));
+    assert!(!saved(&t.screen()));
 
     imap.release();
-    t.wait_until(previewed).unwrap();
+    t.wait_until(saved).unwrap();
     assert!(draft(&home).0.contains("report.pdf\n"));
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());

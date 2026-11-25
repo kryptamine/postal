@@ -11,6 +11,7 @@ use crate::{
     compose::draft_file,
     compose::draft_notes::DraftNotes,
     compose::editor,
+    compose::editor_exit::EditorExit,
     compose::mailto::Mailto,
     compose::notes::{self, Notes},
     compose::outbox::Outbox,
@@ -32,15 +33,16 @@ use crate::{
 };
 
 /// Compose from the Account `from`: a new Draft's file in the editor,
-/// holding its signature and what a `link` fills, then its preview, unless
-/// it was left as the template.
+/// holding its signature and what a `link` fills, then what the editor
+/// asked of it, unless it was left as the template.
 pub fn compose(
     tty: &mut Tty,
     screen: &mut Screen,
-    accounts: Accounts,
+    world: World,
     from: Option<AccountId>,
     link: Option<&Mailto>,
 ) -> Result<(), Error> {
+    let accounts = world.accounts;
     // A Reply or Forward still waiting would open over this Draft.
     screen.replying = None;
     screen.forwarding = None;
@@ -62,18 +64,18 @@ pub fn compose(
         tracing::error!("noting the Account of a Draft failed: {error}");
     }
 
-    in_editor(tty, accounts, &path, notes.account.as_deref())?;
-    if link.is_some_and(|link| link.dropped_bcc) {
-        screen.toast = Some(Toast::new("the link's Bcc is dropped: a Draft has none"));
-    }
-
-    toast_unread(screen, &signature);
+    let exit = in_editor(tty, accounts, &path, notes.account.as_deref())?;
     if draft_file::untouched(&path, &template) {
         drop_untouched(screen, &path);
         return Ok(());
     }
 
-    preview(screen, path, notes);
+    written(screen, world, path, notes, exit);
+    if link.is_some_and(|link| link.dropped_bcc) {
+        screen.toast = Some(Toast::new("the link's Bcc is dropped: a Draft has none"));
+    }
+
+    toast_unread(screen, &signature);
     Ok(())
 }
 
@@ -122,7 +124,9 @@ pub fn reply(
             answering: None,
         };
 
-        return edit(tty, screen, world.accounts, path, notes);
+        let exit = in_editor(tty, world.accounts, &path, notes.account.as_deref())?;
+        written(screen, world, path, notes, exit);
+        return Ok(());
     }
 
     let cache = &world.caches[message.account];
@@ -143,7 +147,7 @@ pub fn reply(
     let signed_out = status == Status::SignedOut;
     match raw {
         Some(raw) if awaited.missing.is_empty() || status != Status::Live => {
-            answer(tty, screen, &raw, &awaited, world.accounts)
+            answer(tty, screen, &raw, &awaited, world)
         }
         None if message.folder.is_none() => {
             screen.toast = Some(Toast::new("not downloaded"));
@@ -197,7 +201,7 @@ pub fn fetched(
         return Ok(());
     };
 
-    answer(tty, screen, &raw, &awaited, world.accounts)
+    answer(tty, screen, &raw, &awaited, world)
 }
 
 /// A Reply's Draft from the answered Message's body `raw`, in the editor,
@@ -207,8 +211,9 @@ fn answer(
     screen: &mut Screen,
     raw: &[u8],
     awaited: &AwaitedReply,
-    accounts: Accounts,
+    world: World,
 ) -> Result<(), Error> {
+    let accounts = world.accounts;
     let account = awaited.message.account;
     let email = accounts.email(account);
     let signature = accounts.outgoing(account).signature();
@@ -218,7 +223,7 @@ fn answer(
         return Ok(());
     };
 
-    // Without its notes, the Draft no longer answers once its preview closes.
+    // Without its notes, the Draft no longer answers once it leaves the screen.
     let notes = DraftNotes {
         account: accounts.noted(account).map(str::to_owned),
         answering: Some(answering),
@@ -228,11 +233,10 @@ fn answer(
         tracing::error!("noting what a Draft answers failed: {error}");
     }
 
-    in_editor(tty, accounts, &path, notes.account.as_deref())?;
-    // After the editor, where a Toast would have run out; a Draft that
-    // does not read says so over it.
+    let exit = in_editor(tty, accounts, &path, notes.account.as_deref())?;
+    written(screen, world, path, notes, exit);
+    // After the editor, where a Toast would have run out.
     toast_unread(screen, &signature);
-    preview(screen, path, notes);
     Ok(())
 }
 
@@ -249,17 +253,21 @@ fn create(screen: &mut Screen, text: &str) -> Option<PathBuf> {
     }
 }
 
-/// The editor on the Draft at `path`, then its preview as the file reads
-/// now; `notes` win over those beside it.
+/// The editor on the shown Draft at `path`, then its Send if the editor
+/// asked for it, else its preview again; `notes` win over those beside it.
 pub fn edit(
     tty: &mut Tty,
     screen: &mut Screen,
-    accounts: Accounts,
+    world: World,
     path: PathBuf,
     notes: DraftNotes,
 ) -> Result<(), Error> {
-    in_editor(tty, accounts, &path, notes.account.as_deref())?;
+    let exit = in_editor(tty, world.accounts, &path, notes.account.as_deref())?;
     preview(screen, path, notes);
+    if matches!(exit, EditorExit::Send) {
+        send(screen, world);
+    }
+
     Ok(())
 }
 
@@ -270,10 +278,27 @@ pub fn in_editor(
     accounts: Accounts,
     path: &Path,
     account: Option<&str>,
-) -> Result<(), Error> {
+) -> Result<EditorExit, Error> {
     let format = accounts.format(account);
-    tty.outside(|| editor::edit_draft(path, format))?;
-    Ok(())
+    tty.outside(|| editor::edit_to_send(path, format))
+}
+
+/// After the editor on a Draft just written: its Send if the editor asked
+/// for it, else the Draft kept for Local Drafts.
+pub fn written(
+    screen: &mut Screen,
+    world: World,
+    path: PathBuf,
+    notes: DraftNotes,
+    exit: EditorExit,
+) {
+    match exit {
+        EditorExit::Send => {
+            preview(screen, path, notes);
+            send(screen, world);
+        }
+        EditorExit::Saved => screen.toast = Some(Toast::new("Saved to Drafts")),
+    }
 }
 
 /// The preview of the Draft at `path` as the file reads now; `notes` win

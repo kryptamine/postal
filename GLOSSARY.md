@@ -141,7 +141,7 @@ The text typed into a Search: free words, and operators in Gmail's syntax, as `f
 _Avoid_: pattern, search string
 
 **Compose**:
-Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers, an empty body and the Account's Signature. `postal <mailto-url>` composes the same way from a `mailto:` link, its recipients, Subject and body filled in and every other header dropped; with a TUI already open, it writes the Draft beside it and opens only the editor, and the TUI lists the Draft in Local Drafts.
+Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers, an empty body and the Account's Signature. An editor that ends in Send sends it; any other exit keeps it in Local Drafts, with no preview. `postal <mailto-url>` composes the same way from a `mailto:` link, its recipients, Subject and body filled in and every other header dropped; with a TUI already open, it writes the Draft beside it and opens only the editor, and the TUI lists the Draft in Local Drafts.
 _Avoid_: new mail, write
 
 **Correspondent**:
@@ -161,7 +161,7 @@ The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `sig
 _Avoid_: footer, sign-off
 
 **Draft**:
-A Message being written, kept on this machine until it is sent or discarded (ADR 0013); `d` in its preview keeps it for later. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox. With `compose-format = "markdown"` in `config.toml`, at the top level or in an `[[account]]`, the body is Markdown: Send adds its HTML beside the text as written, the signature, a Quote and a Forward's original kept as written, and the preview shows that HTML in the Rendered View, `v` the text (ADR 0036).
+A Message being written, kept on this machine until it is sent or discarded (ADR 0013); the editor's exit after Compose, Reply or Forward, or `d` in its preview, keeps it for later. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox. With `compose-format = "markdown"` in `config.toml`, at the top level or in an `[[account]]`, the body is Markdown: Send adds its HTML beside the text as written, the signature, a Quote and a Forward's original kept as written, and the preview shows that HTML in the Rendered View, `v` the text (ADR 0036).
 _Avoid_: unsent mail, composition
 
 **Local Drafts**:
@@ -169,7 +169,7 @@ Postal's own Folder in the Folder Picker, never on the server: every Draft and e
 _Avoid_: Drafts (the server's Folder), unsent
 
 **Send**:
-Handing a Draft to the server over SMTP from its preview with `y`; it waits in the Outbox until the server accepts it. It is first held there for `send-delay` seconds in `config.toml`, 10 unless set and none for `0`, while a Toast counts down and `u` takes it back to the Drafts; quit inside that time, it leaves on the next sync.
+Handing a Draft to the server over SMTP, from its preview with `y` or from the editor with the plugin's `:PostalSend` (ADR 0037); one that does not parse opens its preview with the reason. It waits in the Outbox until the server accepts it. It is first held there for `send-delay` seconds in `config.toml`, 10 unless set and none for `0`, while a Toast counts down and `u` takes it back to the Drafts; quit inside that time, it leaves on the next sync.
 _Avoid_: submit, deliver
 
 **Outbox**:

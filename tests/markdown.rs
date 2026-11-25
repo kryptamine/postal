@@ -15,6 +15,7 @@ use std::{fs, time::Duration};
 
 use mail_parser::{MessageParser, MimeHeaders, PartType};
 use support::{
+    editor::{preview_newest, sending},
     fake_imap::{EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     fake_smtp::FakeSmtp,
@@ -67,8 +68,8 @@ fn listed(screen: &Screen) -> bool {
         && !screen.contains(" Local Drafts ")
 }
 
-/// Postal over `imap` and `smtp`, its editor writing what `desk` holds.
-fn postal(home: &Home, desk: &Desk) -> Terminal {
+/// Postal over `imap` and `smtp`, its editor `editor` at home in `desk`.
+fn postal(home: &Home, desk: &Desk, editor: &str) -> Terminal {
     Terminal::builder()
         .size(100, 30)
         .env_clear()
@@ -78,7 +79,7 @@ fn postal(home: &Home, desk: &Desk) -> Terminal {
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("EDITOR", desk.editor())
+        .env("EDITOR", editor)
         .env("TZ", "UTC")
         .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10))
@@ -94,23 +95,14 @@ fn inbox() -> FakeImap {
     )])
 }
 
-/// Composed with `c`, on the Draft's preview.
-fn composed(home: &Home, desk: &Desk) -> Terminal {
-    let mut t = postal(home, desk);
-    t.wait_until(listed).unwrap();
-    t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
-        .unwrap();
-    t
-}
-
-/// What the server took once `draft` was composed with `c` and sent, and
-/// the format its editor was told.
+/// What the server took once `draft` was composed with `c` and sent from
+/// the editor, and the format its editor was told.
 fn sent(format: &str, draft: &str) -> (String, String) {
     let (imap, smtp, desk) = (inbox(), FakeSmtp::start(), Desk::new(draft));
     let home = home(&imap, &smtp, format);
-    let mut t = composed(&home, &desk);
-    t.send(Key::Char('y')).unwrap();
+    let mut t = postal(&home, &desk, &sending(&desk.editor()));
+    t.wait_until(listed).unwrap();
+    t.send(Key::Char('c')).unwrap();
     t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
@@ -225,8 +217,14 @@ fn a_markdown_drafts_preview_shows_its_html_and_v_its_text() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     let desk = Desk::new("To: bob@example.com\nSubject: Plan\n\n# Plan\n\n- **first**\n- second\n");
     let home = home(&imap, &smtp, MARKDOWN);
-    let mut t = composed(&home, &desk);
-    let rendered = t.snapshot_after(|s| s.contains("first")).unwrap();
+    let mut t = postal(&home, &desk, &desk.editor());
+    t.wait_until(listed).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    preview_newest(&mut t);
+    // Past the Toast the editor's exit left, which would date the snapshot.
+    let rendered = t
+        .snapshot_after(|s| s.contains("first") && !s.contains("Saved to Drafts"))
+        .unwrap();
     assert!(!rendered.contains("**first**"), "{rendered}");
     insta::assert_snapshot!(rendered);
     t.send(Key::Char('v')).unwrap();

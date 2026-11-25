@@ -13,7 +13,7 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
     match drafting {
         Drafting::Compose => {
             let from = composing_from(&ui.view);
-            composing::compose(tty, screen, world.accounts, from, None)?;
+            composing::compose(tty, screen, world, from, None)?;
         }
         Drafting::Edit => {
             if let Some(preview) = screen.over.take::<DraftPreview>() {
@@ -22,7 +22,7 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
                     answering: preview.answering,
                 };
 
-                composing::edit(tty, screen, world.accounts, preview.path, notes)?;
+                composing::edit(tty, screen, world, preview.path, notes)?;
             }
         }
         Drafting::Send => composing::send(screen, world),
@@ -37,7 +37,7 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
 /// Compose of the Draft `link` fills, from the Account `c` composes from.
 pub fn compose_link(link: &Mailto, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<(), Error> {
     let from = composing_from(&ui.view);
-    composing::compose(tty, &mut ui.screen, world.accounts, from, Some(link))
+    composing::compose(tty, &mut ui.screen, world, from, Some(link))
 }
 
 /// A Reply to what the screen answers.

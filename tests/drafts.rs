@@ -1,4 +1,5 @@
-//! `d` keeps a Draft in its preview, and Local Drafts in the Folder Picker
+//! The editor's plain exit keeps a Draft, as `d` in its preview does, and
+//! Local Drafts in the Folder Picker
 //! lists every Draft and Outbox Message to take up again; a Reply to a
 //! Message already answered by a Draft opens that Draft.
 
@@ -14,6 +15,7 @@ mod support;
 use std::{fs, path::PathBuf, time::Duration};
 
 use support::{
+    editor::{saved, sending},
     fake_imap::{EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     fake_smtp::FakeSmtp,
@@ -35,6 +37,15 @@ fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
 
 /// `$EDITOR` copies `WRITTEN` over the Draft, as if the user wrote it.
 fn postal(home: &Home) -> Terminal {
+    launch(home, str::to_owned)
+}
+
+/// [`postal`] with an editor that ends in the Draft's Send.
+fn sending_postal(home: &Home) -> Terminal {
+    launch(home, sending)
+}
+
+fn launch(home: &Home, editor: impl Fn(&str) -> String) -> Terminal {
     let next = home.xdg_config_home().join("next");
     fs::write(&next, WRITTEN).unwrap();
     Terminal::builder()
@@ -45,7 +56,7 @@ fn postal(home: &Home) -> Terminal {
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("EDITOR", format!("cp '{}'", next.display()))
+        .env("EDITOR", editor(&format!("cp '{}'", next.display())))
         .env("TZ", "UTC")
         .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10))
@@ -75,15 +86,13 @@ fn local(screen: &Screen) -> bool {
     screen.contains(" Local Drafts ")
 }
 
-/// Started on the Message List, a Draft written with `c` and kept with `d`.
+/// Started on the Message List, a Draft written with `c` and kept by the
+/// editor's plain exit.
 fn kept(home: &Home) -> Terminal {
     let mut t = postal(home);
     t.wait_until(listed).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
-    t.send(Key::Char('d')).unwrap();
-    t.wait_until(|s| s.contains("Saved to Drafts") && listed(s))
-        .unwrap();
+    t.wait_until(|s| saved(s) && listed(s)).unwrap();
     t
 }
 
@@ -144,10 +153,7 @@ fn a_second_reply_to_the_same_message_opens_the_first_draft() {
     let mut t = postal(&home);
     t.wait_until(listed).unwrap();
     t.send(Key::Char('r')).unwrap();
-    t.wait_until(previewed).unwrap();
-    t.send(Key::Char('d')).unwrap();
-    t.wait_until(|s| s.contains("Saved to Drafts") && listed(s))
-        .unwrap();
+    t.wait_until(|s| saved(s) && listed(s)).unwrap();
     quit(t);
     let first = drafts(&home);
     assert_eq!(first.len(), 1);
@@ -156,9 +162,7 @@ fn a_second_reply_to_the_same_message_opens_the_first_draft() {
     let mut t = postal(&home);
     t.wait_until(listed).unwrap();
     t.send(Key::Char('R')).unwrap();
-    t.wait_until(previewed).unwrap();
-    t.send(Key::Char('d')).unwrap();
-    t.wait_until(listed).unwrap();
+    t.wait_until(|s| saved(s) && listed(s)).unwrap();
     quit(t);
     assert_eq!(drafts(&home), first);
 }
@@ -190,11 +194,9 @@ fn an_outbox_message_shows_read_only_with_its_last_error() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
     smtp.down();
     let home = home(&imap, &smtp);
-    let mut t = postal(&home);
+    let mut t = sending_postal(&home);
     t.wait_until(listed).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
-    t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| listed(s) && s.contains("1 outbox"))
         .unwrap();
 

@@ -14,6 +14,7 @@ use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
 
 use mail_parser::MessageParser;
 use support::{
+    editor::{saved, sending},
     fake_body::FakeBody,
     fake_imap::{APP_PASSWORD, EMAIL, FakeImap, FakeMessage},
     fake_oauth,
@@ -135,14 +136,12 @@ fn quit(mut t: Terminal) {
     assert!(t.wait_exit().unwrap().success());
 }
 
-/// `key` on the Message List, then `y` on the Draft it opens: the text
-/// body the server received.
+/// `key` on the Message List, then the editor's Send of the Draft it
+/// opens: the text body the server received.
 fn sent(home: &Home, smtp: &FakeSmtp, editor: &Editor, key: char) -> String {
-    let mut t = postal(home, &editor.command());
+    let mut t = postal(home, &sending(&editor.command()));
     t.wait_until(listed).unwrap();
     t.send(Key::Char(key)).unwrap();
-    t.wait_until(previewed).unwrap();
-    t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("Sent") && listed(s)).unwrap();
     quit(t);
     let received = smtp.received();
@@ -242,7 +241,7 @@ fn a_signature_file_that_does_not_read_is_said_and_left_out() {
     let mut t = postal(&home, &editor.command());
     t.wait_until(listed).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(|s| previewed(s) && s.contains("could not read the signature"))
+    t.wait_until(|s| listed(s) && s.contains("could not read the signature"))
         .unwrap();
     quit(t);
 
@@ -298,11 +297,9 @@ fn each_account_has_its_own_signature() {
     t.wait_until(both).unwrap();
     t.send(Key::Char('k')).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
+    t.wait_until(|s| saved(s) && both(s)).unwrap();
     assert_eq!(editor.opened(), "To: \nCc: \nSubject: \n\n");
 
-    t.send(Key::Char('q')).unwrap();
-    t.wait_until(both).unwrap();
     t.send(Key::Char(',')).unwrap();
     t.wait_until(|s| s.contains("Secrets") && s.contains("First"))
         .unwrap();
@@ -325,7 +322,7 @@ fn each_account_has_its_own_signature() {
     t.wait_until(both).unwrap();
     t.send(Key::Char('k')).unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
+    t.wait_until(saved).unwrap();
     quit(t);
     assert_eq!(
         editor.opened(),
@@ -461,7 +458,7 @@ fn enter_on_a_signature_in_settings_edits_it() {
     t.wait_until(|s| listed(s) && !s.contains("Secrets"))
         .unwrap();
     t.send(Key::Char('c')).unwrap();
-    t.wait_until(previewed).unwrap();
+    t.wait_until(saved).unwrap();
     quit(t);
     assert_eq!(
         editor.opened(),

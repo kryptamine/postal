@@ -27,11 +27,18 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 | a Markdown Draft  | parses what you write as Markdown: render-markdown.nvim renders it        |
 | `To:` and `Cc:`   | marks a recipient a send would refuse, and an address no mail holds       |
 | `:PostalContacts` | picks a Correspondent and adds it to `To:`, or the `Cc:` under the cursor |
+| `:PostalSend`     | writes and sends the Draft, unless a check warns; `!` sends anyway        |
 | an `Attach:` line | shows the file's size, or that it is missing; `gf` edits the file         |
 | a Message's `[1]` | `gx` opens the link; `:PostalLinks` lists every link                      |
 | a Reply's Quote   | folds away closed: `zo` opens it                                          |
 | a Signature       | `:PostalAgent` edits the signature                                        |
 | a Message (`E`)   | read-only; `:PostalAgent` answers questions about it and its Thread       |
+
+`:PostalSend` exists in a Draft the TUI opened, which waits for the
+editor's exit: Postal passes the exit status that sends the Draft in
+`$POSTAL_SEND_STATUS`. An agent's edit waiting for review holds it back,
+and any other exit keeps the Draft in Local Drafts. Map
+it as you like: `vim.keymap.set("n", "<leader>s", "<cmd>PostalSend<cr>")`.
 
 A Draft is Markdown when its Account sets `compose-format = "markdown"`,
 which Postal tells the editor in `$POSTAL_COMPOSE_FORMAT`. Its filetype is

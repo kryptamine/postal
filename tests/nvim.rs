@@ -79,3 +79,72 @@ fn the_plugin_completes_from_what_the_cli_lists() {
     assert!(output.status.success(), "{stderr}");
     assert!(String::from_utf8_lossy(&output.stdout).contains("smoke: ok"));
 }
+
+/// The TUI with `$EDITOR` a headless Neovim running the plugin, which sets
+/// the Draft's `To` to `to`, runs `:PostalSend`, then writes and quits. Its
+/// stdin is no terminal, where an error would wait for `Enter`.
+fn sent_from_neovim(home: &Home, to: &str) -> Terminal {
+    let repo = env!("CARGO_MANIFEST_DIR");
+    let bin = env!("CARGO_BIN_EXE_postal");
+    let editor = format!(
+        "nvim --clean --headless --cmd 'set rtp^={repo}' \
+         --cmd 'lua require(\"postal\").setup({{ cmd = \"{bin}\" }})' \
+         -c '1s/$/ {to}/' -c 'PostalSend' -c 'wqall!' </dev/null"
+    );
+    Terminal::builder()
+        .size(100, 30)
+        .env_clear()
+        .env("XDG_CONFIG_HOME", home.xdg_config_home())
+        .env("XDG_STATE_HOME", home.xdg_state_home())
+        .env("XDG_CACHE_HOME", home.xdg_cache_home())
+        .env("XDG_DATA_HOME", home.xdg_data_home())
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("EDITOR", editor)
+        .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", "0")
+        .timeout(Duration::from_secs(10))
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap()
+}
+
+#[test]
+fn postal_send_in_neovim_sends_the_draft_with_no_preview() {
+    let imap = FakeImap::start(vec![message(
+        "Ada",
+        "ada@example.com",
+        "2024-11-18T09:00:00Z",
+    )]);
+    let smtp = FakeSmtp::start();
+    let home = synced(&imap, &smtp);
+    let mut t = sent_from_neovim(&home, "bob@example.com");
+    t.wait_until(|s| s.contains("Notes")).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    t.wait_until(|s| s.contains("Sent") && !s.contains("y send"))
+        .unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+
+    let received = smtp.received();
+    assert_eq!(received.len(), 1);
+    assert_eq!(received[0].rcpt_to, ["bob@example.com"]);
+}
+
+// A Draft the checks find wrong stays in the editor, unsent; written and
+// quit, it is kept like any other.
+#[test]
+fn postal_send_refuses_a_draft_with_a_bad_address() {
+    let imap = FakeImap::start(vec![message(
+        "Ada",
+        "ada@example.com",
+        "2024-11-18T09:00:00Z",
+    )]);
+    let smtp = FakeSmtp::start();
+    let home = synced(&imap, &smtp);
+    let mut t = sent_from_neovim(&home, "bob at example");
+    t.wait_until(|s| s.contains("Notes")).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    t.wait_until(|s| s.contains("Saved to Drafts")).unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert!(smtp.received().is_empty());
+}

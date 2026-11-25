@@ -6,6 +6,7 @@ pub mod draft;
 pub mod draft_file;
 pub mod draft_notes;
 pub mod editor;
+pub mod editor_exit;
 pub mod forward_draft;
 pub mod forwarded;
 pub mod local_draft;
