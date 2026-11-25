@@ -149,7 +149,7 @@ fn served_fields(message: &FakeMessage, section: &Section<'static>) -> String {
 /// A section of the body the client asked for, and the octets it asked for.
 pub(super) struct PartAsked {
     pub(super) section: Asking,
-    partial: Option<(u32, NonZeroU32)>,
+    pub(super) partial: Option<(u32, NonZeroU32)>,
 }
 
 #[derive(PartialEq, Eq)]

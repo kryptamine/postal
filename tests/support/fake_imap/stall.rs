@@ -6,7 +6,7 @@ use imap_next::imap_types::{command::CommandBody, fetch::MacroOrMessageDataItemN
 
 use super::{
     Inbox,
-    fetch::{Asking, body_parts, whole_body},
+    fetch::{Asking, PartAsked, body_parts, whole_body},
 };
 
 /// Where the server stops answering until `FakeImap::release`.
@@ -18,6 +18,9 @@ pub enum Stall {
     Fetch,
     /// As `Fetch`, but only for a fetch of body parts alone, as a Snippet's.
     Part,
+    /// As `Part`, but only for a fetch of more than a Snippet's octets, as
+    /// the body index's.
+    Index,
     /// As `Fetch`, but only for a fetch of a Message's body: `BODY[]`, or
     /// the header asked with its text parts.
     Body,
@@ -65,6 +68,10 @@ pub(super) async fn wait_unless_fetch_stalled(
     let header = parts.iter().any(|p| p.section == Asking::Header);
     if !parts.is_empty() && !header {
         wait_unless_stalled(inbox, Stall::Part).await;
+        let past_a_snippet = |p: &PartAsked| p.partial.is_some_and(|(_, len)| len.get() > 2048);
+        if parts.iter().any(past_a_snippet) {
+            wait_unless_stalled(inbox, Stall::Index).await;
+        }
     }
 
     if whole_body(items) || header {

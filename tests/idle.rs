@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FIRST_UID, FakeImap, FakeMessage},
+    fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
     picker::wait_picked,
 };
@@ -119,6 +119,32 @@ fn new_mail_appears_above_and_the_selection_stays_on_its_message() {
     let snippet = after_done.clone().position(|c| c.contains("BODY.PEEK[1]<"));
     let idle = after_done.clone().position(|c| c == "IDLE");
     assert!(snippet.is_some() && snippet < idle, "{commands:#?}");
+}
+
+// A new row shows once, Snippet and all, never as a sender over a blank
+// line while its Snippet is fetched.
+#[test]
+fn new_mail_shows_with_its_snippet_at_once() {
+    let server = FakeImap::start(four_messages());
+    let home = Home::for_server(&server);
+    let mut t = idling(&server, &home);
+    t.wait_until(|s| s.contains("Body of Newest")).unwrap();
+
+    server.stall(Stall::Part);
+    server.deliver(message("Erin", "Brand new", "2024-06-01T00:00:00Z").unread());
+    wait_for(|| {
+        let commands = server.commands();
+        let after_done = commands.iter().skip_while(|c| *c != "DONE");
+        after_done.clone().any(|c| c.contains("BODY.PEEK[1]<"))
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    let screen = t.screen();
+    assert!(!screen.contains("Erin"), "{screen}");
+
+    server.release();
+    let screen = t.snapshot_after(|s| s.contains("Erin")).unwrap();
+    assert!(screen.contains("Body of Brand new"), "{screen}");
+    quit(t);
 }
 
 #[test]

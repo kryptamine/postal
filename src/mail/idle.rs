@@ -136,9 +136,12 @@ async fn take_in(
         changes.expunged.len(),
         changes.flags.len()
     );
+    // The screen hears of new rows once their Snippets are in, so each shows whole.
+    let cut =
+        !changes.new.is_empty() && snippets::batch(server, cache, folder, None, || {}).await?;
     arrived(tell, folder, &changes);
     send(Update::Inbox);
-    if !changes.new.is_empty() {
+    if cut {
         snippets::fetch(server, cache, folder, None, || send(Update::Inbox)).await?;
     }
 
