@@ -7,23 +7,27 @@ use super::{
     Error, attributes,
     body_plan::{self, Plan, Sections},
     connect::Transport,
+    pushed::Pushed,
     tagged,
 };
 use crate::domain::uid::Uid;
 
 /// Each of `uids` as `Plan` fetches it, `(uid, raw)`: a `BODYSTRUCTURE`
-/// first, then one fetch per set of sections. What else the server says on
-/// the way is dropped.
+/// first, then one fetch per set of sections.
 pub async fn fetch(
     session: &mut Session<Box<dyn Transport>>,
+    pushed: &mut Vec<Pushed>,
     uids: &str,
 ) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
     let mut plans: Vec<(Uid, Plan)> = Vec::new();
     let command = format!("UID FETCH {uids} (UID BODYSTRUCTURE)");
-    tagged::run(session, command, |response| {
-        if let Response::Fetch(_, attributes) = response {
-            plans.extend(plan(attributes));
-        }
+    tagged::run(session, pushed, command, |response| {
+        let Response::Fetch(_, attributes) = response else {
+            return false;
+        };
+
+        plans.extend(plan(attributes));
+        true
     })
     .await?;
 
@@ -44,11 +48,19 @@ pub async fn fetch(
             .collect::<Vec<_>>()
             .join(",");
         let mut answered: Vec<(Uid, Sections)> = Vec::new();
-        tagged::run(session, format!("UID FETCH {set} {items}"), |response| {
-            if let Response::Fetch(_, attributes) = response {
+        tagged::run(
+            session,
+            pushed,
+            format!("UID FETCH {set} {items}"),
+            |response| {
+                let Response::Fetch(_, attributes) = response else {
+                    return false;
+                };
+
                 answered.extend(sections(attributes));
-            }
-        })
+                true
+            },
+        )
         .await?;
 
         for (uid, sections) in answered {
