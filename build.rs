@@ -1,6 +1,7 @@
 //! Compiles the vendored litehtml, its bundled gumbo and the cell-grid
-//! container in `cpp/`, for the rendered view of HTML mail, and names the
-//! target, whose release archive `postal update` fetches.
+//! container in `cpp/`, for the rendered view of HTML mail, names the
+//! target, whose release archive `postal update` fetches, and takes in the
+//! macOS mailto: launcher.
 
 use std::path::{Path, PathBuf};
 
@@ -59,4 +60,23 @@ fn main() {
     println!("cargo:rerun-if-changed=vendor/litehtml");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rustc-env=POSTAL_TARGET={}", target());
+    launcher();
+}
+
+/// Copies the launcher zip `POSTAL_LAUNCHER` names to
+/// `$OUT_DIR/launcher.zip`, or writes it empty when the variable is unset.
+#[expect(clippy::panic, reason = "a build script fails by panicking")]
+fn launcher() {
+    println!("cargo:rerun-if-env-changed=POSTAL_LAUNCHER");
+    let out = std::env::var_os("OUT_DIR").unwrap_or_else(|| panic!("OUT_DIR is not set"));
+    let out = Path::new(&out).join("launcher.zip");
+    let copied = match std::env::var("POSTAL_LAUNCHER") {
+        Ok(zip) if !zip.is_empty() => {
+            println!("cargo:rerun-if-changed={zip}");
+            std::fs::copy(&zip, &out).map(drop)
+        }
+        _ => std::fs::write(&out, []),
+    };
+
+    copied.unwrap_or_else(|error| panic!("{}: {error}", out.display()));
 }

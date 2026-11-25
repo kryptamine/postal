@@ -38,6 +38,8 @@ fn main() -> ExitCode {
         },
         Some(Command::Mcp) => answered(cli::mcp::run()),
         Some(Command::Update) => answered(cli::update::run()),
+        Some(Command::SetupMailto { remove }) => answered(cli::setup_mailto::run(remove)),
+        Some(Command::OpenInTerminal { link }) => answered(app::in_terminal::open(&link)),
         tui => {
             let linked = match args.link.as_deref().map(compose::mailto::Mailto::parse) {
                 None => None,

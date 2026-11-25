@@ -15,6 +15,7 @@ mod message_show;
 mod named_folder;
 mod plain_body;
 mod release;
+pub mod setup_mailto;
 mod thread_rows;
 mod thread_show;
 pub mod update;

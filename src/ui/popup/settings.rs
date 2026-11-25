@@ -6,13 +6,14 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    account::config::{self, IconChoice, NotifyChoice, SecretStore},
+    account::config::{self, IconChoice, NotifyChoice, SecretStore, Terminal},
     account::config_file::ConfigFile,
+    account::mailto_handler::{self, CHOOSES_TERMINAL},
     account::partial_config::PartialConfig,
     account::provider::Provider,
     account::sign_in::smtp_key,
     ui::onboarding::field::{self, Edit},
-    ui::popup::settings_mode::Mode,
+    ui::popup::settings_mode::{Field, Mode},
     ui::popup::settings_section::Section,
     ui::popup::settings_value::Value,
 };
@@ -27,6 +28,10 @@ pub enum Row {
     Add,
     Choice(Value),
     Name,
+    /// Whether mailto: links open in Postal.
+    Handler,
+    /// The program a mailto: link runs in place of a terminal.
+    TerminalCommand,
 }
 
 /// What a key in Settings leaves to the event loop.
@@ -57,6 +62,9 @@ pub struct Settings {
     pub notify: NotifyChoice,
     pub name: Option<String>,
     pub secrets: SecretStore,
+    pub terminal: Terminal,
+    /// Whether the system hands mailto: links to Postal.
+    pub handler: bool,
     section: Section,
     /// Index into the tab's rows.
     selected: usize,
@@ -81,6 +89,8 @@ impl Settings {
             notify: config.notify,
             name: config.name,
             secrets: config.secrets,
+            terminal: config.terminal,
+            handler: mailto_handler::is_set_up(),
             section: Section::Accounts,
             selected: 0,
             mode: Mode::Browsing,
@@ -104,6 +114,7 @@ impl Settings {
 
     /// The rows of `section`: its Accounts, or its values.
     pub fn rows_of(&self, section: Section) -> impl Iterator<Item = Row> {
+        let first = (section == Section::Mailto).then_some(Row::Handler);
         let accounts = (section == Section::Accounts)
             .then_some(0..self.accounts.len())
             .into_iter()
@@ -113,9 +124,10 @@ impl Settings {
         let last = match section {
             Section::Accounts => Some(Row::Add),
             Section::Name => Some(Row::Name),
-            Section::Icons | Section::Notify | Section::Secrets => None,
+            Section::Mailto if CHOOSES_TERMINAL => Some(Row::TerminalCommand),
+            Section::Icons | Section::Notify | Section::Secrets | Section::Mailto => None,
         };
-        accounts.chain(values).chain(last)
+        first.into_iter().chain(accounts).chain(values).chain(last)
     }
 
     pub fn selected(&self) -> Row {
@@ -127,6 +139,7 @@ impl Settings {
             Value::Icons(icons) => icons == self.icons,
             Value::Notify(notify) => notify == self.notify,
             Value::Secrets(store) => store == self.secrets,
+            Value::Terminal(app) => self.terminal == Terminal::App(app),
         }
     }
 
@@ -147,15 +160,22 @@ impl Settings {
 
         match std::mem::replace(&mut self.mode, Mode::Browsing) {
             Mode::Browsing => {}
-            Mode::Naming(mut typed) => {
+            Mode::Typing(typing, mut typed) => {
                 match field::edit(&mut typed, key) {
                     Edit::Submit => {
-                        let name = Some(typed.trim().to_owned()).filter(|name| !name.is_empty());
-                        self.change(|settings| settings.rename(name));
+                        let text = Some(typed.trim().to_owned()).filter(|text| !text.is_empty());
+                        match typing {
+                            Field::Name => self.change(|settings| settings.rename(text)),
+                            Field::TerminalCommand => {
+                                let terminal =
+                                    text.map_or_else(Terminal::default, Terminal::Command);
+                                self.change(|settings| settings.set_terminal(terminal))
+                            }
+                        };
                     }
                     Edit::Back => {}
                     Edit::Cancel => return Step::Quit,
-                    Edit::Changed | Edit::Ignored => self.mode = Mode::Naming(typed),
+                    Edit::Changed | Edit::Ignored => self.mode = Mode::Typing(typing, typed),
                 }
 
                 return Step::Stay;
@@ -207,7 +227,20 @@ impl Settings {
                 }
             }
             Row::Add => return Step::AddAccount,
-            Row::Name => self.mode = Mode::Naming(self.name.clone().unwrap_or_default()),
+            Row::Name => {
+                self.mode = Mode::Typing(Field::Name, self.name.clone().unwrap_or_default());
+            }
+            Row::TerminalCommand => {
+                let command = match &self.terminal {
+                    Terminal::Command(command) => command.clone(),
+                    Terminal::App(_) => String::new(),
+                };
+
+                self.mode = Mode::Typing(Field::TerminalCommand, command);
+            }
+            Row::Handler => {
+                self.change(Self::switch_handler);
+            }
             Row::Choice(value) => return self.choose(value),
         }
 
@@ -235,6 +268,9 @@ impl Settings {
             }
             Value::Secrets(store) => {
                 self.change(|settings| settings.switch_store(store));
+            }
+            Value::Terminal(app) => {
+                self.change(|settings| settings.set_terminal(Terminal::App(app)));
             }
         }
 
@@ -265,6 +301,24 @@ impl Settings {
         self.write(|config| config.set_name(name.as_deref()))?;
         self.name = name;
         self.reload = true;
+        Ok(())
+    }
+
+    fn set_terminal(&mut self, terminal: Terminal) -> Result<(), Box<dyn Error>> {
+        self.write(|config| config.set_terminal(&terminal))?;
+        self.terminal = terminal;
+        Ok(())
+    }
+
+    /// Sets Postal up as the mailto: handler, or removes it.
+    fn switch_handler(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.handler {
+            mailto_handler::remove()?;
+        } else {
+            mailto_handler::set_up()?;
+        }
+
+        self.handler = !self.handler;
         Ok(())
     }
 

@@ -55,6 +55,16 @@ pub enum Command {
     Mcp,
     /// Replace this postal with the latest release
     Update,
+    /// Make Postal the system's handler of mailto: links, opening each in a
+    /// terminal; the terminal on macOS is chosen in Settings
+    SetupMailto {
+        /// Give mailto: links back to the handler before Postal
+        #[arg(long)]
+        remove: bool,
+    },
+    /// What the macOS launcher runs on a link: postal on it in a terminal
+    #[command(hide = true)]
+    OpenInTerminal { link: String },
 }
 
 #[derive(Subcommand)]

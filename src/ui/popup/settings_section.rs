@@ -5,16 +5,18 @@ pub enum Section {
     Icons,
     Notify,
     Name,
+    Mailto,
     Secrets,
 }
 
 impl Section {
     /// In the order the tabs show.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Accounts,
         Self::Icons,
         Self::Notify,
         Self::Name,
+        Self::Mailto,
         Self::Secrets,
     ];
 
@@ -25,6 +27,7 @@ impl Section {
             Self::Notify => "Notify",
             Self::Name => "Name",
             Self::Secrets => "Secrets",
+            Self::Mailto => "Mailto",
         }
     }
 
@@ -36,6 +39,7 @@ impl Section {
             Self::Notify => "when new mail in an Inbox raises a desktop notification",
             Self::Name => "your name in the From line of the Messages you send",
             Self::Secrets => "where the passwords and tokens of the Accounts are kept",
+            Self::Mailto => "whether a mailto: link in another app opens in Postal",
         }
     }
 
