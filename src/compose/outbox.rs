@@ -34,6 +34,9 @@ pub struct Queued {
     pub path: PathBuf,
     /// Accepted by SMTP; only its copy in Sent is left.
     pub sent: bool,
+    /// As they read when it was listed; `None` without any, or when they
+    /// do not read.
+    pub notes: Option<Notes>,
 }
 
 /// A Send taken back: the Draft it was again.
@@ -89,7 +92,12 @@ impl Outbox {
                 _ => continue,
             };
 
-            queued.push(Queued { path, sent });
+            let notes = Notes::read(&path).unwrap_or_else(|error| {
+                tracing::warn!("reading the notes of {} failed: {error}", path.display());
+                None
+            });
+
+            queued.push(Queued { path, sent, notes });
         }
 
         // A file's name starts with the time its Draft was made.
@@ -192,7 +200,7 @@ impl Outbox {
 impl Queued {
     /// The time it is held until, by its notes.
     pub fn hold_until(&self) -> Option<DateTime<Utc>> {
-        Notes::read(&self.path).ok().flatten()?.hold_until
+        self.notes.as_ref()?.hold_until
     }
 
     /// Claims the Message for SMTP by a rename, unless an Undo took it
