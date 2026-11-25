@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     cache::Cache, domain::folder_name::FolderName, domain::text_part::TextPart, domain::uid::Uid,
-    mail::imap::MailServer, mail::snippet, mail::sync::Error,
+    mail::imap::MailServer, mail::one_by_one, mail::snippet, mail::sync::Error,
 };
 
 /// Messages per batch: each batch is one Cache write and one redraw.
@@ -77,7 +77,8 @@ pub async fn parts(
 
     let mut raw = HashMap::new();
     for (section, uids) in by_section {
-        raw.extend(server.text_parts(&uids, section, octets).await?);
+        let text = async |uids: &[Uid]| server.text_parts(uids, section, octets).await;
+        raw.extend(one_by_one::fetch(&uids, "text part", text).await?);
     }
 
     Ok(raw)

@@ -422,6 +422,8 @@ fn a_refused_body_says_why_and_keeps_the_connection() {
             .any(|l| l.contains("WARN") && l.contains("refused") && l.contains(refused)),
         "{log}"
     );
+    // Its Snippet is refused too, and that cost no connection either.
+    assert!(!log.contains("retrying in"), "{log}");
 }
 
 // One refused body among the neighbours costs only that one: the others

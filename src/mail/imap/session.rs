@@ -3,13 +3,12 @@ use std::{collections::HashSet, time::Duration};
 use async_imap::{
     Client, Session,
     extensions::idle::IdleResponse,
-    imap_proto::{NameAttribute, Response, SectionPath, Status},
-    types::{Fetch, Flag},
+    imap_proto::{AttributeValue, MailboxDatum, NameAttribute, Response, SectionPath, Status},
 };
 use futures::TryStreamExt;
 
 use super::{
-    Error, Moved, attachments, bodies, body_plan,
+    Error, Moved, attachments, attributes, bodies, body_plan,
     connect::Transport,
     login, moved_uids, named_roles, new_messages,
     opening::{Mode, Opening},
@@ -307,9 +306,38 @@ impl ImapSession {
         }
     }
 
-    async fn uid_fetch(&mut self, uids: String, items: &str) -> Result<Vec<Fetch>, Error> {
-        let fetches = self.session.uid_fetch(uids, items).await?;
-        Ok(fetches.try_collect().await?)
+    /// `command`, read by hand, as async-imap reads a `NO` as an empty answer:
+    /// `each` gets every `FETCH` answer, `pushed` the rest, after what came before.
+    async fn answered(
+        &mut self,
+        command: String,
+        mut each: impl FnMut(u32, &[AttributeValue<'_>]),
+    ) -> Result<(), Error> {
+        let earlier = self.pushed();
+        self.pending = earlier;
+        let pending = &mut self.pending;
+        tagged::run(&mut self.session, command, |response| match response {
+            Response::Fetch(sequence, attributes) => each(*sequence, attributes),
+            _ => pending.extend(Pushed::from_response(response)),
+        })
+        .await
+    }
+
+    /// The UIDs a `UID SEARCH` of `criteria` matches, ascending.
+    async fn search(&mut self, criteria: &str) -> Result<Vec<Uid>, Error> {
+        let earlier = self.pushed();
+        self.pending = earlier;
+        let (pending, mut found) = (&mut self.pending, Vec::new());
+        let command = format!("UID SEARCH {criteria}");
+        tagged::run(&mut self.session, command, |response| match response {
+            Response::MailboxData(MailboxDatum::Search(uids)) => {
+                found.extend(uids.iter().copied().map(Uid::new));
+            }
+            _ => pending.extend(Pushed::from_response(response)),
+        })
+        .await?;
+        found.sort_unstable();
+        Ok(found)
     }
 }
 
@@ -348,14 +376,9 @@ impl MailServer for ImapSession {
         // SILENT: the server need not echo the flags just set.
         let sign = if added { '+' } else { '-' };
         let query = format!("{sign}FLAGS.SILENT ({})", flag.name());
-        let echoed: Vec<Fetch> = self
-            .session
-            .uid_store(uid_set(uids), &query)
-            .await?
-            .try_collect()
-            .await?;
+        let command = format!("UID STORE {} {query}", uid_set(uids));
+        self.answered(command, |_, _| {}).await?;
         tracing::info!("stored {query} on {} Messages", uids.len());
-        drop(echoed);
         Ok(())
     }
 
@@ -369,13 +392,8 @@ impl MailServer for ImapSession {
         let moved = moved_uids::run(&mut self.session, command, &mut self.pending).await?;
         if !self.listed.moves {
             // The copy, flag and expunge a `MOVE` stands for (RFC 6851 3.3).
-            let flagged: Vec<Fetch> = self
-                .session
-                .uid_store(&set, "+FLAGS.SILENT (\\Deleted)")
-                .await?
-                .try_collect()
-                .await?;
-            drop(flagged);
+            let command = format!("UID STORE {set} +FLAGS.SILENT (\\Deleted)");
+            self.answered(command, |_, _| {}).await?;
             if self.listed.uidplus {
                 let pending = &mut self.pending;
                 let expunge = format!("UID EXPUNGE {set}");
@@ -519,30 +537,25 @@ impl MailServer for ImapSession {
     }
 
     async fn thread(&mut self, id: ThreadId) -> Result<Vec<Uid>, Error> {
-        let found = self.session.uid_search(format!("X-GM-THRID {id}")).await?;
-        let mut uids: Vec<_> = found.into_iter().map(Uid::new).collect();
-        uids.sort_unstable();
-        Ok(uids)
+        self.search(&format!("X-GM-THRID {id}")).await
     }
 
     async fn sequence_number(&mut self, uid: Uid) -> Result<Option<u32>, Error> {
-        let fetches = self.uid_fetch(uid.to_string(), "UID").await?;
-        Ok(fetches
-            .iter()
-            .find(|f| f.uid == Some(uid.get()))
-            .map(|f| f.message))
+        let mut found = None;
+        self.answered(format!("UID FETCH {uid} UID"), |sequence, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                found = Some(sequence);
+            }
+        })
+        .await?;
+        Ok(found)
     }
 
     async fn uids(&mut self, first: Uid, last: Uid) -> Result<HashSet<Uid>, Error> {
         // `RETURN (ALL)` is out of reach, as for the Unread count:
         // see docs/adr/0004-unread-count-by-uid-search.md.
-        Ok(self
-            .session
-            .uid_search(format!("UID {first}:{last}"))
-            .await?
-            .into_iter()
-            .map(Uid::new)
-            .collect())
+        let found = self.search(&format!("UID {first}:{last}")).await?;
+        Ok(found.into_iter().collect())
     }
 
     async fn flags(
@@ -555,11 +568,12 @@ impl MailServer for ImapSession {
             || "(UID FLAGS)".to_owned(),
             |modseq| format!("(UID FLAGS) (CHANGEDSINCE {modseq})"),
         );
-        let fetches = self.uid_fetch(format!("{first}:{last}"), &items).await?;
-        let flags: Vec<_> = fetches
-            .iter()
-            .filter_map(|f| Some((Uid::new(f.uid?), flags(f))))
-            .collect();
+        let mut flags = Vec::new();
+        let command = format!("UID FETCH {first}:{last} {items}");
+        self.answered(command, |_, answer| {
+            flags.extend(attributes::uid(answer).zip(attributes::flags(answer)));
+        })
+        .await?;
         tracing::info!("fetched flags of {} Messages", flags.len());
         Ok(flags)
     }
@@ -567,7 +581,7 @@ impl MailServer for ImapSession {
     async fn unread_count(&mut self) -> Result<usize, Error> {
         // async-imap cannot parse ESEARCH, so `RETURN (COUNT)` is out of reach:
         // see docs/adr/0004-unread-count-by-uid-search.md.
-        Ok(self.session.uid_search("UNSEEN").await?.len())
+        Ok(self.search("UNSEEN").await?.len())
     }
 
     async fn text_parts(
@@ -582,11 +596,14 @@ impl MailServer for ImapSession {
         );
         // PEEK, or the server would mark every Message seen.
         let items = format!("(BODY.PEEK[{section}]<0.{octets}>)");
-        let fetches = self.uid_fetch(uid_set(uids), &items).await?;
-        Ok(fetches
-            .iter()
-            .filter_map(|f| Some((Uid::new(f.uid?), f.section(&path)?.to_vec())))
-            .collect())
+        let mut parts = Vec::new();
+        let command = format!("UID FETCH {} {items}", uid_set(uids));
+        self.answered(command, |_, answer| {
+            let part = attributes::section(answer, &path).map(<[u8]>::to_vec);
+            parts.extend(attributes::uid(answer).zip(part));
+        })
+        .await?;
+        Ok(parts)
     }
 
     async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
@@ -594,23 +611,30 @@ impl MailServer for ImapSession {
     }
 
     async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error> {
-        let of = |fetches: &[Fetch]| fetches.iter().position(|f| f.uid == Some(uid.get()));
-        let fetches = self
-            .uid_fetch(uid.to_string(), "(UID BODYSTRUCTURE)")
-            .await?;
-        let part = of(&fetches)
-            .and_then(|at| fetches[at].bodystructure())
-            .and_then(|structure| attachments::part(structure, index));
+        let mut part = None;
+        let command = format!("UID FETCH {uid} (UID BODYSTRUCTURE)");
+        self.answered(command, |_, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                part = attributes::structure(answer)
+                    .and_then(|structure| attachments::part(structure, index));
+            }
+        })
+        .await?;
         let Some((path, encoding)) = part else {
             return Ok(None);
         };
 
         let items = format!("(UID BODY.PEEK[{}])", body_plan::section(&path));
         let path = SectionPath::Part(path, None);
-        let fetches = self.uid_fetch(uid.to_string(), &items).await?;
-        let raw = of(&fetches).and_then(|at| fetches[at].section(&path));
+        let mut raw = None;
+        self.answered(format!("UID FETCH {uid} {items}"), |_, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                raw = attributes::section(answer, &path).map(|raw| encoding.decode(raw));
+            }
+        })
+        .await?;
         tracing::info!("fetched attachment {index} of {uid}");
-        Ok(raw.map(|raw| encoding.decode(raw)))
+        Ok(raw)
     }
 
     fn pushed(&mut self) -> Vec<Pushed> {
@@ -728,13 +752,6 @@ fn uid_set(uids: &[Uid]) -> String {
         .map(Uid::to_string)
         .collect::<Vec<_>>()
         .join(",")
-}
-
-fn flags(fetch: &Fetch) -> MessageFlags {
-    MessageFlags {
-        unread: !fetch.flags().any(|flag| flag == Flag::Seen),
-        answered: fetch.flags().any(|flag| flag == Flag::Answered),
-    }
 }
 
 /// The UID and addresses of each of `rows` from `first` on.

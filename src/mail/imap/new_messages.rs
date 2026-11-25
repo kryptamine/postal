@@ -4,7 +4,9 @@ use async_imap::{
 };
 use chrono::{DateTime, FixedOffset};
 
-use super::{Error, Pushed, attachments, connect::Transport, origin::Origin, tagged, text_part};
+use super::{
+    Error, Pushed, attachments, attributes, connect::Transport, origin::Origin, tagged, text_part,
+};
 use crate::{
     domain::body_key::BodyKey,
     domain::correspondence::{self, Correspondence, Person},
@@ -13,7 +15,6 @@ use crate::{
     domain::new_message::NewMessage,
     domain::root_id::RootId,
     domain::thread_id::ThreadId,
-    domain::uid::Uid,
     mail::header,
 };
 
@@ -58,10 +59,7 @@ pub async fn fetch(
 
 /// `None` when the server left out the UID.
 fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewMessage> {
-    let uid = attributes.iter().find_map(|a| match a {
-        AttributeValue::Uid(uid) => Some(*uid),
-        _ => None,
-    })?;
+    let uid = attributes::uid(attributes)?;
     let gmail_id = attributes.iter().find_map(|a| match a {
         AttributeValue::GmailMsgId(id) => Some(*id),
         _ => None,
@@ -71,25 +69,14 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
         _ => None,
     });
     let received = internal_date(attributes);
-    let flags = MessageFlags::from_names(
-        attributes
-            .iter()
-            .flat_map(|a| match a {
-                AttributeValue::Flags(flags) => flags.as_slice(),
-                _ => &[],
-            })
-            .map(|f| &**f),
-    );
+    let flags = attributes::flags(attributes).unwrap_or_else(|| MessageFlags::from_names([]));
 
     let envelope = envelope(attributes);
     let header = header_block(attributes);
-    let structure = attributes.iter().find_map(|a| match a {
-        AttributeValue::BodyStructure(structure) => Some(structure),
-        _ => None,
-    });
+    let structure = attributes::structure(attributes);
     let row = Message {
-        uid: Uid::new(uid),
-        body_key: BodyKey::new(gmail_id, origin.uid_validity, uid),
+        uid,
+        body_key: BodyKey::new(gmail_id, origin.uid_validity, uid.get()),
         received,
         unread: flags.unread,
         answered: flags.answered,

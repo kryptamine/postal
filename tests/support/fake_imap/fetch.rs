@@ -52,7 +52,8 @@ pub(super) fn answer_fetch(
 
     let refused = fetched(folder, &sequence_set, uid, None)
         .any(|(_, stored)| inbox.refused.contains(&stored.uid));
-    if (asked.whole || asked.parts.iter().any(|p| p.section == Asking::Header)) && refused {
+    // As Gmail: a Message it cannot serve refuses any section of its body.
+    if (asked.whole || !asked.parts.is_empty()) && refused {
         let text = "Some messages could not be FETCHed (Failure)";
         return Status::no(tag, None, text).unwrap();
     }

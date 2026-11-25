@@ -2,6 +2,7 @@
 //! Delete and Undo; bodies are fetched with `BODY.PEEK`.
 
 mod attachments;
+mod attributes;
 mod bodies;
 mod body_plan;
 mod connect;
