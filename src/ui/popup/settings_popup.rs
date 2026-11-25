@@ -17,7 +17,8 @@ use crate::{
 };
 
 const TITLE: &str = " Settings ";
-const WIDTH: u16 = 64;
+/// Wide enough for every tab's label on one line.
+const WIDTH: u16 = 68;
 /// The border and a blank row or column inside it, each side.
 const FRAME: u16 = 4;
 /// The tabs and the rule, then the tab's heading and description, each
@@ -84,7 +85,7 @@ impl SettingsPopup<'_> {
     fn tabs(&self, buf: &mut Buffer, row: Rect) {
         let mut x = row.x;
         for section in Section::ALL {
-            let style = if section == self.settings.section() {
+            let style = if *section == self.settings.section() {
                 self.theme.chosen
             } else {
                 self.theme.muted

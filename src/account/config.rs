@@ -24,6 +24,7 @@ pub struct Config {
     pub oauth: Endpoints,
     pub icons: IconChoice,
     pub notify: NotifyChoice,
+    pub contacts: ContactsChoice,
 }
 
 #[derive(PartialEq, Eq)]
@@ -129,6 +130,26 @@ impl NotifyChoice {
             Self::Unfocused => "unfocused",
             Self::Always => "always",
             Self::Never => "never",
+        }
+    }
+}
+
+/// Where Correspondents come from besides mail: `macos` adds the people
+/// in the system's Contacts, read anew each time (ADR 0035).
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ContactsChoice {
+    #[default]
+    None,
+    Macos,
+}
+
+impl ContactsChoice {
+    /// The value of `contacts` in `config.toml`.
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Macos => "macos",
         }
     }
 }

@@ -1,8 +1,13 @@
+#[cfg(target_os = "macos")]
+mod address_book;
 pub mod atomic_file;
 pub mod autoconfig;
 pub mod browser;
 pub mod config;
 pub mod config_file;
+pub mod contacts;
+#[cfg(target_os = "macos")]
+mod contacts_fake;
 pub mod credential;
 #[cfg_attr(
     not(target_os = "macos"),

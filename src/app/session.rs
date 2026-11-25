@@ -3,7 +3,7 @@ use std::{error::Error, path::Path};
 use futures::TryFutureExt;
 
 use crate::{
-    account::config::{Config, IconChoice, NotifyChoice},
+    account::config::{Config, ContactsChoice, IconChoice, NotifyChoice},
     account::sign_in::SignIn,
     account::xdg,
     cache::Cache,
@@ -84,10 +84,8 @@ pub async fn session(
     let forwards = ForwardFetch::new(requests.clone(), configs.map(|_| false));
     let attachments = WantedAttachments::new(requests.clone(), configs.map(|_| false));
     let (tty, background) = slot.take()?;
-    let icons = configs
-        .values()
-        .next()
-        .map_or(IconChoice::Auto, |config| config.icons);
+    let first = configs.values().next();
+    let icons = first.map_or(IconChoice::Auto, |config| config.icons);
     let mut theme = Theme::from_env(background, Icons::choose(icons));
     let mut previews = Previews::start(requests, configs, sender, theme.mail_look());
     let background = Background {
@@ -104,10 +102,8 @@ pub async fn session(
         failure: opening.failure,
         link: opening.link,
         config_dir: dir,
-        notify: configs
-            .values()
-            .next()
-            .map_or_else(NotifyChoice::default, |config| config.notify),
+        notify: first.map_or_else(NotifyChoice::default, |config| config.notify),
+        contacts: first.map_or_else(ContactsChoice::default, |config| config.contacts),
     };
 
     Ok(run::run(tty, &mut theme, &caches, &mut previews, background).await?)

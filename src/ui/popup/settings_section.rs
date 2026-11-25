@@ -1,3 +1,5 @@
+use crate::account::contacts::READS_CONTACTS;
+
 /// One tab of Settings.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Section {
@@ -6,19 +8,32 @@ pub enum Section {
     Notify,
     Name,
     Mailto,
+    Contacts,
     Secrets,
 }
 
 impl Section {
-    /// In the order the tabs show.
-    pub const ALL: [Self; 6] = [
-        Self::Accounts,
-        Self::Icons,
-        Self::Notify,
-        Self::Name,
-        Self::Mailto,
-        Self::Secrets,
-    ];
+    /// In the order the tabs show; Contacts only where it can be read.
+    pub const ALL: &'static [Self] = if READS_CONTACTS {
+        &[
+            Self::Accounts,
+            Self::Icons,
+            Self::Notify,
+            Self::Name,
+            Self::Mailto,
+            Self::Contacts,
+            Self::Secrets,
+        ]
+    } else {
+        &[
+            Self::Accounts,
+            Self::Icons,
+            Self::Notify,
+            Self::Name,
+            Self::Mailto,
+            Self::Secrets,
+        ]
+    };
 
     pub const fn label(self) -> &'static str {
         match self {
@@ -28,6 +43,7 @@ impl Section {
             Self::Name => "Name",
             Self::Secrets => "Secrets",
             Self::Mailto => "Mailto",
+            Self::Contacts => "Contacts",
         }
     }
 
@@ -40,6 +56,7 @@ impl Section {
             Self::Name => "your name in the From line of the Messages you send",
             Self::Secrets => "where the passwords and tokens of the Accounts are kept",
             Self::Mailto => "whether a mailto: link in another app opens in Postal",
+            Self::Contacts => "whether the people in macOS Contacts are Correspondents",
         }
     }
 

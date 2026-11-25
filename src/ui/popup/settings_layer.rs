@@ -85,6 +85,7 @@ pub fn key(settings: &mut Settings, key: KeyEvent) -> Act {
         settings::Step::Help => Act::Help,
         settings::Step::Icons(choice) => Act::Step(Step::Icons(choice)),
         settings::Step::Notify(choice) => Act::Step(Step::Notify(choice)),
+        settings::Step::Contacts(choice) => Act::Step(Step::Contacts(choice)),
         settings::Step::Signature(email) => Act::Step(Step::Signature(email)),
         settings::Step::AddAccount => Act::Step(Step::Exit(Exit::AddAccount)),
         settings::Step::Unlink(email) => Act::Step(Step::Exit(Exit::Unlink(email))),

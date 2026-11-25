@@ -5,7 +5,8 @@ use serde::Serialize;
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    account::config::Config,
+    account::config::{Config, ContactsChoice},
+    account::contacts,
     account::xdg,
     cache::Reader,
     cli::answer::{Answer, Answers},
@@ -25,8 +26,8 @@ struct Row<'a> {
     written: bool,
 }
 
-/// `postal correspondent list`: every Correspondent the Cache knows, best
-/// first, the Account the arguments name first.
+/// `postal correspondent list`: every Correspondent the Cache knows, and
+/// those of Contacts, best first, the Account the arguments name first.
 impl Answers for CorrespondentList {
     fn answer(&self) -> Result<Answer, Box<dyn Error>> {
         let configs = Config::load(&xdg::config_dir()?.join("config.toml"))?;
@@ -34,7 +35,9 @@ impl Answers for CorrespondentList {
         let seen = Reader::open(&xdg::cache_dir()?)?.correspondence()?;
         let first = first_account(self)?.or_else(|| emails.first().map(|&e| e.to_owned()));
         let first = first.unwrap_or_default();
-        let ranked = correspondent::ranked(seen, &emails, &first, Utc::now());
+        let choice = configs.first().map_or(ContactsChoice::None, |c| c.contacts);
+        let contacts = contacts::read_or_log(choice);
+        let ranked = correspondent::ranked(seen, contacts, &emails, &first, Utc::now());
 
         let rows: Vec<Row<'_>> = ranked
             .iter()

@@ -1,6 +1,7 @@
 use ratatui::layout::Rect;
 
 use crate::{
+    account::config::ContactsChoice,
     render::icons::Icons,
     ui::drafts::drafting,
     ui::drafts::forwarding,
@@ -47,6 +48,12 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
             model.previews.set_look(model.theme.mail_look());
         }
         Step::Notify(choice) => model.notifier.notify = choice,
+        Step::Contacts(choice) => {
+            model.world.contacts = choice;
+            if choice != ContactsChoice::None {
+                ui.screen.contacts_check.start(choice);
+            }
+        }
         Step::Exit(exit) => return Ok(Some(exit)),
     }
 
