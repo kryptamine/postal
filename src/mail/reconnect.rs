@@ -3,13 +3,13 @@ use std::cell::Cell;
 use tokio::time::Instant;
 
 use crate::{
-    mail::backoff::Backoff, mail::refresh, mail::status::Status, mail::sync::Error, mail::wake,
+    mail::backoff::Backoff, mail::outage::Outage, mail::refresh, mail::status::Status,
+    mail::sync::Error, mail::wake,
 };
 
-/// Runs `attempt` on a fresh connection after every outage, waiting out the
-/// backoff first, until it fails for good, reporting `SignedOut` for a
-/// refused Account. `attempt` reports `Live` once through, which restarts
-/// the backoff; a wake from sleep or a Refresh retries at once.
+/// Runs `attempt` on a fresh connection after every failure, after the
+/// backoff, until the Account is refused. `Live` from `attempt` restarts the
+/// backoff; a wake from sleep or a Refresh retries at once.
 pub async fn retry(
     mut attempt: impl AsyncFnMut(&dyn Fn(Status)) -> Result<(), Error>,
     report: impl Fn(Status),
@@ -39,13 +39,14 @@ pub async fn retry(
             backoff = Backoff::default();
         }
 
-        let Some(outage) = error.outage() else {
-            if error.signed_out() {
-                report(Status::SignedOut);
-            }
-
+        // Only a new login helps here; a fresh connection starts any other
+        // failure over, as a refusal by sequence numbers gone stale.
+        if error.signed_out() {
+            report(Status::SignedOut);
             return Err(error);
-        };
+        }
+
+        let outage = error.outage().unwrap_or(Outage::Failed);
 
         let wait = backoff.next();
         tracing::warn!("{error}: retrying in {} ms", wait.as_millis());

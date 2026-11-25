@@ -40,6 +40,7 @@ impl Status {
                 let label = match outage {
                     Outage::Offline => "offline",
                     Outage::Busy => "server busy",
+                    Outage::Failed => "error",
                 };
 
                 write!(text, "{label} · retry in {}s", seconds_left(retry, now))

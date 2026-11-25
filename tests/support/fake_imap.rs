@@ -76,6 +76,8 @@ pub enum Outage {
     /// Every sign-in is answered `NO [AUTHENTICATIONFAILED]`, as for a
     /// revoked access token.
     Revoked,
+    /// Signs in, then answers every `FETCH` with a plain `NO`.
+    Refusing,
 }
 
 struct Stored {
@@ -884,6 +886,9 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
         }
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
             examine(server, folder, tag, opened.writable);
+        }
+        CommandBody::Fetch { .. } if inbox.outage == Some(Outage::Refusing) => {
+            server.enqueue_status(Status::no(tag, None, "Internal error").unwrap());
         }
         CommandBody::Search {
             criteria,

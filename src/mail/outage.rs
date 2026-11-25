@@ -6,4 +6,7 @@ pub enum Outage {
     /// The server is up but turned Postal away: `[THROTTLED]`,
     /// `[UNAVAILABLE]`, `BYE`, bandwidth limits.
     Busy,
+    /// Anything else that broke the connection's work, as a refused command
+    /// nothing handles: a fresh connection starts over from the server.
+    Failed,
 }

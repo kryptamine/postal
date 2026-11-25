@@ -194,6 +194,32 @@ fn a_throttled_login_shows_server_busy() {
     );
 }
 
+// A command the server refused, where nothing handles the refusal, ended
+// Postal; a fresh connection starts over instead.
+#[test]
+fn a_refused_command_reconnects_instead_of_quitting() {
+    let server = FakeImap::start(two_messages());
+    let home = Home::for_server(&server);
+    let mut t = idling(&server, &home);
+
+    server.fail(Outage::Refusing);
+    // The resync's fetch of it is the refused command.
+    server.deliver(FakeMessage::new("Cyd", "Arrived", "2024-11-19T09:00:00Z"));
+    t.wait_until(|s| status(s, "error · retry in").is_some())
+        .unwrap();
+    server.recover();
+    t.wait_until(|s| s.contains("Arrived") && status(s, "retry").is_none())
+        .unwrap();
+    quit(t);
+
+    let log = log(&home);
+    assert!(
+        log.lines()
+            .any(|l| l.contains("WARN") && l.contains("Internal error")),
+        "{log}"
+    );
+}
+
 // Starting without a network must not end Postal: the Cache is shown and
 // the sync keeps trying.
 #[test]
