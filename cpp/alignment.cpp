@@ -67,6 +67,25 @@ void spread(const element::ptr& el, bool listed)
 
 void left_align_spread(const element::ptr& root) { spread(root, false); }
 
+void align_blocks(const element::ptr& el)
+{
+    if(el->css().get_specified_text_align() == text_align_webkit_center)
+        for(auto& child : el->children())
+        {
+            css_properties& css = child->css();
+            css_margins m = css.get_margins();
+            // A block of auto width fills its container: nothing to centre.
+            bool narrow = css.get_display() == display_table ||
+                          (css.get_display() == display_block &&
+                           (!css.get_width().is_auto_or_none() || !css.get_max_width().is_auto_or_none()));
+            if(!narrow || css.get_float() != float_none || m.left.is_predefined() || m.right.is_predefined()) continue;
+            m.left = m.right = css_length::predef_value(0);
+            css.set_margins(m);
+        }
+
+    for(auto& child : el->children()) align_blocks(child);
+}
+
 bool left_align_paragraphs(const element::ptr& root)
 {
     if(root->is_comment() || root->is_text() || root->css().get_display() == display_none) return false;

@@ -443,10 +443,8 @@ class grid_container : public document_container, public Grid
 };
 
 // A border is a whole cell, and a box's own background under it would show
-// round the line. litehtml leaves a table under `align=center` or `<center>`
-// on the left.
-const char* const user_css = "* { background-clip: padding-box !important; } "
-                             "[align=center] > table, center > table { margin-left: auto; margin-right: auto; }";
+// round the line.
+const char* const user_css = "* { background-clip: padding-box !important; }";
 } // namespace
 
 struct cg_grid
@@ -523,6 +521,8 @@ std::unique_ptr<cg_grid> rendered(const char* html, size_t len, int32_t cols, Tr
         buttons = flatten_buttons(doc->root(), contents);
         unframe_titles(doc->root(), contents);
     }
+    // Before the spread sets a list's centred words left: its blocks stay.
+    align_blocks(doc->root());
     left_align_spread(doc->root());
     unfloat_cells(doc->root());
     block_regrouped_cells(doc->root());

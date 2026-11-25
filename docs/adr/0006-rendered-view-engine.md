@@ -193,6 +193,11 @@ element helpers.
   set round it, as in Blink, which maps them to `-webkit-` values a table
   resets; one a style sets, it does. Under `<td align="center">`, a
   receipt's rows stood centred. This changed 67 of 473 cached mails.
+  The table itself, or a block of set width, stands centred under such an
+  `align=center` or `<center>`, on its parent or further up, as in Blink
+  (`alignment.cpp`): under `<tr align="center">`, Google's security alert
+  stood at the pane's left. `align=right` moves no block: a price under a
+  picture met the next column's title. This changed 27 of 378 cached mails.
 - Two table cells with words side by side get a column between them where
   their padding, borders and spacing give less: in 600 px the table spread
   them, and in the pane `Support` met `Unsubscribe`. The digits of a
