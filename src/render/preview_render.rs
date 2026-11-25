@@ -39,6 +39,18 @@ pub fn render(job: &Job) -> Preview {
     rendered(job, Links::Inline)
 }
 
+/// What the Preview of `key` shows when rendering it panicked.
+pub fn failed(key: PreviewKey) -> Preview {
+    let body = note(
+        "(this Message could not be rendered)",
+        usize::from(key.width),
+    );
+    Preview {
+        body,
+        laid_out: false,
+    }
+}
+
 /// `job` as the `$PAGER` shows it: the Preview, with link footnotes in the
 /// text View.
 pub fn paged(job: &Job) -> Preview {

@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    panic,
     sync::{Arc, mpsc},
     thread,
 };
@@ -84,18 +85,7 @@ impl Previews {
         let (jobs, queue) = mpsc::channel::<Work>();
         thread::spawn(move || {
             for work in queue {
-                let update = match work {
-                    Work::Preview(job) => {
-                        let key = job.key;
-                        (
-                            key.account,
-                            Update::Rendered(key, preview_render::render(&job)),
-                        )
-                    }
-                    Work::Html(account, job) => (account, Update::LaidOut(job.run())),
-                };
-
-                if updates.unbounded_send(update).is_err() {
+                if updates.unbounded_send(done(work)).is_err() {
                     return;
                 }
             }
@@ -375,6 +365,20 @@ impl Previews {
     pub fn rendered(&mut self, key: PreviewKey, preview: Preview) {
         self.rendering.remove(&key);
         self.rendered.insert(key, preview);
+    }
+}
+
+/// `work` done as the Update it comes back as. A panic on hostile mail
+/// fails that one job and leaves the thread to render the rest.
+fn done(work: Work) -> (AccountId, Update) {
+    match work {
+        Work::Preview(job) => {
+            let key = job.key;
+            let preview = panic::catch_unwind(|| preview_render::render(&job))
+                .unwrap_or_else(|_| preview_render::failed(key));
+            (key.account, Update::Rendered(key, preview))
+        }
+        Work::Html(account, job) => (account, Update::LaidOut(job.run())),
     }
 }
 
