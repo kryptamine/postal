@@ -43,7 +43,9 @@ stills: demo-build ## shoot the landing page's screenshots in your Ghostty (macO
 
 # A Developer ID in the keychain signs the build as a release is signed, so
 # the keychain stops asking after every rebuild; without one it stays ad-hoc.
-install: $(if $(LAUNCHER),launcher) ## install a release postal in ~/.cargo/bin
+# A postal found first on PATH elsewhere, install.sh's, is replaced by this
+# build too; the rename keeps a running postal on the file it opened.
+install: $(if $(LAUNCHER),launcher) ## install a release postal in ~/.cargo/bin and over the one on PATH
 	POSTAL_LAUNCHER=$(LAUNCHER) cargo install --path . --locked --force
 	@if security find-identity -v -p codesigning 2>/dev/null | grep -q 'Developer ID Application'; then \
 		codesign --force --sign 'Developer ID Application' --identifier $(IDENTIFIER) \
@@ -52,7 +54,9 @@ install: $(if $(LAUNCHER),launcher) ## install a release postal in ~/.cargo/bin
 	@echo "postal: $(INSTALLED)"
 	@found=$$(command -v postal); \
 	if [ -n "$$found" ] && [ "$$(realpath "$$found")" != "$$(realpath $(INSTALLED))" ]; then \
-		echo "warning: postal on PATH is $$found, not this build"; \
+		target=$$(realpath "$$found"); \
+		cp $(INSTALLED) "$$target.new" && mv -f "$$target.new" "$$target" && \
+		echo "postal: $$target"; \
 	fi
 
 # install.sh reads the binary from $(DIST)/postal in this archive.
