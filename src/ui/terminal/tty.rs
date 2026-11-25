@@ -32,8 +32,12 @@ impl<'a> Tty<'a> {
     }
 
     /// Runs `program` in the foreground with the terminal handed back, then
-    /// takes the terminal again. A failure of `program` alone is only logged.
-    pub fn outside(&mut self, program: impl FnOnce() -> io::Result<()>) -> Result<(), Error> {
+    /// takes the terminal again. A failure of `program` alone is only logged,
+    /// and answers `T`'s default.
+    pub fn outside<T: Default>(
+        &mut self,
+        program: impl FnOnce() -> io::Result<T>,
+    ) -> Result<T, Error> {
         // A live EventStream keeps reading the terminal, and would take the
         // pager's keys; dropping it stops its reader thread.
         self.events.restart();
@@ -42,10 +46,9 @@ impl<'a> Tty<'a> {
         let result = program();
         drop(outside);
         terminal_backend::resume(self.terminal).map_err(Error::Terminal)?;
-        if let Err(error) = result {
+        Ok(result.unwrap_or_else(|error| {
             tracing::error!("leaving the screen failed: {error}");
-        }
-
-        Ok(())
+            T::default()
+        }))
     }
 }
