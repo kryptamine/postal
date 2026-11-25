@@ -15,7 +15,7 @@ pub struct Linked {
 /// `None` once `link` is composed beside the TUI already open, which holds
 /// the lock (ADR 0033).
 pub fn open(link: Mailto) -> Result<Option<Linked>, Box<dyn Error>> {
-    match SyncLock::try_take(&xdg::cache_dir()?)? {
+    match SyncLock::try_take()? {
         Some(lock) => Ok(Some(Linked { lock, link })),
         None => compose(&link).map(|()| None),
     }

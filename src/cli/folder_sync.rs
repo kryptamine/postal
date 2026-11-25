@@ -113,7 +113,7 @@ impl FolderSync {
     fn sync(&self) -> Result<Vec<(String, Outcome)>, Box<dyn Error>> {
         let wanted = accounts::named(self.account.as_deref())?;
         let dir = xdg::cache_dir()?;
-        let Some(_lock) = SyncLock::try_take(&dir)? else {
+        let Some(_lock) = SyncLock::try_take()? else {
             return Ok(wanted.into_iter().map(|a| (a, Outcome::Open)).collect());
         };
 

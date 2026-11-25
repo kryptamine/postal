@@ -130,10 +130,10 @@ fn terminal_app_runs_a_script_that_opens_the_link_in_postal_once() {
         let home = home(&format!(
             "email = \"me@example.com\"\nterminal = \"{terminal}\"\n"
         ));
-        let cache = home.xdg_cache_home().join("postal");
-        fs::create_dir_all(&cache).unwrap();
+        let data = home.xdg_data_home().join("postal");
+        fs::create_dir_all(&data).unwrap();
         // The TUI's lock, so the Draft is composed beside it.
-        let lock = File::create(cache.join("sync.lock")).unwrap();
+        let lock = File::create(data.join("postal.lock")).unwrap();
         lock.lock().unwrap();
         let seen = home.xdg_config_home().join("seen");
 

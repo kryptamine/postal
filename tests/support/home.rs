@@ -50,6 +50,7 @@ impl Home {
             .env("XDG_CONFIG_HOME", self.xdg_config_home())
             .env("XDG_STATE_HOME", self.xdg_state_home())
             .env("XDG_CACHE_HOME", self.xdg_cache_home())
+            .env("XDG_DATA_HOME", self.xdg_data_home())
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("TZ", "UTC")
             .timeout(Duration::from_secs(10))

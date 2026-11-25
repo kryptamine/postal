@@ -34,9 +34,12 @@ Message could go out twice, since the `.sent` rename of ADR 0013 only stops
 a second send within one process's order of steps. Both would also open
 the Cache to write, and `Cache::open` may rebuild it.
 
-So whichever runs holds an exclusive lock on `sync.lock` in the Cache's
-directory (`flock`, through `File::try_lock`). The OS releases it when the
-process ends, however it ends.
+So whichever runs holds an exclusive lock on `postal.lock` in the data
+directory, beside the Outbox it guards (`flock`, through `File::try_lock`).
+Two processes whose `XDG_CACHE_HOME` differ still share one Outbox, so the
+lock follows the Outbox, not the Cache. The OS releases it when the process
+ends, however it ends. Until no 0.5.0 binary can be running, each holder
+also takes that release's `sync.lock` in the Cache's directory.
 
 - **A sync finding the TUI open** answers `open` for each Account, opens no
   connection, and succeeds. The TUI's IDLE keeps the Inbox live (ADR 0008),
