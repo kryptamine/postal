@@ -156,7 +156,8 @@ fn write_state(
     changes: &Changes,
 ) -> rusqlite::Result<()> {
     let FolderKey { account, folder } = key;
-    let state = &changes.state;
+    let reported = &changes.reported;
+    let state = &reported.state;
     connection.execute(
         "INSERT INTO mailbox
              (account, name, uid_validity, uid_next, highest_modseq, unread, exists_count,
@@ -171,9 +172,9 @@ fn write_state(
             state.uid_validity,
             state.uid_next,
             state.highest_modseq,
-            changes.unread,
+            reported.unread,
             account,
-            changes.exists,
+            reported.exists,
         ],
     )?;
     Ok(())

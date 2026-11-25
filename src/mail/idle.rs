@@ -3,7 +3,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 
 use crate::{
-    cache::{Cache, Changes},
+    cache::{Cache, Changes, Reported},
     domain::folder::INBOX,
     domain::folder_name::FolderName,
     mail::folder_list,
@@ -315,14 +315,7 @@ async fn changes(
         Vec::new()
     };
 
-    Ok(Some(Changes {
-        // Left as the resync saw it, so the next one asks for all since.
-        state,
-        exists: sequence.exists(),
-        unread: server.unread_count().await?,
-        replace: false,
-        new,
-        expunged,
-        flags,
-    }))
+    // `state` is left as the resync saw it, so the next one asks for all since.
+    let reported = Reported::new(state, sequence.exists(), server.unread_count().await?);
+    Ok(Some(Changes::update(reported, new, expunged, flags)))
 }
