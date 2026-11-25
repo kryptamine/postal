@@ -120,11 +120,13 @@ fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
             screen.over.close::<LinkHints>();
             screen.over.close::<AttachmentHints>();
         }
-    } else if !screen.follow(view, thread) && !view.stack().map(|m| m.body_key).eq(stack) {
+    } else if !screen.follow(view, thread)
+        && !view.stack().map(|m| m.body_key).eq(stack.iter().copied())
+    {
         screen.over.close::<LinkHints>();
         screen.over.close::<AttachmentHints>();
         if let Some(reading) = screen.showing.reading_mut() {
-            reading.hold = true;
+            reading.joined(view.stack().filter(|m| !stack.contains(&m.body_key)));
         }
     }
 

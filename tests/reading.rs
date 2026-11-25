@@ -531,3 +531,62 @@ fn style_after(screen: &Screen, text: &str, before: &str) -> termlens::Style {
         .unwrap()
         .style()
 }
+
+// A Message that arrives in the open Thread is not left folded at its
+// bottom: it opens, marked new, until the cursor reaches it.
+#[test]
+fn a_message_that_joins_the_open_thread_unfolds_marked_new() {
+    let server = FakeImap::start(conversation(false));
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = tall(&home, &browser);
+    read_thread(&mut t);
+    t.wait_until(|s| s.contains("│▎From    Dee")).unwrap();
+
+    server.deliver(reply("Eve", "Eve has news", 5).unread());
+    let screen = t
+        .snapshot_after(|s| s.contains("Eve has news") && s.contains(" 4/5 "))
+        .unwrap();
+    let from = screen.row_text(row_of(&screen, "From    Eve"));
+    assert!(from.contains(" new "), "{screen}");
+    assert!(
+        !screen
+            .row_text(row_of(&screen, "From    Dee"))
+            .contains(" new "),
+        "{screen}"
+    );
+
+    t.send(Key::Char('n')).unwrap();
+    let screen = t.snapshot_after(|s| s.contains(" 5/5 ")).unwrap();
+    assert!(
+        !screen
+            .row_text(row_of(&screen, "From    Eve"))
+            .contains(" new "),
+        "{screen}"
+    );
+    quit(t);
+}
+
+// Joining below the window, the new Message keeps the reader's place, and
+// the border says it is there until it shows.
+#[test]
+fn a_message_that_joins_below_the_window_is_named_on_the_border() {
+    let server = FakeImap::start(vec![long("Ada", 1), long("Bob", 2)]);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains("Bob 01")).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains(" 1/2 ") && s.contains("Ada 01"))
+        .unwrap();
+
+    server.deliver(long("Cid", 3));
+    let screen = t.snapshot_after(|s| s.contains(" 1/3 ")).unwrap();
+    let bottom = screen.row_text(screen.rows() - 2);
+    assert!(bottom.contains("new below · G"), "{screen}");
+    assert!(screen.contains("Ada 01"), "{screen}");
+
+    t.send(Key::Char('G')).unwrap();
+    let screen = t.snapshot_after(|s| s.contains("Cid 40")).unwrap();
+    assert!(!screen.contains("new below"), "{screen}");
+    quit(t);
+}

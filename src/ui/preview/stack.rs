@@ -161,6 +161,7 @@ pub fn settle(
         .find(|p| p.bottom() + GAP > scroll)
         .map(|p| (p.message.body_key, scroll - p.top));
     reading.top = top;
+    reading.reached();
 }
 
 /// Moves the cursor, at `cursor` rows, to the nearest Message the window shows.
