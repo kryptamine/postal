@@ -99,6 +99,25 @@ fn a_dwell_on_an_unread_thread_marks_it_read() {
     );
 }
 
+// Another client's change the server sends with the answer to a Mark Read
+// was dropped, and IDLE never sent it again: the row kept its old flag.
+#[test]
+fn a_flag_change_sent_with_a_stores_answer_is_taken_in() {
+    let server = FakeImap::start(vec![
+        message("Alice", "Older", "2024-03-01T09:00:00Z"),
+        message("Carol", "Newest", "2024-03-02T09:00:00Z").unread(),
+    ]);
+    let home = Home::for_server(&server);
+    server.stall(Stall::Store);
+    let mut t = ready(&server, &home, "Newest");
+    wait_for(|| !stores(&server).is_empty());
+    server.set_seen(FIRST_UID, false);
+    server.release();
+
+    t.wait_until(|s| card(s, "Alice") == Some(true)).unwrap();
+    quit(t);
+}
+
 // Moving through the list must not read every row it passes.
 #[test]
 fn scrolling_past_an_unread_thread_leaves_it_unread() {
