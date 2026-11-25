@@ -116,7 +116,13 @@ pub fn reply(
     screen.forwarding = None;
     let message = &awaited.message;
     if let Some(path) = answered_by(message, world.accounts) {
-        return edit(tty, screen, world.accounts, path, DraftNotes::default());
+        // It was found among the Drafts of the Account the Message reached.
+        let notes = DraftNotes {
+            account: world.accounts.noted(message.account).map(str::to_owned),
+            answering: None,
+        };
+
+        return edit(tty, screen, world.accounts, path, notes);
     }
 
     let cache = &world.caches[message.account];
@@ -252,10 +258,7 @@ pub fn edit(
     path: PathBuf,
     notes: DraftNotes,
 ) -> Result<(), Error> {
-    // Without notes given, those in the file beside the Draft name its Account.
-    let beside = || Notes::read(&path).ok().flatten().and_then(|n| n.account);
-    let account = notes.account.clone().or_else(beside);
-    in_editor(tty, accounts, &path, account.as_deref())?;
+    in_editor(tty, accounts, &path, notes.account.as_deref())?;
     preview(screen, path, notes);
     Ok(())
 }
