@@ -1,0 +1,19 @@
+---
+source: tests/markdown.rs
+expression: html
+---
+<!DOCTYPE html>
+<html><body>
+<p>Sounds good.</p>
+<pre style="white-space:pre-wrap;font-family:inherit;margin:0">-- 
+Bob
+----</pre>
+<pre style="white-space:pre-wrap;font-family:inherit;margin:0">On 18 Nov 2024, Ada Lovelace wrote:</pre>
+<blockquote style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex">
+<pre style="white-space:pre-wrap;font-family:inherit;margin:0">*Shall we?*</pre>
+<blockquote style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex">
+<pre style="white-space:pre-wrap;font-family:inherit;margin:0">Monday</pre>
+</blockquote>
+<pre style="white-space:pre-wrap;font-family:inherit;margin:0">back</pre>
+</blockquote>
+</body></html>

@@ -183,6 +183,9 @@ fn the_send_delay_is_shown_and_typed() {
     }
 
     t.wait_until(|s| s.contains("10 seconds")).unwrap();
+    // Below the formats, the tab opens on the one in effect.
+    t.send(Key::Down).unwrap();
+    t.send(Key::Down).unwrap();
     t.send(Key::Enter).unwrap();
     t.send(Key::Backspace).unwrap();
     t.send(Key::Backspace).unwrap();
@@ -190,6 +193,34 @@ fn the_send_delay_is_shown_and_typed() {
     t.send(Key::Enter).unwrap();
     wait_for(|| config(&home).contains("send-delay = 3"));
     t.wait_until(|s| s.contains("3 seconds")).unwrap();
+    quit(t);
+}
+
+// The format every Account shares goes to `config.toml`, and back to
+// plain leaves the key out, as an untouched file has it.
+#[test]
+fn the_compose_format_is_chosen() {
+    let server = inbox();
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, false);
+    settings(&mut t);
+    for _ in 0..4 {
+        t.send(Key::Tab).unwrap();
+    }
+
+    t.wait_until(|s| s.contains("plain ✓")).unwrap();
+    t.send(Key::Down).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("markdown ✓")).unwrap();
+    assert!(config(&home).contains("compose-format = \"markdown\""));
+    t.send(Key::Up).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("plain ✓")).unwrap();
+    assert!(
+        !config(&home).contains("compose-format"),
+        "{}",
+        config(&home)
+    );
     quit(t);
 }
 

@@ -19,6 +19,7 @@ pub struct Config {
     /// The display name of `From`; without it, the bare address.
     pub name: Option<String>,
     pub signature: Option<Signature>,
+    pub compose_format: ComposeFormat,
     pub imap: Imap,
     pub smtp: Smtp,
     pub secrets: SecretStore,
@@ -90,6 +91,25 @@ impl Smtp {
 pub fn domain(email: &str) -> String {
     let domain = email.rsplit_once('@').map_or(email, |(_, domain)| domain);
     domain.trim().to_lowercase()
+}
+
+/// How a Draft's body is sent: `markdown` sends its HTML beside the text.
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ComposeFormat {
+    #[default]
+    Plain,
+    Markdown,
+}
+
+impl ComposeFormat {
+    /// The value of `compose-format` in `config.toml`.
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Plain => "plain",
+            Self::Markdown => "markdown",
+        }
+    }
 }
 
 /// Whether to draw Nerd Font icons: `auto` guesses from the terminal.

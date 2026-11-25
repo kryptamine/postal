@@ -2,7 +2,7 @@ use std::{io, path::PathBuf};
 
 use crate::{
     compose::awaited_forward::AwaitedForward, compose::draft_file,
-    compose::draft_notes::DraftNotes, compose::editor, compose::forward_draft, compose::forwarded,
+    compose::draft_notes::DraftNotes, compose::forward_draft, compose::forwarded,
     domain::message::Message, mail::forward_fetch::ForwardFetch, mail::status::Status,
     ui::drafts::composing, ui::run::Error, ui::state::screen::Screen, ui::state::toast::Toast,
     ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
@@ -130,7 +130,7 @@ fn open(
         tracing::error!("noting the Account of a Draft failed: {error}");
     }
 
-    tty.outside(|| editor::edit(&path))?;
+    composing::in_editor(tty, accounts, &path, notes.account.as_deref())?;
     composing::toast_unread(screen, &signature);
     composing::preview(screen, path, notes);
     Ok(())

@@ -58,7 +58,7 @@ impl Section {
             Self::Icons => "Nerd Font glyphs in the lists, or symbols any font draws",
             Self::Notify => "when new mail in an Inbox raises a desktop notification",
             Self::Name => "your name in the From line of the Messages you send",
-            Self::Send => "how long a Send waits in the Outbox, for u to take it back",
+            Self::Send => "how a Draft's body is sent, and how long u can take it back",
             Self::Secrets => "where the passwords and tokens of the Accounts are kept",
             Self::Mailto => "whether a mailto: link in another app opens in Postal",
             Self::Contacts => "whether the people in macOS Contacts are Correspondents",

@@ -11,8 +11,8 @@ use toml_edit::{
 use crate::{
     account::atomic_file,
     account::config::{
-        ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY, SecretStore, Smtp,
-        Terminal,
+        ComposeFormat, ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY,
+        SecretStore, Smtp, Terminal,
     },
     account::provider::Provider,
 };
@@ -206,6 +206,16 @@ impl ConfigFile {
             root.remove("contacts");
         } else {
             set(root, "contacts", contacts.key().into());
+        }
+    }
+
+    /// The top-level format, for each Account that sets none.
+    pub fn set_compose_format(&mut self, format: ComposeFormat) {
+        let root = self.document.as_table_mut();
+        if format == ComposeFormat::default() {
+            root.remove("compose-format");
+        } else {
+            set(root, "compose-format", format.key().into());
         }
     }
 

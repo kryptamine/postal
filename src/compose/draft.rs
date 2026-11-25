@@ -4,7 +4,9 @@ use lettre::{
 };
 
 use crate::{
+    account::config::ComposeFormat,
     compose::attach::{self, Attach},
+    compose::markdown,
     domain::answering::Answering,
 };
 
@@ -78,14 +80,15 @@ impl Draft {
         Ok(())
     }
 
-    /// The Message as sent: plain UTF-8 text, its lines as written, then
-    /// each file attached, read now; non-ASCII headers RFC 2047-encoded; in
-    /// its Thread when `answering`.
+    /// The Message as sent: plain UTF-8 text, its lines as written, beside
+    /// its HTML in `Markdown`, then each file attached, read now; non-ASCII
+    /// headers RFC 2047-encoded; in its Thread when `answering`.
     pub fn message(
         &self,
         from: Mailbox,
         id: String,
         answering: Option<&Answering>,
+        format: ComposeFormat,
     ) -> Result<Message, String> {
         let mut message = Message::builder()
             .from(from)
@@ -108,21 +111,34 @@ impl Draft {
             message = message.cc(cc.clone());
         }
 
-        let built = if self.attached.is_empty() {
-            message
-                .header(ContentType::TEXT_PLAIN)
-                .body(self.body.clone())
-        } else {
-            self.attachable()?;
-            let text = SinglePart::builder()
-                .header(ContentType::TEXT_PLAIN)
-                .body(self.body.clone());
-            let mut mixed = MultiPart::mixed().singlepart(text);
-            for attach in &self.attached {
-                mixed = mixed.singlepart(attach.part()?);
-            }
+        let alternative = (format == ComposeFormat::Markdown).then(|| {
+            MultiPart::alternative_plain_html(self.body.clone(), markdown::html(&self.body))
+        });
 
-            message.multipart(mixed)
+        let built = match (alternative, self.attached.is_empty()) {
+            (None, true) => message
+                .header(ContentType::TEXT_PLAIN)
+                .body(self.body.clone()),
+            (Some(alternative), true) => message.multipart(alternative),
+            (alternative, false) => {
+                self.attachable()?;
+                let text = || {
+                    SinglePart::builder()
+                        .header(ContentType::TEXT_PLAIN)
+                        .body(self.body.clone())
+                };
+
+                let mut mixed = alternative.map_or_else(
+                    || MultiPart::mixed().singlepart(text()),
+                    |alternative| MultiPart::mixed().multipart(alternative),
+                );
+
+                for attach in &self.attached {
+                    mixed = mixed.singlepart(attach.part()?);
+                }
+
+                message.multipart(mixed)
+            }
         };
 
         built.map_err(|error| error.to_string())

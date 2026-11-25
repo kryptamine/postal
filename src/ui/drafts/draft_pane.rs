@@ -7,8 +7,8 @@ use ratatui::{
 };
 
 use crate::{
-    ui::drafts::draft_preview::DraftPreview, ui::frame::layout::PADDING, ui::frame::theme::Theme,
-    ui::widgets::border,
+    render::styled_line::StyledLine, ui::drafts::draft_preview::DraftPreview,
+    ui::frame::layout::PADDING, ui::frame::theme::Theme, ui::widgets::border,
 };
 
 /// A Draft over the whole body: what went wrong first, then the headers
@@ -18,6 +18,8 @@ pub struct DraftPane<'a> {
     pub preview: &'a DraftPreview,
     /// The `From` Postal adds, as it will read.
     pub from: &'a str,
+    /// The body as its HTML is laid out, in place of its text.
+    pub rendered: Option<&'a [StyledLine]>,
 }
 
 impl Widget for DraftPane<'_> {
@@ -36,7 +38,7 @@ impl Widget for DraftPane<'_> {
         let text = Rect {
             x: area.x.saturating_add(1 + PADDING),
             y: area.y.saturating_add(1),
-            width: area.width.saturating_sub(2 * (1 + PADDING)),
+            width: text_width(area),
             height: area.height.saturating_sub(2),
         };
 
@@ -44,6 +46,11 @@ impl Widget for DraftPane<'_> {
             .wrap(Wrap { trim: false })
             .render(text, buf);
     }
+}
+
+/// The columns the pane over `area` writes in, inside its border.
+pub const fn text_width(area: Rect) -> u16 {
+    area.width.saturating_sub(2 * (1 + PADDING))
 }
 
 impl DraftPane<'_> {
@@ -83,7 +90,20 @@ impl DraftPane<'_> {
         }
 
         lines.push(Line::default());
-        lines.extend(draft.body.lines().map(Line::raw));
+        let Some(rendered) = self.rendered else {
+            lines.extend(draft.body.lines().map(Line::raw));
+            return lines;
+        };
+
+        for row in rendered {
+            let spans = row.segments().map(|segment| {
+                let style = self.theme.painted(segment.marks, segment.paint);
+                Span::styled(segment.text, style)
+            });
+
+            lines.push(Line::from(spans.collect::<Vec<_>>()));
+        }
+
         lines
     }
 }

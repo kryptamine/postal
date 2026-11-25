@@ -161,7 +161,7 @@ The lines an Account ends its Messages with, under a `-- ` line (RFC 3676): `sig
 _Avoid_: footer, sign-off
 
 **Draft**:
-A Message being written, kept on this machine until it is sent or discarded (ADR 0013); `d` in its preview keeps it for later. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox.
+A Message being written, kept on this machine until it is sent or discarded (ADR 0013); `d` in its preview keeps it for later. Its file holds `To`, `Cc`, `Subject` and `Attach` lines, one file attached per `Attach` line, then the body; the files are read once, on Send, into the Outbox. With `compose-format = "markdown"` in `config.toml`, at the top level or in an `[[account]]`, the body is Markdown: Send adds its HTML beside the text as written, the signature, a Quote and a Forward's original kept as written, and the preview shows that HTML in the Rendered View, `v` the text (ADR 0036).
 _Avoid_: unsent mail, composition
 
 **Local Drafts**:
@@ -181,7 +181,7 @@ The screen that signs an Account in: on a first run, and after `postal login` or
 _Avoid_: setup wizard, registration
 
 **Settings**:
-A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once. A tab per section, switched with `Tab` and `S-Tab`, says what it sets: Accounts, each with its Provider and under it its Signature by its first line, then Add account; Icons, Notify, Mailto and Secrets, each a list of values, the one in effect ticked, `Enter` applying the one selected; Name; and Send, the seconds a Send is held. Mailto also switches whether the system hands `mailto:` links to Postal, and on macOS types a program of the user's own to open them in. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, the Send delay, a Signature or the secret store, opens the TUI again when Settings closes.
+A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once. A tab per section, switched with `Tab` and `S-Tab`, says what it sets: Accounts, each with its Provider and under it its Signature by its first line, then Add account; Icons, Notify, Mailto and Secrets, each a list of values, the one in effect ticked, `Enter` applying the one selected; Name; and Send, the format of a Draft's body, a list of values, and the seconds a Send is held. Mailto also switches whether the system hands `mailto:` links to Postal, and on macOS types a program of the user's own to open them in. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, the format, the Send delay, a Signature or the secret store, opens the TUI again when Settings closes.
 _Avoid_: preferences, options, config screen
 
 **Unlink**:

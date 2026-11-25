@@ -1,0 +1,35 @@
+---
+source: tests/markdown.rs
+expression: rendered
+---
+size: 100x30  cursor: hidden
+┌ Draft ───────────────────────────────────────────────────────────────────────────────────────────┐
+│ From    me@example.com                                                                           │
+│ To      bob@example.com                                                                          │
+│ Subject Plan                                                                                     │
+│                                                                                                  │
+│  Plan                                                                                            │
+│                                                                                                  │
+│     • first                                                                                      │
+│     • second                                                                                     │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+ y send  e edit  q discard  d keep  ?: help
