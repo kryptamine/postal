@@ -26,7 +26,13 @@ end
 --- Keeps Draft buffer `buf` checked in `augroup`; not while a line is
 --- typed, a recipient or a path being nothing whole until it ends.
 function M.watch(buf, augroup)
-	M.run(buf)
+	-- Neovim redraws on each DiagnosticChanged: run now, the Draft would be
+	-- drawn before its window folds the Quote.
+	vim.schedule(function()
+		if vim.api.nvim_buf_is_valid(buf) then
+			M.run(buf)
+		end
+	end)
 	vim.api.nvim_create_autocmd({ "TextChanged", "InsertLeave", "BufEnter", "FocusGained" }, {
 		group = augroup,
 		buffer = buf,
