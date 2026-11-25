@@ -26,23 +26,20 @@ impl InboxPoll {
         }
     }
 
-    /// How long IDLE on `shown` may last, at most `idle`, before the Inbox is due.
-    pub fn period(&self, shown: &FolderName, idle: Duration) -> Duration {
+    /// How long IDLE on `shown` may last, at most `idle`, before the Inbox
+    /// is due; `None` when it is due now, starting the wait for the next
+    /// time. Showing the Inbox starts it too: IDLE watches it then.
+    pub fn wait(&mut self, shown: &FolderName, idle: Duration) -> Option<Duration> {
         if *shown == *FolderName::inbox() {
-            return idle;
-        }
-
-        idle.min(self.every.saturating_sub(self.last.elapsed()))
-    }
-
-    /// Whether the Inbox is due now, starting the wait for the next time
-    /// when it is. Showing the Inbox starts it too: IDLE watches it then.
-    pub fn due(&mut self, shown: &FolderName) -> bool {
-        let due = *shown != *FolderName::inbox() && self.last.elapsed() >= self.every;
-        if due || *shown == *FolderName::inbox() {
             self.last = Instant::now();
+            return Some(idle);
         }
 
-        due
+        if self.last.elapsed() >= self.every {
+            self.last = Instant::now();
+            return None;
+        }
+
+        Some(idle.min(self.every.saturating_sub(self.last.elapsed())))
     }
 }

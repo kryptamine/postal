@@ -1,3 +1,6 @@
+use std::fmt::Write;
+
+use chrono::Utc;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -6,7 +9,8 @@ use ratatui::{
 };
 
 use crate::{
-    compose::accounts::Accounts, compose::local_drafts::LocalDrafts, ui::frame::layout::PADDING,
+    compose::accounts::Accounts, compose::local_draft::LocalDraft,
+    compose::local_drafts::LocalDrafts, render::stack_str::StackStr, ui::frame::layout::PADDING,
     ui::frame::theme::Theme, ui::widgets::border, ui::widgets::centred::centred,
     ui::widgets::truncate,
 };
@@ -19,10 +23,12 @@ const TO_SHARE: u16 = 40;
 const FROM_SHARE: u16 = 30;
 /// The width of the count of files attached, at the right.
 const ATTACHED_WIDTH: u16 = 5;
+/// The width of a held Send's time left, before the count.
+const HELD_WIDTH: u16 = 8;
 
 /// Local Drafts over the whole body: a row per Draft or Outbox Message,
 /// its kind, its sender with several Accounts, its recipients, its subject
-/// and how many files it attaches.
+/// how long a held Send has left and how many files it attaches.
 pub struct LocalDraftsPane<'a> {
     pub theme: &'a Theme,
     pub local: &'a LocalDrafts,
@@ -84,14 +90,40 @@ impl Widget for LocalDraftsPane<'_> {
             let to_x = from_x.saturating_add(from_width).min(list.right());
             truncate::draw(buf, cell(to_x, to_width.saturating_sub(1)), &row.to, style);
             let subject_x = to_x.saturating_add(to_width).min(list.right());
-            let attached_x = list.right().saturating_sub(ATTACHED_WIDTH).max(subject_x);
-            let subject_width = attached_x.saturating_sub(subject_x).saturating_sub(1);
-            truncate::draw(buf, cell(subject_x, subject_width), &row.subject, style);
-            if row.attached > 0 {
-                let count = format!("{} {}", self.theme.icons.attachment(), row.attached);
-                let muted = self.theme.muted.patch(style);
-                truncate::draw(buf, cell(attached_x, ATTACHED_WIDTH), &count, muted);
-            }
+            let tail = Rect::new(subject_x, y, list.right() - subject_x, 1);
+            self.tail(buf, tail, row, style);
+        }
+    }
+}
+
+impl LocalDraftsPane<'_> {
+    /// The subject in `area`, then how long a held Send has left and the
+    /// count of files attached, at its right.
+    fn tail(&self, buf: &mut Buffer, area: Rect, row: &LocalDraft, style: Style) {
+        let cell = |x: u16, width: u16| Rect::new(x, area.y, width.min(area.right() - x), 1);
+        let muted = self.theme.muted.patch(style);
+        let attached_x = area.right().saturating_sub(ATTACHED_WIDTH).max(area.x);
+        let left = row
+            .hold_until
+            .and_then(|until| (until - Utc::now()).to_std().ok());
+        let held_x = match left {
+            Some(_) => attached_x.saturating_sub(HELD_WIDTH).max(area.x),
+            None => attached_x,
+        };
+
+        let subject_width = held_x.saturating_sub(area.x).saturating_sub(1);
+        truncate::draw(buf, cell(area.x, subject_width), &row.subject, style);
+        if let Some(left) = left {
+            let seconds = left.as_secs() + u64::from(left.subsec_nanos() > 0);
+            let mut text = StackStr::<24>::new();
+            // Any u64 fits, so the write cannot fail.
+            write!(text, "in {seconds}s").ok();
+            truncate::draw(buf, cell(held_x, HELD_WIDTH), text.as_str(), muted);
+        }
+
+        if row.attached > 0 {
+            let count = format!("{} {}", self.theme.icons.attachment(), row.attached);
+            truncate::draw(buf, cell(attached_x, ATTACHED_WIDTH), &count, muted);
         }
     }
 }

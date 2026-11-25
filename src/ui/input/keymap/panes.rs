@@ -338,7 +338,7 @@ const PANES: [PaneKeys; 42] = [
             signed_out: false,
             keys: &[Key::Char("u")],
             aliases: &[],
-            description: "undo a move or discard",
+            description: "undo a move, discard or Send",
             hint: None,
         },
         &[Action::Undo],

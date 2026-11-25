@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{account::atomic_file, domain::answering::Answering};
@@ -23,6 +24,9 @@ pub struct Notes {
     /// The server's answer to the last Send.
     #[serde(default)]
     pub error: Option<String>,
+    /// In the Outbox, the time before which it is not sent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hold_until: Option<DateTime<Utc>>,
 }
 
 impl Notes {

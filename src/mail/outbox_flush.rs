@@ -1,3 +1,5 @@
+use std::io;
+
 use chrono::Utc;
 use mail_parser::MessageParser;
 
@@ -77,7 +79,7 @@ pub async fn flush(
                     unreachable = true;
                     continue;
                 }
-                Submitted::Refused | Submitted::Unread => continue,
+                Submitted::Held | Submitted::Refused | Submitted::Unread => continue,
             }
         }
 
@@ -88,6 +90,8 @@ pub async fn flush(
 }
 
 enum Submitted {
+    /// Held until a time to come, or taken back by an Undo.
+    Held,
     /// With the Gmail Thread the Message answers.
     Accepted(Option<ThreadId>),
     /// Left in the Outbox for the next sync: a network error or a `4xx`.
@@ -105,14 +109,11 @@ async fn submit(
     queued: &mut Queued,
     send: &impl Fn(Update),
 ) -> Result<Submitted, Error> {
+    let read = claimed(queued);
     let _sending = held::Sending::start();
-    let read = std::fs::read(&queued.path).and_then(|message| {
-        let notes = Notes::read(&queued.path)?;
-        Ok((message, notes))
-    });
-
     let (message, Some(notes)) = (match read {
-        Ok(read) => read,
+        Ok(None) => return Ok(Submitted::Held),
+        Ok(Some(read)) => read,
         Err(error) => {
             tracing::error!("reading {} failed: {error}", queued.path.display());
             return Ok(Submitted::Unread);
@@ -142,6 +143,10 @@ async fn submit(
                         tracing::error!("keeping the error of the Send failed: {error}");
                     }
 
+                    if let Err(error) = queued.unclaim() {
+                        tracing::error!("handing {} back failed: {error}", queued.path.display());
+                    }
+
                     return Ok(Submitted::Unreachable);
                 }
             }
@@ -155,6 +160,7 @@ async fn submit(
         account: notes.account,
         answering: notes.answering,
         error: Some(refusal),
+        hold_until: None,
     };
 
     if let Err(error) = sender.outbox.give_back(queued, &text, &notes) {
@@ -163,6 +169,22 @@ async fn submit(
 
     send(Update::Refused);
     Ok(Submitted::Refused)
+}
+
+/// The Message and its notes once claimed for SMTP; `None` while it is
+/// held, or once an Undo took it.
+fn claimed(queued: &mut Queued) -> io::Result<Option<(Vec<u8>, Option<Notes>)>> {
+    let notes = Notes::read(&queued.path)?;
+    if notes.as_ref().and_then(|notes| notes.hold_until) > Some(Utc::now()) {
+        return Ok(None);
+    }
+
+    // Claimed before it is read, so an Undo after this finds it gone.
+    if !queued.claim()? {
+        return Ok(None);
+    }
+
+    Ok(Some((std::fs::read(&queued.path)?, notes)))
 }
 
 /// Everyone `draft` went out to, under the `Message-ID` Postal gave

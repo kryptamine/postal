@@ -73,7 +73,7 @@ Moving Messages, as a Delete takes them, with `m` to the Folder the Folder Picke
 _Avoid_: file, label (as a verb)
 
 **Undo**:
-Taking back the latest Delete, Archive, Move or Draft discard not yet taken back, with `u`, as many times as this run has made one: the Messages moved return to the Folder they left, and a discarded Draft returns to its preview.
+Taking back the latest Delete, Archive, Move, Draft discard or held Send not yet taken back, with `u`, as many times as this run has made one: the Messages moved return to the Folder they left, and a discarded Draft or a held Send returns to its preview. A Send SMTP has is never taken back: its Undo is gone, and `u` takes the one before.
 _Avoid_: restore, revert
 
 **Preview**:
@@ -165,11 +165,11 @@ A Message being written, kept on this machine until it is sent or discarded (ADR
 _Avoid_: unsent mail, composition
 
 **Local Drafts**:
-Postal's own Folder in the Folder Picker, never on the server: every Draft and every Outbox Message, newest first, with its recipients and subject, and its sender when there is more than one Account. `Enter` opens a Draft's preview, or shows an Outbox Message read-only with its last error; `Backspace` discards a Draft.
+Postal's own Folder in the Folder Picker, never on the server: every Draft and every Outbox Message, newest first, with its recipients and subject, and its sender when there is more than one Account. A held Send shows how long it has left. `Enter` opens a Draft's preview, or shows an Outbox Message read-only with its last error; `Backspace` discards a Draft.
 _Avoid_: Drafts (the server's Folder), unsent
 
 **Send**:
-Handing a Draft to the server over SMTP from its preview with `y`; it waits in the Outbox until the server accepts it.
+Handing a Draft to the server over SMTP from its preview with `y`; it waits in the Outbox until the server accepts it. It is first held there for `send-delay` seconds in `config.toml`, 10 unless set and none for `0`, while a Toast counts down and `u` takes it back to the Drafts; quit inside that time, it leaves on the next sync.
 _Avoid_: submit, deliver
 
 **Outbox**:
@@ -181,7 +181,7 @@ The screen that signs an Account in: on a first run, and after `postal login` or
 _Avoid_: setup wizard, registration
 
 **Settings**:
-A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once. A tab per section, switched with `Tab` and `S-Tab`, says what it sets: Accounts, each with its Provider and under it its Signature by its first line, then Add account; Icons, Notify, Mailto and Secrets, each a list of values, the one in effect ticked, `Enter` applying the one selected; and Name. Mailto also switches whether the system hands `mailto:` links to Postal, and on macOS types a program of the user's own to open them in. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
+A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once. A tab per section, switched with `Tab` and `S-Tab`, says what it sets: Accounts, each with its Provider and under it its Signature by its first line, then Add account; Icons, Notify, Mailto and Secrets, each a list of values, the one in effect ticked, `Enter` applying the one selected; Name; and Send, the seconds a Send is held. Mailto also switches whether the system hands `mailto:` links to Postal, and on macOS types a program of the user's own to open them in. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, the Send delay, a Signature or the secret store, opens the TUI again when Settings closes.
 _Avoid_: preferences, options, config screen
 
 **Unlink**:

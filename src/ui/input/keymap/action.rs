@@ -31,7 +31,7 @@ pub enum Action {
     Archive,
     /// Move, as Delete, to a Folder the Folder Picker picks.
     MoveTo,
-    /// Undo of the latest move or Draft discard not yet taken back.
+    /// Undo of the latest move, Draft discard or held Send not yet taken back.
     Undo,
     /// A new Draft in `$EDITOR`.
     Compose,

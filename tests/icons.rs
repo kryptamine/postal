@@ -50,6 +50,7 @@ fn postal(home: &Home, terminal: Option<&str>) -> Terminal {
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", format!("cp '{}'", next.display()))
         .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10));
     let builder = match terminal {
         Some(terminal) => builder.env("TERM_PROGRAM", terminal),

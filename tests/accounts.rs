@@ -103,6 +103,7 @@ fn postal(two: &Two) -> Terminal {
         .env("XDG_DATA_HOME", two.home.xdg_data_home())
         .env("EDITOR", editor)
         .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
@@ -325,6 +326,7 @@ fn with_one_account_no_header_names_it() {
         .env("XDG_STATE_HOME", home.xdg_state_home())
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();

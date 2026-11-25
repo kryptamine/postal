@@ -7,6 +7,7 @@ use crate::{
     domain::per_account::AccountId,
     mail::steering::Ask,
     ui::drafts::composing,
+    ui::drafts::local_list::relist_local,
     ui::list::folder_show::{folders, relist, show},
     ui::list::per_account::per_account,
     ui::popup::folder_picker::FolderPicker,
@@ -145,13 +146,18 @@ fn shown<'a>(
     (!messages.is_empty()).then_some((account, messages))
 }
 
-/// Undo of the latest move not yet taken back, selecting its Thread, or
-/// of the latest Draft discarded, showing it again.
+/// Undo of the latest move not yet taken back, selecting its Thread, of
+/// the latest Draft discarded or of a Send still held, showing the Draft.
 pub fn undo(ui: &mut Ui, world: World) -> Result<(), Error> {
     let (caches, Ui { view, screen }) = (world.caches, &mut *ui);
     let folders = match screen.undo.pop() {
         Some(Undo::Discard(path, text, notes)) => {
             composing::restore(screen, path, text, notes);
+            return Ok(());
+        }
+        Some(Undo::Send(path)) => {
+            composing::take_back(screen, world.outbox, &path);
+            relist_local(screen, world.outbox);
             return Ok(());
         }
         Some(Undo::Move(batches, thread)) => {

@@ -12,7 +12,8 @@ use toml::Spanned;
 use crate::{
     account::autoconfig::Autoconfig,
     account::config::{
-        Config, ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp, Terminal,
+        Config, ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY, SecretStore,
+        Smtp, Terminal,
     },
     account::oauth::Endpoints,
     account::provider::Provider,
@@ -37,6 +38,8 @@ pub struct PartialConfig {
     pub notify: NotifyChoice,
     pub terminal: Terminal,
     pub contacts: ContactsChoice,
+    /// In seconds.
+    pub send_delay: u64,
 }
 
 #[derive(Deserialize)]
@@ -67,6 +70,8 @@ struct RawConfig {
     terminal: Terminal,
     #[serde(default)]
     contacts: ContactsChoice,
+    #[serde(rename = "send-delay", default = "send_delay")]
+    send_delay: u64,
     #[serde(default)]
     account: Vec<RawAccount>,
 }
@@ -150,6 +155,10 @@ impl RawSmtp {
     }
 }
 
+const fn send_delay() -> u64 {
+    SEND_DELAY
+}
+
 /// Undocumented: only a test points Postal at a fake Google.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, default, rename_all = "kebab-case")]
@@ -188,6 +197,7 @@ impl PartialConfig {
                 notify: NotifyChoice::default(),
                 terminal: Terminal::default(),
                 contacts: ContactsChoice::default(),
+                send_delay: SEND_DELAY,
             }),
             Err(source) => Err(Error::Read {
                 path: path.to_owned(),
@@ -256,6 +266,7 @@ impl PartialConfig {
             notify: raw.notify,
             terminal: raw.terminal,
             contacts: raw.contacts,
+            send_delay: raw.send_delay,
         })
     }
 
@@ -326,6 +337,7 @@ impl PartialConfig {
             icons: self.icons,
             notify: self.notify,
             contacts: self.contacts,
+            send_delay: Duration::from_secs(self.send_delay),
         }
     }
 }

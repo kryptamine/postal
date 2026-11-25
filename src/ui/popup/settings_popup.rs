@@ -18,7 +18,7 @@ use crate::{
 
 const TITLE: &str = " Settings ";
 /// Wide enough for every tab's label on one line.
-const WIDTH: u16 = 68;
+const WIDTH: u16 = 75;
 /// The border and a blank row or column inside it, each side.
 const FRAME: u16 = 4;
 /// The tabs and the rule, then the tab's heading and description, each
@@ -130,6 +130,7 @@ impl SettingsPopup<'_> {
     fn row(&self, buf: &mut Buffer, area: Rect, row: Row, style: Style) {
         let settings = self.settings;
         let muted = style.patch(self.theme.muted);
+        let delay = format!("{} seconds", settings.send_delay);
         let (label, detail, detail_style) = match row {
             Row::Account(account) => {
                 let (email, provider) = &settings.accounts[account];
@@ -144,6 +145,11 @@ impl SettingsPopup<'_> {
                 (Mode::Typing(Field::Name, typed), _) => (typed.as_str(), "", style),
                 (_, Some(name)) => (name.as_str(), "", style),
                 (_, None) => ("none", "", muted),
+            },
+            Row::SendDelay => match settings.mode() {
+                Mode::Typing(Field::SendDelay, typed) => (typed.as_str(), "", style),
+                _ if settings.send_delay == 0 => ("0 seconds", "a Send leaves at once", muted),
+                _ => (delay.as_str(), "", style),
             },
             Row::Handler if settings.handler => ("Postal opens mailto: links", "on", style),
             Row::Handler => ("Postal opens mailto: links", "off", muted),
@@ -216,6 +222,7 @@ impl SettingsPopup<'_> {
 
         let keys = match (typing, settings.section()) {
             (Some(Field::Name), _) => "type the Name",
+            (Some(Field::SendDelay), _) => "type whole seconds; 0 sends at once",
             (Some(Field::TerminalCommand), _) => {
                 "type a program; it is given postal's path and the link"
             }
@@ -275,10 +282,12 @@ impl SettingsPopup<'_> {
 fn primary(settings: &Settings) -> Option<&'static str> {
     match settings.selected() {
         Row::Account(_) => None,
-        Row::Name | Row::TerminalCommand if matches!(settings.mode(), Mode::Typing(..)) => {
+        Row::Name | Row::SendDelay | Row::TerminalCommand
+            if matches!(settings.mode(), Mode::Typing(..)) =>
+        {
             Some(" ↵ save ")
         }
-        Row::Signature(_) | Row::Name | Row::TerminalCommand => Some(" ↵ edit "),
+        Row::Signature(_) | Row::Name | Row::SendDelay | Row::TerminalCommand => Some(" ↵ edit "),
         Row::Handler if settings.handler => Some(" ↵ remove "),
         Row::Handler => Some(" ↵ set up "),
         Row::Add => Some(" ↵ add "),

@@ -21,7 +21,7 @@ size: 80x24  cursor: hidden
 │ Newer │ Backspace                 delete: move to Trash             │        │
 │       │ e                         archive                           │        │
 │       │ m                         move to a Folder                  │        │
-│       │ u                         undo a move or discard            │        │
+│       │ u                         undo a move, discard or Send      │        │
 │       │                                                             │        │
 │       │ / filter · j/k scroll · esc close                           │        │
 │       │                                                             │        │

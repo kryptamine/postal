@@ -12,6 +12,8 @@ pub enum Mode {
 #[derive(Clone, Copy)]
 pub enum Field {
     Name,
+    /// `send-delay`, in whole seconds.
+    SendDelay,
     /// The program a mailto: link runs in place of a terminal.
     TerminalCommand,
 }

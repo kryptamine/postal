@@ -124,7 +124,8 @@ impl FolderSync {
         // Every Account's handle, as the TUI opens it, though only some sync.
         let caches = Cache::open(&dir, &configs.map(|config| config.email.as_str()))?;
         let places = self.places(&dir, &configs, &wanted)?;
-        let outbox = Outbox::new(xdg::data_dir().ok());
+        // It sends what the TUI held, and holds nothing itself.
+        let outbox = Outbox::new(xdg::data_dir().ok(), Duration::ZERO);
         let syncing = Syncing {
             configs: &configs,
             config_dir: &config_dir,

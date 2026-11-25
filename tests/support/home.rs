@@ -53,6 +53,8 @@ impl Home {
             .env("XDG_DATA_HOME", self.xdg_data_home())
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("TZ", "UTC")
+            // A Send leaves at once; the hold has its own tests.
+            .env("POSTAL_SEND_DELAY", "0")
             .timeout(Duration::from_secs(10))
     }
 
