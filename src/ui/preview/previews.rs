@@ -18,6 +18,7 @@ use crate::{
     mail::routes::Routes,
     mail::update::{BodyLink, Update},
     render::body::Body,
+    render::html_job::HtmlJob,
     render::mail_look::MailLook,
     render::preview::Preview,
     render::preview_render::{self, Job},
@@ -38,6 +39,13 @@ enum Link {
     Starting,
     Live,
     Down,
+}
+
+/// What the render thread does: a Message's Preview, or HTML of Postal's
+/// own laid out, sent back as an Update of `account`.
+enum Work {
+    Preview(Job),
+    Html(AccountId, HtmlJob),
 }
 
 /// Gets Previews ready: fetches bodies the Cache lacks, renders on a thread
@@ -62,7 +70,7 @@ pub struct Previews {
     emails: PerAccount<Arc<str>>,
     look: MailLook,
     requests: Routes<Request>,
-    jobs: mpsc::Sender<Job>,
+    jobs: mpsc::Sender<Work>,
 }
 
 impl Previews {
@@ -73,15 +81,21 @@ impl Previews {
         updates: UnboundedSender<(AccountId, Update)>,
         look: MailLook,
     ) -> Self {
-        let (jobs, queue) = mpsc::channel::<Job>();
+        let (jobs, queue) = mpsc::channel::<Work>();
         thread::spawn(move || {
-            for job in queue {
-                let key = job.key;
-                let preview = preview_render::render(&job);
-                if updates
-                    .unbounded_send((key.account, Update::Rendered(key, preview)))
-                    .is_err()
-                {
+            for work in queue {
+                let update = match work {
+                    Work::Preview(job) => {
+                        let key = job.key;
+                        (
+                            key.account,
+                            Update::Rendered(key, preview_render::render(&job)),
+                        )
+                    }
+                    Work::Html(account, job) => (account, Update::LaidOut(job.run())),
+                };
+
+                if updates.unbounded_send(update).is_err() {
                     return;
                 }
             }
@@ -307,7 +321,13 @@ impl Previews {
         };
 
         // The send fails only once the render thread is gone.
-        self.jobs.send(job).ok();
+        self.jobs.send(Work::Preview(job)).ok();
+    }
+
+    /// Lays `job` out on the render thread, behind the Previews asked
+    /// before it; `account` names the Update it comes back as.
+    pub fn lay_out(&self, account: AccountId, job: HtmlJob) {
+        self.jobs.send(Work::Html(account, job)).ok();
     }
 
     /// Bodies fetched in `folder`; those of a Folder no longer shown are

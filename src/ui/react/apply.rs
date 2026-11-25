@@ -9,6 +9,7 @@ use crate::{
     mail::backfill::Backfill,
     mail::status::Status,
     mail::update::{BodyLink, Update},
+    ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
     ui::list::folder_show::{relist, show, switch},
     ui::list::inbox_view::InboxView,
@@ -55,6 +56,11 @@ pub fn apply(
             ui.screen.backfill = None;
         }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
+        Update::LaidOut(laid) => {
+            if let Some(preview) = ui.screen.over.get_mut::<DraftPreview>() {
+                preview.laid(laid);
+            }
+        }
         Update::Status(status) => report(&mut ui.screen, previews, account, status),
         Update::Backfill(Backfill::Fetching { done, total }) => {
             ui.screen.backfill = Some(Status::Syncing { done, total });

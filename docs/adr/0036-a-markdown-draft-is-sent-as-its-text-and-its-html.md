@@ -37,11 +37,15 @@ and lists it never meant.
 
 ## In the TUI
 
-The Draft's preview of a Markdown Draft lays its HTML out in the Rendered
-View (ADR 0006) at the pane's width, kept until the width changes, and `v`
-switches to the text as written. A layout that fails shows the text, and
-so does an Outbox Message, built already in the format it was sent with.
-Conversion never fails, so there is no plain-text fallback for Send.
+The Draft's preview of a Markdown Draft shows its HTML in the Rendered
+View (ADR 0006) at the pane's width, and `v` switches to the text as
+written. The frame asks for the layout and draws the text until it comes:
+it is laid out on the Previews' render thread, as an `HtmlJob` beside
+their jobs, and comes back as an `Update` named by its HTML and width, so
+a draw never waits on the layout process (ADR 0001). A layout that fails
+shows the text, and so does an Outbox Message, built already in the
+format it was sent with. Conversion never fails, so there is no
+plain-text fallback for Send.
 
 ## In Neovim
 
