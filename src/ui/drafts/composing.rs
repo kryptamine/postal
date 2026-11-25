@@ -325,12 +325,12 @@ pub fn send(screen: &mut Screen, world: World) {
 
     screen.outbox = outbox.count();
     let delay = outbox.delay();
-    screen.toast = Some(if delay.is_zero() {
-        Toast::new("Sending")
+    if delay.is_zero() {
+        screen.toast = Some(Toast::new("Sending"));
     } else {
         screen.undo.push(Undo::Send(path));
-        Toast::held(Instant::now() + delay)
-    });
+        screen.toast = Some(Toast::held(Instant::now() + delay));
+    }
 
     // Signed out, the Outbox waits for a sync. Held, the ask has it wait out the hold.
     world.asks.send(account, Ask::Send);

@@ -12,6 +12,7 @@ pub enum Undo {
     /// A discarded Draft: its file, what the file held, the address it goes
     /// out from and what it answers.
     Discard(PathBuf, String, DraftNotes),
-    /// A Send held in the Outbox, at this path while it waits.
+    /// A Send held in the Outbox: alive while its `.eml` is at this path,
+    /// which SMTP's claim or an answer takes away.
     Send(PathBuf),
 }
