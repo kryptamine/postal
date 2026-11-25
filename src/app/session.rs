@@ -3,7 +3,8 @@ use std::{error::Error, path::Path, time::Duration};
 use futures::TryFutureExt;
 
 use crate::{
-    account::config::{Config, ContactsChoice, IconChoice, NotifyChoice},
+    account::config::{self, Config, ContactsChoice, IconChoice, NotifyChoice},
+    account::partial_config::PartialConfig,
     account::sign_in::SignIn,
     account::xdg,
     cache::Cache,
@@ -48,11 +49,7 @@ pub async fn session(
     let emails = configs.map(|config| config.email.as_str());
     let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
     // Without one, Compose says so when it is used.
-    let delay = configs
-        .values()
-        .next()
-        .map_or(Duration::ZERO, |c| c.send_delay);
-    let outbox = Outbox::new(xdg::data_dir().ok(), delay);
+    let outbox = Outbox::new(xdg::data_dir().ok(), send_delay(dir)?);
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (mut asks, mut requests, mut works) = (Vec::new(), Vec::new(), Vec::new());
     for (account, config) in configs.iter() {
@@ -111,6 +108,17 @@ pub async fn session(
     };
 
     Ok(run::run(tty, &mut theme, &caches, &mut previews, background).await?)
+}
+
+/// `send-delay` from the config in `dir`. Tests set `POSTAL_SEND_DELAY` in
+/// seconds, a fraction too: the config takes whole ones.
+fn send_delay(dir: &Path) -> Result<Duration, config::Error> {
+    let set = std::env::var("POSTAL_SEND_DELAY").ok();
+    let test = set.and_then(|secs| Duration::try_from_secs_f64(secs.parse().ok()?).ok());
+    match test {
+        Some(delay) => Ok(delay),
+        None => Ok(PartialConfig::load(&dir.join("config.toml"))?.send_delay),
+    }
 }
 
 /// The Status an Account starts in.

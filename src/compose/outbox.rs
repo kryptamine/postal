@@ -45,12 +45,8 @@ pub struct TakenBack {
 
 impl Outbox {
     /// The Outbox under `data`, beside `drafts/`, holding each Send for
-    /// `delay`. Tests set `POSTAL_SEND_DELAY` in seconds, a fraction too.
-    pub fn new(data: Option<PathBuf>, delay: Duration) -> Self {
-        let set = std::env::var("POSTAL_SEND_DELAY").ok();
-        let delay = set
-            .and_then(|secs| Duration::try_from_secs_f64(secs.parse().ok()?).ok())
-            .unwrap_or(delay);
+    /// `delay`.
+    pub const fn new(data: Option<PathBuf>, delay: Duration) -> Self {
         Self { data, delay }
     }
 
