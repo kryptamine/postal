@@ -38,9 +38,9 @@ fn home(imap: &FakeImap) -> Home {
 
 /// The lock an open TUI holds, so the link is composed beside it.
 fn open_tui(home: &Home) -> File {
-    let dir = home.xdg_cache_home().join("postal");
+    let dir = home.xdg_data_home().join("postal");
     fs::create_dir_all(&dir).unwrap();
-    let lock = File::create(dir.join("sync.lock")).unwrap();
+    let lock = File::create(dir.join("postal.lock")).unwrap();
     lock.lock().unwrap();
     lock
 }

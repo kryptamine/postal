@@ -83,11 +83,10 @@ pub fn run(linked: Option<Linked>) -> Result<(), Box<dyn Error>> {
     reason = "the screen is not taken yet, so stderr reaches the user"
 )]
 fn sync_lock() -> Result<SyncLock, Box<dyn Error>> {
-    let dir = xdg::cache_dir()?;
-    if let Some(lock) = SyncLock::try_take(&dir)? {
+    if let Some(lock) = SyncLock::try_take()? {
         return Ok(lock);
     }
 
     eprintln!("postal: waiting for a folder sync to finish");
-    Ok(SyncLock::take(&dir)?)
+    Ok(SyncLock::take()?)
 }

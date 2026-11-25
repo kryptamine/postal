@@ -176,6 +176,29 @@ fn a_sync_steps_aside_for_an_open_tui() {
     assert!(t.wait_exit().unwrap().success());
 }
 
+// The Outbox is shared through the data directory alone: a Cache kept
+// elsewhere must not let a second process send it.
+#[test]
+fn a_sync_with_a_cache_of_its_own_still_steps_aside_for_an_open_tui() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let home = home(&imap, &smtp);
+    let mut t = home.terminal().spawn(env!("CARGO_BIN_EXE_postal")).unwrap();
+    t.wait_until(|s| s.contains("Invoice 1042")).unwrap();
+
+    let elsewhere = tempfile::tempdir().unwrap();
+    let output = (home.command(env!("CARGO_BIN_EXE_postal")))
+        .env("XDG_CACHE_HOME", elsewhere.path())
+        .args(["folder", "sync", "--json"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let rows: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(rows[0]["outcome"], "open");
+
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
 #[test]
 fn a_signed_out_account_fails_the_sync() {
     let (imap, smtp) = (inbox(), FakeSmtp::start());
