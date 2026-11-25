@@ -9,6 +9,7 @@ use crate::{
     account::config::NotifyChoice,
     cache::{self, Cache},
     compose::accounts::Accounts,
+    compose::mailto::Mailto,
     compose::outbox::Outbox,
     domain::per_account::{AccountId, PerAccount},
     mail::forward_fetch::ForwardFetch,
@@ -21,6 +22,7 @@ use crate::{
     ui::alloc_count,
     ui::drafts::composing,
     ui::drafts::draft_preview::DraftPreview,
+    ui::drafts::drafting,
     ui::drafts::forwarding,
     ui::drafts::local_list::relist_local,
     ui::exit::Exit,
@@ -74,6 +76,8 @@ pub struct Background<'a, W, U> {
     pub statuses: PerAccount<Status>,
     /// What failed before the TUI opened again, toasted.
     pub failure: Option<&'static str>,
+    /// A `mailto:` link to compose from once the first frame is drawn.
+    pub link: Option<Mailto>,
     pub notify: NotifyChoice,
 }
 
@@ -136,6 +140,10 @@ pub async fn run(
     // Cache read, to the end of its draw; waiting on input is left out.
     let mut frame_start = alloc_count::count();
     frame_start = model.first_frame(frame_start)?;
+    if let Some(link) = background.link {
+        drafting::compose_link(&link, &mut model.tty, &mut model.ui, world)?;
+    }
+
     loop {
         let text = model.frame()?;
         alloc_count::report(frame_start);

@@ -26,7 +26,7 @@ Lowest first:
   (litehtml in its layout process, the cell grid), Quotes, signatures, wrapping,
   the glyphs the font has, how a date reads.
 - `compose/`: Drafts and their notes, Replies, Forwards and the files they
-  attach, the Outbox on disk, the editor,
+  attach, the `mailto:` link a Draft is filled from, the Outbox on disk, the editor,
   the Account a Message goes out from, its signature in the editor.
 - `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
   reconnecting, the sign-in check, the servers a domain publishes
@@ -51,7 +51,8 @@ Lowest first:
   `folder list` and `sync`, `message list`, `show` and `search`, `thread
   show`, the IDs they hand out, `mcp`, which serves each command as an MCP tool,
   `update` and the releases it reads from GitHub.
-- `app/`: the TUI's run and `postal login`: the Accounts signed in, the
+- `app/`: the TUI's run and `postal login`, and `postal <mailto-url>`
+  beside a TUI already open: the Accounts signed in, the
   Onboarding when one is not, each Account's connections and the screen
   over them, opened again after Settings or a sign-in.
 

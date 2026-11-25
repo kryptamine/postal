@@ -1,3 +1,4 @@
+pub mod beside;
 pub mod login;
 mod on_screen;
 mod onboard;

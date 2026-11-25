@@ -137,7 +137,7 @@ The text typed into a Search: free words, and operators in Gmail's syntax, as `f
 _Avoid_: pattern, search string
 
 **Compose**:
-Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers, an empty body and the Account's Signature.
+Writing a new Message with `c` from the Account of the shown Folder; in All Inboxes, of the selected Thread; with neither, from the first Account: Postal opens `$EDITOR` on a Draft holding its headers, an empty body and the Account's Signature. `postal <mailto-url>` composes the same way from a `mailto:` link, its recipients, Subject and body filled in and every other header dropped; with a TUI already open, it writes the Draft beside it and opens only the editor, and the TUI lists the Draft in Local Drafts.
 _Avoid_: new mail, write
 
 **Correspondent**:

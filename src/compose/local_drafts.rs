@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, time::Instant};
 
 use crate::{
     compose::local_draft::{self, LocalDraft},
@@ -10,6 +10,7 @@ use crate::{
 pub struct LocalDrafts {
     rows: Vec<LocalDraft>,
     selected: usize,
+    listed: Instant,
 }
 
 impl LocalDrafts {
@@ -18,11 +19,14 @@ impl LocalDrafts {
         Ok(Self {
             rows: local_draft::list(outbox)?,
             selected: 0,
+            listed: Instant::now(),
         })
     }
 
     /// Lists them anew, the selected one kept while it is listed.
     pub fn reload(&mut self, outbox: &Outbox) -> io::Result<()> {
+        // Set first, so a failing read is retried no sooner.
+        self.listed = Instant::now();
         let rows = local_draft::list(outbox)?;
         let chosen = self.chosen().map(|row| row.path.clone());
         self.selected = chosen
@@ -46,6 +50,11 @@ impl LocalDrafts {
 
     pub const fn selected(&self) -> usize {
         self.selected
+    }
+
+    /// When the rows were last read from disk.
+    pub const fn listed(&self) -> Instant {
+        self.listed
     }
 
     pub fn rows(&self) -> &[LocalDraft] {
