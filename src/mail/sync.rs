@@ -1,5 +1,5 @@
 use crate::{
-    cache::{self, Cache, Changes},
+    cache::{self, Cache, Changes, Reported},
     domain::folder_name::FolderName,
     domain::sync_state::SyncState,
     domain::uid::Uid,
@@ -120,15 +120,8 @@ async fn refetch(
         server.newest(examined.exists, WINDOW, progress).await?
     };
 
-    Ok(Changes {
-        state: examined.state,
-        exists: examined.exists,
-        unread,
-        replace: true,
-        new,
-        expunged: Vec::new(),
-        flags: Vec::new(),
-    })
+    let reported = Reported::new(examined.state, examined.exists, unread);
+    Ok(Changes::replacing(reported, new))
 }
 
 /// New mail by UID range, expunges over the cached range, then flags.
@@ -155,15 +148,8 @@ async fn update(
         _ => server.flags(first, last, None).await?,
     };
 
-    Ok(Changes {
-        state: examined.state,
-        exists: examined.exists,
-        unread,
-        replace: false,
-        new,
-        expunged,
-        flags,
-    })
+    let reported = Reported::new(examined.state, examined.exists, unread);
+    Ok(Changes::update(reported, new, expunged, flags))
 }
 
 /// The cached UIDs gone from the server. `older` counts the server's
