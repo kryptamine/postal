@@ -1,13 +1,16 @@
-use std::{
-    cell::{Ref, RefCell},
-    io,
-    path::PathBuf,
-};
+use std::{io, path::PathBuf, sync::Arc};
 
 use crate::{
-    compose::draft::Draft, compose::draft_notes::DraftNotes, compose::markdown,
-    compose::notes::Notes, domain::answering::Answering, render::mail_look::MailLook,
-    render::rendered_view, render::styled_line::StyledLine, render::view::View,
+    account::config::ComposeFormat,
+    compose::draft::Draft,
+    compose::draft_notes::DraftNotes,
+    compose::markdown,
+    compose::notes::Notes,
+    domain::answering::Answering,
+    render::html_job::{HtmlJob, LaidOut},
+    render::mail_look::MailLook,
+    render::styled_line::StyledLine,
+    render::view::View,
 };
 
 /// A Draft shown after the editor exits, for `y` to send, `e` to edit again,
@@ -29,9 +32,11 @@ pub struct DraftPreview {
     pub queued: bool,
     /// How a Markdown Draft's body shows: its HTML as sent, or its text.
     pub view: View,
-    /// The HTML laid out at the width it was last drawn; `None` where the
-    /// engine failed on it.
-    laid_out: RefCell<Option<(u16, Option<Vec<StyledLine>>)>>,
+    /// The HTML of a Markdown Draft, made once it is first shown.
+    html: Option<Arc<str>>,
+    laid_out: Option<LaidOut>,
+    /// The width the HTML was last asked to be laid out at.
+    asked: Option<u16>,
 }
 
 impl DraftPreview {
@@ -79,24 +84,55 @@ impl DraftPreview {
             answering: notes.answering,
             queued: false,
             view: View::default(),
-            laid_out: RefCell::new(None),
+            html: None,
+            laid_out: None,
+            asked: None,
         }
     }
 
-    /// The body's HTML as a Markdown Draft sends it, laid out `width` cells
-    /// wide; `None` when the Draft does not parse or the engine fails.
-    pub fn laid_out(&self, width: u16, look: MailLook) -> Option<Ref<'_, [StyledLine]>> {
+    /// Whether the body shows as its HTML: a Markdown Draft's, unless `v`
+    /// asked for its text; an Outbox Message was built already, perhaps in
+    /// another format, and shows as written.
+    fn shows_html(&self, format: ComposeFormat) -> bool {
+        format == ComposeFormat::Markdown && !self.queued && self.view == View::Rendered
+    }
+
+    /// The job that lays the HTML out `width` cells wide, when it shows
+    /// and is neither laid out nor asked for at that width.
+    pub fn wanted(&mut self, format: ComposeFormat, width: u16, look: MailLook) -> Option<HtmlJob> {
         let draft = self.draft.as_ref().ok()?;
-        let stale = self
+        let done = self
             .laid_out
-            .borrow()
             .as_ref()
-            .is_none_or(|(at, _)| *at != width);
-        if stale {
-            let rows = rendered_view::render(&markdown::html(&draft.body), width, look);
-            *self.laid_out.borrow_mut() = Some((width, rows));
+            .is_some_and(|laid| laid.width == width);
+        if !self.shows_html(format) || done || self.asked == Some(width) {
+            return None;
         }
 
-        Ref::filter_map(self.laid_out.borrow(), |laid| laid.as_ref()?.1.as_deref()).ok()
+        self.asked = Some(width);
+        let html = self
+            .html
+            .get_or_insert_with(|| markdown::html(&draft.body).into());
+        Some(HtmlJob {
+            html: Arc::clone(html),
+            width,
+            look,
+        })
+    }
+
+    /// Keeps `laid` when it is of this preview's HTML.
+    pub fn laid(&mut self, laid: LaidOut) {
+        if self.html.as_ref() == Some(&laid.html) {
+            self.laid_out = Some(laid);
+        }
+    }
+
+    /// The HTML laid out `width` cells wide, when it shows and is ready; a
+    /// layout the engine failed on shows the text.
+    pub fn rendered(&self, format: ComposeFormat, width: u16) -> Option<&[StyledLine]> {
+        let laid = self.laid_out.as_ref().filter(|laid| laid.width == width)?;
+        self.shows_html(format)
+            .then_some(laid.rows.as_deref())
+            .flatten()
     }
 }

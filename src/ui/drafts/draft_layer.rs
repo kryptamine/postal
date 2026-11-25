@@ -2,9 +2,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{Frame, layout::Rect};
 
 use crate::{
-    account::config::ComposeFormat,
     compose::accounts::Accounts,
-    render::view::View,
+    render::mail_look::MailLook,
     ui::drafts::draft_pane::{self, DraftPane},
     ui::drafts::draft_preview::DraftPreview,
     ui::exit::Exit,
@@ -12,6 +11,7 @@ use crate::{
     ui::input::keymap::{self, Binding, Hint, Key},
     ui::input::step::{Drafting, Step},
     ui::popup::layer_act::Act,
+    ui::preview::previews::Previews,
     ui::state::mode::Mode,
 };
 
@@ -164,20 +164,34 @@ pub fn draw(
             .map_or_else(|_bad| email(), |from| from.to_string())
     });
 
-    let markdown = accounts.format(preview.account.as_deref()) == ComposeFormat::Markdown;
-    let width = draft_pane::text_width(body);
-    // An Outbox Message was built already, perhaps in another format.
-    let laid_out = (markdown && !preview.queued && preview.view == View::Rendered)
-        .then(|| preview.laid_out(width, theme.mail_look()))
-        .flatten();
+    let format = accounts.format(preview.account.as_deref());
     let pane = DraftPane {
         theme,
         preview,
         from: from.as_deref().unwrap_or_default(),
-        rendered: laid_out.as_deref(),
+        rendered: preview.rendered(format, draft_pane::text_width(body)),
     };
 
     frame.render_widget(pane, body);
+}
+
+/// Asks `previews` to lay out the HTML the Draft's preview shows in
+/// `body`, unless it is or is being at that width.
+pub fn lay_out(
+    preview: &mut DraftPreview,
+    accounts: Accounts,
+    body: Rect,
+    previews: &Previews,
+    look: MailLook,
+) {
+    let Some(account) = accounts.place(preview.account.as_deref()) else {
+        return;
+    };
+
+    let format = accounts.outgoing(account).config.compose_format;
+    if let Some(job) = preview.wanted(format, draft_pane::text_width(body), look) {
+        previews.lay_out(account, job);
+    }
 }
 
 const fn draft(key: KeyEvent) -> Option<DraftKey> {

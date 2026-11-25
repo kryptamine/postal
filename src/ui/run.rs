@@ -21,6 +21,7 @@ use crate::{
     mail::update::Update,
     ui::alloc_count,
     ui::drafts::composing,
+    ui::drafts::draft_layer,
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::drafting,
     ui::drafts::forwarding,
@@ -207,6 +208,11 @@ impl Model<'_> {
             let (view, reading) = (&self.ui.view, self.ui.screen.showing.reading());
             let caches = self.world.caches;
             self.previews.want(caches, view, reading, text.width)?;
+        }
+
+        if let Some(preview) = self.ui.screen.over.get_mut::<DraftPreview>() {
+            let (accounts, look) = (self.world.accounts, self.theme.mail_look());
+            draft_layer::lay_out(preview, accounts, panes.body, self.previews, look);
         }
 
         self.older.want(&self.ui.view);
