@@ -76,8 +76,6 @@ pub enum Outage {
     /// Every sign-in is answered `NO [AUTHENTICATIONFAILED]`, as for a
     /// revoked access token.
     Revoked,
-    /// Signs in, then answers every `FETCH` with a plain `NO`.
-    Refusing,
 }
 
 struct Stored {
@@ -179,6 +177,8 @@ struct Inbox {
     /// UIDs whose whole-body `UID FETCH` is answered `NO`, as Gmail does for
     /// a Message it cannot serve.
     refused: Vec<u32>,
+    /// Every `FETCH` is answered with a plain `NO`.
+    refuse_fetches: bool,
     outage: Option<Outage>,
     /// Bumped to drop every connection open before.
     cut: u64,
@@ -229,6 +229,7 @@ impl FakeImap {
             stall: None,
             outage: None,
             refused: Vec::new(),
+            refuse_fetches: false,
             cut: 0,
             open: Vec::new(),
             appended: Vec::new(),
@@ -509,6 +510,10 @@ impl FakeImap {
 
     pub fn refuse_body(&self, uid: u32) {
         self.inbox.lock().unwrap().refused.push(uid);
+    }
+
+    pub fn refuse_fetches(&self, refuse: bool) {
+        self.inbox.lock().unwrap().refuse_fetches = refuse;
     }
 }
 
@@ -887,7 +892,7 @@ fn respond(server: &mut Server, command: Command<'static>, inbox: &mut Inbox, op
         CommandBody::Examine { .. } | CommandBody::Select { .. } => {
             examine(server, folder, tag, opened.writable);
         }
-        CommandBody::Fetch { .. } if inbox.outage == Some(Outage::Refusing) => {
+        CommandBody::Fetch { .. } if inbox.refuse_fetches => {
             server.enqueue_status(Status::no(tag, None, "Internal error").unwrap());
         }
         CommandBody::Search {
