@@ -8,6 +8,7 @@ use crate::{
     account::xdg,
     cache::Cache,
     compose::accounts::Accounts,
+    compose::mailto::Mailto,
     compose::outbox::Outbox,
     compose::outgoing::Outgoing,
     domain::per_account::PerAccount,
@@ -27,14 +28,22 @@ use crate::{
     ui::wanted_attachments::WantedAttachments,
 };
 
+/// What a session opens on, besides its Accounts.
+pub struct Opening {
+    /// What failed before it, toasted.
+    pub failure: Option<&'static str>,
+    /// A `mailto:` link whose Draft it composes once it starts.
+    pub link: Option<Mailto>,
+}
+
 /// The TUI until it exits, each Account of `configs` signed out without
-/// its sign-in; `failure` toasts what failed before it.
+/// its sign-in.
 pub async fn session(
     slot: &mut TerminalSlot,
     dir: &Path,
     configs: &PerAccount<Config>,
     sign_ins: &PerAccount<Option<SignIn>>,
-    failure: Option<&'static str>,
+    opening: Opening,
 ) -> Result<Exit, Box<dyn Error>> {
     let emails = configs.map(|config| config.email.as_str());
     let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
@@ -92,7 +101,8 @@ pub async fn session(
         accounts: Accounts(configs),
         outbox: &outbox,
         statuses: sign_ins.map(|sign_in| starting(sign_in.as_ref())),
-        failure,
+        failure: opening.failure,
+        link: opening.link,
         config_dir: dir,
         notify: configs
             .values()

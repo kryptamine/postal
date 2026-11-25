@@ -9,6 +9,7 @@ use crate::{
     compose::draft_file,
     compose::draft_notes::DraftNotes,
     compose::editor,
+    compose::mailto::Mailto,
     compose::notes::{self, Notes},
     compose::reply_draft,
     domain::message::Message,
@@ -27,20 +28,22 @@ use crate::{
 };
 
 /// Compose from the Account `from`: a new Draft's file in the editor,
-/// holding its signature, then its preview, unless it was left as the
-/// template.
+/// holding its signature and what a `link` fills, then its preview, unless
+/// it was left as the template.
 pub fn compose(
     tty: &mut Tty,
     screen: &mut Screen,
     accounts: Accounts,
     from: Option<AccountId>,
+    link: Option<&Mailto>,
 ) -> Result<(), Error> {
     // A Reply or Forward still waiting would open over this Draft.
     screen.replying = None;
     screen.forwarding = None;
     let signature = from.map_or(Ok(None), |from| accounts.outgoing(from).signature());
     let template = draft_file::template(block(&signature));
-    let Some(path) = create(screen, &template) else {
+    let text = link.map_or_else(|| template.clone(), |link| link.draft(block(&signature)));
+    let Some(path) = create(screen, &text) else {
         return Ok(());
     };
 
@@ -56,6 +59,10 @@ pub fn compose(
     }
 
     tty.outside(|| editor::edit(&path))?;
+    if link.is_some_and(|link| link.dropped_bcc) {
+        screen.toast = Some(Toast::new("the link's Bcc is dropped: a Draft has none"));
+    }
+
     toast_unread(screen, &signature);
     if draft_file::untouched(&path, &template) {
         drop_untouched(screen, &path);

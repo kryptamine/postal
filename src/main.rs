@@ -39,11 +39,20 @@ fn main() -> ExitCode {
         Some(Command::Mcp) => answered(cli::mcp::run()),
         Some(Command::Update) => answered(cli::update::run()),
         tui => {
-            let run = if matches!(tui, Some(Command::Login)) {
-                app::login::run
-            } else {
-                app::tui::run
+            let linked = match args.link.as_deref().map(compose::mailto::Mailto::parse) {
+                None => None,
+                Some(link) => match link.map_err(Into::into).and_then(app::beside::open) {
+                    Ok(Some(linked)) => Some(linked),
+                    done => return answered(done.map(drop)),
+                },
             };
+
+            let run: Box<dyn FnOnce() -> Result<(), Box<dyn Error>>> =
+                if matches!(tui, Some(Command::Login)) {
+                    Box::new(app::login::run)
+                } else {
+                    Box::new(|| app::tui::run(linked))
+                };
 
             let code = match log {
                 Ok(log) => logged(&log, args.verbose, run),
@@ -84,7 +93,7 @@ fn answered(result: Result<(), Box<dyn Error>>) -> ExitCode {
     clippy::print_stderr,
     reason = "the terminal is restored, so stderr reaches the user"
 )]
-fn logged(log: &Path, verbose: u8, run: fn() -> Result<(), Box<dyn Error>>) -> ExitCode {
+fn logged(log: &Path, verbose: u8, run: impl FnOnce() -> Result<(), Box<dyn Error>>) -> ExitCode {
     if let Err(error) = ui::logging::init(log, verbose.into()) {
         eprintln!("postal: {error}");
         return ExitCode::FAILURE;

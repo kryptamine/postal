@@ -3,9 +3,10 @@ use std::error::Error;
 use crate::{
     account::unlink,
     account::xdg,
+    app::beside::Linked,
     app::on_screen::on_screen,
     app::onboard,
-    app::session::session,
+    app::session::{Opening, session},
     app::signed_in::opened,
     cache,
     compose::forwarded,
@@ -17,9 +18,14 @@ use crate::{
 
 /// The TUI, left for the Onboarding on `L` or from Settings, and opened
 /// again after it; after Settings, with the Accounts the config names now.
-pub fn run() -> Result<(), Box<dyn Error>> {
+/// A `linked` one opens the link's Draft once it starts.
+pub fn run(linked: Option<Linked>) -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
-    let _lock = sync_lock()?;
+    let (_lock, mut link) = match linked {
+        Some(Linked { lock, link }) => (lock, Some(link)),
+        None => (sync_lock()?, None),
+    };
+
     attachment_file::clear();
     if let Err(error) = forwarded::sweep() {
         tracing::warn!("removing the files of forwards gone failed: {error}");
@@ -29,7 +35,13 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         let (mut configs, mut sign_ins) = opened(slot, &dir).await?;
         let mut failure = None;
         loop {
-            let exit = Box::pin(session(slot, &dir, &configs, &sign_ins, failure)).await?;
+            let opening = Opening {
+                failure,
+                link: link.take(),
+            };
+
+            let session = session(slot, &dir, &configs, &sign_ins, opening);
+            let exit = Box::pin(session).await?;
             cache::settle(&xdg::cache_dir()?);
             failure = None;
             match exit {

@@ -1,8 +1,8 @@
 use crate::{
     compose::awaited_reply::AwaitedReply, compose::draft_notes::DraftNotes,
-    compose::recipients::Recipients, domain::message::Message, domain::per_account::AccountId,
-    domain::shown::Shown, mail::reply_fetch::ReplyFetch, ui::drafts::composing,
-    ui::drafts::draft_preview::DraftPreview, ui::input::step::Drafting,
+    compose::mailto::Mailto, compose::recipients::Recipients, domain::message::Message,
+    domain::per_account::AccountId, domain::shown::Shown, mail::reply_fetch::ReplyFetch,
+    ui::drafts::composing, ui::drafts::draft_preview::DraftPreview, ui::input::step::Drafting,
     ui::list::inbox_view::InboxView, ui::run::Error, ui::state::ui::Ui, ui::terminal::tty::Tty,
     ui::world::World,
 };
@@ -13,7 +13,7 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
     match drafting {
         Drafting::Compose => {
             let from = composing_from(&ui.view);
-            composing::compose(tty, screen, world.accounts, from)?;
+            composing::compose(tty, screen, world.accounts, from, None)?;
         }
         Drafting::Edit => {
             if let Some(preview) = screen.over.take::<DraftPreview>() {
@@ -32,6 +32,12 @@ pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Re
     }
 
     Ok(())
+}
+
+/// Compose of the Draft `link` fills, from the Account `c` composes from.
+pub fn compose_link(link: &Mailto, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<(), Error> {
+    let from = composing_from(&ui.view);
+    composing::compose(tty, &mut ui.screen, world.accounts, from, Some(link))
 }
 
 /// A Reply to what the screen answers.

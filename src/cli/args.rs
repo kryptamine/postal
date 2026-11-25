@@ -10,7 +10,7 @@ pub const LIMIT: usize = 50;
 /// A keyboard-driven terminal mail client that reads one or more IMAP
 /// mailboxes. Without a command, the TUI.
 #[derive(Parser)]
-#[command(name = "postal", version)]
+#[command(name = "postal", version, args_conflicts_with_subcommands = true)]
 pub struct Args {
     /// Log debug events; -vv, trace events and the IMAP wire trace: trace
     /// contains headers, not bodies or credentials
@@ -19,6 +19,10 @@ pub struct Args {
     /// Print a command's answer as a JSON array, whose fields only grow
     #[arg(long, global = true)]
     pub json: bool,
+    /// A mailto: link to open a Draft from; beside an open TUI, only the
+    /// editor opens, and the TUI lists the Draft in Local Drafts
+    #[arg(value_name = "MAILTO")]
+    pub link: Option<String>,
     #[command(subcommand)]
     pub command: Option<Command>,
 }
