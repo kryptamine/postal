@@ -25,6 +25,46 @@ const BREAKING: [&str; 20] = [
     "ul",
 ];
 
+/// Elements that mark plain text as markup, besides the hidden and breaking ones.
+const MARKING: [&str; 12] = [
+    "a", "b", "body", "center", "em", "font", "html", "i", "img", "meta", "span", "strong",
+];
+
+/// Where HTML markup starts in plain `text`: a doctype, an Outlook
+/// conditional comment, or a tag of an element Postal knows. A
+/// `<https://…>` or `<a@b.c>` is not one.
+pub fn markup_start(text: &str) -> Option<usize> {
+    text.match_indices('<').map(|(at, _)| at).find(|&at| {
+        let tag = text.split_at(at + 1).1;
+        tag.get(..8)
+            .is_some_and(|start| start.eq_ignore_ascii_case("!doctype"))
+            || tag.starts_with("!--[if")
+            || element(tag).is_some_and(known)
+    })
+}
+
+/// The element `tag` names, opening or closing, `tag` being what follows
+/// its `<`; `None` for a doctype, a comment, a link or an address.
+fn element(tag: &str) -> Option<&str> {
+    let tag = tag.strip_prefix('/').unwrap_or(tag);
+    let end = tag
+        .find(|c: char| !c.is_ascii_alphanumeric())
+        .unwrap_or(tag.len());
+    let (name, after) = tag.split_at(end);
+    let delimited =
+        after.is_empty() || after.starts_with(|c: char| c.is_whitespace() || c == '>' || c == '/');
+    (!name.is_empty() && delimited).then_some(name)
+}
+
+/// Whether Postal knows the element `name`, whatever its case.
+fn known(name: &str) -> bool {
+    breaks(name)
+        || HIDDEN
+            .iter()
+            .chain(&MARKING)
+            .any(|known| known.eq_ignore_ascii_case(name))
+}
+
 /// Whether the element `name` breaks a line, whatever its case.
 pub fn breaks(name: &str) -> bool {
     BREAKING.iter().any(|tag| tag.eq_ignore_ascii_case(name))
@@ -58,12 +98,7 @@ pub fn strip(html: &str) -> String {
         let tag = tag.strip_prefix('<').unwrap_or(tag);
         rest = after;
         let closing = tag.starts_with('/');
-        let name = tag
-            .trim_start_matches('/')
-            .split(|c: char| c.is_whitespace() || c == '/')
-            .next()
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let name = element(tag).unwrap_or_default().to_ascii_lowercase();
         if !closing && HIDDEN.contains(&name.as_str()) {
             rest = after_closing(rest, &name);
         } else if breaks(&name) {

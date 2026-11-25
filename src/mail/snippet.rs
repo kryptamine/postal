@@ -38,9 +38,13 @@ pub fn text(raw: &[u8], part: &TextPart) -> String {
     let mut text = part.decode(raw);
     // A multi-byte character cut off by the partial fetch decodes as U+FFFD.
     text.truncate(text.trim_end_matches('\u{FFFD}').len());
-    if part.html {
-        html_text::strip(&text)
+    // Some senders put HTML into the plain part, often after a first line
+    // of words, which stays as written.
+    let at = if part.html {
+        Some(0)
     } else {
-        text
-    }
+        html_text::markup_start(&text)
+    };
+    let (words, html) = text.split_at(at.unwrap_or(text.len()));
+    format!("{words}{}", html_text::strip(html))
 }

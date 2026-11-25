@@ -157,6 +157,11 @@ fn a_cache_of_schema_32_survives() {
     survives(32);
 }
 
+#[test]
+fn a_cache_of_schema_33_survives() {
+    survives(33);
+}
+
 // Not a check: writes the fixture of this Postal's schema, with `sqlite3`.
 // Run it before appending a migration, and add a test of that fixture.
 #[test]
