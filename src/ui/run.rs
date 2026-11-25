@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 use tokio::time::Instant;
 
 use crate::{
-    account::config::NotifyChoice,
+    account::config::{ContactsChoice, NotifyChoice},
     cache::{self, Cache},
     compose::accounts::Accounts,
     compose::mailto::Mailto,
@@ -79,6 +79,7 @@ pub struct Background<'a, W, U> {
     /// A `mailto:` link to compose from once the first frame is drawn.
     pub link: Option<Mailto>,
     pub notify: NotifyChoice,
+    pub contacts: ContactsChoice,
 }
 
 /// The screen, with the terminal, the look, the Previews and the network
@@ -117,6 +118,7 @@ pub async fn run(
         outbox: background.outbox,
         accounts: background.accounts,
         config_dir: background.config_dir,
+        contacts: background.contacts,
     };
 
     let (statuses, failure) = (background.statuses, background.failure);

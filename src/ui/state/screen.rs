@@ -9,6 +9,7 @@ use crate::{
     domain::thread::Key,
     mail::status::Status,
     ui::list::inbox_view::InboxView,
+    ui::outside::contacts_check::ContactsCheck,
     ui::popup::help::Help,
     ui::popup::layer::Layer,
     ui::popup::over::Over,
@@ -42,6 +43,8 @@ pub struct Screen {
     pub forwarding: Option<AwaitedForward>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
+    /// The read of Contacts started by turning them on, while under way.
+    pub contacts_check: ContactsCheck,
 }
 
 impl Screen {
@@ -130,15 +133,25 @@ impl Screen {
     /// whichever is first; `None` while none will.
     pub fn changes_at(&self, now: Instant) -> Option<Instant> {
         let toast = self.toast.as_ref().map(|toast| toast.until);
-        [toast, self.status().0.ticks_at(now), self.dwell.due()]
-            .into_iter()
-            .flatten()
-            .min()
+        let contacts = self.contacts_check.due(now);
+        [
+            toast,
+            self.status().0.ticks_at(now),
+            self.dwell.due(),
+            contacts,
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     pub fn expire(&mut self, now: Instant) {
         if self.toast.as_ref().is_some_and(|toast| toast.until <= now) {
             self.toast = None;
+        }
+
+        if let Some(toast) = self.contacts_check.finished() {
+            self.toast = Some(toast);
         }
     }
 }

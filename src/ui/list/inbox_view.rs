@@ -3,6 +3,7 @@ use std::{collections::HashSet, sync::Arc};
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
 
 use crate::{
+    account::config::ContactsChoice,
     cache::{self, Cache},
     domain::body_key::BodyKey,
     domain::folder::Folder,
@@ -191,7 +192,11 @@ impl InboxView {
     /// Starts a Search over every cached Folder, or resumes the one under
     /// way; false before any rows. Either way, Esc while typing comes back
     /// to the selection now.
-    pub fn start_search(&mut self, caches: &PerAccount<Cache>) -> Result<bool, cache::Error> {
+    pub fn start_search(
+        &mut self,
+        caches: &PerAccount<Cache>,
+        contacts: ContactsChoice,
+    ) -> Result<bool, cache::Error> {
         if self.list.is_none() {
             return Ok(false);
         }
@@ -199,7 +204,7 @@ impl InboxView {
         let (before, body) = (self.selected_key(), self.selected_body());
         if self.search.is_none() {
             self.picks.clear();
-            self.search = Some(Search::new(caches, &self.folder, &self.accounts)?);
+            self.search = Some(Search::new(caches, &self.folder, &self.accounts, contacts)?);
             self.offset = 0;
             self.keep_row(before);
             self.fill(caches, self.screen)?;

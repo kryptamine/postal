@@ -69,7 +69,7 @@ pub enum Command {
 
 #[derive(Subcommand)]
 pub enum Correspondent {
-    /// Every one the Cache knows, best first
+    /// Every one the Cache knows, and Contacts when config.toml asks, best first
     List(CorrespondentList),
 }
 

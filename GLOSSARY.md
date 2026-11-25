@@ -141,7 +141,7 @@ Writing a new Message with `c` from the Account of the shown Folder; in All Inbo
 _Avoid_: new mail, write
 
 **Correspondent**:
-An address an Account has mail from or has written to, with the name it goes by, as the Cache knows it; those the Account wrote to rank first. Postal learns them from mail alone and never keeps an address book. The CLI lists them, for an editor to complete a Draft's recipients from.
+An address an Account has mail from or has written to, with the name it goes by, as the Cache knows it; those the Account wrote to rank first. On macOS, with `contacts = "macos"`, each address of a person in Contacts is one too, under the name the user gave, ranked below every address with mail. Postal never keeps an address book: Contacts are read anew each time, never copied into the Cache (ADR 0035). The CLI lists them, for an editor to complete a Draft's recipients from.
 _Avoid_: contact, address book, recipient
 
 **Reply**:

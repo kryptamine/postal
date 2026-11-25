@@ -40,6 +40,10 @@ undocumented `POSTAL_KEYCHAIN_FAIL` variable makes the keychain refuse access,
 with its value as the reason, to cover the error path. Reading a real keychain
 entry is checked by hand.
 
+macOS Contacts are faked: `POSTAL_CONTACTS_FAKE` names a JSON file of people,
+or is `denied`, in place of `CNContactStore` (ADR 0035). Reading the real
+Contacts and its permission prompt are checked by hand.
+
 ## Considered options
 
 - **A fake behind Postal's IMAP trait.** Faster to write, but it skips the

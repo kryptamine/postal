@@ -1,8 +1,9 @@
 use std::path::Path;
 
 use crate::{
-    cache::Cache, compose::accounts::Accounts, compose::outbox::Outbox,
-    domain::per_account::PerAccount, mail::routes::Routes, mail::steering::Ask,
+    account::config::ContactsChoice, cache::Cache, compose::accounts::Accounts,
+    compose::outbox::Outbox, domain::per_account::PerAccount, mail::routes::Routes,
+    mail::steering::Ask,
 };
 
 /// What the main screen acts on: each Account's Cache and sync connection,
@@ -15,4 +16,6 @@ pub struct World<'a> {
     pub accounts: Accounts<'a>,
     /// Where `config.toml` is, which Settings writes.
     pub config_dir: &'a Path,
+    /// Where Search finds Correspondents besides mail; Settings changes it.
+    pub contacts: ContactsChoice,
 }

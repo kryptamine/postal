@@ -6,7 +6,7 @@ use std::{
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    account::config::{self, IconChoice, NotifyChoice, SecretStore, Terminal},
+    account::config::{self, ContactsChoice, IconChoice, NotifyChoice, SecretStore, Terminal},
     account::config_file::ConfigFile,
     account::mailto_handler::{self, CHOOSES_TERMINAL},
     account::partial_config::PartialConfig,
@@ -49,6 +49,7 @@ pub enum Step {
     Signature(String),
     Icons(IconChoice),
     Notify(NotifyChoice),
+    Contacts(ContactsChoice),
     Quit,
 }
 
@@ -63,6 +64,7 @@ pub struct Settings {
     pub name: Option<String>,
     pub secrets: SecretStore,
     pub terminal: Terminal,
+    pub contacts: ContactsChoice,
     /// Whether the system hands mailto: links to Postal.
     pub handler: bool,
     section: Section,
@@ -90,6 +92,7 @@ impl Settings {
             name: config.name,
             secrets: config.secrets,
             terminal: config.terminal,
+            contacts: config.contacts,
             handler: mailto_handler::is_set_up(),
             section: Section::Accounts,
             selected: 0,
@@ -125,7 +128,11 @@ impl Settings {
             Section::Accounts => Some(Row::Add),
             Section::Name => Some(Row::Name),
             Section::Mailto if CHOOSES_TERMINAL => Some(Row::TerminalCommand),
-            Section::Icons | Section::Notify | Section::Secrets | Section::Mailto => None,
+            Section::Icons
+            | Section::Notify
+            | Section::Secrets
+            | Section::Mailto
+            | Section::Contacts => None,
         };
         first.into_iter().chain(accounts).chain(values).chain(last)
     }
@@ -140,6 +147,7 @@ impl Settings {
             Value::Notify(notify) => notify == self.notify,
             Value::Secrets(store) => store == self.secrets,
             Value::Terminal(app) => self.terminal == Terminal::App(app),
+            Value::Contacts(contacts) => contacts == self.contacts,
         }
     }
 
@@ -271,6 +279,12 @@ impl Settings {
             }
             Value::Terminal(app) => {
                 self.change(|settings| settings.set_terminal(Terminal::App(app)));
+            }
+            Value::Contacts(contacts) => {
+                if self.change(|settings| settings.write(|config| config.set_contacts(contacts))) {
+                    self.contacts = contacts;
+                    return Step::Contacts(contacts);
+                }
             }
         }
 

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
-    cache::{self, Cache, Correspondents},
+    account::config::ContactsChoice,
+    account::contacts,
+    cache::{self, Cache, Correspondent, Correspondents},
     domain::operator::Operator,
     domain::per_account::PerAccount,
     domain::query_token::{Head, tokens},
@@ -30,10 +32,34 @@ pub struct Suggestion {
 }
 
 impl Completion {
-    /// Starts reading the Correspondents, done before a word asks for them.
-    pub fn new(caches: &PerAccount<Cache>, accounts: PerAccount<Arc<str>>) -> Self {
+    /// Starts reading the Correspondents, with those of `contacts`, done
+    /// before a word asks for them.
+    pub fn new(
+        caches: &PerAccount<Cache>,
+        accounts: PerAccount<Arc<str>>,
+        contacts: ContactsChoice,
+    ) -> Self {
+        let own: Vec<String> = accounts.values().map(|a| a.to_lowercase()).collect();
+        let also = move || {
+            let contacts = contacts::read_or_log(contacts).into_iter();
+            let others = contacts.filter(|contact| !own.contains(&contact.address));
+            let known = others.map(|contact| {
+                let name = contact.name.unwrap_or_default();
+                Correspondent {
+                    address: contact.address,
+                    lower: name.to_lowercase(),
+                    name,
+                }
+            });
+
+            known.collect()
+        };
+
         // Every Account's rows sit in the one store all handles share.
-        let correspondents = caches.values().next().map(Cache::correspondents);
+        let correspondents = caches
+            .values()
+            .next()
+            .map(|cache| cache.correspondents(also));
         Self {
             at: 0,
             suggestions: Vec::new(),

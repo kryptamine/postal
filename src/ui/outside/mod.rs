@@ -1,5 +1,6 @@
 pub mod attachment_file;
 pub mod clipboard;
+pub mod contacts_check;
 mod delivery;
 mod message_file;
 pub mod notifier;

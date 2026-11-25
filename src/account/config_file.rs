@@ -9,7 +9,9 @@ use toml_edit::{
 
 use crate::{
     account::atomic_file,
-    account::config::{Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp, Terminal},
+    account::config::{
+        ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp, Terminal,
+    },
     account::provider::Provider,
 };
 
@@ -193,6 +195,15 @@ impl ConfigFile {
             root.remove("notify");
         } else {
             set(root, "notify", notify.key().into());
+        }
+    }
+
+    pub fn set_contacts(&mut self, contacts: ContactsChoice) {
+        let root = self.document.as_table_mut();
+        if contacts == ContactsChoice::default() {
+            root.remove("contacts");
+        } else {
+            set(root, "contacts", contacts.key().into());
         }
     }
 

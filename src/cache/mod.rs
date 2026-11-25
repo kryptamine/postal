@@ -34,7 +34,7 @@ mod window;
 pub use body_index::Indexed;
 pub use changes::Changes;
 pub use correspondence::SentPass;
-pub use correspondents::Correspondents;
+pub use correspondents::{Correspondent, Correspondents};
 pub use envelope_pass::EnvelopePass;
 pub use error::Error;
 pub use forget::forget;

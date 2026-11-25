@@ -15,6 +15,7 @@ use nucleo_matcher::{
 };
 
 use crate::{
+    account::config::ContactsChoice,
     cache::{self, Cache, Scope},
     domain::listing::Listing,
     domain::message::Message,
@@ -81,13 +82,14 @@ impl Search {
         caches: &PerAccount<Cache>,
         shown: &Shown,
         accounts: &PerAccount<Arc<str>>,
+        contacts: ContactsChoice,
     ) -> Result<Self, cache::Error> {
         let mut search = Self {
             query: String::new(),
             parsed: Query { terms: Vec::new() },
             ran: String::new(),
             kept: Vec::new(),
-            completion: Completion::new(caches, accounts.clone()),
+            completion: Completion::new(caches, accounts.clone(), contacts),
             more: false,
             pattern: Pattern::default(),
             matcher: Matcher::new(Config::DEFAULT),

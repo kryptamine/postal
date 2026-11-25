@@ -1,6 +1,7 @@
 use crate::{
-    cache::Cache, domain::folder::Folder, domain::per_account::PerAccount, domain::shown::Shown,
-    ui::list::all_inboxes, ui::list::inbox_view::InboxView, ui::list::search::Search,
+    account::config::ContactsChoice, cache::Cache, domain::folder::Folder,
+    domain::per_account::PerAccount, domain::shown::Shown, ui::list::all_inboxes,
+    ui::list::inbox_view::InboxView, ui::list::search::Search,
     ui::popup::folder_picker::FolderPicker, ui::preview::link_hints::LinkHints, ui::run::Error,
     ui::state::showing::Showing, ui::state::ui::Ui,
 };
@@ -79,8 +80,12 @@ pub fn relist(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
 }
 
 /// Types the Query of a new Search over the whole Cache, or of the one under way.
-pub fn start_search(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
-    if ui.view.start_search(caches)? {
+pub fn start_search(
+    ui: &mut Ui,
+    caches: &PerAccount<Cache>,
+    contacts: ContactsChoice,
+) -> Result<(), Error> {
+    if ui.view.start_search(caches, contacts)? {
         ui.screen.showing = Showing::Query;
     }
 

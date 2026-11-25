@@ -1,5 +1,5 @@
 use crate::{
-    account::config::{IconChoice, NotifyChoice, SecretStore, TerminalApp},
+    account::config::{ContactsChoice, IconChoice, NotifyChoice, SecretStore, TerminalApp},
     account::mailto_handler::CHOOSES_TERMINAL,
     ui::popup::settings_section::Section,
 };
@@ -11,6 +11,7 @@ pub enum Value {
     Notify(NotifyChoice),
     Secrets(SecretStore),
     Terminal(TerminalApp),
+    Contacts(ContactsChoice),
 }
 
 impl Value {
@@ -38,6 +39,10 @@ impl Value {
                 Self::Terminal(TerminalApp::Wezterm),
                 Self::Terminal(TerminalApp::Iterm2),
             ],
+            Section::Contacts => &[
+                Self::Contacts(ContactsChoice::None),
+                Self::Contacts(ContactsChoice::Macos),
+            ],
             Section::Accounts | Section::Name | Section::Mailto => &[],
         }
     }
@@ -48,6 +53,7 @@ impl Value {
             Self::Notify(notify) => notify.key(),
             Self::Secrets(store) => store.key(),
             Self::Terminal(terminal) => terminal.key(),
+            Self::Contacts(contacts) => contacts.key(),
         }
     }
 
@@ -67,6 +73,10 @@ impl Value {
             Self::Terminal(TerminalApp::Kitty) => "in kitty",
             Self::Terminal(TerminalApp::Wezterm) => "in WezTerm",
             Self::Terminal(TerminalApp::Iterm2) => "in iTerm2",
+            Self::Contacts(ContactsChoice::None) => "Correspondents come from mail alone",
+            Self::Contacts(ContactsChoice::Macos) => {
+                "Contacts too: an agent through MCP sees them too"
+            }
         }
     }
 }

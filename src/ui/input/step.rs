@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    account::config::{IconChoice, NotifyChoice},
+    account::config::{ContactsChoice, IconChoice, NotifyChoice},
     compose::recipients::Recipients,
     domain::folder::Folder,
     domain::per_account::AccountId,
@@ -32,6 +32,9 @@ pub enum Step {
     Signature(String),
     Icons(IconChoice),
     Notify(NotifyChoice),
+    /// Where Search finds Correspondents besides mail, read at once when
+    /// turned on so macOS asks for access then.
+    Contacts(ContactsChoice),
     Exit(Exit),
 }
 

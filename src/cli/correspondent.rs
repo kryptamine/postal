@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::HashMap};
 use chrono::{DateTime, Utc};
 use lettre::message::Mailbox;
 
-use crate::cache::Seen;
+use crate::{account::contacts::Contact, cache::Seen};
 
 /// Days over which one Message's weight in a rank halves.
 const HALF_LIFE_DAYS: f64 = 90.0;
@@ -62,9 +62,11 @@ struct Tally {
 
 /// Every Correspondent of `seen` but the Accounts' own addresses and a
 /// no-reply one never written to: the Account `first`'s first, then those
-/// written to, then by how often and how lately at `now`.
+/// written to, then by how often and how lately at `now`. The name in
+/// `contacts` wins, and those only there follow in its order, of `first`.
 pub fn ranked(
     seen: Vec<Seen>,
+    contacts: Vec<Contact>,
     accounts: &[&str],
     first: &str,
     now: DateTime<Utc>,
@@ -103,7 +105,27 @@ pub fn ranked(
         .collect();
 
     ranked.sort_by(|(a, x), (b, y)| a.cmp(b).then_with(|| x.address.cmp(&y.address)));
-    ranked.into_iter().map(|(_, c)| c).collect()
+    let mut ranked: Vec<_> = ranked.into_iter().map(|(_, c)| c).collect();
+    let at: HashMap<String, usize> = (ranked.iter().enumerate())
+        .map(|(at, c)| (c.address.clone(), at))
+        .collect();
+    for contact in contacts {
+        if let Some(&at) = at.get(&contact.address) {
+            ranked[at].name = contact.name.or_else(|| ranked[at].name.take());
+        } else if !accounts
+            .iter()
+            .any(|a| a.eq_ignore_ascii_case(&contact.address))
+        {
+            ranked.push(Correspondent {
+                address: contact.address,
+                name: contact.name,
+                account: first.clone(),
+                written: false,
+            });
+        }
+    }
+
+    ranked
 }
 
 fn correspondent(address: String, tally: Tally, first: &str) -> (Rank, Correspondent) {

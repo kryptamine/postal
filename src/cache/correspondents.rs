@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     mem,
     path::{Path, PathBuf},
     thread::{self, JoinHandle},
@@ -51,23 +52,41 @@ impl Correspondents {
 }
 
 impl Cache {
-    /// Starts reading every Account's Correspondents, on a connection of
-    /// their own; none for a Cache in memory.
-    pub fn correspondents(&self) -> Correspondents {
+    /// Starts reading every Account's Correspondents on a connection of
+    /// their own, none for a Cache in memory, then adds those of `also`:
+    /// its names win, and its new addresses go last.
+    pub fn correspondents(
+        &self,
+        also: impl FnOnce() -> Vec<Correspondent> + Send + 'static,
+    ) -> Correspondents {
         let path = (self.connection().path())
             .filter(|path| !path.is_empty())
             .map(PathBuf::from);
-        let Some(path) = path else {
-            return Correspondents::default();
-        };
 
         Correspondents(State::Reading(thread::spawn(move || {
-            read(&path).unwrap_or_else(|error| {
+            let read = path.map_or_else(|| Ok(Vec::new()), |path| read(&path));
+            let read = read.unwrap_or_else(|error| {
                 tracing::warn!("no Correspondents to suggest: {error}");
                 Vec::new()
-            })
+            });
+            merged(read, also())
         })))
     }
+}
+
+fn merged(mut read: Vec<Correspondent>, also: Vec<Correspondent>) -> Vec<Correspondent> {
+    let at: HashMap<String, usize> = (read.iter().enumerate())
+        .map(|(at, known)| (known.address.clone(), at))
+        .collect();
+    for known in also {
+        match at.get(&known.address) {
+            Some(_) if known.name.is_empty() => {}
+            Some(&at) => read[at] = known,
+            None => read.push(known),
+        }
+    }
+
+    read
 }
 
 fn read(path: &Path) -> Result<Vec<Correspondent>, Error> {

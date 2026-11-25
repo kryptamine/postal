@@ -49,7 +49,7 @@ pub fn steer(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
         Steer::Pick => moving::pick(ui, world)?,
         Steer::MoveTo(folder) => moving::move_to(ui, world, &folder)?,
         Steer::Undo => moving::undo(ui, world)?,
-        Steer::Search => start_search(ui, caches)?,
+        Steer::Search => start_search(ui, caches, world.contacts)?,
         Steer::Type(c) => type_query(ui, caches, |search| search.push(c))?,
         Steer::Erase => type_query(ui, caches, Search::pop)?,
         Steer::Complete(direction) => complete(ui, caches, matches!(direction, Direction::Down))?,
