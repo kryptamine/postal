@@ -50,6 +50,14 @@ than Postal needs, and every unread field claims a dependency nothing exercises.
 Add a field in the change that reads it, and delete it with its last reader. The
 same holds for methods, constants and enum variants.
 
+## Constructor rule (mandatory)
+
+**A named constructor exists when its name says what a literal cannot**: the
+type has cases worth naming (`Changes::replacing`, `Changes::update`), or an
+invariant the constructor holds. A plain bag of data is built with a literal,
+whose field names document the call site; a `new` that takes the fields in
+order only hides them.
+
 ## File rule (mandatory)
 
 **One Rust file holds one concept: a type with its impls, or one piece of
