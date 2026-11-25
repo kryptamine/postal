@@ -337,7 +337,7 @@ fn new_mail_arrives_by_idle_during_the_body_pass() {
     let home = Home::for_server(&server);
     let mut t = started(&server, &home);
 
-    server.stall(Stall::Part);
+    server.stall(Stall::Index);
     wait_for(|| server.commands().iter().any(|c| indexing(c)));
     server.deliver(FakeMessage::new("Sender", "Late", "2024-04-01T09:00:00Z"));
     t.wait_until(|s| list(s).contains("Late")).unwrap();
