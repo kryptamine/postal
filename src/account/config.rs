@@ -133,6 +133,82 @@ impl NotifyChoice {
     }
 }
 
+/// What a mailto: link opens Postal in on macOS: `terminal = "ghostty"`,
+/// or `terminal = { command = "..." }` for a program of the user's own.
+#[derive(Deserialize, Clone, PartialEq, Eq)]
+#[serde(from = "WrittenTerminal")]
+pub enum Terminal {
+    App(TerminalApp),
+    /// Run with Postal's path and the link.
+    Command(String),
+}
+
+impl Default for Terminal {
+    fn default() -> Self {
+        Self::App(TerminalApp::default())
+    }
+}
+
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum TerminalApp {
+    /// Terminal.app.
+    #[default]
+    Terminal,
+    Ghostty,
+    Kitty,
+    Wezterm,
+    Iterm2,
+}
+
+impl TerminalApp {
+    pub const ALL: [Self; 5] = [
+        Self::Terminal,
+        Self::Ghostty,
+        Self::Kitty,
+        Self::Wezterm,
+        Self::Iterm2,
+    ];
+
+    /// The value of `terminal` in `config.toml`.
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Terminal => "terminal",
+            Self::Ghostty => "ghostty",
+            Self::Kitty => "kitty",
+            Self::Wezterm => "wezterm",
+            Self::Iterm2 => "iterm2",
+        }
+    }
+}
+
+/// `terminal` as written: a name, or a table naming a command.
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum WrittenTerminal {
+    Terminal,
+    Ghostty,
+    Kitty,
+    Wezterm,
+    Iterm2,
+    Command(String),
+}
+
+impl From<WrittenTerminal> for Terminal {
+    fn from(written: WrittenTerminal) -> Self {
+        let app = match written {
+            WrittenTerminal::Command(command) => return Self::Command(command),
+            WrittenTerminal::Terminal => TerminalApp::Terminal,
+            WrittenTerminal::Ghostty => TerminalApp::Ghostty,
+            WrittenTerminal::Kitty => TerminalApp::Kitty,
+            WrittenTerminal::Wezterm => TerminalApp::Wezterm,
+            WrittenTerminal::Iterm2 => TerminalApp::Iterm2,
+        };
+
+        Self::App(app)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{}: {source}", .path.display())]

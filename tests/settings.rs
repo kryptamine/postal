@@ -102,11 +102,11 @@ fn settings_shows_a_tab_per_section() {
             .is_some_and(|c| c.style().fg == termlens::Color::Indexed(3))
     };
     assert!(
-        yellow(8, 20) && screen.cell(8, 20).unwrap().style().reverse,
+        yellow(6, 20) && screen.cell(6, 20).unwrap().style().reverse,
         "{screen}"
     );
     assert!(
-        yellow(14, 21) && screen.cell(14, 21).unwrap().style().reverse,
+        yellow(12, 21) && screen.cell(12, 21).unwrap().style().reverse,
         "{screen}"
     );
 
@@ -212,6 +212,43 @@ fn a_refused_store_switch_changes_nothing() {
         .unwrap();
     assert_eq!(config(&home), before);
     assert!(home.secret_path().exists());
+    quit(t);
+}
+
+// A link opens Postal in the terminal chosen, or in a program of the
+// user's own, which wins over the choice until a terminal is chosen again.
+#[cfg(target_os = "macos")]
+#[test]
+fn the_terminal_of_a_mailto_link_is_chosen_or_typed() {
+    let server = inbox();
+    let home = Home::for_server(&server);
+    let before = config(&home);
+    let mut t = postal(&home, false);
+    settings(&mut t);
+    for _ in 0..4 {
+        t.send(Key::Char('l')).unwrap();
+    }
+
+    t.wait_until(|s| s.contains("Postal opens mailto: links") && s.contains("off"))
+        .unwrap();
+    // The tab opens on the terminal in effect.
+    t.send(Key::Char('j')).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("ghostty ✓")).unwrap();
+    wait_for(|| config(&home).contains("terminal = \"ghostty\""));
+
+    t.send_str("jjjj").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.send_str("/usr/local/bin/my term").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("/usr/local/bin/my term") && !s.contains("ghostty ✓"))
+        .unwrap();
+    wait_for(|| config(&home).contains("terminal = { command = \"/usr/local/bin/my term\" }"));
+
+    t.send_str("kkkkk").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("terminal ✓")).unwrap();
+    wait_for(|| config(&home) == before);
     quit(t);
 }
 

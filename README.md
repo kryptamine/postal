@@ -76,6 +76,16 @@ latest tag into a `pack/*/start/` directory on your `packpath`, then call
 
 [`nvim/`](nvim/) lists the options, commands and keys.
 
+## Mail links
+
+`postal setup-mailto` makes Postal the system's handler of `mailto:` links:
+a click on one in a browser opens a terminal on a new Draft. On macOS it
+installs a small launcher app in `~/Applications`, and Settings (`,`, the
+Mailto tab) chooses Terminal.app, Ghostty, kitty, WezTerm, iTerm2 or a
+program of your own; on Linux it writes a desktop entry, and the desktop
+picks the terminal. `postal setup-mailto --remove`, or the same switch in
+Settings, gives the links back to the handler before.
+
 ## Agents
 
 `postal mcp` serves Postal's mail to any [MCP](https://modelcontextprotocol.io)

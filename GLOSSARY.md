@@ -177,7 +177,7 @@ The screen that signs an Account in: on a first run, and after `postal login` or
 _Avoid_: setup wizard, registration
 
 **Settings**:
-A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once. A tab per section, switched with `Tab` and `S-Tab`, says what it sets: Accounts, each with its Provider and under it its Signature by its first line, then Add account; Icons, Notify and Secrets, each a list of values, the one in effect ticked, `Enter` applying the one selected; and Name. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
+A popup over the screen, opened with `,`, that changes `config.toml` without editing it, each change written at once. A tab per section, switched with `Tab` and `S-Tab`, says what it sets: Accounts, each with its Provider and under it its Signature by its first line, then Add account; Icons, Notify, Mailto and Secrets, each a list of values, the one in effect ticked, `Enter` applying the one selected; and Name. Mailto also switches whether the system hands `mailto:` links to Postal, and on macOS types a program of the user's own to open them in. `Enter` on a Signature opens `$EDITOR` on it; `d` unlinks an Account after `y`: it leaves the config, its secret and its Cache rows go. A change that the Accounts read at start, the Name, a Signature or the secret store, opens the TUI again when Settings closes.
 _Avoid_: preferences, options, config screen
 
 **Unlink**:

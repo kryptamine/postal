@@ -7,11 +7,9 @@ size: 100x30  cursor: hidden
 │ ● Ada                2024-11-18 ││ From    Ada <someone@example.com>      Mon, 18 Nov 2024 09:00 │
 │   Weekly notes                  ││ To                                                            │
 │   Notes                         ││ Subject Weekly notes                                          │
-│                                 │├───────────────────────────────────────────────────────────────┤
-│                                 ││ Notes                                                         │
-│                 ┌ Settings ────────────────────────────────────────────────────┐                 │
+│                 ┌ Settings ────────────────────────────────────────────────────┐─────────────────┤
 │                 │                                                              │                 │
-│                 │  Accounts   Icons   Notify   Name   Secrets                  │                 │
+│                 │  Accounts   Icons   Notify   Name   Mailto   Secrets         │                 │
 │                 │ ──────────────────────────────────────────────────────────── │                 │
 │                 │                                                              │                 │
 │                 │ Accounts                                                     │                 │
@@ -22,12 +20,14 @@ size: 100x30  cursor: hidden
 │                 │    + Add account                                             │                 │
 │                 │                                                              │                 │
 │                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
+│                 │                                                              │                 │
 │                 │ ↑↓ select  tab section  d unlink                             │                 │
 │                 │                          esc close                           │                 │
 │                 │                                                              │                 │
 │                 └──────────────────────────────────────────────────────────────┘                 │
-│                                 ││                                                               │
-│                                 ││                                                               │
 │                                 ││                                                               │
 │                                 ││                                                               │
 │                                 ││                                                               │

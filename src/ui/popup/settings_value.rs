@@ -1,5 +1,6 @@
 use crate::{
-    account::config::{IconChoice, NotifyChoice, SecretStore},
+    account::config::{IconChoice, NotifyChoice, SecretStore, TerminalApp},
+    account::mailto_handler::CHOOSES_TERMINAL,
     ui::popup::settings_section::Section,
 };
 
@@ -9,6 +10,7 @@ pub enum Value {
     Icons(IconChoice),
     Notify(NotifyChoice),
     Secrets(SecretStore),
+    Terminal(TerminalApp),
 }
 
 impl Value {
@@ -29,7 +31,14 @@ impl Value {
                 Self::Secrets(SecretStore::Keychain),
                 Self::Secrets(SecretStore::File),
             ],
-            Section::Accounts | Section::Name => &[],
+            Section::Mailto if CHOOSES_TERMINAL => &[
+                Self::Terminal(TerminalApp::Terminal),
+                Self::Terminal(TerminalApp::Ghostty),
+                Self::Terminal(TerminalApp::Kitty),
+                Self::Terminal(TerminalApp::Wezterm),
+                Self::Terminal(TerminalApp::Iterm2),
+            ],
+            Section::Accounts | Section::Name | Section::Mailto => &[],
         }
     }
 
@@ -38,6 +47,7 @@ impl Value {
             Self::Icons(icons) => icons.key(),
             Self::Notify(notify) => notify.key(),
             Self::Secrets(store) => store.key(),
+            Self::Terminal(terminal) => terminal.key(),
         }
     }
 
@@ -52,6 +62,11 @@ impl Value {
             Self::Notify(NotifyChoice::Never) => "no notifications",
             Self::Secrets(SecretStore::Keychain) => "the OS keychain",
             Self::Secrets(SecretStore::File) => "files in secrets/ beside config.toml",
+            Self::Terminal(TerminalApp::Terminal) => "a link opens Postal in Terminal.app",
+            Self::Terminal(TerminalApp::Ghostty) => "in Ghostty",
+            Self::Terminal(TerminalApp::Kitty) => "in kitty",
+            Self::Terminal(TerminalApp::Wezterm) => "in WezTerm",
+            Self::Terminal(TerminalApp::Iterm2) => "in iTerm2",
         }
     }
 }

@@ -7,9 +7,10 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
+    account::config::{Terminal, TerminalApp},
     ui::frame::theme::Theme,
     ui::popup::settings::{Row, Settings},
-    ui::popup::settings_mode::Mode,
+    ui::popup::settings_mode::{Field, Mode},
     ui::popup::settings_section::Section,
     ui::popup::settings_value::Value,
     ui::widgets::{popup_area::popup_area, truncate},
@@ -24,8 +25,10 @@ const FRAME: u16 = 4;
 const HEADER: u16 = 6;
 /// A blank row, the question or failure, the keys, the buttons.
 const FOOTER: u16 = 4;
-/// The fewest rows a tab's list takes, so a short one keeps the box.
-const LIST: u16 = 3;
+/// The fewest rows a tab's list takes, so a short one keeps the box: the
+/// Mailto tab's where it chooses a terminal, so the box is one height on
+/// every system. A switch, the terminals, then a command of one's own.
+const LIST: usize = 2 + TerminalApp::ALL.len();
 const GAP: u16 = 2;
 /// Where a row's text starts: after a column, the marker, and a gap.
 const TEXT: u16 = 3;
@@ -137,9 +140,16 @@ impl SettingsPopup<'_> {
             },
             Row::Add => ("+ Add account", "", style),
             Row::Name => match (settings.mode(), &settings.name) {
-                (Mode::Naming(typed), _) => (typed.as_str(), "", style),
+                (Mode::Typing(Field::Name, typed), _) => (typed.as_str(), "", style),
                 (_, Some(name)) => (name.as_str(), "", style),
                 (_, None) => ("none", "", muted),
+            },
+            Row::Handler if settings.handler => ("Postal opens mailto: links", "on", style),
+            Row::Handler => ("Postal opens mailto: links", "off", muted),
+            Row::TerminalCommand => match (settings.mode(), &settings.terminal) {
+                (Mode::Typing(Field::TerminalCommand, typed), _) => (typed.as_str(), "", style),
+                (_, Terminal::Command(command)) => ("own command", command.as_str(), style),
+                (_, Terminal::App(_)) => ("own command", "none", muted),
             },
             Row::Choice(value) => return self.choice(buf, area, value, style),
         };
@@ -190,7 +200,11 @@ impl SettingsPopup<'_> {
         let settings = self.settings;
         let bottom = inner.bottom();
         let message = line(inner, bottom - 3);
-        let naming = matches!(settings.mode(), Mode::Naming(_));
+        let typing = match settings.mode() {
+            Mode::Typing(field, _) => Some(*field),
+            Mode::Browsing | Mode::Unlinking(_) => None,
+        };
+
         if let Mode::Unlinking(email) = settings.mode() {
             let question = format!("Unlink {email} and delete its Cache? y/n");
             truncate::draw(buf, message, &question, self.theme.warning);
@@ -199,14 +213,17 @@ impl SettingsPopup<'_> {
             truncate::draw(buf, message, first, self.theme.error);
         }
 
-        let keys = match (naming, settings.section()) {
-            (true, _) => "type the Name",
-            (false, Section::Accounts) => "↑↓ select  tab section  d unlink",
-            (false, _) => "↑↓ select  tab section",
+        let keys = match (typing, settings.section()) {
+            (Some(Field::Name), _) => "type the Name",
+            (Some(Field::TerminalCommand), _) => {
+                "type a program; it is given postal's path and the link"
+            }
+            (None, Section::Accounts) => "↑↓ select  tab section  d unlink",
+            (None, _) => "↑↓ select  tab section",
         };
         truncate::draw(buf, line(inner, bottom - 2), keys, self.theme.muted);
 
-        let close = if naming { CANCEL } else { CLOSE };
+        let close = if typing.is_some() { CANCEL } else { CLOSE };
         let primary = primary(settings);
         let width = |text: &str| u16::try_from(text.width()).unwrap_or(u16::MAX);
         let total = primary.map_or(0, |p| width(p) + GAP) + width(ESC) + 1 + width(close);
@@ -227,15 +244,27 @@ impl SettingsPopup<'_> {
         put(close, Style::new());
     }
 
-    /// Where the terminal's cursor goes while the Name is typed: after it.
+    /// Where the terminal's cursor goes while a setting is typed: after it,
+    /// on the selected row.
     pub fn cursor(&self, area: Rect) -> Option<Position> {
-        let Mode::Naming(typed) = self.settings.mode() else {
+        let settings = self.settings;
+        let Mode::Typing(_, typed) = settings.mode() else {
             return None;
         };
-        let inner = inner(popup(area, self.settings));
+        let inner = inner(popup(area, settings));
+        let list = Rect {
+            y: inner.y + HEADER,
+            height: inner.height.saturating_sub(HEADER + FOOTER),
+            ..inner
+        };
+
+        let at = settings.rows().position(|row| row == settings.selected());
+        let shown = at.unwrap_or(0).saturating_sub(offset(settings, list));
         let typed = u16::try_from(typed.width()).unwrap_or(u16::MAX);
         let x = (inner.x + TEXT).saturating_add(typed);
-        let y = inner.y + HEADER;
+        let y = list
+            .y
+            .saturating_add(u16::try_from(shown).unwrap_or(u16::MAX));
         (x < inner.right() && y < inner.bottom()).then(|| Position::new(x, y))
     }
 }
@@ -245,8 +274,12 @@ impl SettingsPopup<'_> {
 fn primary(settings: &Settings) -> Option<&'static str> {
     match settings.selected() {
         Row::Account(_) => None,
-        Row::Name if matches!(settings.mode(), Mode::Naming(_)) => Some(" ↵ save "),
-        Row::Signature(_) | Row::Name => Some(" ↵ edit "),
+        Row::Name | Row::TerminalCommand if matches!(settings.mode(), Mode::Typing(..)) => {
+            Some(" ↵ save ")
+        }
+        Row::Signature(_) | Row::Name | Row::TerminalCommand => Some(" ↵ edit "),
+        Row::Handler if settings.handler => Some(" ↵ remove "),
+        Row::Handler => Some(" ↵ set up "),
         Row::Add => Some(" ↵ add "),
         Row::Choice(_) => Some(" ↵ apply "),
     }
@@ -275,8 +308,9 @@ fn popup(area: Rect, settings: &Settings) -> Rect {
         .iter()
         .map(|&section| settings.rows_of(section).count())
         .max()
-        .unwrap_or(0);
-    let rows = u16::try_from(longest).unwrap_or(u16::MAX).max(LIST);
+        .unwrap_or(0)
+        .max(LIST);
+    let rows = u16::try_from(longest).unwrap_or(u16::MAX);
     popup_area(area, WIDTH, rows.saturating_add(FRAME + HEADER + FOOTER))
 }
 

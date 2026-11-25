@@ -9,7 +9,7 @@ use toml_edit::{
 
 use crate::{
     account::atomic_file,
-    account::config::{Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp},
+    account::config::{Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp, Terminal},
     account::provider::Provider,
 };
 
@@ -193,6 +193,19 @@ impl ConfigFile {
             root.remove("notify");
         } else {
             set(root, "notify", notify.key().into());
+        }
+    }
+
+    pub fn set_terminal(&mut self, terminal: &Terminal) {
+        let root = self.document.as_table_mut();
+        match terminal {
+            _ if *terminal == Terminal::default() => drop(root.remove("terminal")),
+            Terminal::App(app) => set(root, "terminal", app.key().into()),
+            Terminal::Command(command) => {
+                let mut table = InlineTable::new();
+                table.insert("command", command.as_str().into());
+                set(root, "terminal", Value::InlineTable(table));
+            }
         }
     }
 

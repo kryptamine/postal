@@ -11,7 +11,7 @@ use toml::Spanned;
 
 use crate::{
     account::autoconfig::Autoconfig,
-    account::config::{Config, Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp},
+    account::config::{Config, Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp, Terminal},
     account::oauth::Endpoints,
     account::provider::Provider,
     account::signature::Signature,
@@ -33,6 +33,7 @@ pub struct PartialConfig {
     pub autoconfig: Autoconfig,
     pub icons: IconChoice,
     pub notify: NotifyChoice,
+    pub terminal: Terminal,
 }
 
 #[derive(Deserialize)]
@@ -59,6 +60,8 @@ struct RawConfig {
     icons: IconChoice,
     #[serde(default)]
     notify: NotifyChoice,
+    #[serde(default)]
+    terminal: Terminal,
     #[serde(default)]
     account: Vec<RawAccount>,
 }
@@ -178,6 +181,7 @@ impl PartialConfig {
                 autoconfig: Autoconfig::default(),
                 icons: IconChoice::default(),
                 notify: NotifyChoice::default(),
+                terminal: Terminal::default(),
             }),
             Err(source) => Err(Error::Read {
                 path: path.to_owned(),
@@ -244,6 +248,7 @@ impl PartialConfig {
             autoconfig: raw.autoconfig,
             icons: raw.icons,
             notify: raw.notify,
+            terminal: raw.terminal,
         })
     }
 

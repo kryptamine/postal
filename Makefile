@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build run demo-build demo media stills install dist fmt lint deny test nvim sanitize brand landing landing-dev check
+.PHONY: help launcher build run demo-build demo media stills install dist fmt lint deny test nvim sanitize brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -12,6 +12,11 @@ DIST := postal-$(TARGET)
 # changed, every user allows access again. See docs/adr/0029.
 IDENTIFIER := dev.postalmail.postal
 INSTALLED := $(or $(CARGO_INSTALL_ROOT),$(CARGO_HOME),$(HOME)/.cargo)/bin/postal
+# The mailto: launcher a macOS postal carries (docs/adr/0034), built here and
+# never on a user's machine; none for Linux.
+APP := target/$(TARGET)/launcher/Postal.app
+LAUNCHER := $(if $(filter %-apple-darwin,$(TARGET)),$(abspath target/$(TARGET)/launcher/Postal.zip))
+SWIFT_TARGET := $(subst aarch64,arm64,$(firstword $(subst -, ,$(TARGET))))-apple-macos13.0
 
 help: ## list every target
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
@@ -38,8 +43,8 @@ stills: demo-build ## shoot the landing page's screenshots in your Ghostty (macO
 
 # A Developer ID in the keychain signs the build as a release is signed, so
 # the keychain stops asking after every rebuild; without one it stays ad-hoc.
-install: ## install a release postal in ~/.cargo/bin
-	cargo install --path . --locked --force
+install: $(if $(LAUNCHER),launcher) ## install a release postal in ~/.cargo/bin
+	POSTAL_LAUNCHER=$(LAUNCHER) cargo install --path . --locked --force
 	@if security find-identity -v -p codesigning 2>/dev/null | grep -q 'Developer ID Application'; then \
 		codesign --force --sign 'Developer ID Application' --identifier $(IDENTIFIER) \
 			--options runtime $(INSTALLED); \
@@ -53,12 +58,21 @@ install: ## install a release postal in ~/.cargo/bin
 # install.sh reads the binary from $(DIST)/postal in this archive.
 # SIGN, when set, is run on the binary and the identifier before it is packed.
 dist: ## pack the release archive of postal for TARGET
-	cargo build --release --locked --target $(TARGET)
+	$(if $(LAUNCHER),$(MAKE) launcher TARGET=$(TARGET) SIGN=$(SIGN))
+	POSTAL_LAUNCHER=$(LAUNCHER) cargo build --release --locked --target $(TARGET)
 	rm -rf dist/$(DIST) && mkdir -p dist/$(DIST)
 	cp target/$(TARGET)/release/postal LICENSE THIRD_PARTY_LICENSES.md README.md dist/$(DIST)/
 	$(if $(SIGN),$(SIGN) dist/$(DIST)/postal $(IDENTIFIER))
 	tar -czf dist/$(DIST).tar.gz -C dist $(DIST)
 	cd dist && shasum -a 256 $(DIST).tar.gz > $(DIST).tar.gz.sha256
+
+# SIGN, when set, signs and notarizes the app as it does the binary; else ad-hoc.
+launcher: ## build the macOS mailto: launcher postal carries
+	rm -rf $(dir $(APP)) && mkdir -p $(APP)/Contents/MacOS
+	cp macos/Info.plist $(APP)/Contents/
+	swiftc -O -target $(SWIFT_TARGET) macos/launcher.swift -o $(APP)/Contents/MacOS/postal-mailto
+	$(if $(SIGN),$(SIGN) $(APP) dev.postalmail.mailto,codesign --force --sign - $(APP))
+	ditto -c -k --keepParent $(APP) $(LAUNCHER)
 
 fmt: ## format the Rust, the C++ and the Lua
 	cargo fmt

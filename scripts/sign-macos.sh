@@ -1,5 +1,5 @@
 #!/bin/sh
-# Signs a macOS binary with the Developer ID and notarizes it, in place.
+# Signs a macOS binary or app with the Developer ID and notarizes it, in place.
 # Reads the certificate and the App Store Connect key from the environment;
 # see docs/adr/0029-releases-come-from-release-please.md.
 set -eu
@@ -40,8 +40,8 @@ codesign --verify --strict --verbose=2 "$binary"
 codesign --display --verbose=2 "$binary" 2>&1 | grep -qx "TeamIdentifier=$APPLE_TEAM_ID"
 
 # notarytool takes a zip, not a tar.gz; a bare binary cannot be stapled,
-# so Gatekeeper looks the ticket up online.
-ditto -c -k "$binary" "$work/postal.zip"
+# so Gatekeeper looks its ticket up online.
+ditto -c -k --keepParent "$binary" "$work/postal.zip"
 printf %s "$APPLE_API_KEY" >"$work/key.p8"
 result=$(xcrun notarytool submit "$work/postal.zip" --wait --timeout 30m \
 	--key "$work/key.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" \
@@ -53,4 +53,7 @@ if [ "$status" != Accepted ]; then
 	xcrun notarytool log "$id" \
 		--key "$work/key.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER"
 	exit 1
+fi
+if [ -d "$binary" ]; then
+	xcrun stapler staple "$binary"
 fi
