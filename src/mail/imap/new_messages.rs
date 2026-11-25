@@ -68,6 +68,7 @@ fn message(attributes: &[AttributeValue<'_>], origin: Origin<'_>) -> Option<NewM
         _ => None,
     });
     let received = internal_date(attributes);
+    // The list items ask for `FLAGS`; a row sent without them counts as unread.
     let flags = attributes::flags(attributes).unwrap_or_else(|| MessageFlags::from_names([]));
 
     let envelope = envelope(attributes);
