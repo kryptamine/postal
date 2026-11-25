@@ -202,12 +202,12 @@ fn a_refused_command_reconnects_instead_of_quitting() {
     let home = Home::for_server(&server);
     let mut t = idling(&server, &home);
 
-    server.fail(Outage::Refusing);
-    // The resync's fetch of it is the refused command.
+    server.refuse_fetches(true);
+    // The fetch of it after IDLE announces it is the refused command.
     server.deliver(FakeMessage::new("Cyd", "Arrived", "2024-11-19T09:00:00Z"));
     t.wait_until(|s| status(s, "error · retry in").is_some())
         .unwrap();
-    server.recover();
+    server.refuse_fetches(false);
     t.wait_until(|s| s.contains("Arrived") && status(s, "retry").is_none())
         .unwrap();
     quit(t);
