@@ -39,6 +39,25 @@ pub async fn page(
     size: u32,
     progress: impl Fn(u32, u32),
 ) -> Result<Page, Error> {
+    match numbered(server, cache, folder, size, &progress).await {
+        // Another connection's expunge renumbered the Folder after the
+        // lookup, and iCloud refuses the stale numbers: number it again.
+        Err(Error::Imap(error)) if error.refusal().is_some() => {
+            tracing::warn!("a page of {folder} was refused: {error}: renumbering");
+            numbered(server, cache, folder, size, &progress).await
+        }
+        page => page,
+    }
+}
+
+/// `page`, by the sequence numbers of one fresh `EXAMINE`.
+async fn numbered(
+    server: &mut impl MailServer,
+    cache: &Cache,
+    folder: &FolderName,
+    size: u32,
+    progress: &impl Fn(u32, u32),
+) -> Result<Page, Error> {
     let Some(oldest) = cache.oldest_uid(folder)? else {
         return Ok(Page {
             below: None,

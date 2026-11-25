@@ -44,6 +44,12 @@ pub(super) fn answer_fetch(
         whole: whole_body(&macro_or_item_names),
     };
 
+    // As iCloud: numbers count the Folder as it is now, whatever this
+    // connection was told.
+    if !uid && beyond(&sequence_set, u32::try_from(folder.messages.len()).unwrap()) {
+        return Status::no(tag, None, "Invalid message number").unwrap();
+    }
+
     let refused = fetched(folder, &sequence_set, uid, None)
         .any(|(_, stored)| inbox.refused.contains(&stored.uid));
     if (asked.whole || asked.parts.iter().any(|p| p.section == Asking::Header)) && refused {
@@ -78,6 +84,15 @@ pub(super) fn fetched<'a>(
     (1..).zip(&inbox.messages).filter(move |&(seq, stored)| {
         contains(set, if uid { stored.uid } else { seq }, max)
             && changed_since.is_none_or(|since| stored.modseq > since)
+    })
+}
+
+/// Whether `set` names a number past `count`; `*` never does.
+fn beyond(set: &SequenceSet, count: u32) -> bool {
+    let past = |bound: &SeqOrUid| matches!(bound, SeqOrUid::Value(n) if n.get() > count);
+    set.0.as_ref().iter().any(|sequence| match sequence {
+        Sequence::Single(one) => past(one),
+        Sequence::Range(a, b) => past(a) || past(b),
     })
 }
 
