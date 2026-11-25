@@ -8,6 +8,7 @@ use crate::{
     domain::thread_id::ThreadId,
     domain::uid::Uid,
     mail::imap::{MailServer, Mode},
+    mail::one_by_one,
     mail::snippets,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -113,28 +114,11 @@ fn all<A>(folders: Vec<Folder<A>>) -> Option<FolderName> {
         .map(|f| f.name)
 }
 
-/// The bodies of `uids`; when the server refuses the batch, each is asked
-/// again alone, so one refused body does not take the rest with it.
+/// The bodies of `uids`, but those the server refuses.
 async fn bodies(server: &mut impl MailServer, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
     if uids.is_empty() {
         return Ok(Vec::new());
     }
 
-    match server.bodies(uids).await {
-        Err(error) if error.refusal().is_some() && uids.len() > 1 => {
-            let mut bodies = Vec::new();
-            for &uid in uids {
-                match server.bodies(&[uid]).await {
-                    Ok(one) => bodies.extend(one),
-                    Err(error) if error.refusal().is_some() => {
-                        tracing::warn!("fetching the body of {uid} was refused: {error}");
-                    }
-                    Err(error) => return Err(error.into()),
-                }
-            }
-
-            Ok(bodies)
-        }
-        result => Ok(result?),
-    }
+    one_by_one::fetch(uids, "body", async |uids| server.bodies(uids).await).await
 }
