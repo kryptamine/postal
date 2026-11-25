@@ -25,33 +25,32 @@ const PROGRESS_EVERY: u32 = 50;
 const INTERNAL_DATE: &str = "%d-%b-%Y %H:%M:%S %z";
 
 /// The rows a `FETCH` of the list items answers; `progress` gets how many
-/// have come so far, now and then. What else the server announces on the
-/// way goes to `pushed`, in order.
+/// have come so far, now and then.
 pub async fn fetch(
     session: &mut Session<Box<dyn Transport>>,
+    pushed: &mut Vec<Pushed>,
     command: String,
     origin: Origin<'_>,
-    pushed: &mut Vec<Pushed>,
     progress: impl Fn(u32),
 ) -> Result<Vec<NewMessage>, Error> {
     let mut messages = Vec::new();
     let mut received = 0;
-    tagged::run(session, command, |response| {
-        let row = match response {
-            Response::Fetch(_, attributes) if envelope(attributes).is_some() => {
-                message(attributes, origin)
-            }
-            _ => {
-                pushed.extend(Pushed::from_response(response));
-                return;
-            }
+    tagged::run(session, pushed, command, |response| {
+        let Response::Fetch(_, attributes) = response else {
+            return false;
         };
 
-        messages.extend(row);
+        if envelope(attributes).is_none() {
+            return false;
+        }
+
+        messages.extend(message(attributes, origin));
         received += 1;
         if received % PROGRESS_EVERY == 0 {
             progress(received);
         }
+
+        true
     })
     .await?;
     Ok(messages)

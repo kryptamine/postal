@@ -257,9 +257,6 @@ impl ImapSession {
         command: String,
         progress: impl Fn(u32),
     ) -> Result<Vec<NewMessage>, Error> {
-        // What came before stays ahead of what comes during the fetch.
-        let earlier = self.pushed();
-        self.pending = earlier;
         let origin = Origin {
             uid_validity: self.uid_validity,
             email: &self.email,
@@ -267,9 +264,9 @@ impl ImapSession {
 
         new_messages::fetch(
             &mut self.session,
+            &mut self.pending,
             command,
             origin,
-            &mut self.pending,
             progress,
         )
         .await
@@ -306,34 +303,43 @@ impl ImapSession {
         }
     }
 
-    /// `command`, read by hand, as async-imap reads a `NO` as an empty answer:
-    /// `each` gets every `FETCH` answer, `pushed` the rest, after what came before.
+    /// `command` by `tagged::run`, which leaves the rest of what the server says
+    /// to `pushed`.
+    async fn run(
+        &mut self,
+        command: String,
+        take: impl FnMut(&Response<'_>) -> bool,
+    ) -> Result<(), Error> {
+        tagged::run(&mut self.session, &mut self.pending, command, take).await
+    }
+
+    /// A `UID FETCH`: `each` gets every `FETCH` answer, sequence number first.
     async fn answered(
         &mut self,
         command: String,
         mut each: impl FnMut(u32, &[AttributeValue<'_>]),
     ) -> Result<(), Error> {
-        let earlier = self.pushed();
-        self.pending = earlier;
-        let pending = &mut self.pending;
-        tagged::run(&mut self.session, command, |response| match response {
-            Response::Fetch(sequence, attributes) => each(*sequence, attributes),
-            _ => pending.extend(Pushed::from_response(response)),
+        self.run(command, |response| {
+            let Response::Fetch(sequence, attributes) = response else {
+                return false;
+            };
+
+            each(*sequence, attributes);
+            true
         })
         .await
     }
 
     /// The UIDs a `UID SEARCH` of `criteria` matches, ascending.
     async fn search(&mut self, criteria: &str) -> Result<Vec<Uid>, Error> {
-        let earlier = self.pushed();
-        self.pending = earlier;
-        let (pending, mut found) = (&mut self.pending, Vec::new());
-        let command = format!("UID SEARCH {criteria}");
-        tagged::run(&mut self.session, command, |response| match response {
-            Response::MailboxData(MailboxDatum::Search(uids)) => {
-                found.extend(uids.iter().copied().map(Uid::new));
-            }
-            _ => pending.extend(Pushed::from_response(response)),
+        let mut found = Vec::new();
+        self.run(format!("UID SEARCH {criteria}"), |response| {
+            let Response::MailboxData(MailboxDatum::Search(uids)) = response else {
+                return false;
+            };
+
+            found.extend(uids.iter().copied().map(Uid::new));
+            true
         })
         .await?;
         found.sort_unstable();
@@ -377,30 +383,24 @@ impl MailServer for ImapSession {
         let sign = if added { '+' } else { '-' };
         let query = format!("{sign}FLAGS.SILENT ({})", flag.name());
         let command = format!("UID STORE {} {query}", uid_set(uids));
-        self.answered(command, |_, _| {}).await?;
+        self.run(command, |r| matches!(r, Response::Fetch(..))).await?;
         tracing::info!("stored {query} on {} Messages", uids.len());
         Ok(())
     }
 
     async fn move_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
         let (set, to) = (uid_set(uids), quoted(to.as_str()));
-        // What came before stays ahead of what comes during the move.
-        let earlier = self.pushed();
-        self.pending = earlier;
         let command = if self.listed.moves { "MOVE" } else { "COPY" };
+        let mut moved = Vec::new();
         let command = format!("UID {command} {set} {to}");
-        let moved = moved_uids::run(&mut self.session, command, &mut self.pending).await?;
+        self.run(command, |response| moved_uids::read(response, &mut moved))
+            .await?;
         if !self.listed.moves {
             // The copy, flag and expunge a `MOVE` stands for (RFC 6851 3.3).
             let command = format!("UID STORE {set} +FLAGS.SILENT (\\Deleted)");
-            self.answered(command, |_, _| {}).await?;
+            self.run(command, |r| matches!(r, Response::Fetch(..))).await?;
             if self.listed.uidplus {
-                let pending = &mut self.pending;
-                let expunge = format!("UID EXPUNGE {set}");
-                tagged::run(&mut self.session, expunge, |response| {
-                    pending.extend(Pushed::from_response(response));
-                })
-                .await?;
+                self.run(format!("UID EXPUNGE {set}"), |_| false).await?;
             } else {
                 // A plain `EXPUNGE` would also take what another client flagged.
                 tracing::warn!("no UIDPLUS: {} Messages left flagged \\Deleted", uids.len());
@@ -413,9 +413,9 @@ impl MailServer for ImapSession {
 
     async fn copy_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
         let command = format!("UID COPY {} {}", uid_set(uids), quoted(to.as_str()));
-        let earlier = self.pushed();
-        self.pending = earlier;
-        let copied = moved_uids::run(&mut self.session, command, &mut self.pending).await?;
+        let mut copied = Vec::new();
+        self.run(command, |response| moved_uids::read(response, &mut copied))
+            .await?;
         tracing::info!("copied {} Messages", uids.len());
         Ok(copied)
     }
@@ -607,7 +607,7 @@ impl MailServer for ImapSession {
     }
 
     async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
-        bodies::fetch(&mut self.session, &uid_set(uids)).await
+        bodies::fetch(&mut self.session, &mut self.pending, &uid_set(uids)).await
     }
 
     async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error> {
@@ -638,18 +638,8 @@ impl MailServer for ImapSession {
     }
 
     fn pushed(&mut self) -> Vec<Pushed> {
-        let mut pushed = std::mem::take(&mut self.pending);
-        // async-imap drops what comes once its queue of 100 is full.
-        let lost = self.session.unsolicited_responses.is_full();
-        while let Ok(response) = self.session.unsolicited_responses.try_recv() {
-            pushed.extend(Pushed::from_unsolicited(&response));
-        }
-
-        if lost {
-            pushed.push(Pushed::Lost);
-        }
-
-        pushed
+        Pushed::queued(&self.session, &mut self.pending);
+        std::mem::take(&mut self.pending)
     }
 
     async fn idle(

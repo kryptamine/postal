@@ -3,16 +3,24 @@ use async_imap::{
     imap_proto::{Response, Status},
 };
 
-use super::{Error, connect::Transport};
+use super::{Error, connect::Transport, pushed::Pushed};
 
-/// Sends `command` and hands `each` every response up to the one completing
-/// it, that one too when it is `OK`. Read by hand, as async-imap's own fetch ends quietly on a `NO` and on
-/// a closed connection alike, and keeps back what it has no accessor for.
+/// Sends `command` and reads every response up to the one completing it,
+/// that one too when `OK`: `take` keeps what it reads, the rest goes to
+/// `pushed`, after what came before. By hand, as async-imap reads a `NO` as empty.
 pub async fn run(
     session: &mut Session<Box<dyn Transport>>,
+    pushed: &mut Vec<Pushed>,
     command: String,
-    mut each: impl FnMut(&Response<'_>),
+    mut take: impl FnMut(&Response<'_>) -> bool,
 ) -> Result<(), Error> {
+    Pushed::queued(session, pushed);
+    let mut each = |response: &Response<'_>| {
+        if !take(response) {
+            pushed.extend(Pushed::from_response(response));
+        }
+    };
+
     let tag = session.run_command(command).await?;
     loop {
         let response = session
