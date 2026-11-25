@@ -1,0 +1,46 @@
+From: Erin Vale <erin@fabrikam.com>
+To: me@example.com
+Subject: Summer planning
+Date: Tue, 1 Dec 2026 12:00:00 +0000
+X-Postal-Case: A zone named by neither IANA nor Windows is read from the invitation's own VTIMEZONE, its summer rule in force in July.
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset="utf-8"
+
+See you in July.
+
+--alt
+Content-Type: text/calendar; charset="utf-8"; method=REQUEST
+
+BEGIN:VCALENDAR
+METHOD:REQUEST
+VERSION:2.0
+BEGIN:VTIMEZONE
+TZID:Customized Time Zone
+BEGIN:STANDARD
+DTSTART:16010101T030000
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T020000
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=3
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+ORGANIZER;CN=Erin Vale:mailto:erin@fabrikam.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:me@example.com
+UID:summer@fabrikam.com
+SUMMARY:Summer planning
+DTSTART;TZID="Customized Time Zone":20270715T100000
+DTEND;TZID="Customized Time Zone":20270715T110000
+DTSTAMP:20261201T120000Z
+END:VEVENT
+END:VCALENDAR
+
+--alt--

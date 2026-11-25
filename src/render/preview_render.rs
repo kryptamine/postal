@@ -1,7 +1,11 @@
-use mail_parser::{HeaderValue, MessageParser, PartType};
+use std::sync::Arc;
+
+use mail_parser::{HeaderValue, Message, MessageParser, PartType};
 
 use crate::{
     render::html_preview::{self, Links},
+    render::invitation::Invitation,
+    render::invitation_card,
     render::mail_look::MailLook,
     render::marks::Marks,
     render::preview::Preview,
@@ -22,9 +26,12 @@ const QUOTE_CUT: &str = "… quoted text hidden (z)";
 /// What rendering one Preview needs, sent to the thread that renders it.
 pub struct Job {
     pub key: PreviewKey,
-    /// The raw body: the header and the text parts, still MIME-encoded.
+    /// The raw body: the header, the text parts and any calendar part, still
+    /// MIME-encoded.
     pub body: Vec<u8>,
     pub look: MailLook,
+    /// The Account's address, which an invitation's attendees are matched to.
+    pub own: Arc<str>,
 }
 
 /// The Preview of `job` at the width in its key.
@@ -38,28 +45,38 @@ pub fn paged(job: &Job) -> Preview {
     rendered(job, Links::Footnotes)
 }
 
+/// The body under the card of the invitation it carries, if any.
 fn rendered(job: &Job, links: Links) -> Preview {
-    let (body, laid_out) = body(job, links);
-    Preview { body, laid_out }
+    let message = MessageParser::default().parse(&job.body);
+    let (body, laid_out) = body(job, message.as_ref(), links);
+    let card = message
+        .as_ref()
+        .and_then(|m| Invitation::find(m, &job.own))
+        .map(|invitation| invitation_card::rows(&invitation, usize::from(job.key.width)));
+    let Some(mut rows) = card else {
+        return Preview { body, laid_out };
+    };
+
+    rows.extend(body);
+    Preview {
+        body: rows,
+        laid_out,
+    }
 }
 
 /// The HTML part when there is one, laid out in the rendered View; else
 /// the `text/plain` part wrapped, else a note. `true` when laid out. Its
 /// Quote is left out unless the key keeps it (ADR 0015).
-fn body(job: &Job, links: Links) -> (Vec<StyledLine>, bool) {
-    let message = MessageParser::default().parse(&job.body);
+fn body(job: &Job, message: Option<&Message<'_>>, links: Links) -> (Vec<StyledLine>, bool) {
     // Outlook names what it answers in `References` alone.
-    let reply = message.as_ref().is_some_and(|m| {
+    let reply = message.is_some_and(|m| {
         [m.in_reply_to(), m.references()]
             .iter()
             .any(|header| !matches!(header, HeaderValue::Empty))
     });
 
     let cutting = reply && !job.key.quoted;
-    let html = message
-        .as_ref()
-        .and_then(|m| m.html_part(0))
-        .map(|p| &p.body);
+    let html = message.and_then(|m| m.html_part(0)).map(|p| &p.body);
     if let Some(PartType::Html(html)) = html {
         let own = cutting.then(|| quoted_html::cut(html)).flatten();
         let (rows, laid_out) = html_rows(own.unwrap_or(html), job, links);
@@ -67,10 +84,7 @@ fn body(job: &Job, links: Links) -> (Vec<StyledLine>, bool) {
     }
 
     let width = usize::from(job.key.width);
-    let text = message
-        .as_ref()
-        .and_then(|m| m.text_part(0))
-        .map(|p| &p.body);
+    let text = message.and_then(|m| m.text_part(0)).map(|p| &p.body);
     let Some(PartType::Text(text)) = text else {
         return (note("(this Message has no text)", width), false);
     };

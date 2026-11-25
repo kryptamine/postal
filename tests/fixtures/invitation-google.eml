@@ -1,0 +1,87 @@
+From: Alice Doe <alice@example.com>
+To: me@example.com
+Subject: Invitation: Project sync @ Thu 3 Dec 2026 15:00 - 16:00 (CET) (me@example.com)
+Date: Mon, 30 Nov 2026 10:00:00 +0000
+X-Postal-Case: A Google invitation shows its card over the body, in the local time with the event's own zone beside it, and its Meet link to join by; the body's RSVP links stay links.
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mixed"
+
+--mixed
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset="UTF-8"
+
+Project sync
+Thursday 3 Dec 2026 15:00 - 16:00 (Central European Time - Berlin)
+
+Join with Google Meet: https://meet.google.com/abc-defg-hij
+
+Reply for me@example.com: Yes https://calendar.google.com/calendar/event?action=RESPOND&eid=abc&rst=1 No https://calendar.google.com/calendar/event?action=RESPOND&eid=abc&rst=2 Maybe https://calendar.google.com/calendar/event?action=RESPOND&eid=abc&rst=3
+
+--alt
+Content-Type: text/html; charset="UTF-8"
+
+<html><body>
+<h2>Project sync</h2>
+<p>Thursday 3 Dec 2026 15:00 - 16:00 (Central European Time - Berlin)</p>
+<p><a href="https://meet.google.com/abc-defg-hij">Join with Google Meet</a></p>
+<p>Reply for me@example.com:
+<a href="https://calendar.google.com/calendar/event?action=RESPOND&amp;eid=abc&amp;rst=1">Yes</a>
+<a href="https://calendar.google.com/calendar/event?action=RESPOND&amp;eid=abc&amp;rst=2">No</a>
+<a href="https://calendar.google.com/calendar/event?action=RESPOND&amp;eid=abc&amp;rst=3">Maybe</a></p>
+</body></html>
+
+--alt
+Content-Type: text/calendar; charset="UTF-8"; method=REQUEST
+
+BEGIN:VCALENDAR
+PRODID:-//Google Inc//Google Calendar 70.9054//EN
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:REQUEST
+BEGIN:VTIMEZONE
+TZID:Europe/Berlin
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+DTSTART:19701025T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+TZNAME:CEST
+DTSTART:19700329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Berlin:20261203T150000
+DTEND;TZID=Europe/Berlin:20261203T160000
+DTSTAMP:20261130T100000Z
+ORGANIZER;CN=Alice Doe:mailto:alice@example.com
+UID:abc123@google.com
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Alice Doe;X-NUM-GUESTS=0:mailto:alice@example.com
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN=me@example.com;X-NUM-GUESTS=0:mailto:me@example.com
+X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij
+DESCRIPTION:-::~:~::~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~::~:~::-\nJoin with Google Meet: https://meet.google.com/abc-defg-hij\n\nLearn more about Meet at: https://support.google.com/a/users/answer/9282720\n\nPlease do not edit this section.\n-::~:~::~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~:~::~:~::-
+LOCATION:
+SEQUENCE:0
+STATUS:CONFIRMED
+SUMMARY:Project sync
+TRANSP:OPAQUE
+END:VEVENT
+END:VCALENDAR
+
+--alt--
+
+--mixed
+Content-Type: application/ics; name="invite.ics"
+Content-Disposition: attachment; filename="invite.ics"
+Content-Transfer-Encoding: base64
+
+QkVHSU46VkNBTEVOREFSCkVORDpWQ0FMRU5EQVIK
+
+--mixed--

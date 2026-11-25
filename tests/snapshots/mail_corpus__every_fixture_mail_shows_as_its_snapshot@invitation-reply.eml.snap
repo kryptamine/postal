@@ -1,0 +1,23 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 61
+description: "An answer to the user's own invitation shows as one line naming who answered and how."
+input_file: tests/fixtures/invitation-reply.eml
+---
+── rendered ──
+From    Dan Moss <dan@example.org>  Wed, 2 Dec 2026 11:00
+To      me@example.com
+Subject Accepted: Planning
+
+Dan Moss accepted
+
+Dan Moss has accepted this invitation.
+
+── text ──
+From    Dan Moss <dan@example.org>  Wed, 2 Dec 2026 11:00
+To      me@example.com
+Subject Accepted: Planning
+
+Dan Moss accepted
+
+Dan Moss has accepted this invitation.

@@ -25,6 +25,9 @@ Message inside one, attached or forwarded inline, are left out: none of the
 readers above enters an inner Message. A multipart that lists no boundary cannot
 be put back, so a Message with one is fetched whole as before.
 
+A calendar part (`text/calendar`, or `application/ics`) is kept even when
+it is attached: the Invitation card reads it, and it is a few kilobytes.
+
 ## Considered options
 
 - **`BODY[]` under a size limit.** One command, and nothing to put back;

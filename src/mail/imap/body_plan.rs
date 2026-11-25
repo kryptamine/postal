@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Write};
 
-use async_imap::imap_proto::{BodyStructure, MessageSection, SectionPath};
+use async_imap::imap_proto::{BodyContentCommon, BodyStructure, MessageSection, SectionPath};
 
 use super::attachments::attached;
 
@@ -81,10 +81,14 @@ pub fn key(answered: Option<&SectionPath>) -> Option<String> {
 }
 
 /// The part kept of `structure`, at `path`; `Err` for a multipart without
-/// a boundary. Attachments and parts other than text are left out.
+/// a boundary. Attachments and parts other than text are left out, but for
+/// a calendar part, which the invitation card reads.
 fn node(structure: &BodyStructure<'_>, path: &[u32]) -> Result<Option<Node>, ()> {
     match structure {
-        BodyStructure::Text { common, .. } if !attached(common) => Ok(Some(Node::Text)),
+        BodyStructure::Text { common, .. } if !attached(common) || calendar(common) => {
+            Ok(Some(Node::Text))
+        }
+        BodyStructure::Basic { common, .. } if calendar(common) => Ok(Some(Node::Text)),
         BodyStructure::Multipart { common, bodies, .. } => {
             let boundary = common
                 .ty
@@ -106,6 +110,13 @@ fn node(structure: &BodyStructure<'_>, path: &[u32]) -> Result<Option<Node>, ()>
         }
         _ => Ok(None),
     }
+}
+
+/// `text/calendar`, or `application/ics` as some senders name it.
+fn calendar(common: &BodyContentCommon<'_>) -> bool {
+    let (ty, subtype) = (&common.ty.ty, &common.ty.subtype);
+    (ty.eq_ignore_ascii_case("text") && subtype.eq_ignore_ascii_case("calendar"))
+        || (ty.eq_ignore_ascii_case("application") && subtype.eq_ignore_ascii_case("ics"))
 }
 
 fn push_items(items: &mut String, node: &Node, path: &[u32]) {

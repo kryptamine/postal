@@ -268,3 +268,36 @@ fn a_label_covers_its_link_in_the_rendered_view() {
     browser.wait_for(&[NOTES]);
     quit(t);
 }
+
+const MEET: &str = "https://meet.google.com/abc-defg-hij";
+
+// The link to join by sits in the invitation's calendar part, which the
+// body may not repeat; its line on the card takes a label like the body's.
+#[test]
+fn the_link_to_join_an_invitation_by_opens_from_its_card() {
+    let calendar = format!(
+        "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:sync@example.com\r\n\
+         DTSTART:20241120T140000Z\r\nDTEND:20241120T150000Z\r\nSUMMARY:Sync\r\n\
+         DESCRIPTION:Join with Google Meet: {MEET}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    );
+    let body = FakeBody::multipart(
+        "alternative",
+        vec![
+            FakeBody::plain("Talk soon."),
+            FakeBody::text("calendar", "7bit", calendar),
+        ],
+    );
+    let date = "2024-11-18T09:00:00Z";
+    let invitation = FakeMessage::new("Ada Lovelace", "Invitation: Sync", date).body(body);
+    let (_server, home, browser) = start(vec![invitation]);
+    let mut t = postal(&home, &browser);
+    t.wait_until(|s| s.contains(&format!("Join       {MEET}")) && s.contains("Talk soon."))
+        .unwrap();
+
+    t.send(Key::Char('o')).unwrap();
+    t.wait_until(|s| s.contains(&format!("Join       a{MEET}")))
+        .unwrap();
+    t.send(Key::Char('a')).unwrap();
+    browser.wait_for(&[MEET]);
+    quit(t);
+}

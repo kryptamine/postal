@@ -1,0 +1,29 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 61
+description: "A zone named by neither IANA nor Windows is read from the invitation's own VTIMEZONE, its summer rule in force in July."
+input_file: tests/fixtures/invitation-custom-zone.eml
+---
+── rendered ──
+From    Erin Vale <erin@fabrikam.com>  Tue, 1 Dec 2026 12:00
+To      me@example.com
+Subject Summer planning
+
+Invitation Summer planning
+When       Thu, 15 Jul 2027 08:00–09:00 (10:00–11:00 UTC+02)
+Organizer  Erin Vale <erin@fabrikam.com>
+You        not answered yet
+
+See you in July.
+
+── text ──
+From    Erin Vale <erin@fabrikam.com>  Tue, 1 Dec 2026 12:00
+To      me@example.com
+Subject Summer planning
+
+Invitation Summer planning
+When       Thu, 15 Jul 2027 08:00–09:00 (10:00–11:00 UTC+02)
+Organizer  Erin Vale <erin@fabrikam.com>
+You        not answered yet
+
+See you in July.

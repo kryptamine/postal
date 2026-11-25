@@ -1,0 +1,54 @@
+From: Carol King <carol@icloud.com>
+To: me@example.com
+Subject: Invitation: Dinner
+Date: Tue, 1 Dec 2026 08:00:00 +0000
+X-Postal-Case: An Apple invitation attaches its calendar part; the card still shows, with the answer the invitation already holds for the user.
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mixed"
+
+--mixed
+Content-Type: text/plain; charset="utf-8"
+
+Carol King has invited you to Dinner.
+
+--mixed
+Content-Type: text/calendar; charset="utf-8"; method=REQUEST; name="iCal-20261201.ics"
+Content-Disposition: attachment; filename="iCal-20261201.ics"
+Content-Transfer-Encoding: quoted-printable
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//macOS 15.1//EN
+METHOD:REQUEST
+BEGIN:VTIMEZONE
+TZID:America/New_York
+BEGIN:STANDARD
+DTSTART:20071104T020000
+RRULE:FREQ=3DYEARLY;BYMONTH=3D11;BYDAY=3D1SU
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+TZNAME:EST
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:20070311T020000
+RRULE:FREQ=3DYEARLY;BYMONTH=3D3;BYDAY=3D2SU
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+TZNAME:EDT
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:9C1A2B3C-4D5E-6F70-8192-A3B4C5D6E7F8
+DTSTART;TZID=3DAmerica/New_York:20261205T190000
+DTEND;TZID=3DAmerica/New_York:20261205T213000
+SUMMARY:Dinner
+LOCATION:Pino's\, 12 Main St\, Brooklyn
+ORGANIZER;CN=3D"Carol King":mailto:carol@icloud.com
+ATTENDEE;CN=3D"Carol King";PARTSTAT=3DACCEPTED:mailto:carol@icloud.com
+ATTENDEE;CN=3D"Me";PARTSTAT=3DTENTATIVE;RSVP=3DTRUE:mailto:Me@Example.com
+SEQUENCE:1
+DTSTAMP:20261201T080000Z
+END:VEVENT
+END:VCALENDAR
+
+--mixed--

@@ -1,0 +1,51 @@
+---
+source: tests/mail_corpus.rs
+assertion_line: 61
+description: "An Outlook invitation names its zone the Windows way and puts the Teams link in its description; the card maps the zone and offers the link, as the body has neither the time nor an answer."
+input_file: tests/fixtures/invitation-outlook.eml
+---
+── rendered ──
+From    Bob Stone <bob@contoso.com>  Mon, 30 Nov 2026 18:00
+To      me@example.com
+Subject Quarterly review
+
+Invitation Quarterly review
+When       Tue, 8 Dec 2026 17:00–18:30 (09:00–10:30 America/Los_Angeles)
+Where      Microsoft Teams Meeting
+Join       https://teams.microsoft.com/l/meetup-join/19%3ameeting_NjM2%40thread.
+           v2/0?context=%7b%22Tid%22%3a%22abc%22%7d
+Organizer  Bob Stone <bob@contoso.com>
+You        not answered yet
+
+Let's go over the numbers.
+
+________________________________________________________________________________
+Microsoft Teams Need help?
+Join the meeting now
+<https://teams.microsoft.com/l/meetup-join/19%3ameeting_NjM2%40thread.v2/0?conte
+xt=%7b%22Tid%22%3a%22abc%22%7d>
+Meeting ID: 123 456 789
+________________________________________________________________________________
+
+── text ──
+From    Bob Stone <bob@contoso.com>  Mon, 30 Nov 2026 18:00
+To      me@example.com
+Subject Quarterly review
+
+Invitation Quarterly review
+When       Tue, 8 Dec 2026 17:00–18:30 (09:00–10:30 America/Los_Angeles)
+Where      Microsoft Teams Meeting
+Join       https://teams.microsoft.com/l/meetup-join/19%3ameeting_NjM2%40thread.
+           v2/0?context=%7b%22Tid%22%3a%22abc%22%7d
+Organizer  Bob Stone <bob@contoso.com>
+You        not answered yet
+
+Let's go over the numbers.
+
+________________________________________________________________________________
+Microsoft Teams Need help?
+Join the meeting now
+<https://teams.microsoft.com/l/meetup-join/19%3ameeting_NjM2%40thread.v2/0?conte
+xt=%7b%22Tid%22%3a%22abc%22%7d>
+Meeting ID: 123 456 789
+________________________________________________________________________________

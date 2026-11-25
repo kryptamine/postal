@@ -1,0 +1,31 @@
+From: Dan Moss <dan@example.org>
+To: me@example.com
+Subject: Accepted: Planning
+Date: Wed, 2 Dec 2026 11:00:00 +0000
+X-Postal-Case: An answer to the user's own invitation shows as one line naming who answered and how.
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset="UTF-8"
+
+Dan Moss has accepted this invitation.
+
+--alt
+Content-Type: text/calendar; charset="UTF-8"; method=REPLY
+
+BEGIN:VCALENDAR
+VERSION:2.0
+METHOD:REPLY
+BEGIN:VEVENT
+DTSTART:20261210T100000Z
+DTEND:20261210T110000Z
+DTSTAMP:20261202T110000Z
+ORGANIZER:mailto:me@example.com
+UID:plan-1@example.com
+ATTENDEE;PARTSTAT=ACCEPTED;CN=Dan Moss:mailto:dan@example.org
+SUMMARY:Planning
+END:VEVENT
+END:VCALENDAR
+
+--alt--
