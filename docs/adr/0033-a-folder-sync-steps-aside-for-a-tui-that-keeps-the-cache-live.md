@@ -44,8 +44,22 @@ also takes that release's `sync.lock` in the Cache's directory.
 - **A sync finding the TUI open** answers `open` for each Account, opens no
   connection, and succeeds. The TUI's IDLE keeps the Inbox live (ADR 0008),
   so the Cache is as fresh as a sync would make it.
-- **A TUI started during a sync** waits for it, saying so on stderr before
-  it takes the screen. A sync is bounded by its five minutes per Account.
+- **A TUI started during a sync** waits for it, saying so in a popup. A
+  sync is bounded by its five minutes per Account, and no signal reaches
+  it: it may run inside a long-lived `postal mcp`.
+- **A TUI started while another is open** asks to move the session here.
+  The holder writes its kind, pid and terminal into the lock file, and
+  whether a Send or a program in the foreground is under way. On `y` the
+  new one sends SIGTERM: the old TUI starts no new Send, finishes the one
+  under way for up to 15 s, settles the Cache and quits, naming the
+  terminal it moved to. With the editor or the pager open, its event loop
+  is blocked, so the thread that hears SIGTERM settles the Cache and lets
+  the lock go at once; the program runs on, and the process quits when it
+  ends. One that does not quit within 5 s is offered to be forced out.
+
+Two TUIs at once were weighed against this: they would share the Cache's
+writes, a Folder's sync state among them, and reach for a lock on each.
+A takeover keeps one writer.
 
 This supersedes ADR 0017's "never writes the Cache" for this command alone.
 Every other command still opens the Cache read-only.

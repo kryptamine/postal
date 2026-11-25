@@ -34,8 +34,9 @@ Lowest first:
   reconnecting, the sign-in check, the servers a domain publishes
   (autoconfig, DNS SRV), one Account's two connections
   (`mail::serve`), one sync on demand (`mail::folder_sync`) and the lock
-  it shares with the TUI (`mail::sync_lock`), and what they tell the
-  screen (`Update`, `Status`, `Steering`).
+  it shares with the TUI (`mail::sync_lock`), what a takeover from
+  another terminal waits on and sends (`mail::held`, `mail::handover`),
+  and what they tell the screen (`Update`, `Status`, `Steering`).
 - `ui/`: the TUI. At its root the event loop (`run`) and what it hands
   each reaction (`World`); then `state/` (the Screen, what the panes show,
   the Mode, Toasts, Undo), `input/` (the keymap, a key's `Step`), `react/`
@@ -45,7 +46,8 @@ Lowest first:
   of a Folder), `preview/` (the
   Preview, the Thread, link hints), `drafts/` (composing, the Draft and
   Local Drafts panes), `popup/` (the layers over the screen: help, the
-  Folder Picker, Settings), `widgets/` (small drawing pieces), `outside/`
+  Folder Picker, Settings), `takeover/` (asking a TUI in another terminal
+  to move here, and leaving for one), `widgets/` (small drawing pieces), `outside/`
   (the pager, opening a Message elsewhere, attachments opened or saved, the
   clipboard), `onboarding/`
   and `logging/`.
@@ -53,7 +55,8 @@ Lowest first:
   `folder list` and `sync`, `message list`, `show` and `search`, `thread
   show`, the IDs they hand out, `mcp`, which serves each command as an MCP tool,
   `update` and the releases it reads from GitHub, `setup-mailto`.
-- `app/`: the TUI's run and `postal login`, and `postal <mailto-url>`
+- `app/`: the TUI's run and `postal login`, the thread that hears a
+  takeover's SIGTERM (`app::moved`), and `postal <mailto-url>`
   beside a TUI already open or in the terminal `config.toml` chooses
   (`app::in_terminal`, `app::link_script`): the Accounts signed in, the
   Onboarding when one is not, each Account's connections and the screen

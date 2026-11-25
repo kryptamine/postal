@@ -1,9 +1,16 @@
 use std::error::Error;
 
 use crate::{
-    account::config::Config, account::xdg, compose::accounts::Accounts, compose::draft_file,
-    compose::draft_notes::DraftNotes, compose::editor, compose::mailto::Mailto, compose::notes,
-    domain::per_account::PerAccount, mail::sync_lock::SyncLock,
+    account::config::Config,
+    account::xdg,
+    compose::accounts::Accounts,
+    compose::draft_file,
+    compose::draft_notes::DraftNotes,
+    compose::editor,
+    compose::mailto::Mailto,
+    compose::notes,
+    domain::per_account::PerAccount,
+    mail::sync_lock::{Kind, SyncLock},
 };
 
 /// `postal <link>` with no TUI open: the lock the TUI it starts holds.
@@ -15,7 +22,7 @@ pub struct Linked {
 /// `None` once `link` is composed beside the TUI already open, which holds
 /// the lock (ADR 0033).
 pub fn open(link: Mailto) -> Result<Option<Linked>, Box<dyn Error>> {
-    match SyncLock::try_take()? {
+    match SyncLock::try_take(Kind::Tui)? {
         Some(lock) => Ok(Some(Linked { lock, link })),
         None => compose(&link).map(|()| None),
     }

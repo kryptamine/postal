@@ -7,6 +7,7 @@ use std::{
     net::{Ipv4Addr, TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
+    time::Duration,
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -39,6 +40,9 @@ struct State {
     turned_away: usize,
     /// `STARTTLS` commands, each ending its connection.
     starttls: usize,
+    /// How long the answer to the end of the data waits, the Message
+    /// recorded already.
+    stall: Duration,
 }
 
 pub struct FakeSmtp {
@@ -96,6 +100,12 @@ impl FakeSmtp {
 
     pub fn turned_away(&self) -> usize {
         self.state.lock().unwrap().turned_away
+    }
+
+    /// Holds back the answer to the end of every Message's data for
+    /// `delay` from now on, as a slow server would; it is recorded at once.
+    pub fn stall(&self, delay: Duration) {
+        self.state.lock().unwrap().stall = delay;
     }
 
     pub fn up(&self) {
@@ -180,7 +190,9 @@ fn take(received: Received, state: &Mutex<State>) -> String {
     }
 
     state.received.push(received);
+    let stall = state.stall;
     drop(state);
+    thread::sleep(stall);
     "250 2.0.0 OK queued".to_owned()
 }
 

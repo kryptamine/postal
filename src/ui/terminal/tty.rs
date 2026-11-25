@@ -3,6 +3,7 @@ use std::io;
 use ratatui::{Terminal, layout::Rect};
 
 use crate::{
+    mail::held,
     ui::frame::layout::{self, Panes},
     ui::run::Error,
     ui::state::mode::Mode,
@@ -37,7 +38,9 @@ impl<'a> Tty<'a> {
         // pager's keys; dropping it stops its reader thread.
         self.events.restart();
         terminal_backend::leave(self.terminal).map_err(Error::Terminal)?;
+        let outside = held::Outside::enter();
         let result = program();
+        drop(outside);
         terminal_backend::resume(self.terminal).map_err(Error::Terminal)?;
         if let Err(error) = result {
             tracing::error!("leaving the screen failed: {error}");

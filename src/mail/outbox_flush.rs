@@ -13,6 +13,7 @@ use crate::{
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::thread_id::ThreadId,
+    mail::held,
     mail::imap::MailServer,
     mail::role_folder,
     mail::smtp,
@@ -65,7 +66,8 @@ pub async fn flush(
     for mut queued in queued.into_iter().filter(|queued| sender.sends(queued)) {
         if !queued.sent {
             // A failure that is not a refusal would fail the rest the same way.
-            if unreachable {
+            // A TUI moving to another terminal leaves the rest to the next.
+            if unreachable || held::leaving() {
                 continue;
             }
 
@@ -103,6 +105,7 @@ async fn submit(
     queued: &mut Queued,
     send: &impl Fn(Update),
 ) -> Result<Submitted, Error> {
+    let _sending = held::Sending::start();
     let read = std::fs::read(&queued.path).and_then(|message| {
         let notes = Notes::read(&queued.path)?;
         Ok((message, notes))

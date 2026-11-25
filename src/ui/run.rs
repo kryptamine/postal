@@ -42,6 +42,7 @@ use crate::{
     ui::react::timed::{expire, next_change},
     ui::state::screen::Screen,
     ui::state::ui::Ui,
+    ui::takeover::leaving::Leaving,
     ui::terminal::tty::Tty,
     ui::world::World,
 };
@@ -137,16 +138,13 @@ pub async fn run(
     };
 
     let mut work = std::pin::pin!(background.work.fuse());
-    let mut listening = true;
-    // A frame's allocations count from what triggered it, the input or the
-    // Cache read, to the end of its draw; waiting on input is left out.
-    let mut frame_start = alloc_count::count();
-    frame_start = model.first_frame(frame_start)?;
-    if let Some(link) = background.link {
-        drafting::compose_link(&link, &mut model.tty, &mut model.ui, world)?;
-    }
-
+    let (mut listening, mut leaving) = (true, Leaving::start());
+    let mut frame_start = model.first_frame(background.link)?;
     loop {
+        if leaving.due() {
+            return Ok(Exit::Moved);
+        }
+
         let text = model.frame()?;
         alloc_count::report(frame_start);
         let change = next_change(&mut model.ui, model.previews, text);
@@ -155,6 +153,7 @@ pub async fn run(
                 frame_start = alloc_count::count();
                 expire(&mut model.ui, world)?;
             }
+            () = leaving.woken() => frame_start = alloc_count::count(),
             result = &mut work, if !work.is_terminated() => {
                 frame_start = alloc_count::count();
                 finished(result)?;
@@ -177,13 +176,19 @@ pub async fn run(
 }
 
 impl Model<'_> {
-    /// Draws the first frame from the rows it read, then reads the rest of
-    /// the list; the next frame's allocations count from here.
-    fn first_frame(&mut self, start: u64) -> Result<u64, Error> {
+    /// Draws the first frame from the rows it read, reads the rest of the
+    /// list, then composes `link`'s Draft. A frame's allocations count from
+    /// what triggered it to the end of its draw; the next counts from here.
+    fn first_frame(&mut self, link: Option<Mailto>) -> Result<u64, Error> {
+        let start = alloc_count::count();
         self.draw()?;
         alloc_count::report(start);
         let start = alloc_count::count();
         show(&mut self.ui.view, self.world.caches, None)?;
+        if let Some(link) = link {
+            drafting::compose_link(&link, &mut self.tty, &mut self.ui, self.world)?;
+        }
+
         Ok(start)
     }
 

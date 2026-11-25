@@ -2,6 +2,7 @@ pub mod beside;
 pub mod in_terminal;
 mod link_script;
 pub mod login;
+mod moved;
 mod on_screen;
 mod onboard;
 mod session;
