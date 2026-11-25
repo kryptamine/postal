@@ -70,11 +70,11 @@ pub const HELP: &[Binding] = &[
         modes: DRAFT,
         signed_out: false,
         keys: &[Key::Char("q")],
-        aliases: &[],
-        description: "discard it; u brings it back",
+        aliases: &[Key::Esc],
+        description: "keep it in Local Drafts",
         hint: Some(Hint {
             keys: "q",
-            description: "discard",
+            description: "keep",
         }),
     },
     Binding {
@@ -83,10 +83,10 @@ pub const HELP: &[Binding] = &[
         signed_out: false,
         keys: &[Key::Char("d")],
         aliases: &[],
-        description: "keep it in Local Drafts",
+        description: "discard it; u brings it back",
         hint: Some(Hint {
             keys: "d",
-            description: "keep",
+            description: "discard",
         }),
     },
     Binding {
@@ -209,8 +209,8 @@ const fn draft(key: KeyEvent) -> Option<DraftKey> {
     match key.code {
         KeyCode::Char('y') => Some(DraftKey::Send),
         KeyCode::Char('e') => Some(DraftKey::Edit),
-        KeyCode::Char('d') => Some(DraftKey::Keep),
-        KeyCode::Char('q') => Some(DraftKey::Discard),
+        KeyCode::Char('d') => Some(DraftKey::Discard),
+        KeyCode::Char('q') | KeyCode::Esc => Some(DraftKey::Keep),
         KeyCode::Char('v') => Some(DraftKey::SwitchView),
         KeyCode::Char('?') => Some(DraftKey::Help),
         _ => None,

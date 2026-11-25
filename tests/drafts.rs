@@ -240,8 +240,30 @@ fn backspace_discards_a_draft_in_local_drafts_and_u_brings_it_back() {
     t.wait_until(|s| previewed(s) && s.contains("Café plans"))
         .unwrap();
     assert_eq!(drafts(&home), before);
-    t.send(Key::Char('d')).unwrap();
+    t.send(Key::Char('q')).unwrap();
     t.wait_until(|s| local(s) && s.contains("Café plans") && !previewed(s))
         .unwrap();
+    quit(t);
+}
+
+// Back is `q` or Esc everywhere else, so neither may discard a Draft.
+#[test]
+fn q_and_esc_close_a_draft_opened_from_local_drafts_and_keep_it() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let home = home(&imap, &smtp);
+    let mut t = kept(&home);
+    let before = drafts(&home);
+    open_local(&mut t);
+
+    for back in [Key::Char('q'), Key::Esc] {
+        t.send(Key::Enter).unwrap();
+        t.wait_until(|s| previewed(s) && s.contains("Hi Bob"))
+            .unwrap();
+        t.send(back).unwrap();
+        t.wait_until(|s| local(s) && s.contains("Café plans") && !previewed(s))
+            .unwrap();
+        assert_eq!(drafts(&home), before);
+    }
+
     quit(t);
 }
