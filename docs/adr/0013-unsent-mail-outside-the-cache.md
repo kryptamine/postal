@@ -30,6 +30,17 @@ error kept in the JSON file for Local Drafts to show. A
 the Draft is opened; a `53x` refuses the sign-in, not the Message, and keeps
 it.
 
+A Send is held first, for `send-delay` seconds, its `hold_until` time in the
+JSON file; the sync connection skips it until then and ends its `IDLE` at
+that time to send it. An Undo inside the hold takes the file back to
+`drafts/`. Both sides claim the file by a rename, so one alone wins: the
+sync connection renames `<id>.eml` to `<id>.sending` before it reads it for
+SMTP, and the Undo renames it to `<id>.undone`. An Undo that finds no
+`<id>.eml` lost the race, and the Message is sent. A Send SMTP did not take
+goes back to `<id>.eml`, where an Undo can still reach it; a crash leaves
+`<id>.sending`, which the next sync sends as it would `<id>.eml`. A crash
+inside an Undo can leave `<id>.undone`, which nothing sends.
+
 ## Considered options
 
 - **A table in the Cache.** One store and one transaction, but a rebuilt

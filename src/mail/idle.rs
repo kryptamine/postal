@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
+
 use crate::{
     cache::{Cache, Changes},
     domain::folder::INBOX,
@@ -11,7 +13,7 @@ use crate::{
     mail::queued::{send_changes, send_outbox},
     mail::sequence_numbers::SequenceNumbers,
     mail::snippets,
-    mail::steering::Steering,
+    mail::steering::{Asked, Steering},
     mail::sync::{self, Error},
     mail::tell::Tell,
     mail::thread_fetch,
@@ -87,13 +89,15 @@ pub async fn listen<S: MailServer>(
         }
 
         if pushed.is_empty() {
-            (server, pushed) = idle(server, cache, steering, &mut poll, tell).await?;
+            let held = sender.outbox.next_hold();
+            let wait = poll.wait(&steering.folder, idle_for(held));
+            (server, pushed) = idle(server, cache, steering, wait, tell).await?;
             let Some(more) = steering.take() else {
                 return Ok(());
             };
 
             asked = more;
-            asked.send |= asked.quiet() && sender.outbox.count() > 0;
+            asked.send |= sends(&asked, sender, held);
             continue;
         }
 
@@ -160,22 +164,34 @@ async fn shown(
     }
 }
 
-/// IDLEs on the shown Folder until the server announces a change or the
-/// screen asks; when the Inbox is due a look instead, gives it that and
-/// returns at once, leaving the Inbox open.
+/// Whether the Outbox goes next, after an IDLE that ended on `asked`; a
+/// hold that ran out, `held`, is sent though another ask ended it.
+fn sends(asked: &Asked, sender: Sender<'_>, held: Option<DateTime<Utc>>) -> bool {
+    let due = held.is_some_and(|until| until <= Utc::now());
+    due || (asked.quiet() && sender.outbox.count() > 0)
+}
+
+/// How long one `IDLE` may last: until the Message `held` is due, if sooner.
+fn idle_for(held: Option<DateTime<Utc>>) -> Duration {
+    let left = |until: DateTime<Utc>| (until - Utc::now()).to_std().unwrap_or_default();
+    held.map_or(PERIOD, |until| left(until).min(PERIOD))
+}
+
+/// IDLEs on the shown Folder for `wait` at most, until the server
+/// announces a change or the screen asks; with no `wait`, the Inbox is due
+/// a look instead: gives it that and returns at once, leaving it open.
 async fn idle<S: MailServer>(
     mut server: S,
     cache: &Cache,
     steering: &mut Steering,
-    poll: &mut InboxPoll,
+    wait: Option<Duration>,
     tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<(S, Vec<Pushed>), Error> {
-    if poll.due(&steering.folder) {
+    let Some(period) = wait else {
         poll_inbox(&mut server, cache, tell).await?;
         return Ok((server, Vec::new()));
-    }
+    };
 
-    let period = poll.period(&steering.folder, PERIOD);
     Ok(server.idle(period, steering.asking()).await?)
 }
 

@@ -96,6 +96,7 @@ fn spawn(home: &Home, browser: &Browser, editor: &Editor, args: &[&str]) -> Term
         .env("PATH", browser.path())
         .env("EDITOR", editor.command())
         .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", "0")
         .args(args)
         .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))

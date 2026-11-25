@@ -43,7 +43,7 @@ impl Value {
                 Self::Contacts(ContactsChoice::None),
                 Self::Contacts(ContactsChoice::Macos),
             ],
-            Section::Accounts | Section::Name | Section::Mailto => &[],
+            Section::Accounts | Section::Name | Section::Send | Section::Mailto => &[],
         }
     }
 

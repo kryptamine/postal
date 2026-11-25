@@ -44,6 +44,7 @@ fn postal(home: &Home, keychain_fails: bool) -> Terminal {
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10));
     let builder = if keychain_fails {
         builder.env("POSTAL_KEYCHAIN_FAIL", "locked")
@@ -170,6 +171,28 @@ fn the_name_is_typed_in_place() {
     quit(t);
 }
 
+// The Send tab shows the hold `config.toml` sets, and a typed one replaces it.
+#[test]
+fn the_send_delay_is_shown_and_typed() {
+    let server = inbox();
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, false);
+    settings(&mut t);
+    for _ in 0..4 {
+        t.send(Key::Tab).unwrap();
+    }
+
+    t.wait_until(|s| s.contains("10 seconds")).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.send(Key::Backspace).unwrap();
+    t.send(Key::Backspace).unwrap();
+    t.send_str("3").unwrap();
+    t.send(Key::Enter).unwrap();
+    wait_for(|| config(&home).contains("send-delay = 3"));
+    t.wait_until(|s| s.contains("3 seconds")).unwrap();
+    quit(t);
+}
+
 // A change edits its own key: the user's comments stay where they were.
 #[test]
 fn a_change_keeps_the_comments() {
@@ -225,7 +248,7 @@ fn the_terminal_of_a_mailto_link_is_chosen_or_typed() {
     let before = config(&home);
     let mut t = postal(&home, false);
     settings(&mut t);
-    for _ in 0..4 {
+    for _ in 0..5 {
         t.send(Key::Char('l')).unwrap();
     }
 

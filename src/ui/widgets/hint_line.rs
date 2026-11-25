@@ -58,12 +58,14 @@ impl Widget for HintLine<'_> {
         }
 
         let status = self.status_text();
-        let (right, style) = match self.toast {
-            Some(toast) if toast.error => (&*toast.text, self.theme.error),
-            Some(toast) => (&*toast.text, Style::new()),
-            None if self.status == Status::SignedOut => (status.as_str(), self.theme.error),
-            None if self.status.warns() => (status.as_str(), self.theme.warning),
-            None => (status.as_str(), self.theme.muted),
+        let countdown = self.toast.and_then(|toast| toast.countdown(self.now));
+        let (right, style) = match (self.toast, &countdown) {
+            (Some(_), Some(countdown)) => (countdown.as_str(), Style::new()),
+            (Some(toast), None) if toast.error => (&*toast.text, self.theme.error),
+            (Some(toast), None) => (&*toast.text, Style::new()),
+            (None, _) if self.status == Status::SignedOut => (status.as_str(), self.theme.error),
+            (None, _) if self.status.warns() => (status.as_str(), self.theme.warning),
+            (None, _) => (status.as_str(), self.theme.muted),
         };
 
         let reserved = if right.is_empty() {

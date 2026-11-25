@@ -20,6 +20,7 @@ use crate::{
     ui::state::showing::Showing,
     ui::state::toast::Toast,
     ui::state::ui::Ui,
+    ui::state::undo::Undo,
     ui::world::World,
 };
 
@@ -71,11 +72,13 @@ pub fn apply(
         }
         Update::Unrestored => ui.screen.toast = Some(Toast::error("nothing to undo")),
         Update::Sent => {
+            forget_sent(&mut ui.screen);
             relist_local(&mut ui.screen, outbox);
             ui.screen.outbox = outbox.count();
             ui.screen.toast = Some(Toast::new("Sent"));
         }
         Update::Refused => {
+            forget_sent(&mut ui.screen);
             relist_local(&mut ui.screen, outbox);
             ui.screen.outbox = outbox.count();
             ui.screen.toast = Some(Toast::error("refused · back in Drafts"));
@@ -83,6 +86,14 @@ pub fn apply(
     }
 
     Ok(())
+}
+
+/// Drops the Undo of each Send that left the Outbox: `u` never unsends
+/// what SMTP has, and moves on to the entry before.
+fn forget_sent(screen: &mut Screen) {
+    screen
+        .undo
+        .retain(|undo| !matches!(undo, Undo::Send(path) if !path.exists()));
 }
 
 /// The shown Folder again as the Cache reads it now.

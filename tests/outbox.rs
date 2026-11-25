@@ -1,6 +1,7 @@
 //! `y` moves a Draft to the Outbox, which the sync connection sends: a
 //! Message waits there while the fake SMTP server is down, goes back to the
-//! Drafts when refused, and is never sent twice once accepted.
+//! Drafts when refused, and is never sent twice once accepted. A Send is
+//! held for `send-delay` first, and `u` takes it back inside that window.
 
 #![allow(
     clippy::unwrap_used,
@@ -61,6 +62,11 @@ fn home(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
 }
 
 fn postal(home: &Home, editor: &Editor) -> Terminal {
+    holding(home, editor, "0")
+}
+
+/// Postal with its Sends held for `delay` seconds.
+fn holding(home: &Home, editor: &Editor, delay: &str) -> Terminal {
     Terminal::builder()
         .size(100, 30)
         .env_clear()
@@ -71,6 +77,7 @@ fn postal(home: &Home, editor: &Editor) -> Terminal {
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", editor.command())
         .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", delay)
         .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
@@ -90,7 +97,11 @@ fn listed(screen: &Screen) -> bool {
 
 /// Started on the Message List, a Draft written and `y` sent on its preview.
 fn sent(home: &Home, editor: &Editor) -> Terminal {
-    let mut t = postal(home, editor);
+    send(postal(home, editor))
+}
+
+/// `y` on a Draft written in `t`, started on the Message List.
+fn send(mut t: Terminal) -> Terminal {
     t.wait_until(listed).unwrap();
     t.send(Key::Char('c')).unwrap();
     t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
@@ -234,4 +245,108 @@ fn a_message_smtp_accepted_is_never_sent_again_after_its_copy_fails() {
     assert_eq!(appended.len(), 1);
     assert_eq!(appended[0].0, "Sent");
     assert_eq!(message_id(&appended[0].1), message_id(&received[0].data));
+}
+
+fn held(screen: &Screen) -> bool {
+    screen.contains("u to undo")
+}
+
+#[test]
+fn a_held_message_reaches_smtp_once_its_window_is_over() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let (home, editor) = (home(&imap, &smtp), Editor::new());
+    let mut t = send(holding(&home, &editor, "1.5"));
+    t.wait_until(|s| held(s) && s.contains("sent in ")).unwrap();
+    assert!(smtp.received().is_empty(), "sent inside the window");
+
+    t.wait_until(|s| s.contains("Sent") && !held(s)).unwrap();
+    quit(t);
+    assert_eq!(smtp.received().len(), 1);
+    assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn u_inside_the_window_gives_the_draft_back_and_nothing_is_sent() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let (home, editor) = (home(&imap, &smtp), Editor::new());
+    let mut t = send(holding(&home, &editor, "2"));
+    t.wait_until(held).unwrap();
+    t.send(Key::Char('u')).unwrap();
+    t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
+        .unwrap();
+
+    // Past the window, which a Message left in the Outbox would have left on.
+    std::thread::sleep(Duration::from_millis(2500));
+    assert!(smtp.received().is_empty());
+    assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
+    // One Account and no Reply: the Draft has no notes to give back.
+    let drafts = files(&home.drafts_dir());
+    assert_eq!(drafts.len(), 1, "{drafts:?}");
+    assert_eq!(fs::read_to_string(&drafts[0]).unwrap(), WRITTEN);
+
+    // Taken back, it is a Draft like any other: sent again, it leaves once.
+    t.send(Key::Char('y')).unwrap();
+    t.wait_until(|s| s.contains("Sent") && !held(s)).unwrap();
+    quit(t);
+    assert_eq!(smtp.received().len(), 1);
+}
+
+#[test]
+fn u_after_the_send_leaves_the_outbox_alone() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let (home, editor) = (home(&imap, &smtp), Editor::new());
+    let mut t = send(holding(&home, &editor, "0.3"));
+    t.wait_until(|s| s.contains("Sent") && !held(s)).unwrap();
+    t.send(Key::Char('u')).unwrap();
+    t.wait_until(|s| s.contains("nothing to undo")).unwrap();
+    quit(t);
+
+    assert_eq!(smtp.received().len(), 1);
+    assert_eq!(files(&home.drafts_dir()), Vec::<PathBuf>::new());
+    assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn a_held_message_survives_a_restart_and_is_sent_once() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let (home, editor) = (home(&imap, &smtp), Editor::new());
+    let mut t = send(holding(&home, &editor, "2"));
+    t.wait_until(held).unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    let text = t.screen().text();
+    assert!(text.contains("leaves on the next sync"), "{text}");
+    assert!(smtp.received().is_empty());
+    let id = message_id(&waiting(&home));
+
+    let mut t = holding(&home, &editor, "2");
+    t.wait_until(|s| listed(s) && s.contains("Sent")).unwrap();
+    quit(t);
+    let received = smtp.received();
+    assert_eq!(received.len(), 1);
+    assert_eq!(message_id(&received[0].data), id, "the Message as queued");
+    assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn local_drafts_shows_how_long_a_held_send_has_left() {
+    let (imap, smtp) = (inbox(), FakeSmtp::start());
+    let (home, editor) = (home(&imap, &smtp), Editor::new());
+    let mut t = send(holding(&home, &editor, "8"));
+    t.wait_until(held).unwrap();
+    t.send(Key::Char('f')).unwrap();
+    t.send_str("local").unwrap();
+    t.wait_until(|s| s.contains("Local Drafts")).unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains(" Local Drafts ") && s.contains("Plans") && s.contains(" in "))
+        .unwrap();
+    let row = t.screen().text();
+    let row = row.lines().find(|line| line.contains("Plans")).unwrap();
+    assert!(
+        ["in 8s", "in 7s", "in 6s"]
+            .iter()
+            .any(|left| row.contains(left)),
+        "{row}"
+    );
+    quit(t);
 }

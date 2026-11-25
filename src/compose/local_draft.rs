@@ -1,5 +1,7 @@
 use std::{io, path::PathBuf};
 
+use chrono::{DateTime, Utc};
+
 use crate::{compose::draft, compose::draft_file, compose::notes::Notes, compose::outbox::Outbox};
 
 /// One Draft or Outbox Message as Local Drafts lists it.
@@ -13,6 +15,8 @@ pub struct LocalDraft {
     pub attached: usize,
     /// The address of the Account it goes out from, as its notes name it.
     pub account: Option<String>,
+    /// In the Outbox, the time its Send is held until.
+    pub hold_until: Option<DateTime<Utc>>,
 }
 
 impl LocalDraft {
@@ -21,6 +25,7 @@ impl LocalDraft {
             account,
             path,
             queued,
+            hold_until: None,
             to: draft::header(text, "To").unwrap_or_default(),
             subject: draft::header(text, "Subject").unwrap_or_default(),
             attached: draft::headers(text, "Attach")
@@ -53,7 +58,9 @@ pub fn list(outbox: &Outbox) -> io::Result<Vec<LocalDraft>> {
             Ok(notes) => {
                 let notes = notes.unwrap_or_default();
                 let text = notes.draft.unwrap_or_default();
-                rows.push(LocalDraft::new(queued.path, true, &text, notes.account));
+                let mut row = LocalDraft::new(queued.path, true, &text, notes.account);
+                row.hold_until = notes.hold_until;
+                rows.push(row);
             }
             Err(error) => tracing::warn!("reading {} failed: {error}", queued.path.display()),
         }

@@ -3,6 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use tokio::time::Instant;
+
 use crate::{
     compose::accounts::Accounts,
     compose::awaited_reply::AwaitedReply,
@@ -11,6 +13,7 @@ use crate::{
     compose::editor,
     compose::mailto::Mailto,
     compose::notes::{self, Notes},
+    compose::outbox::Outbox,
     compose::reply_draft,
     domain::message::Message,
     domain::per_account::AccountId,
@@ -298,28 +301,56 @@ pub fn send(screen: &mut Screen, world: World) {
         // gone from the config would leave it in the Outbox.
         account: accounts.noted(account).map(str::to_owned),
         answering: preview.answering.clone(),
-        error: None,
+        ..Notes::default()
     };
 
     let queued = built.and_then(|message| {
         outbox
-            .queue(&preview.path, &message, &notes)
+            .queue(&preview.path, &message, notes)
             .map_err(|error| {
                 tracing::error!("moving the Draft to the Outbox failed: {error}");
                 "could not move the Draft to the Outbox".to_owned()
             })
     });
 
-    if let Err(error) = queued {
-        preview.failure = Some(error);
-        screen.over.open(preview);
-        return;
-    }
+    let path = match queued {
+        Ok(path) => path,
+        Err(error) => {
+            preview.failure = Some(error);
+            screen.over.open(preview);
+            return;
+        }
+    };
 
     screen.outbox = outbox.count();
-    screen.toast = Some(Toast::new("Sending"));
-    // Signed out, the Outbox waits for a sync.
+    let delay = outbox.delay();
+    screen.toast = Some(if delay.is_zero() {
+        Toast::new("Sending")
+    } else {
+        screen.undo.push(Undo::Send(path));
+        Toast::held(Instant::now() + delay)
+    });
+
+    // Signed out, the Outbox waits for a sync. Held, the ask has it wait out the hold.
     world.asks.send(account, Ask::Send);
+}
+
+/// Undo of a Send still held: the Draft back, and its preview again.
+pub fn take_back(screen: &mut Screen, outbox: &Outbox, path: &Path) {
+    match outbox.take_back(path) {
+        Ok(Some(taken)) => {
+            screen.outbox = outbox.count();
+            screen.toast = Some(Toast::new("back in Drafts"));
+            screen
+                .over
+                .open(DraftPreview::new(taken.path, taken.text, taken.notes));
+        }
+        Ok(None) => screen.toast = Some(Toast::new("already sent")),
+        Err(error) => {
+            tracing::error!("taking the Send back failed: {error}");
+            screen.toast = Some(Toast::error("could not take the Send back"));
+        }
+    }
 }
 
 /// Closes the shown Draft's preview, its file kept for Local Drafts.

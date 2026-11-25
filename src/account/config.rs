@@ -1,6 +1,7 @@
 use std::{
     io,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use serde::Deserialize;
@@ -25,7 +26,12 @@ pub struct Config {
     pub icons: IconChoice,
     pub notify: NotifyChoice,
     pub contacts: ContactsChoice,
+    /// How long a Send is held before it leaves, for `u` to take it back.
+    pub send_delay: Duration,
 }
+
+/// `send-delay` when `config.toml` sets none, in seconds.
+pub const SEND_DELAY: u64 = 10;
 
 #[derive(PartialEq, Eq)]
 pub struct Imap {

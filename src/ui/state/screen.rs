@@ -129,13 +129,15 @@ impl Screen {
         }
     }
 
-    /// When the Toast goes, the Status's countdown ticks or the Dwell ends,
-    /// whichever is first; `None` while none will.
+    /// When the Toast goes or counts down, the Status's countdown ticks or
+    /// the Dwell ends, whichever is first; `None` while none will.
     pub fn changes_at(&self, now: Instant) -> Option<Instant> {
         let toast = self.toast.as_ref().map(|toast| toast.until);
+        let countdown = self.toast.as_ref().and_then(|toast| toast.ticks_at(now));
         let contacts = self.contacts_check.due(now);
         [
             toast,
+            countdown,
             self.status().0.ticks_at(now),
             self.dwell.due(),
             contacts,

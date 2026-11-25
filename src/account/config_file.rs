@@ -10,7 +10,8 @@ use toml_edit::{
 use crate::{
     account::atomic_file,
     account::config::{
-        ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SecretStore, Smtp, Terminal,
+        ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY, SecretStore, Smtp,
+        Terminal,
     },
     account::provider::Provider,
 };
@@ -204,6 +205,17 @@ impl ConfigFile {
             root.remove("contacts");
         } else {
             set(root, "contacts", contacts.key().into());
+        }
+    }
+
+    /// `send-delay` in seconds; the default leaves the key out.
+    pub fn set_send_delay(&mut self, seconds: u64) {
+        let root = self.document.as_table_mut();
+        if seconds == SEND_DELAY {
+            root.remove("send-delay");
+        } else {
+            let seconds = i64::try_from(seconds).unwrap_or(i64::MAX);
+            set(root, "send-delay", seconds.into());
         }
     }
 

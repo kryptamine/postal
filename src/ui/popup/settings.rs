@@ -28,6 +28,7 @@ pub enum Row {
     Add,
     Choice(Value),
     Name,
+    SendDelay,
     /// Whether mailto: links open in Postal.
     Handler,
     /// The program a mailto: link runs in place of a terminal.
@@ -62,6 +63,8 @@ pub struct Settings {
     pub icons: IconChoice,
     pub notify: NotifyChoice,
     pub name: Option<String>,
+    /// In seconds.
+    pub send_delay: u64,
     pub secrets: SecretStore,
     pub terminal: Terminal,
     pub contacts: ContactsChoice,
@@ -90,6 +93,7 @@ impl Settings {
             icons: config.icons,
             notify: config.notify,
             name: config.name,
+            send_delay: config.send_delay,
             secrets: config.secrets,
             terminal: config.terminal,
             contacts: config.contacts,
@@ -127,6 +131,7 @@ impl Settings {
         let last = match section {
             Section::Accounts => Some(Row::Add),
             Section::Name => Some(Row::Name),
+            Section::Send => Some(Row::SendDelay),
             Section::Mailto if CHOOSES_TERMINAL => Some(Row::TerminalCommand),
             Section::Icons
             | Section::Notify
@@ -174,6 +179,9 @@ impl Settings {
                         let text = Some(typed.trim().to_owned()).filter(|text| !text.is_empty());
                         match typing {
                             Field::Name => self.change(|settings| settings.rename(text)),
+                            Field::SendDelay => {
+                                self.change(|settings| settings.set_send_delay(text.as_deref()))
+                            }
                             Field::TerminalCommand => {
                                 let terminal =
                                     text.map_or_else(Terminal::default, Terminal::Command);
@@ -237,6 +245,9 @@ impl Settings {
             Row::Add => return Step::AddAccount,
             Row::Name => {
                 self.mode = Mode::Typing(Field::Name, self.name.clone().unwrap_or_default());
+            }
+            Row::SendDelay => {
+                self.mode = Mode::Typing(Field::SendDelay, self.send_delay.to_string());
             }
             Row::TerminalCommand => {
                 let command = match &self.terminal {
@@ -314,6 +325,22 @@ impl Settings {
     fn rename(&mut self, name: Option<String>) -> Result<(), Box<dyn Error>> {
         self.write(|config| config.set_name(name.as_deref()))?;
         self.name = name;
+        self.reload = true;
+        Ok(())
+    }
+
+    /// `typed` whole seconds, or the default for none.
+    fn set_send_delay(&mut self, typed: Option<&str>) -> Result<(), Box<dyn Error>> {
+        let seconds = match typed {
+            Some(typed) => typed
+                .parse()
+                .map_err(|error| format!("the delay is whole seconds: {error}"))?,
+            None => config::SEND_DELAY,
+        };
+
+        self.write(|config| config.set_send_delay(seconds))?;
+        self.send_delay = seconds;
+        // The Outbox holds each Send for the delay it opened with.
         self.reload = true;
         Ok(())
     }

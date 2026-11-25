@@ -105,6 +105,7 @@ fn postal(home: &Home, editor: &str) -> Terminal {
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", editor)
         .env("TZ", "UTC")
+        .env("POSTAL_SEND_DELAY", "0")
         .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()

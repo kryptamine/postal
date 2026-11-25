@@ -1,4 +1,4 @@
-use std::{error::Error, path::Path};
+use std::{error::Error, path::Path, time::Duration};
 
 use futures::TryFutureExt;
 
@@ -48,7 +48,11 @@ pub async fn session(
     let emails = configs.map(|config| config.email.as_str());
     let caches = Cache::open(&xdg::cache_dir()?, &emails)?;
     // Without one, Compose says so when it is used.
-    let outbox = Outbox::new(xdg::data_dir().ok());
+    let delay = configs
+        .values()
+        .next()
+        .map_or(Duration::ZERO, |c| c.send_delay);
+    let outbox = Outbox::new(xdg::data_dir().ok(), delay);
     let (sender, updates) = futures::channel::mpsc::unbounded();
     let (mut asks, mut requests, mut works) = (Vec::new(), Vec::new(), Vec::new());
     for (account, config) in configs.iter() {

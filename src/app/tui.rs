@@ -1,4 +1,4 @@
-use std::{error::Error, path::Path};
+use std::{error::Error, path::Path, time::Duration};
 
 use crate::{
     account::unlink,
@@ -11,6 +11,7 @@ use crate::{
     app::signed_in::opened,
     cache,
     compose::forwarded,
+    compose::outbox::Outbox,
     mail::held,
     mail::sync_lock::{Kind, SyncLock},
     ui::attachment_file,
@@ -23,10 +24,6 @@ use crate::{
 /// The TUI, left for the Onboarding on `L` or from Settings, and opened
 /// again after it; after Settings, with the Accounts the config names now.
 /// A `linked` one opens the link's Draft once it starts.
-#[expect(
-    clippy::print_stderr,
-    reason = "the screen is handed back, so stderr reaches the user"
-)]
 pub fn run(linked: Option<Linked>) -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_dir()?;
     let (lock, mut link) = match linked {
@@ -88,11 +85,25 @@ pub fn run(linked: Option<Linked>) -> Result<(), Box<dyn Error>> {
         }
     })?;
 
+    farewell(moved);
+    Ok(())
+}
+
+/// What the terminal is told once the screen is handed back: where the
+/// TUI moved, or that a Send still held waits for a sync.
+#[expect(
+    clippy::print_stderr,
+    reason = "the screen is handed back, so stderr reaches the user"
+)]
+fn farewell(moved: bool) {
     if moved {
         eprintln!("{}", moved::line());
+    } else if Outbox::new(xdg::data_dir().ok(), Duration::ZERO)
+        .next_hold()
+        .is_some()
+    {
+        eprintln!("postal: a held Send stays in the Outbox and leaves on the next sync");
     }
-
-    Ok(())
 }
 
 /// The lock: `lock`, else whatever holds it gives it up, as the user says.

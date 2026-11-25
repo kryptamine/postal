@@ -80,7 +80,7 @@ impl Status {
 }
 
 /// Whole seconds until `retry`, rounded up.
-fn seconds_left(retry: Instant, now: Instant) -> u64 {
+pub fn seconds_left(retry: Instant, now: Instant) -> u64 {
     let left = retry.saturating_duration_since(now);
     left.as_secs() + u64::from(left.subsec_nanos() > 0)
 }

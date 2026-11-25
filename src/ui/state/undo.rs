@@ -12,4 +12,6 @@ pub enum Undo {
     /// A discarded Draft: its file, what the file held, the address it goes
     /// out from and what it answers.
     Discard(PathBuf, String, DraftNotes),
+    /// A Send held in the Outbox, at this path while it waits.
+    Send(PathBuf),
 }
