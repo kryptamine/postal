@@ -21,6 +21,7 @@ use crate::{
     mail::status::Status,
     mail::steering::Ask,
     ui::drafts::draft_preview::DraftPreview,
+    ui::drafts::local_list::relist_local,
     ui::run::Error,
     ui::state::screen::Screen,
     ui::state::toast::Toast,
@@ -340,6 +341,7 @@ pub fn take_back(screen: &mut Screen, outbox: &Outbox, path: &Path) {
     match outbox.take_back(path) {
         Ok(Some(taken)) => {
             screen.outbox = outbox.count();
+            relist_local(screen, outbox);
             screen.toast = Some(Toast::new("back in Drafts"));
             screen
                 .over

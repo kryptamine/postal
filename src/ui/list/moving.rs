@@ -5,9 +5,8 @@ use crate::{
     domain::message::Message,
     domain::message_ref::MessageRef,
     domain::per_account::AccountId,
+    domain::thread::Key,
     mail::steering::Ask,
-    ui::drafts::composing,
-    ui::drafts::local_list::relist_local,
     ui::list::folder_show::{folders, relist, show},
     ui::list::per_account::per_account,
     ui::popup::folder_picker::FolderPicker,
@@ -146,38 +145,27 @@ fn shown<'a>(
     (!messages.is_empty()).then_some((account, messages))
 }
 
-/// Undo of the latest move not yet taken back, selecting its Thread, of
-/// the latest Draft discarded or of a Send still held, showing the Draft.
-pub fn undo(ui: &mut Ui, world: World) -> Result<(), Error> {
+/// Undo of a move: each Account's `batches` back where they were, the
+/// Thread `thread` selected.
+pub fn undo(
+    ui: &mut Ui,
+    world: World,
+    batches: Vec<(AccountId, i64)>,
+    thread: Option<Key>,
+) -> Result<(), Error> {
     let (caches, Ui { view, screen }) = (world.caches, &mut *ui);
-    let folders = match screen.undo.pop() {
-        Some(Undo::Discard(path, text, notes)) => {
-            composing::restore(screen, path, text, notes);
-            return Ok(());
+    let mut restored = Vec::new();
+    for (account, batch) in batches {
+        let folders = caches[account].undo(batch)?;
+        if !folders.is_empty() {
+            restored.push((account, folders));
         }
-        Some(Undo::Send(path)) => {
-            composing::take_back(screen, world.outbox, &path);
-            relist_local(screen, world.outbox);
-            return Ok(());
-        }
-        Some(Undo::Move(batches, thread)) => {
-            let mut restored = Vec::new();
-            for (account, batch) in batches {
-                let folders = caches[account].undo(batch)?;
-                if !folders.is_empty() {
-                    restored.push((account, folders));
-                }
-            }
+    }
 
-            (!restored.is_empty()).then_some((restored, thread))
-        }
-        None => None,
-    };
-
-    let Some((restored, thread)) = folders else {
+    if restored.is_empty() {
         screen.toast = Some(Toast::new("nothing to undo"));
         return Ok(());
-    };
+    }
 
     show(view, caches, None)?;
     screen.over.close::<LinkHints>();
