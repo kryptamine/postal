@@ -7,6 +7,22 @@ local tools = require("postal.tools")
 
 local M = {}
 
+local REVIEWING = "Your last edit is still under the user's review: the text below shows it, "
+	.. "the hunks the user has not decided yet included. A new write replaces that review."
+
+-- A turn over a text the agent writes, given by `scheme`: the text as it
+-- stands, and the one a write is reviewed against, an open review's
+-- undecided hunks rejected.
+local function editing(scheme)
+	return function(chat)
+		chat.proposed = nil
+		chat.sent = chat.review and chat.review:base() or body.get(chat.mail)
+		local blocks = chat.review and { { type = "text", text = REVIEWING } } or {}
+		table.insert(blocks, chat:resource(scheme .. chat.path, body.get(chat.mail)))
+		return blocks
+	end
+end
+
 M.draft = {
 	rules = [[
 You are helping the user write the email Draft open in their editor.
@@ -26,12 +42,7 @@ You are helping the user write the email Draft open in their editor.
 	context = function()
 		return {}
 	end,
-	-- The body as it stands, which a write of the agent's is reviewed against.
-	turn = function(chat)
-		chat.sent = body.get(chat.mail)
-		chat.proposed = nil
-		return { chat:resource("postal-draft://" .. chat.path, chat.sent) }
-	end,
+	turn = editing("postal-draft://"),
 }
 
 M.signature = {
@@ -47,11 +58,7 @@ You are helping the user write the signature their email account ends its messag
 	context = function()
 		return {}
 	end,
-	turn = function(chat)
-		chat.sent = body.get(chat.mail)
-		chat.proposed = nil
-		return { chat:resource("postal-signature://" .. chat.path, chat.sent) }
-	end,
+	turn = editing("postal-signature://"),
 }
 
 M.message = {

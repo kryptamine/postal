@@ -62,7 +62,8 @@ In the chat pane, send with `<CR>` or `<C-s>`; `q` stops the agent's turn,
 chat, `?` lists the keys. The agent reaches only the text, through an MCP
 server the plugin hands it: no headers, no commands, no
 sending. It writes in the language of the correspondence. Its edit
-lands in the buffer for review:
+lands in the buffer for review; keep chatting to ask for another take,
+and the next edit replaces the review:
 
 | key         | does                             |
 | ----------- | -------------------------------- |

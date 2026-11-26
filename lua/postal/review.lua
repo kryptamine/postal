@@ -251,6 +251,23 @@ function Review:settle(accept, quiet)
 	end
 end
 
+--- The body with every hunk left rejected: a conflict already shows the
+--- user's lines, every other hunk gives back the ones it replaced.
+function Review:base()
+	local first = body.start(self.draft)
+	local lines = vim.api.nvim_buf_get_lines(self.draft, first, -1, false)
+	for n = #self.hunks, 1, -1 do
+		local hunk = self.hunks[n]
+		if not hunk.conflict then
+			local row, count = self:range(hunk)
+			local rest = vim.list_slice(lines, row - first + count + 1)
+			lines = vim.list_extend(vim.list_extend(vim.list_slice(lines, 1, row - first), hunk.old), rest)
+		end
+	end
+
+	return body.join(lines)
+end
+
 --- How many hunks are left, and how to decide them.
 function Review:summary()
 	local conflicts = #vim.tbl_filter(function(hunk)
