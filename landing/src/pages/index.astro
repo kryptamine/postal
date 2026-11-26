@@ -23,16 +23,34 @@ const also = [
   ['All inboxes', 'The inboxes of all your accounts in one list, newest first.'],
   ['Undo', 'u undoes a delete, an archive, a move or a discarded draft.'],
   [
+    'Undo send',
+    'A sent message waits ten seconds in the outbox, and u takes it back to your drafts.',
+  ],
+  [
+    'Meeting invitations',
+    'An invitation shows as a card: when, in your time zone and the event’s, where, and the link to join.',
+  ],
+  [
+    'Open in the browser',
+    'B opens an HTML mail in your browser, to see it exactly as it was sent.',
+  ],
+  ['Check now', '^r fetches new mail on every account at once, without waiting for the server.'],
+  [
     'Act on several at once',
     'J and K pick a run of threads to delete, archive or move together. One u brings them all back.',
   ],
   ['Archive and move', 'e archives a message. m moves it to a folder you find by typing.'],
   ['Attachments', 'Open or save an attachment by typing its label, no mouse needed.'],
   ['Notifications', 'A desktop notification for new mail while the terminal is in the background.'],
+  [
+    'Mail links',
+    'postal setup-mailto makes Postal the handler of mailto: links: a click in the browser opens a new draft in a terminal.',
+  ],
+  ['One window', 'Start Postal in another terminal, and it offers to move the open session there.'],
   ['Works offline', 'Your mail loads from the local cache before the server answers.'],
   [
     'Mail for your agents',
-    'postal mcp serves your cached mail to any MCP client, read-only: folders, threads, messages and search.',
+    'postal mcp serves your cached mail to any MCP client: folders, threads, messages, search and a sync. It never sends, moves or deletes. The same tools are shell commands, with --json.',
   ],
 ];
 
@@ -158,6 +176,10 @@ const providers = [
           image shows as its name.
         </span>
       </li>
+      <li>
+        <kbd>B</kbd>
+        <span>opens the mail in your browser, images and all, when you choose to see it.</span>
+      </li>
     </ul>
   </section>
 
@@ -214,12 +236,17 @@ const providers = [
       keys={[
         ['c', 'write a new message'],
         ['r', 'reply'],
+        ['u', 'take back a message in the seconds after you send it'],
       ]}
     >
       <p>
         A new message opens in <code>$EDITOR</code> as plain text: <code>To</code>, <code>Cc</code>,{' '}
         <code>Subject</code> and <code>Attach</code> lines, then the body. Addresses complete from
-        the people you have exchanged mail with.
+        the people you have exchanged mail with, and on macOS from your Contacts too.
+      </p>
+      <p>
+        Write the body in Markdown if you like: Postal sends its HTML beside the plain text, so
+        lists, links and code read well in any client.
       </p>
       <p>
         Sent mail goes through an outbox that keeps retrying until the server accepts it. A draft
@@ -235,9 +262,14 @@ const providers = [
       shows="The agent pane next to a draft, with an edit reviewed hunk by hunk"
     >
       <p>
-        The Neovim plugin completes addresses as you type. It can also open a chat pane with an
-        agent you already use, connected over the Agent Client Protocol. Ask it about the message
-        you are reading, or let it edit your draft and review each change hunk by hunk.
+        The Neovim plugin completes addresses as you type, warns of a draft with no recipient or
+        subject, or one that mentions an attachment it lacks, and sends it with
+        <code>:PostalSend</code> without leaving the editor.
+      </p>
+      <p>
+        It can also open a chat pane with an agent you already use, connected over the Agent Client
+        Protocol. Ask it about the message you are reading, or let it edit your draft and review
+        each change hunk by hunk.
       </p>
       <p>
         Postal does not include an agent. You bring your own, and it sees a message only when you
@@ -302,7 +334,8 @@ const providers = [
           <strong>No telemetry</strong>, analytics or crash reports. The log is a file on your disk.
         </li>
         <li>
-          <strong>No images</strong> are downloaded, so tracking pixels never load.
+          <strong>No images</strong> are downloaded, so tracking pixels never load, unless you open
+          a mail in your browser with <kbd>B</kbd>.
         </li>
       </ul>
     </div>
