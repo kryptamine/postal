@@ -60,15 +60,26 @@ fn v_switches_between_the_rendered_and_the_text_view() {
     quit(t);
 }
 
-// A rule is one line: four borders a cell thick drew an empty box instead.
+// A rule is one line: four borders a cell thick drew an empty box instead,
+// whether written as `<hr>` or an empty bordered `<div>`.
 #[test]
 fn a_rule_is_one_line() {
-    let screen = preview(html("<p>Above</p><hr><p>Below</p>"), &DEFAULT, "Below");
+    let body = html(
+        "<p>Above</p><hr><p>Middle</p>\
+         <div style=\"border:1px solid #dadce0;margin:16px 0\"></div><p>Below</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
-    assert_eq!(row("Below") - row("Above"), 4, "{}", rows.join("\n"));
+    assert_eq!(row("Middle") - row("Above"), 4, "{}", rows.join("\n"));
+    assert_eq!(row("Below") - row("Middle"), 4, "{}", rows.join("\n"));
     assert!(
         rows[row("Above") + 2].contains("────"),
+        "{}",
+        rows.join("\n")
+    );
+    assert!(
+        rows[row("Middle") + 2].contains("────"),
         "{}",
         rows.join("\n")
     );
