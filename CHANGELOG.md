@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/kryptamine/postal/compare/v0.7.0...v0.8.0) (2026-11-26)
+
+
+### Features
+
+* **nvim:** diagnose a Draft to nobody or with no Subject ([871c939](https://github.com/kryptamine/postal/commit/871c9399634f5bb523d40a4f27c0a0a2fc8c92af))
+* **ui:** open a Message in the browser with B ([2dfb2ce](https://github.com/kryptamine/postal/commit/2dfb2ce6915dd5c7525d17fcbfe6c0dbe7e75b44)), closes [#228](https://github.com/kryptamine/postal/issues/228)
+
+
+### Bug Fixes
+
+* **nvim:** fold a reply's Quote before its first draw ([bcb0db3](https://github.com/kryptamine/postal/commit/bcb0db32185e9bb295ba90656c0098153e9b0329))
+
 ## [0.7.0](https://github.com/kryptamine/postal/compare/v0.6.0...v0.7.0) (2026-11-25)
 
 
