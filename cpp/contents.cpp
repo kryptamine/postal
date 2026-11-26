@@ -57,7 +57,7 @@ const Holds& Contents::of(const element* el) const
 Holds Contents::gather(const element::ptr& el)
 {
     Holds h;
-    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return holds[el.get()] = h;
+    if(unseen(el)) return holds[el.get()] = h;
     if(el->is_text())
     {
         std::string raw;

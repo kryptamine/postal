@@ -31,7 +31,7 @@ impl Looks {
             .cells()
             .iter()
             .zip(outlines)
-            .filter(|&(cell, &outline)| worded(cell) && fill(cell, outline, colours).is_none())
+            .filter(|&(cell, &outline)| on_terminal(cell, outline, colours))
             .filter_map(|(cell, _)| Some((cell.fg()?, under(cell))));
         let palette = Palette::new(on_terminal);
         let inline_links = inline_ink_links(grid, outlines, colours, &palette);
@@ -67,9 +67,8 @@ impl Looks {
             return (Marks::ALT.with(Marks::EMPHASIS), Paint { fg: None, bg });
         }
 
-        let auto_underline = cell.link() != 0 && self.inline_links.contains(&cell.link());
         let underline = (
-            cell.has(cell_grid::UNDERLINE) || auto_underline,
+            cell.has(cell_grid::UNDERLINE) || self.inline_links.contains(&cell.link()),
             Marks::UNDERLINE,
         );
         if cell.glyph() == " " && !underline.0 {
@@ -128,14 +127,10 @@ fn inline_ink_links(
     colours: MailColours,
     palette: &Palette,
 ) -> HashSet<u32> {
-    struct Info {
-        row: usize,
-        ok: bool,
-    }
-
     let cols = usize::from(grid.cols().max(1));
     let mut row_has_prose = vec![false; grid.cells().len().div_ceil(cols)];
-    let mut links: HashMap<u32, Info> = HashMap::new();
+    // Each link's one row, or `None` once it fails a test.
+    let mut links: HashMap<u32, Option<usize>> = HashMap::new();
     for (row_idx, (row, row_outlines)) in grid.rows().zip(outlines.chunks(cols)).enumerate() {
         for (cell, &outline) in row.iter().zip(row_outlines) {
             if !worded(cell) {
@@ -151,25 +146,21 @@ fn inline_ink_links(
                 continue;
             }
 
-            let plain_ink = fill(cell, outline, colours).is_none()
+            let plain_ink = on_terminal(cell, outline, colours)
                 && !cell.has(cell_grid::TITLE | cell_grid::SMALL)
                 && cell
                     .fg()
                     .is_some_and(|fg| matches!(palette.role(fg, under(cell)), Role::Ink));
-            let entry = links.entry(id).or_insert(Info {
-                row: row_idx,
-                ok: true,
-            });
-            if entry.row != row_idx || !plain_ink {
-                entry.ok = false;
+            let entry = links.entry(id).or_insert(Some(row_idx));
+            if *entry != Some(row_idx) || !plain_ink {
+                *entry = None;
             }
         }
     }
 
     links
         .into_iter()
-        .filter(|(_, info)| info.ok && row_has_prose[info.row])
-        .map(|(id, _)| id)
+        .filter_map(|(id, row)| row.filter(|&row| row_has_prose[row]).map(|_| id))
         .collect()
 }
 
@@ -178,6 +169,11 @@ fn worded(cell: &Cell) -> bool {
     cell.has(cell_grid::TEXT)
         && !cell.has(cell_grid::BORDER | cell_grid::ALT | cell_grid::WIDE_TAIL)
         && cell.glyph() != " "
+}
+
+/// Text the terminal's background shows through: no fill is left under it.
+fn on_terminal(cell: &Cell, outline: Outline, colours: MailColours) -> bool {
+    worded(cell) && fill(cell, outline, colours).is_none()
 }
 
 /// The fill left under `cell`, moved onto the terminal's background.

@@ -28,6 +28,11 @@ uint32_t blend(uint32_t under, uint32_t over, float a)
     return 0x01000000u | (r << 16) | (g << 8) | b;
 }
 
+uint32_t over(uint32_t under, const litehtml::web_color& c)
+{
+    return c.alpha == 255 ? rgb(c) : blend(under, rgb(c), float(c.alpha) / 255.f);
+}
+
 bool page_light(uint32_t c)
 {
     auto lin = [](uint32_t v) {

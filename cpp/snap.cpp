@@ -14,11 +14,6 @@ namespace cg
 {
 namespace
 {
-bool shown(const css_border& b)
-{
-    return b.width.val() > 0 && b.style != border_style_none && b.style != border_style_hidden;
-}
-
 void hide(css_border& b)
 {
     b.style = border_style_none;
@@ -38,7 +33,7 @@ bool empty_block(const element::ptr& el)
 {
     for(auto& child : el->children())
     {
-        if(child->is_comment() || child->css().get_display() == display_none || text_hidden(child)) continue;
+        if(unseen(child)) continue;
         if(child->is_text())
         {
             std::string text;
@@ -71,9 +66,7 @@ void hide_unseen(css_borders& b, uint32_t fill)
     for(css_border* e : {&b.top, &b.bottom, &b.left, &b.right})
     {
         if(!shown(*e)) continue;
-        uint32_t colour =
-            e->color.alpha == 255 ? rgb(e->color) : blend(fill, rgb(e->color), float(e->color.alpha) / 255.f);
-        if(e->color.alpha < 13 || (!fill_may_go && alike(colour, fill))) hide(*e);
+        if(e->color.alpha < 13 || (!fill_may_go && alike(over(fill, e->color), fill))) hide(*e);
     }
 }
 

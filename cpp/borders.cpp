@@ -1,11 +1,13 @@
 #include "borders.h"
 
 #include "colour.h"
-#include "geometry.h"
+#include "dom.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 using namespace litehtml;
 
@@ -13,9 +15,6 @@ namespace cg
 {
 namespace
 {
-// A corner rounded this much or more is drawn round, as `╭`.
-const float ROUND_PX = 4;
-
 enum Dir : uint8_t
 {
     DIR_UP = 1,
@@ -38,12 +37,16 @@ struct Edge
     Stroke stroke = Stroke::solid;
 };
 
-bool is_round(pixel_t x, pixel_t y) { return float(x) >= ROUND_PX && float(y) >= ROUND_PX; }
-
-bool shown(const border& e)
+// One side of a frame: the cells `from` to `to` along row (or column) `at`.
+// At an end another side meets, the line turns into a corner.
+struct Side
 {
-    return float(e.width) > 0.f && e.style != border_style_none && e.style != border_style_hidden;
-}
+    const border& b;
+    bool across;
+    int at, from, to;
+    bool met_from, met_to;
+    bool round_from, round_to;
+};
 
 Stroke stroke_of(border_style s)
 {
@@ -54,11 +57,7 @@ Stroke stroke_of(border_style s)
 
 bool inside_clips(int row, int col, const std::vector<position>& clips)
 {
-    float x = (float(col) + 0.5f) * CW, y = (float(row) + 0.5f) * CH;
-    return std::all_of(clips.begin(), clips.end(), [x, y](const position& p) {
-        float px = p.x, py = p.y, pw = p.width, ph = p.height;
-        return x >= px && x < px + pw && y >= py && y < py + ph;
-    });
+    return std::all_of(clips.begin(), clips.end(), [row, col](const position& p) { return centre_in(row, col, p); });
 }
 
 bool row_has_text(const Grid& grid, int row, int c0, int c1)
@@ -73,27 +72,40 @@ bool row_has_text(const Grid& grid, int row, int c0, int c1)
     return false;
 }
 
-void set_glyph(cg_cell& c, const char* g)
+// A horizontal edge on a row of text moves one row out, to `out`, or drops
+// when that row has text too.
+void step_off_text(const Grid& grid, bool& on, int& row, int out, int c0, int c1, bool left, bool right)
 {
-    size_t n = std::min(std::strlen(g), sizeof c.glyph - 1);
-    std::memcpy(c.glyph, g, n);
-    c.glyph[n] = 0;
+    if(!on || !row_has_text(grid, row, c0 + left, c1 - right)) return;
+    if(row_has_text(grid, out, c0, c1)) on = false;
+    else row = out;
 }
 
-void mark(Grid& grid, std::vector<Edge>& edges, int row, int col, uint8_t dirs, const border& b, uint32_t flags,
-          const std::vector<position>& clips, bool round = false)
+void mark(Grid& grid, std::vector<Edge>& edges, int row, int col, uint8_t dirs, bool round, const border& b,
+          uint32_t flags, const std::vector<position>& clips)
 {
     cg_cell* c = grid.at(row, col);
-    if(!c || (c->flags & CG_TEXT) || !inside_clips(row, col, clips)) return;
+    // `at` grows the grid down to a border stepped below the last row.
     if(edges.size() < grid.drawn.size()) edges.resize(grid.drawn.size());
-    size_t idx = size_t(row) * size_t(grid.cols) + size_t(col);
-    Edge& edge = edges[idx];
+    if(!c || (c->flags & CG_TEXT) || !inside_clips(row, col, clips)) return;
+    Edge& edge = edges[size_t(row) * size_t(grid.cols) + size_t(col)];
     edge.dirs |= dirs;
-    if(round) edge.round = true;
+    edge.round = edge.round || round;
     if(edge.stroke == Stroke::solid) edge.stroke = stroke_of(b.style);
-    c->fg = b.color.alpha == 255 ? rgb(b.color) : blend(c->bg, rgb(b.color), float(b.color.alpha) / 255.f);
+    c->fg = over(c->bg, b.color);
     // An inner border overlapping the page box keeps the inner one visible.
     c->flags = (c->flags & CG_BORDER) ? (c->flags & flags) : flags;
+}
+
+void draw_side(Grid& grid, std::vector<Edge>& edges, const Side& s, uint32_t flags, const std::vector<position>& clips)
+{
+    uint8_t back = s.across ? DIR_LEFT : DIR_UP, ahead = s.across ? DIR_RIGHT : DIR_DOWN;
+    for(int i = s.from; i <= s.to; i++)
+    {
+        auto dirs = uint8_t((i > s.from || !s.met_from ? back : 0) | (i < s.to || !s.met_to ? ahead : 0));
+        bool round = (i == s.from && s.met_from && s.round_from) || (i == s.to && s.met_to && s.round_to);
+        mark(grid, edges, s.across ? s.at : i, s.across ? i : s.at, dirs, round, s.b, flags, clips);
+    }
 }
 
 bool joins(const cg_cell& a, const cg_cell& b)
@@ -101,6 +113,35 @@ bool joins(const cg_cell& a, const cg_cell& b)
     if(!(a.flags & CG_BORDER) || !(b.flags & CG_BORDER)) return false;
     if((a.flags & CG_PAGE_BOX) || (b.flags & CG_PAGE_BOX)) return false;
     return alike(a.fg, b.fg) || (grey(a.fg) && grey(b.fg));
+}
+
+// Connects borders whose lines touch in adjacent cells into T-junctions.
+void join_touching(const Grid& grid, std::vector<Edge>& edges)
+{
+    const std::vector<Edge> orig = edges;
+    int rows = grid.rows(), cols = grid.cols;
+    auto stride = size_t(cols);
+    for(int r = 0; r < rows; r++)
+        for(int c = 0; c < cols; c++)
+        {
+            size_t i = size_t(r) * stride + size_t(c);
+            uint8_t d = orig[i].dirs;
+            if(!d || (grid.drawn[i].flags & CG_PAGE_BOX)) continue;
+            auto link = [&](bool there, size_t j, uint8_t facing, uint8_t dir) {
+                if(there && (orig[j].dirs & facing) && joins(grid.drawn[i], grid.drawn[j])) edges[i].dirs |= dir;
+            };
+            if(d & (DIR_UP | DIR_DOWN))
+            {
+                link(c + 1 < cols, i + 1, DIR_LEFT, DIR_RIGHT);
+                link(c > 0, i - 1, DIR_RIGHT, DIR_LEFT);
+            }
+
+            if(d & (DIR_LEFT | DIR_RIGHT))
+            {
+                link(r + 1 < rows, i + stride, DIR_UP, DIR_DOWN);
+                link(r > 0, i - stride, DIR_DOWN, DIR_UP);
+            }
+        }
 }
 
 const char* glyph_for(const Edge& e)
@@ -139,105 +180,37 @@ const char* glyph_for(const Edge& e)
 }
 } // namespace
 
-void apply_borders(Grid& grid, const std::vector<Frame>& frames, const Box& mail, bool& lost_border)
+bool apply_borders(Grid& grid, const std::vector<Frame>& frames, const Box& mail)
 {
+    bool lost = false;
     std::vector<Edge> edges(grid.drawn.size());
     for(const auto& f : frames)
     {
         auto [r0, r1, c0, c1] = f.box;
         bool top = shown(f.b.top), bottom = shown(f.b.bottom), left = shown(f.b.left), right = shown(f.b.right);
-        lost_border = lost_border || (left && c0 < 0) || (right && c1 >= grid.cols);
+        lost = lost || (left && c0 < 0) || (right && c1 >= grid.cols);
         bool page = top && bottom && left && right && f.box.holds(mail);
         uint32_t flags = page ? CG_BORDER | CG_PAGE_BOX : CG_BORDER;
         int tr = r0, br = r1;
-        // A horizontal edge on a row of text moves one row out, or drops.
-        if(top && row_has_text(grid, tr, c0 + left, c1 - right))
-        {
-            tr = r0 - 1;
-            if(row_has_text(grid, tr, c0, c1))
-            {
-                top = false;
-                tr = r0;
-            }
-        }
-
-        if(bottom && row_has_text(grid, br, c0 + left, c1 - right))
-        {
-            br = r1 + 1;
-            if(row_has_text(grid, br, c0, c1))
-            {
-                bottom = false;
-                br = r1;
-            }
-        }
-
+        step_off_text(grid, top, tr, r0 - 1, c0, c1, left, right);
+        step_off_text(grid, bottom, br, r1 + 1, c0, c1, left, right);
         const border_radiuses& rad = f.b.radius;
-        if(top)
-            for(int c = c0; c <= c1; c++)
-            {
-                auto d = uint8_t((c > c0 || !left ? DIR_LEFT : 0) | (c < c1 || !right ? DIR_RIGHT : 0));
-                bool r = (c == c0 && left && is_round(rad.top_left_x, rad.top_left_y)) ||
-                         (c == c1 && right && is_round(rad.top_right_x, rad.top_right_y));
-                mark(grid, edges, tr, c, d, f.b.top, flags, f.clips, r);
-            }
-
-        if(bottom)
-            for(int c = c0; c <= c1; c++)
-            {
-                auto d = uint8_t((c > c0 || !left ? DIR_LEFT : 0) | (c < c1 || !right ? DIR_RIGHT : 0));
-                bool r = (c == c0 && left && is_round(rad.bottom_left_x, rad.bottom_left_y)) ||
-                         (c == c1 && right && is_round(rad.bottom_right_x, rad.bottom_right_y));
-                mark(grid, edges, br, c, d, f.b.bottom, flags, f.clips, r);
-            }
-
-        if(left)
-            for(int r = tr; r <= br; r++)
-            {
-                auto d = uint8_t((r > tr || !top ? DIR_UP : 0) | (r < br || !bottom ? DIR_DOWN : 0));
-                bool r_corner = (r == tr && top && is_round(rad.top_left_x, rad.top_left_y)) ||
-                                (r == br && bottom && is_round(rad.bottom_left_x, rad.bottom_left_y));
-                mark(grid, edges, r, c0, d, f.b.left, flags, f.clips, r_corner);
-            }
-
-        if(right)
-            for(int r = tr; r <= br; r++)
-            {
-                auto d = uint8_t((r > tr || !top ? DIR_UP : 0) | (r < br || !bottom ? DIR_DOWN : 0));
-                bool r_corner = (r == tr && top && is_round(rad.top_right_x, rad.top_right_y)) ||
-                                (r == br && bottom && is_round(rad.bottom_right_x, rad.bottom_right_y));
-                mark(grid, edges, r, c1, d, f.b.right, flags, f.clips, r_corner);
-            }
+        bool tl = rounded(rad.top_left_x, rad.top_left_y), tright = rounded(rad.top_right_x, rad.top_right_y);
+        bool bl = rounded(rad.bottom_left_x, rad.bottom_left_y);
+        bool bright = rounded(rad.bottom_right_x, rad.bottom_right_y);
+        const std::array<std::pair<bool, Side>, 4> sides{{
+            {top, {f.b.top, true, tr, c0, c1, left, right, tl, tright}},
+            {bottom, {f.b.bottom, true, br, c0, c1, left, right, bl, bright}},
+            {left, {f.b.left, false, c0, tr, br, top, bottom, tl, bl}},
+            {right, {f.b.right, false, c1, tr, br, top, bottom, tright, bright}},
+        }};
+        for(const auto& [on, side] : sides)
+            if(on) draw_side(grid, edges, side, flags, f.clips);
     }
 
-    // Connect borders whose lines touch in adjacent cells into T-junctions.
-    std::vector<Edge> orig = edges;
-    int rows = grid.rows(), cols = grid.cols;
-    for(int r = 0; r < rows; r++)
-        for(int c = 0; c < cols; c++)
-        {
-            size_t i = size_t(r) * size_t(cols) + size_t(c);
-            uint8_t d = orig[i].dirs;
-            if(!d || (grid.drawn[i].flags & CG_PAGE_BOX)) continue;
-            if(d & (DIR_UP | DIR_DOWN))
-            {
-                if(c + 1 < cols && (orig[i + 1].dirs & DIR_LEFT) && joins(grid.drawn[i], grid.drawn[i + 1]))
-                    edges[i].dirs |= DIR_RIGHT;
-                if(c > 0 && (orig[i - 1].dirs & DIR_RIGHT) && joins(grid.drawn[i], grid.drawn[i - 1]))
-                    edges[i].dirs |= DIR_LEFT;
-            }
-
-            if(d & (DIR_LEFT | DIR_RIGHT))
-            {
-                if(r + 1 < rows && (orig[i + size_t(cols)].dirs & DIR_UP) &&
-                   joins(grid.drawn[i], grid.drawn[i + size_t(cols)]))
-                    edges[i].dirs |= DIR_DOWN;
-                if(r > 0 && (orig[i - size_t(cols)].dirs & DIR_DOWN) &&
-                   joins(grid.drawn[i], grid.drawn[i - size_t(cols)]))
-                    edges[i].dirs |= DIR_UP;
-            }
-        }
-
+    join_touching(grid, edges);
     for(size_t i = 0; i < edges.size(); i++)
-        if(const char* g = glyph_for(edges[i])) set_glyph(grid.drawn[i], g);
+        if(const char* g = glyph_for(edges[i])) set_glyph(grid.drawn[i], g, std::strlen(g));
+    return lost;
 }
 } // namespace cg

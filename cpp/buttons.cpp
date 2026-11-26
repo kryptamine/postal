@@ -44,9 +44,7 @@ bool outlined(const element::ptr& el)
 {
     const css_borders& b = el->css().get_borders();
     for(const css_border* e : {&b.top, &b.bottom, &b.left, &b.right})
-        if(e->width.val() <= 0 || e->style == border_style_none || e->style == border_style_hidden ||
-           e->color.alpha == 0)
-            return false;
+        if(!shown(*e) || e->color.alpha == 0) return false;
     if(el->css().get_display() != display_table_cell) return true;
     auto table = table_of(el);
     return table && cells_in(table) == 1;
