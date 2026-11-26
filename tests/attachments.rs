@@ -169,8 +169,12 @@ fn a_line_too_narrow_for_every_attachment_counts_the_rest() {
     let mut t = postal(&home, 80);
     let listed = "file-1.pdf 6 B · file-2.pdf 6 B · file-3.pdf 6 B · +3 more";
     let screen = t.snapshot_after(|s| shown(s, listed)).unwrap();
-    quit(t);
     assert!(!screen.contains("file-4"), "{screen}");
+    t.send(Key::Char('a')).unwrap();
+    t.wait_until(|s| s.contains("more (")).unwrap();
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| !s.contains("more (")).unwrap();
+    quit(t);
 }
 
 /// What `$PAGER` read after `|`, then what `$EDITOR` was handed after `E`,
