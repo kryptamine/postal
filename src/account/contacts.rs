@@ -22,7 +22,8 @@ pub struct Person {
     pub emails: Vec<String>,
 }
 
-#[derive(Debug, thiserror::Error)]
+/// Crosses from the Contacts process as JSON, inside a `Result`.
+#[derive(Debug, thiserror::Error, Serialize, Deserialize)]
 #[cfg_attr(
     not(target_os = "macos"),
     expect(dead_code, reason = "only the macOS sources fail")

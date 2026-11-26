@@ -5,8 +5,6 @@ use std::{
     thread,
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::account::{
     address_book::AddressBook,
     contacts::{Person, Source, Unavailable},
@@ -21,34 +19,23 @@ const ARG: &str = "__contacts";
 /// back to the system when the process ends. See ADR 0035.
 pub struct ContactsProcess;
 
-/// What the process writes to stdout.
-#[derive(Serialize, Deserialize)]
-enum Reply {
-    People(Vec<Person>),
-    Denied,
-    Failed(String),
-}
-
 impl Source for ContactsProcess {
     fn people(&self) -> Result<Vec<Person>, Unavailable> {
-        let failed = |error: &dyn std::fmt::Display| Unavailable::Failed(error.to_string());
-        let exe = env::current_exe().map_err(|error| failed(&error))?;
+        let exe = env::current_exe().map_err(|error| Unavailable::Failed(error.to_string()))?;
         let output = Command::new(exe)
             .arg(ARG)
             .stdin(Stdio::null())
             .stderr(Stdio::null())
             .output()
-            .map_err(|error| failed(&error))?;
+            .map_err(|error| Unavailable::Failed(error.to_string()))?;
         let status = output.status;
         if !status.success() {
-            return Err(failed(&format!("the Contacts process failed: {status}")));
+            let reason = format!("the Contacts process failed: {status}");
+            return Err(Unavailable::Failed(reason));
         }
 
-        match serde_json::from_slice(&output.stdout).map_err(|error| failed(&error))? {
-            Reply::People(people) => Ok(people),
-            Reply::Denied => Err(Unavailable::Denied),
-            Reply::Failed(reason) => Err(Unavailable::Failed(reason)),
-        }
+        serde_json::from_slice(&output.stdout)
+            .map_err(|error| Unavailable::Failed(error.to_string()))?
     }
 }
 
@@ -64,15 +51,11 @@ pub fn serve() -> Option<ExitCode> {
         fake.map_or_else(|| AddressBook.people(), |source| source.people())
     });
 
-    let reply = match read.join() {
-        Ok(Ok(people)) => Reply::People(people),
-        Ok(Err(Unavailable::Denied)) => Reply::Denied,
-        Ok(Err(Unavailable::Failed(reason))) => Reply::Failed(reason),
-        Err(_panic) => Reply::Failed("reading Contacts panicked".to_owned()),
-    };
-
+    let read = read
+        .join()
+        .unwrap_or_else(|_panic| Err(Unavailable::Failed("reading Contacts panicked".to_owned())));
     let written =
-        serde_json::to_vec(&reply).is_ok_and(|bytes| io::stdout().write_all(&bytes).is_ok());
+        serde_json::to_vec(&read).is_ok_and(|bytes| io::stdout().write_all(&bytes).is_ok());
     Some(if written {
         ExitCode::SUCCESS
     } else {
