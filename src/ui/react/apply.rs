@@ -49,8 +49,8 @@ pub fn apply(
         }
         Update::Bodies(folder, fetched) => previews.fetched(account, &folder, fetched),
         // Taken before the screen: an Attachment by the attachments asked
-        // for, arrivals by the Notifier.
-        Update::Attachment(_) | Update::Arrived(_) => {}
+        // for, inline images by the originals, arrivals by the Notifier.
+        Update::Attachment(_) | Update::Inline(_) | Update::Arrived(_) => {}
         Update::BodyLink(link) => {
             previews.link(account, link);
             ui.screen.backfill = None;

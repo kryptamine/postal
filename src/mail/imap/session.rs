@@ -10,7 +10,7 @@ use futures::TryStreamExt;
 use super::{
     Error, Moved, attachments, attributes, bodies, body_plan,
     connect::Transport,
-    login, moved_uids, named_roles, new_messages,
+    inline_parts, login, moved_uids, named_roles, new_messages,
     opening::{Mode, Opening},
     origin::Origin,
     pushed::Pushed,
@@ -26,6 +26,7 @@ use crate::{
     domain::flag,
     domain::folder::{Folder, INBOX, Role},
     domain::folder_name::FolderName,
+    domain::inline_image::InlineImage,
     domain::message_flags::MessageFlags,
     domain::new_message::NewMessage,
     domain::sync_state::SyncState,
@@ -168,6 +169,10 @@ pub trait MailServer {
     /// The attachment at `index` of `uid`, in the order the Message's
     /// attachments are listed, decoded; `None` when there is none.
     async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error>;
+
+    /// The parts of `uid` whose `Content-ID` is one of `ids`, decoded; those
+    /// the Message lacks are left out.
+    async fn inline_images(&mut self, uid: Uid, ids: &[String]) -> Result<Vec<InlineImage>, Error>;
 
     /// What the server announced during earlier commands, in order.
     fn pushed(&mut self) -> Vec<Pushed>;
@@ -636,6 +641,48 @@ impl MailServer for ImapSession {
         .await?;
         tracing::info!("fetched attachment {index} of {uid}");
         Ok(raw)
+    }
+
+    async fn inline_images(&mut self, uid: Uid, ids: &[String]) -> Result<Vec<InlineImage>, Error> {
+        let mut parts = Vec::new();
+        let command = format!("UID FETCH {uid} (UID BODYSTRUCTURE)");
+        self.answered(command, |_, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                parts = attributes::structure(answer)
+                    .map(|structure| inline_parts::find(structure, ids))
+                    .unwrap_or_default();
+            }
+        })
+        .await?;
+        if parts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let sections: Vec<_> = parts
+            .iter()
+            .map(|part| format!("BODY.PEEK[{}]", body_plan::section(&part.path)))
+            .collect();
+        let command = format!("UID FETCH {uid} (UID {})", sections.join(" "));
+        let mut images = Vec::new();
+        self.answered(command, |_, answer| {
+            if attributes::uid(answer) != Some(uid) {
+                return;
+            }
+
+            for part in &parts {
+                let path = SectionPath::Part(part.path.clone(), None);
+                if let Some(raw) = attributes::section(answer, &path) {
+                    images.push(InlineImage {
+                        id: part.id.clone(),
+                        kind: part.kind.clone(),
+                        bytes: part.encoding.decode(raw),
+                    });
+                }
+            }
+        })
+        .await?;
+        tracing::info!("fetched {} inline images of {uid}", images.len());
+        Ok(images)
     }
 
     fn pushed(&mut self) -> Vec<Pushed> {

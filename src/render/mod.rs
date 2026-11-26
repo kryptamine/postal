@@ -19,6 +19,7 @@ pub mod mail_colours;
 pub mod mail_look;
 pub mod marks;
 mod meeting_link;
+pub mod original_page;
 mod outlines;
 pub mod paint;
 mod palette;

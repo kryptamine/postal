@@ -10,6 +10,7 @@ use crate::{
     mail::attachment_fetch::{self, AttachmentRequest},
     mail::backfill::{self, Backfill},
     mail::imap::{MailServer, Mode},
+    mail::inline_fetch::{self, InlineRequest},
     mail::spare_work::SpareWork,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -26,6 +27,8 @@ pub enum Request {
     Reply(Vec<MessageRef>),
     /// Served after a Reply's bodies, each in turn.
     Attachment(AttachmentRequest),
+    /// Served with the attachments, for a Message opened in the browser.
+    Inline(InlineRequest),
 }
 
 /// The requests received and not yet served.
@@ -35,6 +38,7 @@ struct Pending {
     older: Option<FolderName>,
     reply: Option<Vec<MessageRef>>,
     attachments: Vec<AttachmentRequest>,
+    inlines: Vec<InlineRequest>,
 }
 
 impl Pending {
@@ -43,11 +47,12 @@ impl Pending {
             && self.older.is_none()
             && self.reply.is_none()
             && self.attachments.is_empty()
+            && self.inlines.is_empty()
     }
 
     /// Whether a request that goes before bodies waits.
     const fn urgent(&self) -> bool {
-        self.reply.is_some() || !self.attachments.is_empty()
+        self.reply.is_some() || !self.attachments.is_empty() || !self.inlines.is_empty()
     }
 
     fn take(&mut self, request: Request) {
@@ -56,6 +61,7 @@ impl Pending {
             Request::Backfill(folder) => self.older = Some(folder),
             Request::Reply(bodies) => self.reply = Some(bodies),
             Request::Attachment(attachment) => self.attachments.push(attachment),
+            Request::Inline(inline) => self.inlines.push(inline),
         }
     }
 
@@ -91,6 +97,23 @@ impl Fetched {
     }
 }
 
+/// The attachments and inline images asked for, each in turn.
+async fn fetch_parts(
+    server: &mut impl MailServer,
+    pending: &mut Pending,
+    send: &impl Fn(Update),
+) -> Result<(), Error> {
+    for attachment in std::mem::take(&mut pending.attachments) {
+        attachment_fetch::fetch(server, attachment, send).await?;
+    }
+
+    for inline in std::mem::take(&mut pending.inlines) {
+        inline_fetch::fetch(server, inline, send).await?;
+    }
+
+    Ok(())
+}
+
 /// Serves `requests` until the channel closes, telling `send` how each went:
 /// a Reply's bodies, attachments, bodies, a page of older Messages, then
 /// `SpareWork` while none waits. Only a failure but a refusal ends it.
@@ -118,9 +141,7 @@ pub async fn serve(
             fetch_reply(server, cache, reply, &send).await?;
         }
 
-        for attachment in std::mem::take(&mut pending.attachments) {
-            attachment_fetch::fetch(server, attachment, &send).await?;
-        }
+        fetch_parts(server, &mut pending, &send).await?;
 
         while let Some(request) = pending.bodies.take() {
             if !open(server, &request.folder).await? {
