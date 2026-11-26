@@ -38,11 +38,18 @@ impl Widget for MovePopup<'_> {
         buf.set_stringn(popup.x + 1, popup.y, TITLE, room, self.theme.title);
 
         let (x, mut y) = (popup.x + 2, popup.y + 2);
+        let bottom = popup.bottom().saturating_sub(1);
         for line in self.lines {
+            if y >= bottom {
+                return;
+            }
+
             buf.set_stringn(x, y, line, room, self.theme.subject);
             y += 1;
         }
 
-        buf.set_stringn(x, y + 1, self.keys, room, self.theme.muted);
+        if y + 1 < bottom {
+            buf.set_stringn(x, y + 1, self.keys, room, self.theme.muted);
+        }
     }
 }

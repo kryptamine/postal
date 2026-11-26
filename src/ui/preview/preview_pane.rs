@@ -68,8 +68,14 @@ impl StatefulWidget for PreviewPane<'_> {
         })
         .ok();
 
-        let title = [" ", view.folder.label(), position.as_str()];
-        border::label(buf, area, (area.x + 1, area.y), title, self.theme.title);
+        let title = Rect::new(area.x + 1, area.y, area.width.saturating_sub(2), 1);
+        border::title(
+            buf,
+            title,
+            view.folder.label(),
+            position.as_str(),
+            self.theme.title,
+        );
 
         // No rows, as when a Search matches none, leave the pane empty.
         if rows == 0 {
