@@ -390,16 +390,13 @@ namespace litehtml
             break;
         case GUMBO_NODE_WHITESPACE:
             {
-                // Postal: a run of spaces is one element, as in split_text;
-                // each element costs a few KB, and indentation ran to 45,000.
-                std::string str = node->v.text.text;
-                for(size_t i = 0; i < str.length();)
-                {
-                    size_t n = str[i] == ' ' ? str.find_first_not_of(' ', i) : i + 1;
-                    n = (n == std::string::npos ? str.length() : n) - i;
-                    elements.push_back(std::make_shared<el_space>(str.substr(i, n).c_str(), shared_from_this()));
-                    i += n;
-                }
+                // Postal: through split_text, which makes one element of a run
+                // of spaces; each costs a few KB, and indentation ran to 45,000.
+                m_container->split_text(
+                    node->v.text.text, [](const char*) {},
+                    [this, &elements](const char* text) {
+                        elements.push_back(std::make_shared<el_space>(text, shared_from_this()));
+                    });
             }
             break;
         default:

@@ -35,11 +35,12 @@ Eight changes, marked `Postal:` in the source:
 - `el_text::set_text` in `include/litehtml/el_text.h` replaces a word's
   text after parsing and measures it again, so `cpp/superscripts.cpp` can
   show the digits of a `<sup>` raised.
-- `document::create_node` in `src/document.cpp` and
-  `document_container::split_text` in `src/document_container.cpp` make one
-  `el_space` of a run of spaces, not one per space. Each element holds its
-  own styles, a few KB: a mail indented for its tables had 45,000 of them,
-  235 MB to parse. Line feeds and tabs stay one element each.
+- `document_container::split_text` in `src/document_container.cpp` makes
+  one `el_space` of a run of spaces, not one per space, and
+  `document::create_node` in `src/document.cpp` splits whitespace between
+  tags through it too. Each element holds its own styles, a few KB: a mail
+  indented for its tables had 45,000 of them, 235 MB to parse.
+  Line feeds and tabs stay one element each.
 
 To update, replace these directories from a newer commit, apply the changes
 again and update the hash.
