@@ -264,3 +264,51 @@ fn a_rounded_box_has_round_corners() {
     assert_eq!(rows.matches('╯').count(), 2, "{rows}");
     assert!(!rows.contains('┌'), "{rows}");
 }
+
+// A horizontal divider inside a bordered card meets its sides as a T-junction
+// rather than cutting through them.
+#[test]
+fn touching_borders_join_at_t_junctions() {
+    let body = html(
+        "<p>Above</p><div style=\"border:1px solid #888;border-radius:8px\">\
+         <div>Header</div><div style=\"border-top:1px solid #888\">Body</div></div><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    let rows = pane(&screen).join("\n");
+    assert!(rows.contains('├') && rows.contains('┤'), "{rows}");
+}
+
+// Dashed and double borders keep their line style rather than all drawing solid.
+#[test]
+fn dashed_and_double_borders_use_their_own_lines() {
+    let body = html(
+        "<p>Top</p><div style=\"border-top:1px dashed #888\">Subtotal</div>\
+         <div style=\"border-top:3px double #888\">Total</div><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    let rows = pane(&screen).join("\n");
+    assert!(rows.contains("┄┄┄┄"), "{rows}");
+    assert!(rows.contains("════"), "{rows}");
+}
+
+// Translucent borders blend onto the page rather than drawing at full strength,
+// and near-invisible ones drop.
+#[test]
+fn translucent_borders_blend_with_their_background() {
+    let body = html(
+        "<p>Top</p><div style=\"border:1px solid rgba(255,0,0,0.1)\">Faint</div>\
+         <div style=\"border:1px solid rgba(0,0,0,0.02)\">Gone</div><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    let (faint, _) = at(&screen, "Faint");
+    let top = screen.row_text(faint - 1);
+    let corner = u16::try_from(top.chars().position(|c| c == '┌').unwrap()).unwrap();
+    // Blended onto white, rgba(255,0,0,0.1) is a pale grey drawn dim, not red.
+    assert_eq!(fg(&screen, faint - 1, corner), Color::Default);
+    let (gone, _) = at(&screen, "Gone");
+    assert!(
+        !screen.row_text(gone + 1).contains('└'),
+        "{}",
+        screen.text()
+    );
+}

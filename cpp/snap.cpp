@@ -37,7 +37,12 @@ void hide_unseen(css_borders& b, uint32_t fill)
 {
     bool fill_may_go = !fill || page_light(fill) || grey(fill);
     for(css_border* e : {&b.top, &b.bottom, &b.left, &b.right})
-        if(shown(*e) && (e->color.alpha == 0 || (!fill_may_go && alike(rgb(e->color), fill)))) hide(*e);
+    {
+        if(!shown(*e)) continue;
+        uint32_t colour =
+            e->color.alpha == 255 ? rgb(e->color) : blend(fill, rgb(e->color), float(e->color.alpha) / 255.f);
+        if(e->color.alpha < 13 || (!fill_may_go && alike(colour, fill))) hide(*e);
+    }
 }
 
 // Inline-blocks holding blocks are the columns of a fluid layout. On the

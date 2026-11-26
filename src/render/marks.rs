@@ -20,6 +20,7 @@ impl Marks {
     /// A heading of the mail, set larger than its body and in no colour of
     /// its own, in the rendered View.
     pub const HEADING: Self = Self(1 << 8);
+    pub const STRIKE: Self = Self(1 << 9);
 
     #[must_use]
     pub const fn with(self, other: Self) -> Self {

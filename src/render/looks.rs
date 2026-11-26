@@ -72,6 +72,7 @@ impl Looks {
         let marks = [
             (cell.has(cell_grid::BOLD), Marks::STRONG),
             (cell.has(cell_grid::ITALIC), Marks::EMPHASIS),
+            (cell.has(cell_grid::STRIKE), Marks::STRIKE),
             underline,
         ]
         .into_iter()
@@ -96,13 +97,23 @@ impl Looks {
                 (Some(WHITE), plain)
             }
             (Some(fg), Some(_)) => (Some(self.colours.text(fg, bg)), plain),
-            (Some(fg), None) => match self.palette.role(fg, under(cell)) {
-                // Ink set larger than the body is a heading.
-                Role::Ink if cell.has(cell_grid::TITLE) => (None, Marks::HEADING),
-                Role::Ink => (None, plain),
-                Role::Muted => (None, Marks::MUTED),
-                Role::Accent(accent) => (Some(self.colours.text(accent, None)), plain),
-            },
+            (Some(fg), None) => {
+                // A body link set in grey with no underline reads as plain text.
+                let linked = if cell.link() != 0 {
+                    Marks::UNDERLINE
+                } else {
+                    plain
+                };
+
+                match self.palette.role(fg, under(cell)) {
+                    // Ink set larger than the body is a heading.
+                    Role::Ink if cell.has(cell_grid::TITLE) => (None, Marks::HEADING),
+                    Role::Ink if cell.has(cell_grid::CODE) => (None, Marks::CODE.with(linked)),
+                    Role::Ink => (None, linked),
+                    Role::Muted => (None, Marks::MUTED.with(linked)),
+                    Role::Accent(accent) => (Some(self.colours.text(accent, None)), plain),
+                }
+            }
         }
     }
 }

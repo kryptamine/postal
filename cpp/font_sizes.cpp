@@ -1,5 +1,6 @@
 #include "font_sizes.h"
 
+#include "hidden.h"
 #include "text.h"
 
 #include <algorithm>
@@ -26,7 +27,7 @@ const int BODY_ROWS = 3;
 
 void letters(const element::ptr& el, std::map<float, size_t>& count)
 {
-    if(el->is_comment() || el->css().get_display() == display_none) return;
+    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return;
     if(el->is_text())
     {
         std::string text;

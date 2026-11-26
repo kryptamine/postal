@@ -29,6 +29,9 @@ enum
     CG_CAP_RIGHT = 1024,
     // Text set well larger than the body: a heading.
     CG_TITLE = 2048,
+    CG_STRIKE = 4096,
+    // Inline or block code (`<code>`, `<pre>`, `<kbd>`, `<samp>`).
+    CG_CODE = 8192,
 };
 
 // A colour is 0x01RRGGBB when set and 0 when not. A `bg` also carries
@@ -45,7 +48,7 @@ enum
 #define CG_GREY_SPREAD 40
 typedef struct cg_cell
 {
-    char glyph[16];
+    char glyph[32];
     uint32_t fg;
     uint32_t bg;
     uint32_t flags;

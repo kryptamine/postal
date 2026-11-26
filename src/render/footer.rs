@@ -5,7 +5,19 @@ use crate::{render::marks::Marks, render::styled_line::StyledLine};
 const SHARE: usize = 3;
 const ROWS: usize = 8;
 /// What a row of the footer says, lowercase, or links to.
-const WORDS: [&str; 4] = ["©", "unsubscribe", "all rights reserved", "copyright"];
+const WORDS: [&str; 11] = [
+    "©",
+    "unsubscribe",
+    "all rights reserved",
+    "copyright",
+    "отписаться",
+    "отказаться от рассылки",
+    "все права защищены",
+    "отменить подписку",
+    "управлять подпиской",
+    "настройки рассылки",
+    "вы получили это письмо",
+];
 const ADDRESSES: [&str; 4] = ["unsub", "optout", "opt-out", "opt_out"];
 
 /// Draws the footer muted, in the terminal's own colours: the block near

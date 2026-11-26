@@ -61,10 +61,13 @@ bool file_word(const std::string& alt)
 
 std::string alt_name(const std::string& alt)
 {
-    size_t cut = alt.find_last_of(' ');
-    std::string last = alt.substr(cut == std::string::npos ? 0 : cut + 1);
-    if(!among(last, PICTURE_NOUNS)) return alt;
-    std::string rest = cut == std::string::npos ? "" : alt.substr(0, cut);
+    std::string out = alt;
+    if(size_t cut = out.find(' '); cut != std::string::npos && among(out.substr(0, cut), PICTURE_NOUNS))
+        out = out.substr(cut + 1);
+    size_t cut = out.find_last_of(' ');
+    std::string last = out.substr(cut == std::string::npos ? 0 : cut + 1);
+    if(!among(last, PICTURE_NOUNS)) return out;
+    std::string rest = cut == std::string::npos ? "" : out.substr(0, cut);
     if(rest.find(' ') == std::string::npos && among(rest, ARTICLES)) return "";
     return portrayed(rest);
 }
