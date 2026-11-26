@@ -243,6 +243,29 @@ end
 
 mentioned({ "", "pet" })
 
+-- A Draft to nobody is an error before the send, and one with no Subject
+-- a warning; a Cc alone addresses it
+local function blank(lines)
+	vim.api.nvim_buf_set_lines(0, 0, 3, false, lines)
+	vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+	return diagnosed("blank")
+end
+
+local found = blank({ "To: ", "Cc: ", "Subject:  " })
+local want_blank = {
+	{ 0, 0, vim.diagnostic.severity.ERROR, "no recipient in To: or Cc:" },
+	{ 2, 0, vim.diagnostic.severity.WARN, "the Subject is empty" },
+}
+if not vim.deep_equal(found, want_blank) then
+	fail("the empty headers are diagnosed " .. vim.inspect(found))
+end
+
+if #blank({ "To:", "Cc: ada@example.com", "Subject: Hi" }) ~= 0 then
+	fail("a Draft to its Cc alone is diagnosed " .. vim.inspect(diagnosed("blank")))
+end
+
+blank({ "To: bob@example.com", "Cc: Ada Lovelace <ada@example.com>, pet", "Subject: Hi" })
+
 local reply = drafts .. "/2.eml"
 local said_by = "On 1 Mar 2026, Bob <bob@example.com> wrote:"
 vim.fn.writefile(

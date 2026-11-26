@@ -81,15 +81,15 @@ fn the_plugin_completes_from_what_the_cli_lists() {
 }
 
 /// The TUI with `$EDITOR` a headless Neovim running the plugin, which sets
-/// the Draft's `To` to `to`, runs `:PostalSend`, then writes and quits. Its
-/// stdin is no terminal, where an error would wait for `Enter`.
-fn sent_from_neovim(home: &Home, to: &str) -> Terminal {
+/// the Draft's `To` and `Subject`, runs `:PostalSend`, then writes and quits.
+/// Its stdin is no terminal, where an error would wait for `Enter`.
+fn sent_from_neovim(home: &Home, to: &str, subject: &str) -> Terminal {
     let repo = env!("CARGO_MANIFEST_DIR");
     let bin = env!("CARGO_BIN_EXE_postal");
     let editor = format!(
         "nvim --clean --headless --cmd 'set rtp^={repo}' \
          --cmd 'lua require(\"postal\").setup({{ cmd = \"{bin}\" }})' \
-         -c '1s/$/ {to}/' -c 'PostalSend' -c 'wqall!' </dev/null"
+         -c '1s/$/ {to}/' -c '3s/$/ {subject}/' -c 'PostalSend' -c 'wqall!' </dev/null"
     );
     Terminal::builder()
         .size(100, 30)
@@ -116,7 +116,7 @@ fn postal_send_in_neovim_sends_the_draft_with_no_preview() {
     )]);
     let smtp = FakeSmtp::start();
     let home = synced(&imap, &smtp);
-    let mut t = sent_from_neovim(&home, "bob@example.com");
+    let mut t = sent_from_neovim(&home, "bob@example.com", "Lunch");
     t.wait_until(|s| s.contains("Notes")).unwrap();
     t.send(Key::Char('c')).unwrap();
     t.wait_until(|s| s.contains("Sent") && !s.contains("y send"))
@@ -140,7 +140,26 @@ fn postal_send_refuses_a_draft_with_a_bad_address() {
     )]);
     let smtp = FakeSmtp::start();
     let home = synced(&imap, &smtp);
-    let mut t = sent_from_neovim(&home, "bob at example");
+    let mut t = sent_from_neovim(&home, "bob at example", "Lunch");
+    t.wait_until(|s| s.contains("Notes")).unwrap();
+    t.send(Key::Char('c')).unwrap();
+    t.wait_until(|s| s.contains("Saved to Drafts")).unwrap();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert!(smtp.received().is_empty());
+}
+
+// A warning holds the Send back as an error does, until `:PostalSend!`.
+#[test]
+fn postal_send_holds_back_a_draft_with_no_subject() {
+    let imap = FakeImap::start(vec![message(
+        "Ada",
+        "ada@example.com",
+        "2024-11-18T09:00:00Z",
+    )]);
+    let smtp = FakeSmtp::start();
+    let home = synced(&imap, &smtp);
+    let mut t = sent_from_neovim(&home, "bob@example.com", "");
     t.wait_until(|s| s.contains("Notes")).unwrap();
     t.send(Key::Char('c')).unwrap();
     t.wait_until(|s| s.contains("Saved to Drafts")).unwrap();

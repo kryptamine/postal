@@ -1,7 +1,9 @@
--- What a Draft is checked for as it is written: its recipients and the
--- attachment its words mention, as diagnostics, and each `Attach:` file's size.
+-- What a Draft is checked for as it is written: its recipients, the headers
+-- left empty and the attachment its words mention, as diagnostics, and each
+-- `Attach:` file's size.
 local addresses = require("postal.addresses")
 local attach = require("postal.attach")
+local blank = require("postal.blank")
 local mention = require("postal.mention")
 
 local M = {}
@@ -9,7 +11,7 @@ local M = {}
 M.NS = vim.api.nvim_create_namespace("postal-checks")
 
 -- Each by the `code` its diagnostics carry.
-local CHECKS = { address = addresses.diagnose, mention = mention.diagnose }
+local CHECKS = { address = addresses.diagnose, blank = blank.diagnose, mention = mention.diagnose }
 
 function M.run(buf)
 	local diagnostics = {}
