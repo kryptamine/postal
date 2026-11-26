@@ -83,7 +83,8 @@ element helpers.
   standalone links keep their author's style. `text-transform` maps ASCII, Latin-1
   and Cyrillic case including `capitalize`, and grapheme clusters handle BMP
   emoji, variation selectors (`U+FE0F`), skin tones, flags and ZWJ sequences
-  in both width measurement and grid placement.
+  in both width measurement and grid placement. A cell holds 32 bytes of
+  glyph, since a ZWJ family emoji takes 25; 16 cut it to a broken sequence.
 - A box with all four borders round every glyph of the mail only frames the
   page, a frame round every line of it, and prints as blank cells. It stays
   in the grid (`CG_PAGE_BOX`), so a section against it still takes it as its

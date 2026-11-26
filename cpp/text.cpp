@@ -114,11 +114,12 @@ int cp_width(uint32_t cp)
     return 1;
 }
 
-void next_cluster(const char*& s, uint32_t& lead, int& width)
+Cluster next_cluster(const char*& s)
 {
+    uint32_t lead = 0;
     utf8_next(s, lead);
-    width = cp_width(lead);
-    if(width == 0) return;
+    int width = cp_width(lead);
+    if(width == 0) return {lead, 0};
 
     if(regional_indicator(lead) && *s)
     {
@@ -152,6 +153,8 @@ void next_cluster(const char*& s, uint32_t& lead, int& width)
         else if(cp_width(next) == 0) s = peek;
         else break;
     }
+
+    return {lead, width};
 }
 
 int cells(const char* text)
@@ -159,10 +162,7 @@ int cells(const char* text)
     int w = 0;
     for(const char* s = text; *s;)
     {
-        uint32_t lead = 0;
-        int cw = 0;
-        next_cluster(s, lead, cw);
-        w += cw;
+        w += next_cluster(s).width;
     }
 
     return w;
@@ -175,10 +175,7 @@ std::string fit(const std::string& text, int cols)
     const char* cut = s;
     while(*s)
     {
-        uint32_t lead = 0;
-        int cw = 0;
-        next_cluster(s, lead, cw);
-        w += cw;
+        w += next_cluster(s).width;
         if(w > cols) return std::string(text.c_str(), cut) + "…";
         if(w <= cols - 1) cut = s;
     }
@@ -241,9 +238,9 @@ void transform_case(std::string& text, Case mode)
     text = std::move(out);
 }
 
-std::string lower_utf8(const std::string& s)
+std::string folded(const std::string& s)
 {
-    std::string out = s;
+    std::string out = squeezed(s);
     transform_case(out, Case::lower);
     return out;
 }

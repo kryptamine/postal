@@ -17,9 +17,19 @@ float px_or(const css_length& l, float none)
 
 void shown_text(const element::ptr& el, std::string& out)
 {
-    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return;
+    if(unseen(el)) return;
     if(el->is_text() || el->is_space()) el->get_text(out);
     for(auto& child : el->children()) shown_text(child, out);
+}
+
+bool shown(const css_border& b)
+{
+    return b.width.val() > 0 && b.style != border_style_none && b.style != border_style_hidden;
+}
+
+bool shown(const border& b)
+{
+    return float(b.width) > 0.f && b.style != border_style_none && b.style != border_style_hidden;
 }
 
 element::ptr link_of(const element::ptr& el)

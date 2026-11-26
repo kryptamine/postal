@@ -1,5 +1,7 @@
 #include "hidden.h"
 
+#include "dom.h"
+
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -60,8 +62,7 @@ bool zero_opacity(const element::ptr& el)
 bool has_border(const css_borders& b)
 {
     for(const css_border* e : {&b.top, &b.bottom, &b.left, &b.right})
-        if(e->width.val() > 0 && e->style != border_style_none && e->style != border_style_hidden && e->color.alpha > 0)
-            return true;
+        if(shown(*e) && e->color.alpha > 0) return true;
     return false;
 }
 
@@ -98,8 +99,9 @@ void hide_invisible(const element::ptr& root)
     for(auto& child : root->children()) hide_invisible(child);
 }
 
-bool text_hidden(const element::ptr& el)
+bool unseen(const element::ptr& el)
 {
+    if(el->is_comment() || el->css().get_display() == display_none) return true;
     if(!el->is_text()) return false;
     if(float(el->css().get_font_metrics().font_size) < 4.f) return true;
     element::ptr parent = el->parent();

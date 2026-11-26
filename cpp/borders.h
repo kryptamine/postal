@@ -18,9 +18,9 @@ struct Frame
 };
 
 // Draws every recorded frame into `grid`, stepping horizontal edges off
-// text, blending translucent colours and joining touching borders. Sets
-// `lost_border` when a left or right edge fell past the pane.
-void apply_borders(Grid& grid, const std::vector<Frame>& frames, const Box& mail, bool& lost_border);
+// text, blending translucent colours and joining touching borders. True
+// when a left or right edge fell past the pane.
+bool apply_borders(Grid& grid, const std::vector<Frame>& frames, const Box& mail);
 } // namespace cg
 
 #endif

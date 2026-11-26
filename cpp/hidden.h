@@ -10,8 +10,10 @@ namespace cg
 // into `display: none`, so layout and image passes both ignore them.
 void hide_invisible(const litehtml::element::ptr& root);
 
-// Whether a text node draws nothing: font under 4 px or transparent ink.
-bool text_hidden(const litehtml::element::ptr& el);
+// Whether a pass reading the mail's text skips `el`: a comment, an element
+// not displayed, or text under 4 px or in transparent ink. Hiding such text
+// before layout instead would leave its empty line boxes as blank rows.
+bool unseen(const litehtml::element::ptr& el);
 } // namespace cg
 
 #endif

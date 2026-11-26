@@ -15,6 +15,9 @@ float px_or(const litehtml::css_length& l, float none);
 // The text a reader sees: litehtml's `get_text` takes in comments too, and
 // mail hides whole Outlook tables in conditional ones.
 void shown_text(const litehtml::element::ptr& el, std::string& out);
+// A border of some width in a style that draws, before layout and after.
+bool shown(const litehtml::css_border& b);
+bool shown(const litehtml::border& b);
 // The nearest link around `el`, not `el` itself; null outside one.
 litehtml::element::ptr link_of(const litehtml::element::ptr& el);
 // The nearest table around `el`; null outside one.

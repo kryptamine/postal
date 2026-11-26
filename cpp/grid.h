@@ -25,6 +25,12 @@ struct Box
 Box cells_of(const litehtml::position& p);
 
 bool is(const cg_cell& c, const char* glyph);
+// Sets the first `n` bytes of `g` as the glyph, cut to fit the cell.
+void set_glyph(cg_cell& c, const char* g, size_t n);
+// Whether the centre of the cell lies in `p`.
+bool centre_in(int row, int col, const litehtml::position& p);
+// A corner rounded 4 px or more on both axes is drawn round, as `╭`.
+bool rounded(litehtml::pixel_t x, litehtml::pixel_t y);
 
 class Grid
 {

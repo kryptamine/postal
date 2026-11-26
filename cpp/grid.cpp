@@ -2,6 +2,7 @@
 
 #include "geometry.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace cg
@@ -15,6 +16,22 @@ Box cells_of(const litehtml::position& p)
 }
 
 bool is(const cg_cell& c, const char* glyph) { return std::strcmp(c.glyph, glyph) == 0; }
+
+void set_glyph(cg_cell& c, const char* g, size_t n)
+{
+    n = std::min(n, sizeof c.glyph - 1);
+    std::memcpy(c.glyph, g, n);
+    c.glyph[n] = 0;
+}
+
+bool centre_in(int row, int col, const litehtml::position& p)
+{
+    float x = (float(col) + 0.5f) * CW, y = (float(row) + 0.5f) * CH;
+    float px = p.x, py = p.y, pw = p.width, ph = p.height;
+    return x >= px && x < px + pw && y >= py && y < py + ph;
+}
+
+bool rounded(litehtml::pixel_t x, litehtml::pixel_t y) { return float(x) >= 4 && float(y) >= 4; }
 
 cg_cell* Grid::at(int row, int col)
 {

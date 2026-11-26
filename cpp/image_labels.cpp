@@ -10,6 +10,7 @@
 #include "text.h"
 
 #include <algorithm>
+#include <array>
 #include <set>
 #include <utility>
 
@@ -26,11 +27,17 @@ std::string page_of(const char* href)
     return url.substr(0, url.find_first_of("?#"));
 }
 
+// The attributes that name an image, or the link round it, by trust.
+const std::array<const char*, 3> NAME_ATTRS = {"alt", "title", "aria-label"};
+
+// A picture with no alt this wide is a clickable banner, not a logo.
+const float BANNER_PX = 300;
+
 // A picture says something or opens something; a spacer image does neither,
 // and its box keeps the gap it was put there for.
 bool picture(const element::ptr& img)
 {
-    for(const char* attr : {"alt", "title", "aria-label"})
+    for(const char* attr : NAME_ATTRS)
         if(const char* val = img->get_attr(attr); val && *val) return true;
     for(auto p = img->parent(); p; p = p->parent())
         if(tag_is(p, "a")) return true;
@@ -49,7 +56,7 @@ struct LinkScan
 
 void scan(const element::ptr& el, LinkScan& s)
 {
-    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return;
+    if(unseen(el)) return;
     if(el->is_text())
     {
         std::string text;
@@ -105,15 +112,13 @@ bool invisible(const element::ptr& img)
     return (w >= 0 && w < CW) || (h >= 0 && h <= 2);
 }
 
-std::string attr_name(const element::ptr& el, std::initializer_list<const char*> attrs)
+std::string name_of(const element::ptr& el)
 {
-    for(const char* attr : attrs)
+    for(const char* attr : NAME_ATTRS)
         if(const char* value = el->get_attr(attr); value && *value)
             if(std::string name = alt_name(squeezed(value)); !name.empty()) return name;
     return "";
 }
-
-std::string name_of(const element::ptr& img) { return attr_name(img, {"alt", "title", "aria-label"}); }
 
 // The names of the icons under `el`, by the table each sits in.
 void icon_names(const element::ptr& el, std::map<const element*, std::vector<std::string>>& out)
@@ -134,7 +139,7 @@ size_t words(const std::string& s) { return s.empty() ? 0 : size_t(std::count(s.
 // last: the sender's logo at the top or the bottom.
 void ends(const element::ptr& el, std::vector<const element*>& before, std::vector<const element*>& after, bool& worded)
 {
-    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return;
+    if(unseen(el)) return;
     if(el->is_text())
     {
         std::string text;
@@ -155,7 +160,7 @@ void ImageLabels::label(const element::ptr& root, int cols)
     label_widths = LabelWidths(cols);
     redundant = redundant_links(root);
     shown_text(root, mail_text);
-    mail_text = lower_utf8(squeezed(mail_text));
+    mail_text = folded(mail_text);
     std::map<const element*, std::vector<std::string>> names;
     icon_names(root, names);
     for(auto& [table, in_table] : names)
@@ -193,9 +198,8 @@ std::string ImageLabels::named(const element::ptr& img, const std::string& name,
 std::string ImageLabels::text_for(const element::ptr& el, bool icon, const element::ptr& link, bool sole)
 {
     std::string alt = name_of(el);
-    if(alt.empty() && sole) alt = attr_name(link, {"title", "aria-label"});
-    // A wide picture with no alt at an end is a clickable banner, not a logo.
-    bool banner = alt.empty() && px_or(el->css().get_width(), 0) >= 300;
+    if(alt.empty() && sole) alt = name_of(link);
+    bool banner = alt.empty() && px_or(el->css().get_width(), 0) >= BANNER_PX;
     bool logo = logos.count(el.get()) && !banner && words(alt) <= NAME_WORDS;
     if(invisible(el) || logo || said_already(el, alt, mail_text)) return "";
     std::string shown = shown_alt(alt, sole, icon);
