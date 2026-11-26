@@ -26,4 +26,3 @@ size: 80x24  cursor: hidden
 │ Line 17 │ / filter · j/k scroll · esc close                        │         │
 │ Line 18 │                                                          │         │
 └─────────└──────────────────────────────────────────────────────────┘─────────┘
- j/k scroll  ^d/^u page  n/p next  enter fold  | pager  q back  ?: help

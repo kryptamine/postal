@@ -10,7 +10,9 @@ use super::{
     server_form::{SLOTS, ServerForm, Shown},
     step::Step,
 };
-use crate::{account::provider::Provider, render::wrap, ui::frame::theme::Theme};
+use crate::{
+    account::provider::Provider, render::wrap, ui::frame::theme::Theme, ui::widgets::input,
+};
 
 const TITLE: &str = " Postal ";
 const WIDTH: u16 = 72;
@@ -157,12 +159,15 @@ fn draw(theme: &Theme, row: &Row<'_>, area: Rect, buf: &mut Buffer) -> u16 {
         Row::Hints(hints) => {
             let mut x = area.x;
             for &(key, action) in hints {
+                let needed = key.width() + 1 + action.width();
                 let room = usize::from(area.right().saturating_sub(x));
+                if needed > room {
+                    break;
+                }
+
                 x = buf.set_stringn(x, y, key, room, theme.key).0;
-                let room = usize::from(area.right().saturating_sub(x));
-                x = buf
-                    .set_stringn(x + 1, y, action, room.saturating_sub(1), theme.muted)
-                    .0;
+                let room = usize::from(area.right().saturating_sub(x + 1));
+                x = buf.set_stringn(x + 1, y, action, room, theme.muted).0;
                 x = x.saturating_add(3).min(area.right());
             }
 
@@ -275,9 +280,10 @@ fn entry(theme: &Theme, row: &Entry<'_>, area: Rect, buf: &mut Buffer) {
     } = row;
 
     let label_style = if focused { theme.key } else { theme.muted };
-    buf.set_stringn(area.x, area.y, label, usize::from(LABEL), label_style);
+    let label_width = LABEL.min(area.width);
+    buf.set_stringn(area.x, area.y, label, label_width.into(), label_style);
     let value = Rect {
-        x: area.x.saturating_add(LABEL),
+        x: area.x.saturating_add(label_width),
         width: area.width.saturating_sub(LABEL),
         height: 1,
         ..area
@@ -289,8 +295,10 @@ fn entry(theme: &Theme, row: &Entry<'_>, area: Rect, buf: &mut Buffer) {
             buf.set_stringn(value.x, value.y, text, value.width.into(), theme.key);
         }
         Shown::Choice(security) => {
-            let room = value.width.into();
-            buf.set_stringn(value.x + 2, value.y, security.label(), room, Style::new());
+            if value.width > 2 {
+                let room = usize::from(value.width - 2);
+                buf.set_stringn(value.x + 2, value.y, security.label(), room, Style::new());
+            }
         }
         Shown::Text("") | Shown::Dots(0) if !focused => {
             let room = value.width.into();
@@ -310,13 +318,9 @@ fn entry(theme: &Theme, row: &Entry<'_>, area: Rect, buf: &mut Buffer) {
 
 /// Draws `value` on the top line of `area`, the cursor in the column after.
 fn field(theme: &Theme, value: &str, area: Rect, buf: &mut Buffer) {
-    let room = usize::from(area.width).saturating_sub(1);
-    let skip = value.width().saturating_sub(room);
-    let shown: String = value.chars().skip(skip).collect();
-    let x = buf
-        .set_stringn(area.x, area.y, &shown, room, Style::new())
-        .0;
-    buf.set_stringn(x, area.y, CURSOR, 1, theme.key);
+    if let Some(cursor) = input::draw(buf, area, value, Style::new()) {
+        buf.set_stringn(cursor.x, cursor.y, CURSOR, 1, theme.key);
+    }
 }
 
 fn rows<'a>(theme: &Theme, step: &'a Step<'a>) -> Vec<Row<'a>> {

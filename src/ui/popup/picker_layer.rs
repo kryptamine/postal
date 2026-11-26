@@ -5,13 +5,29 @@ use crate::{
     domain::shown::Shown,
     ui::exit::Exit,
     ui::frame::theme::Theme,
-    ui::input::keymap,
+    ui::input::keymap::{self, Hint},
     ui::input::step::Steer,
     ui::input::step::Step,
     ui::popup::folder_picker::{FolderPicker, Purpose},
     ui::popup::layer_act::Act,
     ui::popup::picker_popup::PickerPopup,
 };
+
+/// `pick` reads these keys; change the two together.
+pub const HINTS: &[Hint] = &[
+    Hint {
+        keys: "↑↓",
+        description: "select",
+    },
+    Hint {
+        keys: "enter",
+        description: "open",
+    },
+    Hint {
+        keys: "esc",
+        description: "close",
+    },
+];
 
 /// What a key does while the Folder Picker is open.
 #[derive(Clone, Copy)]
@@ -51,8 +67,11 @@ pub fn key(picker: &mut FolderPicker, key: KeyEvent) -> Act {
 
 pub fn draw(picker: &FolderPicker, frame: &mut Frame, theme: &Theme, body: Rect) {
     let popup = PickerPopup { theme, picker };
-    frame.set_cursor_position(popup.cursor(body));
-    frame.render_widget(popup, body);
+    let mut cursor = None;
+    frame.render_stateful_widget(popup, body, &mut cursor);
+    if let Some(cursor) = cursor {
+        frame.set_cursor_position(cursor);
+    }
 }
 
 const fn pick(key: KeyEvent) -> Option<Pick> {

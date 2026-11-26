@@ -2,7 +2,7 @@ use std::{fmt::Write, iter};
 
 use ratatui::{
     buffer::Buffer,
-    layout::{Position, Rect},
+    layout::{Margin, Rect},
     style::Style,
     widgets::{Block, Clear, StatefulWidget, Widget},
 };
@@ -14,7 +14,9 @@ use crate::{
     ui::input::keymap::{self, Binding, Key},
     ui::popup::help::Help,
     ui::state::mode::Mode,
-    ui::widgets::{popup_area::popup_area, scrollbar::scrollbar},
+    ui::widgets::{
+        centred::centred, input, popup_area::popup_area, scrollbar::scrollbar, truncate,
+    },
 };
 
 const TITLE: &str = " Help ";
@@ -66,16 +68,17 @@ impl StatefulWidget for HelpPopup<'_> {
         };
 
         if inner.height < CHROME + 1 {
+            help.cursor = None;
+            centred("terminal too small", popup.inner(Margin::new(1, 1)), buf);
             return;
         }
 
         self.filter_line(buf, inner, help);
         let footer = if help.filtering { FILTERING } else { KEYS };
         let bottom = inner.bottom() - 1;
-        cell(
+        truncate::draw(
             buf,
-            (inner.x, bottom),
-            inner.right(),
+            Rect::new(inner.x, bottom, inner.width, 1),
             footer,
             self.theme.muted,
         );
@@ -112,15 +115,15 @@ impl HelpPopup<'_> {
         let (x, y, right) = (inner.x, inner.y, inner.right());
         cell(buf, (x, y), right, "/", self.theme.key);
         let x = x.saturating_add(1);
-        if help.filtering || !help.query.is_empty() {
-            cell(buf, (x, y), right, &help.query, Style::new());
-        } else {
+        let area = Rect::new(x, y, right.saturating_sub(x), 1);
+        help.cursor = None;
+        if help.filtering {
+            help.cursor = input::draw(buf, area, &help.query, Style::new());
+        } else if help.query.is_empty() {
             cell(buf, (x, y), right, PLACEHOLDER, self.theme.muted);
+        } else {
+            truncate::draw(buf, area, &help.query, Style::new());
         }
-
-        let typed = u16::try_from(help.query.width()).unwrap_or(u16::MAX);
-        let at = x.saturating_add(typed).min(right.saturating_sub(1));
-        help.cursor = help.filtering.then_some(Position::new(at, y));
     }
 
     fn line(

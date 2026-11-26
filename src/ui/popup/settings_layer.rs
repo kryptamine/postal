@@ -8,6 +8,7 @@ use crate::{
     ui::input::step::Step,
     ui::popup::layer_act::Act,
     ui::popup::settings::{self, Settings},
+    ui::popup::settings_mode,
     ui::popup::settings_popup::SettingsPopup,
     ui::state::mode::Mode,
 };
@@ -93,11 +94,31 @@ pub fn key(settings: &mut Settings, key: KeyEvent) -> Act {
     }
 }
 
+const TYPING: &[Hint] = &[
+    Hint {
+        keys: "enter",
+        description: "save",
+    },
+    Hint {
+        keys: "esc",
+        description: "cancel",
+    },
+];
+
+/// While a setting is typed every character is its own, so only these keys
+/// act.
+pub const fn hints(settings: &Settings) -> Option<&'static [Hint]> {
+    match settings.mode() {
+        settings_mode::Mode::Typing(..) => Some(TYPING),
+        settings_mode::Mode::Browsing | settings_mode::Mode::Unlinking(_) => None,
+    }
+}
+
 pub fn draw(settings: &Settings, frame: &mut Frame, theme: &Theme, body: Rect) {
     let popup = SettingsPopup { theme, settings };
-    if let Some(cursor) = popup.cursor(body) {
+    let mut cursor = None;
+    frame.render_stateful_widget(popup, body, &mut cursor);
+    if let Some(cursor) = cursor {
         frame.set_cursor_position(cursor);
     }
-
-    frame.render_widget(popup, body);
 }

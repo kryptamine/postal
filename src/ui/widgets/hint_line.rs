@@ -4,7 +4,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Position, Rect},
     style::Style,
-    widgets::Widget,
+    widgets::StatefulWidget,
 };
 use tokio::time::Instant;
 use unicode_width::UnicodeWidthStr;
@@ -21,6 +21,7 @@ use crate::{
     ui::list::search::LIMIT,
     ui::state::mode::Mode,
     ui::state::toast::{Text, Toast},
+    ui::widgets::{input, truncate},
 };
 
 const GAP: u16 = 2;
@@ -28,6 +29,7 @@ const GAP: u16 = 2;
 /// The bottom row: key hints on the left, a Toast or else the Status and
 /// Outbox count on the right. Hints that do not fit drop from the right.
 /// A Search's Query leads the hints, and is all the left shows while typed.
+/// Its state is where the terminal's cursor goes: after the Query, while typed.
 pub struct HintLine<'a> {
     pub theme: &'a Theme,
     pub toast: Option<&'a Toast>,
@@ -36,7 +38,7 @@ pub struct HintLine<'a> {
     pub account: Option<&'a str>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
-    pub mode: Mode,
+    pub hints: Hints,
     pub query: Option<&'a str>,
     /// The Query's terms, whose operators it highlights.
     pub parsed: Option<&'a Query>,
@@ -50,8 +52,19 @@ pub struct HintLine<'a> {
     pub now: Instant,
 }
 
-impl Widget for HintLine<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+/// Where the hint line's keys come from.
+#[derive(Clone, Copy)]
+pub enum Hints {
+    /// The keymap's for the mode, after the Query and the picks.
+    Keys(Mode),
+    /// A layer's own, while it takes every key.
+    Fixed(&'static [Hint]),
+}
+
+impl StatefulWidget for HintLine<'_> {
+    type State = Option<Position>;
+
+    fn render(self, area: Rect, buf: &mut Buffer, cursor: &mut Option<Position>) {
         let row = row(area);
         if row.is_empty() {
             return;
@@ -79,9 +92,17 @@ impl Widget for HintLine<'_> {
         };
 
         let room = usize::from(row.width).saturating_sub(reserved);
-        let end = match self.query {
-            Some(query) if self.mode.typing() => self.query(buf, row.x, row, query),
-            _ => self.hints(buf, row, room),
+        let end = match (self.hints, self.query) {
+            // The last hint needs no gap after it.
+            (Hints::Fixed(hints), _) => self
+                .fitting(buf, row, room + usize::from(GAP), hints.iter())
+                .min(row.right()),
+            (Hints::Keys(_), Some(query)) if self.typing() => {
+                let (end, at) = self.query(buf, row.x, row, query);
+                *cursor = at;
+                end
+            }
+            (Hints::Keys(mode), _) => self.hints(buf, row, room, mode),
         };
 
         if !right.is_empty() {
@@ -91,8 +112,8 @@ impl Widget for HintLine<'_> {
                 .saturating_sub(width)
                 .max(end.saturating_add(GAP))
                 .min(row.right());
-            let room = usize::from(row.right() - at);
-            buf.set_stringn(at, row.y, right, room, style);
+            let right_area = Rect::new(at, row.y, row.right().saturating_sub(at), 1);
+            truncate::draw(buf, right_area, right, style);
         }
     }
 }
@@ -125,24 +146,39 @@ impl HintLine<'_> {
         text
     }
 
-    /// Where the terminal's cursor goes: after the Query, while it is typed.
-    pub fn cursor(&self, area: Rect) -> Option<Position> {
-        let query = self.query.filter(|_| self.mode.typing())?;
-        let row = row(area);
-        let width = u16::try_from(query.width() + 1).unwrap_or(u16::MAX);
-        let x = row
-            .x
-            .saturating_add(width)
-            .min(row.right().saturating_sub(1));
-        (!row.is_empty()).then_some(Position::new(x, row.y))
+    const fn typing(&self) -> bool {
+        matches!(self.hints, Hints::Keys(mode) if mode.typing())
+    }
+
+    /// Draws from the start of `row` each of `hints` that fits `left` columns
+    /// with a gap after it; returns where the next would go.
+    fn fitting<'h>(
+        &self,
+        buf: &mut Buffer,
+        row: Rect,
+        mut left: usize,
+        hints: impl Iterator<Item = &'h Hint>,
+    ) -> u16 {
+        let mut x = row.x;
+        for hint in hints {
+            let needed = width(hint) + usize::from(GAP);
+            if needed > left {
+                break;
+            }
+
+            left -= needed;
+            x = self.hint(buf, x, row, hint).saturating_add(GAP);
+        }
+
+        x
     }
 
     /// The Query, if any, then the hints that fit `room` and `?: help`;
     /// returns where they end.
-    fn hints(&self, buf: &mut Buffer, row: Rect, room: usize) -> u16 {
+    fn hints(&self, buf: &mut Buffer, row: Rect, room: usize, mode: Mode) -> u16 {
         let mut x = row.x;
         if let Some(query) = self.query {
-            x = self.query(buf, x, row, query).saturating_add(GAP);
+            x = self.query(buf, x, row, query).0.saturating_add(GAP);
         }
 
         if self.picks > 0 {
@@ -155,35 +191,48 @@ impl HintLine<'_> {
         }
 
         let used = usize::from(x - row.x);
-        let mut left = room.saturating_sub(used + width(&HELP_HINT));
+        let left = room.saturating_sub(used + width(&HELP_HINT));
         let signed_out = self.status == Status::SignedOut;
-        for hint in keymap::bindings(self.mode, signed_out).filter_map(|b| b.hint.as_ref()) {
-            let needed = width(hint) + usize::from(GAP);
-            if needed > left {
-                break;
-            }
+        let hints = keymap::bindings(mode, signed_out).filter_map(|b| b.hint.as_ref());
+        let rest = Rect {
+            x,
+            width: row.right().saturating_sub(x),
+            ..row
+        };
 
-            left -= needed;
-            x = self.hint(buf, x, row, hint).saturating_add(GAP);
-        }
-
+        x = self.fitting(buf, rest, left, hints);
         self.hint(buf, x.min(row.right()), row, &HELP_HINT)
     }
 
     /// Draws `/` and `query` from `x`, then whether it matched more than is
     /// shown and how far the search index is, cut at the row's end; returns
-    /// where they end.
-    fn query(&self, buf: &mut Buffer, x: u16, row: Rect, query: &str) -> u16 {
+    /// where they end, and where the cursor goes while the Query is typed.
+    fn query(&self, buf: &mut Buffer, x: u16, row: Rect, query: &str) -> (u16, Option<Position>) {
         let room = |x: u16| usize::from(row.right().saturating_sub(x));
         let (x, _) = buf.set_stringn(x, row.y, "/", room(x), self.theme.key);
         let start = x;
-        let (x, _) = buf.set_stringn(x, row.y, query, room(x), Style::new());
+        let typing = self.typing();
+        let shown = if typing {
+            input::shown(query, row.right().saturating_sub(x))
+        } else {
+            query
+        };
+
+        let skipped = query.len() - shown.len();
+        let (x, _) = buf.set_stringn(x, row.y, shown, room(x), Style::new());
+        let cursor = (typing && x < row.right()).then_some(Position::new(x, row.y));
         for term in self.parsed.iter().flat_map(|parsed| &parsed.terms) {
+            if term.head.end <= skipped {
+                continue;
+            }
+
+            let from_byte = term.head.start.saturating_sub(skipped);
+            let to_byte = term.head.end.saturating_sub(skipped);
             let at = |byte: usize| {
-                let width = query.get(..byte).map_or(0, UnicodeWidthStr::width);
+                let width = shown.get(..byte).map_or(0, UnicodeWidthStr::width);
                 start.saturating_add(u16::try_from(width).unwrap_or(u16::MAX))
             };
-            let (from, to) = (at(term.head.start).min(x), at(term.head.end).min(x));
+            let (from, to) = (at(from_byte).min(x), at(to_byte).min(x));
             buf.set_style(Rect::new(from, row.y, to - from, 1), self.theme.key);
         }
 
@@ -205,12 +254,12 @@ impl HintLine<'_> {
 
         let notice = notice.as_str().trim_end();
         if notice.is_empty() {
-            return x;
+            return (x, cursor);
         }
 
         let x = x.saturating_add(GAP).min(row.right());
-        buf.set_stringn(x, row.y, notice, room(x), self.theme.muted)
-            .0
+        let (end, _) = buf.set_stringn(x, row.y, notice, room(x), self.theme.muted);
+        (end, cursor)
     }
 
     /// Draws `hint` from `x`, cut at the row's end; returns where it ends.

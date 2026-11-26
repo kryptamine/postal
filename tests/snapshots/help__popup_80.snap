@@ -26,4 +26,3 @@ size: 80x24  cursor: hidden
 │       │ / filter · j/k scroll · esc close                           │        │
 │       │                                                             │        │
 └───────└─────────────────────────────────────────────────────────────┘────────┘
- j/k move  ^d/^u scroll  enter read  F forward  o links  q quit  ?: help
