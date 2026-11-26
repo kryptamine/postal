@@ -12,7 +12,7 @@
   </p>
 </div>
 
-<img src="landing/src/assets/media/hero.png" alt="Postal showing a mailbox and a message" width="100%">
+<img src="assets/tour.gif" alt="Postal: an HTML newsletter and an invitation in the preview, a thread read full screen, then a search" width="100%">
 
 ## Install
 
