@@ -154,6 +154,24 @@ fn a_bordered_cell_with_a_link_is_no_button() {
     assert!(screen.row_text(row - 1).contains('┌'), "{}", screen.text());
 }
 
+// A table sized with `height` round a filled button cell stretched the button
+// into a three-row slab.
+#[test]
+fn a_table_height_round_a_button_collapses_with_it() {
+    let body = html(
+        "<p>x</p><table height=\"48\"><tr><td align=\"center\" bgcolor=\"#222325\" \
+         height=\"48\" style=\"border-radius:8px;padding:0 27px\">\
+         <a href=\"https://shop.example\" style=\"color:#fff;display:inline-block\">\
+         Browse services</a></td></tr></table><p>x</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Browse services");
+    let (row, col) = at(&screen, "Browse services");
+    assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
+    for r in [row - 1, row + 1] {
+        assert_eq!(bg(&screen, r, col), Color::Default, "row {r}");
+    }
+}
+
 // A rounded button ends in half circles where the font has them: a pill,
 // as the mail drew it, not a slab.
 #[test]
