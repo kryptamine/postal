@@ -358,3 +358,18 @@ fn a_heading_takes_the_title_style() {
     let (row, col) = at(&screen, "Body text");
     assert_eq!(fg(&screen, row, col), Color::Default, "{}", screen.text());
 }
+
+// A run of spaces is one litehtml element: outside `pre` it still reads as
+// one space, inside it keeps every space and line.
+#[test]
+fn a_run_of_spaces_keeps_its_width_only_in_pre() {
+    let body = html(
+        "<table>\n        <tr>\n            <td>Flowing      words</td>\n        </tr>\n    </table>\
+         <pre>Set    apart\n    indented</pre>",
+    );
+    let screen = preview(body, &DEFAULT, "indented");
+    assert!(screen.contains("Flowing words"), "{}", screen.text());
+    assert!(screen.contains("Set    apart"), "{}", screen.text());
+    let (apart, indented) = (at(&screen, "Set").1, at(&screen, "indented").1);
+    assert_eq!(indented - apart, 4, "{}", screen.text());
+}

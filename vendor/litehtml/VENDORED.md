@@ -5,7 +5,7 @@ Vendored from https://github.com/litehtml/litehtml at commit
 (with the bundled gumbo in `src/gumbo/`) and `LICENSE`. Built by `build.rs`.
 See `docs/adr/0006-rendered-view-engine.md`.
 
-Seven changes, marked `Postal:` in the source:
+Eight changes, marked `Postal:` in the source:
 
 - `document::rebuild_render_tree` is public in
   `include/litehtml/document.h`, so `cpp/cell_grid.cpp` can rebuild the boxes
@@ -35,6 +35,11 @@ Seven changes, marked `Postal:` in the source:
 - `el_text::set_text` in `include/litehtml/el_text.h` replaces a word's
   text after parsing and measures it again, so `cpp/superscripts.cpp` can
   show the digits of a `<sup>` raised.
+- `document::create_node` in `src/document.cpp` and
+  `document_container::split_text` in `src/document_container.cpp` make one
+  `el_space` of a run of spaces, not one per space. Each element holds its
+  own styles, a few KB: a mail indented for its tables had 45,000 of them,
+  235 MB to parse. Line feeds and tabs stay one element each.
 
 To update, replace these directories from a newer commit, apply the changes
 again and update the hash.
