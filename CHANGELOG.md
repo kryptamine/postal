@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.0](https://github.com/kryptamine/postal/compare/v0.8.0...v0.9.0) (2026-11-26)
+
+
+### Features
+
+* **landing:** show undo send, invitations, B, ^r, mailto and markdown ([d7b407d](https://github.com/kryptamine/postal/commit/d7b407d18359dccd6a8c41503aa9fb4425d97337))
+* **nvim:** let the chat go on while an agent's edit is reviewed ([79affd3](https://github.com/kryptamine/postal/commit/79affd3b396202392a4436a2b4e907a6808fe2cb))
+* **nvim:** write a Draft in the language of its correspondence ([4f423e5](https://github.com/kryptamine/postal/commit/4f423e5de2fec3797be33579be239179caeaaeb6))
+
+
+### Performance Improvements
+
+* **account:** read macOS Contacts in a process of their own ([35bed83](https://github.com/kryptamine/postal/commit/35bed8395e26641e26808fefa9bfcc5341f108a8)), closes [#233](https://github.com/kryptamine/postal/issues/233)
+* **render:** make one litehtml element of a run of spaces ([b98aea6](https://github.com/kryptamine/postal/commit/b98aea697920d54fe77b889e17450e88d52dc669)), closes [#233](https://github.com/kryptamine/postal/issues/233)
+
 ## [0.8.0](https://github.com/kryptamine/postal/compare/v0.7.0...v0.8.0) (2026-11-26)
 
 
