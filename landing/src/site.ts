@@ -10,5 +10,5 @@ export const site = {
   contact: 'privacy@postalmail.dev',
   repo: 'https://github.com/kryptamine/postal',
   // The day the privacy policy and terms take effect; set it when they go live.
-  policyDate: '2026-11-23',
+  policyDate: '2026-11-26',
 };
