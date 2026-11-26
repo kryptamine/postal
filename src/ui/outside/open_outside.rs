@@ -4,15 +4,11 @@ use crate::{
     compose::editor,
     render::preview_render::{self, Job},
     render::rendered_previews::PreviewKey,
-    ui::frame::theme::Theme,
     ui::outside::message_file::MessageFile,
     ui::outside::pager,
     ui::outside::pager_text,
-    ui::run::Error,
+    ui::run::{Error, Model},
     ui::state::toast::Toast,
-    ui::state::ui::Ui,
-    ui::terminal::tty::Tty,
-    ui::world::World,
 };
 
 /// Where a Message opens outside the TUI.
@@ -22,17 +18,14 @@ pub enum Outside {
     Pager,
     /// `$EDITOR`, read-only, as text.
     Editor,
+    /// The browser, as its sender made it.
+    Browser,
 }
 
 /// Opens the selected Message, in Reading the one at the cursor, in `to`.
 /// Returns the Toast to show instead; `None` drops any shown.
-pub fn open(
-    to: Outside,
-    tty: &mut Tty,
-    theme: &Theme,
-    world: World<'_>,
-    ui: &Ui,
-) -> Result<Option<Toast>, Error> {
+pub fn open(to: Outside, model: &mut Model<'_>) -> Result<Option<Toast>, Error> {
+    let (tty, theme, world, ui) = (&mut model.tty, &*model.theme, model.world, &model.ui);
     let (view, reading) = (&ui.view, ui.screen.showing.reading());
     let message = reading.map_or_else(
         || view.selected_message(),
@@ -77,6 +70,7 @@ pub fn open(
 
             tty.outside(|| editor::edit(file.path()))?;
         }
+        Outside::Browser => return Ok(Some(model.originals.ask(message, &body))),
     }
 
     Ok(None)

@@ -9,6 +9,7 @@ mod connect;
 mod encoding;
 mod error;
 mod file_name;
+mod inline_parts;
 mod login;
 mod moved;
 mod moved_uids;

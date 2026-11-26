@@ -11,17 +11,17 @@ size: 80x24  cursor: hidden
 │   Olde│ j / k        ↓ / ↑        next / previous Message         ▐ │        │
 │   Olde│ g / G        Home / End   first / last Message            ▐ │        │
 │       │                                                           ▐ │        │
-│       │ Message                                                   ▐ │        │
+│       │ Message                                                     │        │
 └───────│ ^d / ^u      PgDn / PgUp  scroll the Preview half a page    │────────┘
 ┌ Inbox │ Enter        l            read the Message full screen      │────────┐
 │ From  │ |                         open the Message in $PAGER        │4 09:00 │
 │ To    │ E                         open the Message in $EDITOR       │        │
-│ Subjec│ J / K                     pick Threads down / up            │        │
-├───────│ U                         mark Unread, or toggle the Picks  │────────┤
-│ Newer │ Backspace                 delete: move to Trash             │        │
+│ Subjec│ B                         open the Message in the browser   │        │
+├───────│ J / K                     pick Threads down / up            │────────┤
+│ Newer │ U                         mark Unread, or toggle the Picks  │        │
+│       │ Backspace                 delete: move to Trash             │        │
 │       │ e                         archive                           │        │
 │       │ m                         move to a Folder                  │        │
-│       │ u                         undo a move, discard or Send      │        │
 │       │                                                             │        │
 │       │ / filter · j/k scroll · esc close                           │        │
 │       │                                                             │        │

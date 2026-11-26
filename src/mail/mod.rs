@@ -19,6 +19,7 @@ mod idle;
 mod imap;
 mod inbox_poll;
 mod index_progress;
+pub mod inline_fetch;
 pub mod login;
 mod move_changes;
 mod one_by_one;

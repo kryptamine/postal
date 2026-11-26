@@ -1,8 +1,8 @@
 use crate::{
     domain::folder::Role, domain::folder_name::FolderName, domain::indexing::Indexing,
     mail::arrival::Arrival, mail::attachment_fetch::AttachmentFetched, mail::backfill::Backfill,
-    mail::body_fetch::Fetched, mail::status::Status, render::html_job::LaidOut,
-    render::preview::Preview, render::rendered_previews::PreviewKey,
+    mail::body_fetch::Fetched, mail::inline_fetch::InlineFetched, mail::status::Status,
+    render::html_job::LaidOut, render::preview::Preview, render::rendered_previews::PreviewKey,
 };
 
 /// Work done away from the event loop that changes what the screen shows.
@@ -15,6 +15,7 @@ pub enum Update {
     FolderGone(FolderName),
     Bodies(FolderName, Fetched),
     Attachment(AttachmentFetched),
+    Inline(InlineFetched),
     BodyLink(BodyLink),
     /// New Unread Messages reached the Inbox, all in one resync or IDLE burst.
     Arrived(Vec<Arrival>),

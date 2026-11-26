@@ -8,3 +8,4 @@ pub mod open_outside;
 mod pager;
 mod pager_text;
 pub mod wanted_attachments;
+pub mod wanted_original;

@@ -68,7 +68,7 @@ const MOVE: &[Action] = &[Action::Move(Move::Down), Action::Move(Move::Up)];
 
 /// The panes' keymap and the keys every layer shares, as the hint line and
 /// the `?` popup show them and `action` reads them.
-const PANES: [PaneKeys; 43] = [
+const PANES: [PaneKeys; 44] = [
     listed(
         Binding {
             group: "Navigate",
@@ -258,6 +258,18 @@ const PANES: [PaneKeys; 43] = [
             hint: None,
         },
         &[Action::Open(Outside::Editor)],
+    ),
+    listed(
+        Binding {
+            group: "Message",
+            modes: BOTH,
+            signed_out: false,
+            keys: &[Key::Char("B")],
+            aliases: &[],
+            description: "open the Message in the browser",
+            hint: None,
+        },
+        &[Action::Open(Outside::Browser)],
     ),
     listed(
         Binding {
