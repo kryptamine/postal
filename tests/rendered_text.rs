@@ -426,20 +426,35 @@ fn strikethrough_and_code_keep_their_marks() {
     );
 }
 
-// Body links styled in plain ink without CSS underline still read as clickable.
+// Inline links styled in plain ink without CSS underline still read as
+// clickable, while multi-line clickable cards and footers stay clean.
 #[test]
 fn unstyled_body_links_are_underlined() {
     let body = html(
         "<p style=\"color:#222222\">Read <a href=\"https://news.example/story\" \
          style=\"color:#222222;text-decoration:none\">full story</a> today.</p>\
+         <div><a href=\"https://jobs.example/1\" style=\"text-decoration:none\">\
+         <div style=\"color:#0a66c2\">Senior Engineer</div>\
+         <div style=\"color:#222222\">Acme Corp</div>\
+         <div style=\"color:#777777\">Easy Apply</div></a></div>\
          <p>Footer <a href=\"https://news.example/unsub\" \
          style=\"color:#222222;text-decoration:none\">Unsubscribe</a></p>",
     );
     let screen = preview(body, &DEFAULT, "Unsubscribe");
-    let (row, col) = at(&screen, "full");
+    let (row, col) = at(&screen, "full story");
     assert!(screen.cell(row, col).unwrap().style().underline);
+    assert!(screen.cell(row, col + 4).unwrap().style().underline);
     let (row, col) = at(&screen, "Read");
     assert!(!screen.cell(row, col).unwrap().style().underline);
+    for card_text in ["Senior Engineer", "Acme Corp", "Easy Apply"] {
+        let (row, col) = at(&screen, card_text);
+        assert!(
+            !screen.cell(row, col).unwrap().style().underline,
+            "{card_text} was underlined\n{}",
+            screen.with_styles()
+        );
+    }
+
     // The footer stays muted without noisy underlines.
     let (row, col) = at(&screen, "Unsubscribe");
     assert!(dim(&screen, "Unsubscribe"));
