@@ -41,7 +41,8 @@ element helpers.
   had a blank row between its lines. This changed 9 of 473 cached mails.
 - Before layout, vertical margins, paddings and heights snap to whole rows,
   horizontal ones to whole columns, and a shown border is one cell thick;
-  an `<hr>` keeps only its top border, or four would box nothing in. Under a
+  an `<hr>` or an empty zero-height bordered block keeps only its top border,
+  or four would box nothing in. Under a
   shown border, vertical padding short of a row is dropped: the border is a
   row of its own already, and a 12 px padding made a button five rows high. A
   border the colour of the fill it sits on goes, as a browser cannot show it,

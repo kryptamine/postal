@@ -3,6 +3,10 @@
 #include "colour.h"
 #include "dom.h"
 #include "geometry.h"
+#include "hidden.h"
+#include "text.h"
+
+#include <string>
 
 using namespace litehtml;
 
@@ -29,6 +33,34 @@ void snap(css_length& l, float (*to)(float))
 bool share(const css_length& l) { return !l.is_predefined() && l.units() == css_units_percentage; }
 
 bool under_a_row(const css_length& l) { return !l.is_predefined() && l.units() == css_units_px && l.val() < CH; }
+
+bool empty_block(const element::ptr& el)
+{
+    for(auto& child : el->children())
+    {
+        if(child->is_comment() || child->css().get_display() == display_none || text_hidden(child)) continue;
+        if(child->is_text())
+        {
+            std::string text;
+            child->get_text(text);
+            if(squeezed(text).empty()) continue;
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+// An empty zero-height block with borders is a divider, like `<hr>`.
+bool rule_box(const element::ptr& el, const css_properties& css, const css_margins& p)
+{
+    if(tag_is(el, "hr")) return true;
+    if(css.get_display() != display_block) return false;
+    bool zero_h = css.get_height().is_predefined() || under_a_row(css.get_height());
+    bool zero_min = css.get_min_height().is_predefined() || under_a_row(css.get_min_height());
+    return zero_h && zero_min && p.top.val() == 0 && p.bottom.val() == 0 && empty_block(el);
+}
 
 // A transparent border, or one the colour of the fill under it, takes no
 // room. A page-light or grey fill may give way to the terminal's background
@@ -114,7 +146,7 @@ void snap_box(const element::ptr& el, uint32_t fill)
     snap(p.left, columns);
     snap(p.right, columns);
     css.set_padding(p);
-    one_cell_thick(b, tag_is(el, "hr"));
+    one_cell_thick(b, rule_box(el, css, p));
     css.set_borders(b);
     within_borders(el, css, b);
 
