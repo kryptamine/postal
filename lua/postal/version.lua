@@ -1,3 +1,3 @@
 -- The release the plugin came with, the postal it was built beside;
 -- release-please moves it with Cargo.toml.
-return "0.7.0" -- x-release-please-version
+return "0.8.0" -- x-release-please-version
