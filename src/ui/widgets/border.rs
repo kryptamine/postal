@@ -1,4 +1,7 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::Style, symbols::line};
+use unicode_width::UnicodeWidthStr;
+
+use crate::ui::widgets::truncate;
 
 /// `├───┤` across the bordered `pane` on row `y`, joined to its sides, over
 /// whatever was drawn there.
@@ -34,4 +37,15 @@ pub fn label<'a>(
         let room = usize::from(pane.right().saturating_sub(x + 1));
         x = buf.set_stringn(x, y, part, room, style).0;
     }
+}
+
+/// A space, `text` and `suffix` over a border row in `row`, `text` cut with
+/// `…` so that `suffix` still fits.
+pub fn title(buf: &mut Buffer, row: Rect, text: &str, suffix: &str, style: Style) {
+    let (x, _) = buf.set_stringn(row.x, row.y, " ", row.width.into(), style);
+    let suffix_width = u16::try_from(suffix.width()).unwrap_or(u16::MAX);
+    let room = row.right().saturating_sub(x).saturating_sub(suffix_width);
+    let x = truncate::draw(buf, Rect::new(x, row.y, room, 1), text, style);
+    let room = usize::from(row.right().saturating_sub(x));
+    buf.set_stringn(x, row.y, suffix, room, style);
 }

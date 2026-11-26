@@ -119,14 +119,21 @@ impl ThreadPane<'_> {
         let names = stack.clone().enumerate().filter(first).enumerate();
         let names =
             names.flat_map(|(n, (_, m))| [if n == 0 { "" } else { ", " }, thread::sender(m)]);
-        let parts = [" ", subject, " · "].into_iter().chain(names).chain([" "]);
-        // Short of `place`: the label stops one cell before its pane's right.
-        let left = Rect {
-            width: place_x - area.x,
-            ..area
-        };
+        let mut text = StackStr::<256>::new();
+        text.write_str(subject).ok();
+        text.write_str(" · ").ok();
+        for part in names {
+            if text.write_str(part).is_err() {
+                break;
+            }
+        }
 
-        border::label(buf, left, (area.x + 1, area.y), parts, self.theme.title);
+        // A border dash is left before `place`.
+        let room = place_x.saturating_sub(area.x + 2);
+        if room > 2 {
+            let row = Rect::new(area.x + 1, area.y, room, 1);
+            border::title(buf, row, text.as_str(), " ", self.theme.title);
+        }
     }
 
     /// Row `offset` of the Message `placed`, from its top.
@@ -141,7 +148,8 @@ impl ThreadPane<'_> {
             Shape::Run(count) => {
                 let mut earlier = StackStr::<32>::new();
                 write!(earlier, "··· {count} earlier messages").ok();
-                return truncate::draw(buf, row, earlier.as_str(), self.theme.muted);
+                truncate::draw(buf, row, earlier.as_str(), self.theme.muted);
+                return;
             }
             Shape::Folded => return self.folded(buf, row, placed),
             Shape::Unfolded(body) => body,
@@ -171,8 +179,12 @@ impl ThreadPane<'_> {
 
                 lines.draw(buf, row, index);
             }
-            Body::Loading => truncate::draw(buf, row, "Loading…", self.theme.muted),
-            Body::Unavailable(why) => truncate::draw(buf, row, why, self.theme.muted),
+            Body::Loading => {
+                truncate::draw(buf, row, "Loading…", self.theme.muted);
+            }
+            Body::Unavailable(why) => {
+                truncate::draw(buf, row, why, self.theme.muted);
+            }
         }
     }
 

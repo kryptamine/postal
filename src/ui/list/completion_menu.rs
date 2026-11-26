@@ -6,9 +6,14 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::{ui::frame::theme::Theme, ui::list::completion::Completion};
+use crate::{
+    ui::frame::theme::Theme,
+    ui::list::completion::{Completion, Suggestion},
+    ui::widgets::{scrollbar::scrollbar, truncate},
+};
 
 const GAP: u16 = 2;
+const BAR: u16 = 1;
 
 /// The menu above the Query line, its border's left edge at the column
 /// before the word completed: each suggestion, then its detail muted, the
@@ -55,25 +60,48 @@ impl Widget for CompletionMenu<'_> {
             .render(menu, buf);
 
         let fitting = usize::from(height - 2);
+        let total = suggestions.len();
+        let scrollable = total > fitting;
         let selected = self.completion.selected();
         let offset = selected.map_or(0, |at| (at + 1).saturating_sub(fitting));
         let shown = suggestions.iter().enumerate().skip(offset).take(fitting);
+        let row_width = menu.width - 2 - if scrollable { BAR } else { 0 };
         for ((index, suggestion), y) in shown.zip(menu.y + 1..) {
-            let row = Rect::new(menu.x + 1, y, menu.width - 2, 1);
+            let row = Rect::new(menu.x + 1, y, row_width, 1);
             let style = if selected == Some(index) {
                 self.theme.selected
             } else {
                 Style::new()
             };
 
-            buf.set_style(row, style);
-            let right = row.right().saturating_sub(1);
-            let room = |x: u16| usize::from(right.saturating_sub(x));
-            let at = row.x + 1;
-            buf.set_stringn(at, y, &suggestion.text, room(at), style);
-            let at = at.saturating_add(text + GAP);
             let muted = style.patch(self.theme.muted);
-            buf.set_stringn(at, y, &suggestion.detail, room(at), muted);
+            draw_row(buf, row, suggestion, text, (style, muted));
         }
+
+        let track = Rect::new(menu.right().saturating_sub(2), menu.y + 1, BAR, height - 2);
+        scrollbar(buf, track, (offset, total), self.theme.muted);
     }
+}
+
+/// `suggestion` in `row`: its text in a column `text` wide, then its detail.
+fn draw_row(
+    buf: &mut Buffer,
+    row: Rect,
+    suggestion: &Suggestion,
+    text: u16,
+    (style, muted): (Style, Style),
+) {
+    buf.set_style(row, style);
+    let right = row.right().saturating_sub(1);
+    let at = row.x + 1;
+    let width = text.min(right.saturating_sub(at));
+    truncate::draw(buf, Rect::new(at, row.y, width, 1), &suggestion.text, style);
+    let at = at.saturating_add(text + GAP);
+    let width = right.saturating_sub(at);
+    truncate::draw(
+        buf,
+        Rect::new(at, row.y, width, 1),
+        &suggestion.detail,
+        muted,
+    );
 }
