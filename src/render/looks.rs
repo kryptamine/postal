@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::{
     render::cell_grid::{self, Cell, CellGrid},
     render::mail_colours::MailColours,
@@ -18,6 +20,8 @@ const CONTROL_INK: f32 = 2.5;
 pub struct Looks {
     colours: MailColours,
     palette: Palette,
+    /// Single-line inline links in plain ink with no CSS underline or fill.
+    inline_links: HashSet<u32>,
 }
 
 impl Looks {
@@ -29,9 +33,12 @@ impl Looks {
             .zip(outlines)
             .filter(|&(cell, &outline)| worded(cell) && fill(cell, outline, colours).is_none())
             .filter_map(|(cell, _)| Some((cell.fg()?, under(cell))));
+        let palette = Palette::new(on_terminal);
+        let inline_links = inline_ink_links(grid, outlines, colours, &palette);
         Self {
             colours,
-            palette: Palette::new(on_terminal),
+            palette,
+            inline_links,
         }
     }
 
@@ -60,7 +67,11 @@ impl Looks {
             return (Marks::ALT.with(Marks::EMPHASIS), Paint { fg: None, bg });
         }
 
-        let underline = (cell.has(cell_grid::UNDERLINE), Marks::UNDERLINE);
+        let auto_underline = cell.link() != 0 && self.inline_links.contains(&cell.link());
+        let underline = (
+            cell.has(cell_grid::UNDERLINE) || auto_underline,
+            Marks::UNDERLINE,
+        );
         if cell.glyph() == " " && !underline.0 {
             if before.1.bg == bg && !before.0.has(Marks::UNDERLINE) {
                 return before;
@@ -97,25 +108,69 @@ impl Looks {
                 (Some(WHITE), plain)
             }
             (Some(fg), Some(_)) => (Some(self.colours.text(fg, bg)), plain),
-            (Some(fg), None) => {
-                // A body link set in grey with no underline reads as plain text.
-                let linked = if cell.link() != 0 {
-                    Marks::UNDERLINE
-                } else {
-                    plain
-                };
+            (Some(fg), None) => match self.palette.role(fg, under(cell)) {
+                // Ink set larger than the body is a heading.
+                Role::Ink if cell.has(cell_grid::TITLE) => (None, Marks::HEADING),
+                Role::Ink if cell.has(cell_grid::CODE) => (None, Marks::CODE),
+                Role::Ink => (None, plain),
+                Role::Muted => (None, Marks::MUTED),
+                Role::Accent(accent) => (Some(self.colours.text(accent, None)), plain),
+            },
+        }
+    }
+}
 
-                match self.palette.role(fg, under(cell)) {
-                    // Ink set larger than the body is a heading.
-                    Role::Ink if cell.has(cell_grid::TITLE) => (None, Marks::HEADING),
-                    Role::Ink if cell.has(cell_grid::CODE) => (None, Marks::CODE.with(linked)),
-                    Role::Ink => (None, linked),
-                    Role::Muted => (None, Marks::MUTED.with(linked)),
-                    Role::Accent(accent) => (Some(self.colours.text(accent, None)), plain),
+/// Links that sit on one row beside plain words, in ordinary ink with no fill
+/// or colour of their own: without an underline they are invisible in prose.
+fn inline_ink_links(
+    grid: &CellGrid,
+    outlines: &[Outline],
+    colours: MailColours,
+    palette: &Palette,
+) -> HashSet<u32> {
+    struct Info {
+        row: usize,
+        ok: bool,
+    }
+
+    let cols = usize::from(grid.cols().max(1));
+    let mut row_has_prose = vec![false; grid.cells().len().div_ceil(cols)];
+    let mut links: HashMap<u32, Info> = HashMap::new();
+    for (row_idx, (row, row_outlines)) in grid.rows().zip(outlines.chunks(cols)).enumerate() {
+        for (cell, &outline) in row.iter().zip(row_outlines) {
+            if !worded(cell) {
+                continue;
+            }
+
+            let id = cell.link();
+            if id == 0 {
+                if cell.glyph().chars().any(char::is_alphanumeric) {
+                    row_has_prose[row_idx] = true;
                 }
+
+                continue;
+            }
+
+            let plain_ink = fill(cell, outline, colours).is_none()
+                && !cell.has(cell_grid::TITLE | cell_grid::SMALL)
+                && cell
+                    .fg()
+                    .is_some_and(|fg| matches!(palette.role(fg, under(cell)), Role::Ink));
+            let entry = links.entry(id).or_insert(Info {
+                row: row_idx,
+                ok: true,
+            });
+            if entry.row != row_idx || !plain_ink {
+                entry.ok = false;
             }
         }
     }
+
+    links
+        .into_iter()
+        .filter(|(_, info)| info.ok && row_has_prose[info.row])
+        .map(|(id, _)| id)
+        .collect()
 }
 
 /// A glyph of the mail's own text: not a blank, a border or an alt.

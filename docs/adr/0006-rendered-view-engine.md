@@ -77,9 +77,10 @@ element helpers.
   logo right after them from being dropped.
 - Text in `<del>`, `<s>`, `<strike>` or `text-decoration: line-through` is
   drawn crossed out (`CG_STRIKE`), and `<code>`, `<pre>`, `<kbd>`, `<samp>`
-  in no colour of their own take Postal's code style (`CG_CODE`). A body link
-  set in ordinary or muted grey with no fill and no CSS underline is still
-  underlined so it reads as clickable. `text-transform` maps ASCII, Latin-1
+  in no colour of their own take Postal's code style (`CG_CODE`). A single-row
+  inline link set in ordinary ink beside plain words with no fill and no CSS
+  underline is underlined so it reads as clickable; multi-line cards and
+  standalone links keep their author's style. `text-transform` maps ASCII, Latin-1
   and Cyrillic case including `capitalize`, and grapheme clusters handle BMP
   emoji, variation selectors (`U+FE0F`), skin tones, flags and ZWJ sequences
   in both width measurement and grid placement.
