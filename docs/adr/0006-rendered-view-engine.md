@@ -177,8 +177,9 @@ element helpers.
   of its table, since in a table of several it is data that holds a link.
   It loses its vertical padding, height and borders: padding was rows of
   fill, and a slab three rows high read as no button. So do the boxes round
-  it in its own fill that show nothing else: a cell of `height: 50px` in
-  the button's purple stood as a slab round the label. One with a border
+  it in its own fill that show nothing else, and the height of transparent
+  wrappers (`<table>`, `<tr>`) round it: a cell or table of `height: 50px`
+  stood as a slab round the label. One with a border
   alone takes the border's colour as its fill, or its label's where the
   border is page-light, or mid grey. After the draw every button gets one
   shape: its label in bold with no underline, on two cells of fill at each

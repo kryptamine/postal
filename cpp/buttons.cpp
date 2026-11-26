@@ -67,7 +67,7 @@ void fill_from_border(const element::ptr& el)
 }
 
 // The boxes round `button` in its own fill that show nothing else are its
-// shape too: a cell of `height: 50px` stood as a slab round the label.
+// shape too: a cell or table of `height: 50px` stood as a slab round the label.
 void collapse_shell(const element::ptr& button, const Contents& contents)
 {
     // A page-light button gives way to the terminal: its frame is its shape.
@@ -80,6 +80,11 @@ void collapse_shell(const element::ptr& button, const Contents& contents)
         bool shell = (!bg.alpha || rgb(bg) == rgb(fill)) && contents.of(box.get()).words() == label;
         if(!shell) return;
         if(bg.alpha) collapse(box);
+        else
+        {
+            box->css().set_height(css_length::predef_value(sizing_auto));
+            box->css().set_min_height(css_length(0, css_units_px));
+        }
     }
 }
 
