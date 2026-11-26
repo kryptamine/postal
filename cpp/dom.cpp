@@ -1,5 +1,7 @@
 #include "dom.h"
 
+#include "hidden.h"
+
 #include <cstring>
 
 using namespace litehtml;
@@ -15,7 +17,7 @@ float px_or(const css_length& l, float none)
 
 void shown_text(const element::ptr& el, std::string& out)
 {
-    if(el->is_comment() || el->css().get_display() == display_none) return;
+    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return;
     if(el->is_text() || el->is_space()) el->get_text(out);
     for(auto& child : el->children()) shown_text(child, out);
 }

@@ -373,3 +373,128 @@ fn a_run_of_spaces_keeps_its_width_only_in_pre() {
     let (apart, indented) = (at(&screen, "Set").1, at(&screen, "indented").1);
     assert_eq!(indented - apart, 4, "{}", screen.text());
 }
+
+// Hidden preheaders never draw and never keep the sender logo right after them.
+#[test]
+fn hidden_preheaders_stay_hidden_and_do_not_keep_the_logo() {
+    let body = html(
+        "<div style=\"visibility:hidden;opacity:0;max-height:0;overflow:hidden\">Secret preheader</div>\
+         <div hidden>Hidden attr</div><template>Template text</template><noscript>No script</noscript>\
+         <a href=\"https://acme.example\"><img src=\"https://cdn.example/logo.png\" width=\"120\" alt=\"Acme\"></a>\
+         <p>Visible body</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Visible body");
+    let rows = pane(&screen).join("\n");
+    for absent in [
+        "Secret preheader",
+        "Hidden attr",
+        "Template text",
+        "No script",
+        "Acme",
+    ] {
+        assert!(!rows.contains(absent), "{absent} in\n{rows}");
+    }
+}
+
+// Translucent grey text blends onto the white page so secondary copy reads muted.
+#[test]
+fn translucent_text_blends_with_the_page() {
+    let body = html(
+        "<p style=\"color:#222222\">Main body copy of the message.</p>\
+         <p style=\"color:rgba(0,0,0,0.45)\">Secondary note</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Secondary note");
+    assert!(!dim(&screen, "Main body"), "{}", screen.with_styles());
+    assert!(dim(&screen, "Secondary note"), "{}", screen.with_styles());
+}
+
+// Struck text stays crossed out and code takes Postal's code colour.
+#[test]
+fn strikethrough_and_code_keep_their_marks() {
+    let body = html("<p>Was <del>$99</del> now $49. Run <code>cargo test</code> to verify.</p>");
+    let screen = preview(body, &DEFAULT, "verify");
+    let (row, col) = at(&screen, "$99");
+    assert!(screen.cell(row, col).unwrap().style().strikethrough);
+    let (row, col) = at(&screen, "$49");
+    assert!(!screen.cell(row, col).unwrap().style().strikethrough);
+    let (row, col) = at(&screen, "cargo");
+    assert_eq!(
+        fg(&screen, row, col),
+        Color::Indexed(3),
+        "{}",
+        screen.text()
+    );
+}
+
+// Body links styled in plain ink without CSS underline still read as clickable.
+#[test]
+fn unstyled_body_links_are_underlined() {
+    let body = html(
+        "<p style=\"color:#222222\">Read <a href=\"https://news.example/story\" \
+         style=\"color:#222222;text-decoration:none\">full story</a> today.</p>\
+         <p>Footer <a href=\"https://news.example/unsub\" \
+         style=\"color:#222222;text-decoration:none\">Unsubscribe</a></p>",
+    );
+    let screen = preview(body, &DEFAULT, "Unsubscribe");
+    let (row, col) = at(&screen, "full");
+    assert!(screen.cell(row, col).unwrap().style().underline);
+    let (row, col) = at(&screen, "Read");
+    assert!(!screen.cell(row, col).unwrap().style().underline);
+    // The footer stays muted without noisy underlines.
+    let (row, col) = at(&screen, "Unsubscribe");
+    assert!(dim(&screen, "Unsubscribe"));
+    assert!(!screen.cell(row, col).unwrap().style().underline);
+}
+
+// Russian footers mute like English ones.
+#[test]
+fn a_russian_footer_is_muted() {
+    let body = html(
+        "<p>Привет, заказ готов.</p><p>Подробности в кабинете.</p>\
+         <p>Отписаться от рассылки</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Отписаться");
+    assert!(!dim(&screen, "Привет"), "{}", screen.with_styles());
+    assert!(dim(&screen, "Отписаться"), "{}", screen.with_styles());
+}
+
+// Non-ASCII case transforms map Cyrillic and capitalize words.
+#[test]
+fn cyrillic_text_transform_changes_case() {
+    let body = html(
+        "<p style=\"text-transform:uppercase\">привет ёжик</p>\
+         <p style=\"text-transform:capitalize\">добрый день</p>",
+    );
+    let screen = preview(body, &DEFAULT, "Добрый");
+    assert!(screen.contains("ПРИВЕТ ЁЖИК"), "{}", screen.text());
+    assert!(screen.contains("Добрый День"), "{}", screen.text());
+}
+
+// BMP emoji, skin tones and variation selectors measure as two cells so
+// columns after them line up.
+#[test]
+fn wide_bmp_emoji_and_skin_tones_keep_alignment() {
+    let body = html(
+        "<table>\
+         <tr><td>✅</td><td>Done</td></tr>\
+         <tr><td>⚠️</td><td>Warn</td></tr>\
+         <tr><td>👋🏽</td><td>Wave</td></tr>\
+         </table>",
+    );
+    let screen = preview(body, &DEFAULT, "Wave");
+    let col_of = |word: &str| {
+        let first = word.chars().next().unwrap();
+        let (row, _) = at(&screen, word);
+        (44..118)
+            .find(|&c| {
+                screen
+                    .cell(row, c)
+                    .is_some_and(|cell| cell.contents().starts_with(first))
+            })
+            .unwrap()
+    };
+
+    let done = col_of("Done");
+    assert_eq!(done, col_of("Warn"), "{}", screen.text());
+    assert_eq!(done, col_of("Wave"), "{}", screen.text());
+}

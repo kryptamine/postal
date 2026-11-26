@@ -12,6 +12,8 @@ one key away.
 Apache-2.0) is vendored in `vendor/litehtml/` and compiled by `build.rs` with
 `cc`. A C++ container in `cpp/` supplies the metrics and draws into a flat
 buffer of cells: `cell_grid.cpp` draws into the cells of `grid.cpp`,
+`hidden.cpp` hides invisible elements and preheaders before layout,
+`borders.cpp` draws borders with junctions and line styles,
 `snap.cpp` snaps the styles before layout, `floated_cells.cpp` keeps a
 floated cell in its row, `regrouped_cells.cpp` sets a cell shown as a
 table group as a block, `row_heights.cpp` makes a row as high as its
@@ -57,11 +59,29 @@ element helpers.
   bordered block of `width: 100%` takes its container's width: it spilt
   by its borders, 2 px in a browser and two columns here.
 - Backgrounds fill the cells whose centre lies in the box; text rows use the
-  same rule. A box's own background stops inside its border
+  same rule. Translucent text and border colours blend onto the fill under
+  them (or white on the page), so `rgba(0,0,0,0.5)` reads as secondary text
+  rather than full ink. A box's own background stops inside its border
   (`background-clip: padding-box`), as a 1px border looks; a cell thick, it
   would ring the line in the fill. Borders are drawn as `─ │ ┌ ┐ └ ┘` after
-  the text, on cells without text; a corner rounded 4 px or more is drawn
-  as `╭ ╮ ╰ ╯`, and so is the frame of a section whose box was rounded.
+  the text, on cells without text; touching edges join into `├ ┤ ┬ ┴ ┼`,
+  dashed and dotted edges draw as `┄ ┆`, double ones as `═ ║`, and a corner
+  rounded 4 px or more draws as `╭ ╮ ╰ ╯`, as does the frame of a rounded
+  section.
+- Elements hidden by `visibility: hidden`, inline `opacity: 0`, collapsed
+  `max-height: 0; overflow: hidden` without a border, `[hidden]`, `<template>`
+  or `<noscript>` become `display: none` before image and layout passes
+  (`hidden.cpp`), and zero-font or transparent text nodes are ignored by text
+  scans: hidden preheaders neither leak onto the screen nor stop the sender's
+  logo right after them from being dropped.
+- Text in `<del>`, `<s>`, `<strike>` or `text-decoration: line-through` is
+  drawn crossed out (`CG_STRIKE`), and `<code>`, `<pre>`, `<kbd>`, `<samp>`
+  in no colour of their own take Postal's code style (`CG_CODE`). A body link
+  set in ordinary or muted grey with no fill and no CSS underline is still
+  underlined so it reads as clickable. `text-transform` maps ASCII, Latin-1
+  and Cyrillic case including `capitalize`, and grapheme clusters handle BMP
+  emoji, variation selectors (`U+FE0F`), skin tones, flags and ZWJ sequences
+  in both width measurement and grid placement.
 - A box with all four borders round every glyph of the mail only frames the
   page, a frame round every line of it, and prints as blank cells. It stays
   in the grid (`CG_PAGE_BOX`), so a section against it still takes it as its
@@ -84,13 +104,18 @@ element helpers.
   cut to its own width read `Kra…`. The leading words all the names but
   one share go, where the table has three icons or more and every name
   has more after them (`shared_prefix.cpp`).
-- An `alt` loses the noun at its end that only calls it a picture (`icon`,
-  `image`, `img`, `logo`, `picture`, `photo`, `banner`): `Messaging icon`
-  names `Messaging`. With nothing left but an article, as in `Some Image`
-  or `Logo`, the image has no `alt`. `Ann Lee's profile picture` names
-  `Ann Lee`, which the text beside a portrait says already. One word with
-  a `_` is the file's name: it goes, and a link's own picture keeps its
-  words, an icon the first (`github_original_white` reads `github`).
+- An `alt` loses the noun at its start or end that only calls it a picture
+  (`icon`, `image`, `img`, `logo`, `picture`, `photo`, `banner`,
+  `illustration`): `Messaging icon` names `Messaging` and `icon star rating`
+  names `star rating`. When `alt` is empty, `title` and `aria-label` (on the
+  image or its sole link) stand in for it. With nothing left but an article,
+  as in `Some Image` or `Logo`, the image has no `alt`. `Ann Lee's profile
+  picture` names `Ann Lee`, which the text beside a portrait says already.
+  Duplicate checks against nearby text, captions and titles compare case-
+  insensitively. Click-tracking redirect domains (`sendgrid.net`,
+  `awstrack.me`, etc.) read as `[link]` rather than naming the mailer. One
+  word with a `_` is the file's name: it goes, and a link's own picture keeps
+  its words, an icon the first (`github_original_white` reads `github`).
 - Images are never fetched: remote ones are a tracking risk and add little to
   reading. Before layout each image either goes (`display: none`) or becomes
   a label one row high, its `alt` cut with `…` to the image's declared width.
@@ -386,8 +411,9 @@ line, in as many styles as there are senders. The rows are drawn muted, in
 the terminal's own colours with no fill, and stay links (`src/render/footer.rs`).
 
 The footer starts at the first row, in the last third of the mail or its
-last 8 rows, that shows `©`, `unsubscribe`, `copyright` or `all rights
-reserved`, or links to an address with `unsub` or `optout` in it. The rows
+last 8 rows, that shows `©`, `unsubscribe`, `copyright`, `all rights
+reserved` or their Russian equivalents, or links to an address with `unsub`
+or `optout` in it. The rows
 of its block above it, back to a blank row, go with it, unless the block
 starts above that last third: then it is the body, with the line in it.
 

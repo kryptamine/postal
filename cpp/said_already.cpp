@@ -31,8 +31,9 @@ bool repeats_nearby(const element::ptr& el, const std::string& alt)
         shown_text(p, text);
         text = squeezed(text);
         // Past a caption's or a table row's length, the text is the mail's.
-        if(!text.empty()) return text.size() <= 200 && text.find(alt) != std::string::npos;
+        if(!text.empty()) return text.size() <= 200 && lower_utf8(text).find(alt) != std::string::npos;
     }
+
     return false;
 }
 
@@ -61,8 +62,9 @@ bool captioned(const element::ptr& el, const std::string& alt)
     {
         std::string beside = words_beside(at, true);
         if(beside.empty()) beside = words_beside(at, false);
-        if(!beside.empty()) return beside == alt;
+        if(!beside.empty()) return lower_utf8(beside) == alt;
     }
+
     return false;
 }
 
@@ -76,6 +78,7 @@ bool titles(const std::string& alt, const std::string& mail_text)
 
 bool said_already(const element::ptr& img, const std::string& alt, const std::string& mail_text)
 {
-    return !alt.empty() && (repeats_nearby(img, alt) || captioned(img, alt) || titles(alt, mail_text));
+    std::string low = lower_utf8(alt);
+    return !low.empty() && (repeats_nearby(img, low) || captioned(img, low) || titles(low, mail_text));
 }
 } // namespace cg

@@ -54,6 +54,16 @@ bool second_level(const std::string& label)
     return false;
 }
 
+// Click-tracking redirect domains name the mailer, not the page.
+bool tracker(const std::string& site)
+{
+    for(const char* d :
+        {"awstrack.me", "customeriomail.com", "emltrk.com", "hubspotlinks.com", "intercom-mail.com", "klclick.com",
+         "list-manage.com", "mailchi.mp", "mandrillapp.com", "pstmrk.it", "sendgrid.net", "sparkpostmail.com"})
+        if(site == d) return true;
+    return false;
+}
+
 // The last two labels, or three under a country's second level (`co.uk`).
 std::string domain(const std::string& host)
 {
@@ -87,6 +97,8 @@ std::string link_name(const char* href)
         for(auto it = segments.rbegin(); it != segments.rend(); ++it)
             if(std::string words = slug_words(*it); !words.empty()) return words;
     }
-    return domain(host);
+
+    std::string site = domain(host);
+    return tracker(site) ? "link" : site;
 }
 } // namespace cg

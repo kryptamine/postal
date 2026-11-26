@@ -21,6 +21,9 @@ pub const CAP_LEFT: u32 = 512;
 pub const CAP_RIGHT: u32 = 1024;
 /// Text set well larger than the body: a heading.
 pub const TITLE: u32 = 2048;
+pub const STRIKE: u32 = 4096;
+/// Inline or block code (`<code>`, `<pre>`, `<kbd>`, `<samp>`).
+pub const CODE: u32 = 8192;
 /// In `bg`: it comes from a section or the page, not from a control.
 const BG_PANEL: u32 = 0x0200_0000;
 /// In `bg`: the box filled has rounded corners.
@@ -42,7 +45,7 @@ pub struct Cell {
     link: u32,
 }
 
-const GLYPH: usize = 16;
+const GLYPH: usize = 32;
 /// The glyph, then fg, bg, flags and link, little-endian.
 const CELL_BYTES: usize = GLYPH + 4 * 4;
 

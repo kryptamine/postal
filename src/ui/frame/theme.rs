@@ -35,6 +35,7 @@ pub struct Theme {
     pub link: Style,
     code: Style,
     underline: Style,
+    strike: Style,
     /// Whether the rendered View keeps the mail's colours.
     coloured: bool,
     /// Mail colours moved onto this terminal's background.
@@ -83,6 +84,7 @@ impl Theme {
             link: fg(Color::Blue).add_modifier(Modifier::UNDERLINED),
             code: fg(Color::Yellow),
             underline: Style::new().add_modifier(Modifier::UNDERLINED),
+            strike: Style::new().add_modifier(Modifier::CROSSED_OUT),
             coloured,
             mail: MailColours::new(background),
             icons,
@@ -117,6 +119,7 @@ impl Theme {
             (Marks::BORDER, self.border),
             (Marks::MUTED, self.muted),
             (Marks::HEADING, self.title),
+            (Marks::STRIKE, self.strike),
         ]
         .into_iter()
         .filter(|&(mark, _)| marks.has(mark))

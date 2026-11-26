@@ -406,3 +406,30 @@ fn the_logo_at_either_end_of_the_mail_is_dropped() {
     assert!(!screen.contains("Acme"), "{}", screen.text());
     assert!(screen.contains("Spring sale"), "{}", screen.text());
 }
+
+// Pictures without alt fall back to title, leading picture nouns go, case
+// differences still count as repeats, and tracker domains read as `[link]`.
+#[test]
+fn title_fallback_leading_nouns_case_duplicates_and_trackers() {
+    let body = html(
+        "<p>Above</p>\
+         <a href=\"https://u1.ct.sendgrid.net/ss/c/abc\"><img src=\"https://cdn.example/ig.png\" \
+         width=\"24\" height=\"24\" alt=\"\" title=\"Instagram\"></a>\
+         <p><img src=\"https://cdn.example/star.png\" width=\"100\" alt=\"icon star rating\"></p>\
+         <div><img src=\"https://cdn.example/a.png\" width=\"80\" alt=\"ACME\"><div>Acme news</div></div>\
+         <p><a href=\"https://u1.ct.sendgrid.net/ss/c/xyz\"><img src=\"https://cdn.example/b.png\" \
+         width=\"200\" alt=\"\"></a></p><p>End</p>",
+    );
+    let screen = preview(body, &DEFAULT, "End");
+    let rows = pane(&screen).join("\n");
+    assert!(rows.contains("Instagram"), "{rows}");
+    assert!(
+        rows.contains("star rating") && !rows.contains("icon"),
+        "{rows}"
+    );
+    assert!(!rows.contains("ACME"), "{rows}");
+    assert!(
+        rows.contains("[link]") && !rows.contains("sendgrid"),
+        "{rows}"
+    );
+}

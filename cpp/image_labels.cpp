@@ -3,6 +3,7 @@
 #include "alt_names.h"
 #include "dom.h"
 #include "geometry.h"
+#include "hidden.h"
 #include "link_names.h"
 #include "said_already.h"
 #include "shared_prefix.h"
@@ -29,8 +30,8 @@ std::string page_of(const char* href)
 // and its box keeps the gap it was put there for.
 bool picture(const element::ptr& img)
 {
-    const char* alt = img->get_attr("alt");
-    if(alt && *alt) return true;
+    for(const char* attr : {"alt", "title", "aria-label"})
+        if(const char* val = img->get_attr(attr); val && *val) return true;
     for(auto p = img->parent(); p; p = p->parent())
         if(tag_is(p, "a")) return true;
     return false;
@@ -48,7 +49,7 @@ struct LinkScan
 
 void scan(const element::ptr& el, LinkScan& s)
 {
-    if(el->is_comment() || el->css().get_display() == display_none) return;
+    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return;
     if(el->is_text())
     {
         std::string text;
@@ -104,11 +105,15 @@ bool invisible(const element::ptr& img)
     return (w >= 0 && w < CW) || (h >= 0 && h <= 2);
 }
 
-std::string name_of(const element::ptr& img)
+std::string attr_name(const element::ptr& el, std::initializer_list<const char*> attrs)
 {
-    const char* alt = img->get_attr("alt");
-    return alt_name(squeezed(alt ? alt : ""));
+    for(const char* attr : attrs)
+        if(const char* value = el->get_attr(attr); value && *value)
+            if(std::string name = alt_name(squeezed(value)); !name.empty()) return name;
+    return "";
 }
+
+std::string name_of(const element::ptr& img) { return attr_name(img, {"alt", "title", "aria-label"}); }
 
 // The names of the icons under `el`, by the table each sits in.
 void icon_names(const element::ptr& el, std::map<const element*, std::vector<std::string>>& out)
@@ -129,7 +134,7 @@ size_t words(const std::string& s) { return s.empty() ? 0 : size_t(std::count(s.
 // last: the sender's logo at the top or the bottom.
 void ends(const element::ptr& el, std::vector<const element*>& before, std::vector<const element*>& after, bool& worded)
 {
-    if(el->is_comment() || el->css().get_display() == display_none) return;
+    if(el->is_comment() || el->css().get_display() == display_none || text_hidden(el)) return;
     if(el->is_text())
     {
         std::string text;
@@ -150,7 +155,7 @@ void ImageLabels::label(const element::ptr& root, int cols)
     label_widths = LabelWidths(cols);
     redundant = redundant_links(root);
     shown_text(root, mail_text);
-    mail_text = squeezed(mail_text);
+    mail_text = lower_utf8(squeezed(mail_text));
     std::map<const element*, std::vector<std::string>> names;
     icon_names(root, names);
     for(auto& [table, in_table] : names)
@@ -188,7 +193,10 @@ std::string ImageLabels::named(const element::ptr& img, const std::string& name,
 std::string ImageLabels::text_for(const element::ptr& el, bool icon, const element::ptr& link, bool sole)
 {
     std::string alt = name_of(el);
-    bool logo = logos.count(el.get()) && words(alt) <= NAME_WORDS;
+    if(alt.empty() && sole) alt = attr_name(link, {"title", "aria-label"});
+    // A wide picture with no alt at an end is a clickable banner, not a logo.
+    bool banner = alt.empty() && px_or(el->css().get_width(), 0) >= 300;
+    bool logo = logos.count(el.get()) && !banner && words(alt) <= NAME_WORDS;
     if(invisible(el) || logo || said_already(el, alt, mail_text)) return "";
     std::string shown = shown_alt(alt, sole, icon);
     if(!shown.empty() || !sole || icon) return named(el, shown, icon);

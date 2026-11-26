@@ -4,6 +4,7 @@
 #include "cell_grid.h"
 
 #include "alignment.h"
+#include "borders.h"
 #include "buttons.h"
 #include "cell_gaps.h"
 #include "colour.h"
@@ -13,6 +14,7 @@
 #include "font_sizes.h"
 #include "geometry.h"
 #include "grid.h"
+#include "hidden.h"
 #include "image_labels.h"
 #include "loosen.h"
 #include "picture_boxes.h"
@@ -43,7 +45,7 @@ namespace
 {
 struct Font
 {
-    bool zero = false, bold = false, italic = false, underline = false;
+    bool zero = false, bold = false, italic = false, underline = false, strike = false;
     float size = 0;
 };
 
@@ -86,12 +88,12 @@ void append_glyph(cg_cell& c, const char* g, size_t n)
     }
 }
 
-struct Frame
+void clear_cell(cg_cell& c)
 {
-    Box box;
-    borders b;
-    std::vector<position> clips;
-};
+    set_glyph(c, " ", 1);
+    c.fg = 0;
+    c.flags = 0;
+}
 
 class grid_container : public document_container, public Grid
 {
@@ -155,6 +157,7 @@ class grid_container : public document_container, public Grid
         f->bold = d.weight >= 600 || float(d.size) >= 20.f;
         f->italic = d.style == font_style_italic;
         f->underline = (d.decoration_line & text_decoration_line_underline) != 0;
+        f->strike = (d.decoration_line & text_decoration_line_line_through) != 0;
         f->size = float(d.size);
         if(fm)
         {
@@ -178,19 +181,26 @@ class grid_container : public document_container, public Grid
         return reinterpret_cast<Font*>(font)->zero ? 0 : float(cells(text)) * CW;
     }
 
-    void put(int row, int col, const char* text, uint32_t fg, uint32_t flags, const position* clip = nullptr,
-             int last = INT32_MAX)
+    void put(int row, int col, const char* text, uint32_t fg, uint8_t alpha, uint32_t flags,
+             const position* clip = nullptr, int last = INT32_MAX)
     {
         for(const char* s = text; *s && col <= last;)
         {
             const char* start = s;
-            uint32_t cp;
-            utf8_next(s, cp);
-            int w = cp_width(cp);
+            uint32_t cp = 0;
+            int w = 0;
+            next_cluster(s, cp, w);
             if(w == 0)
             {
                 if(cg_cell* prev = at(row, col - 1); prev && (prev->flags & CG_TEXT))
                     append_glyph(*prev, start, size_t(s - start));
+                continue;
+            }
+
+            if(w == 2 && col + 1 >= cols)
+            {
+                if(col >= cols - 1) lost_text = true;
+                col += w;
                 continue;
             }
 
@@ -201,9 +211,12 @@ class grid_container : public document_container, public Grid
             bool over_word = blank && c && (c->flags & CG_TEXT) && !is(*c, " ");
             if(c && visible(row, col, clip) && !over_word)
             {
+                if(c->flags & CG_WIDE_TAIL)
+                    if(cg_cell* left = at(row, col - 1)) clear_cell(*left);
+                if(cg_cell* after = at(row, col + w); after && (after->flags & CG_WIDE_TAIL)) clear_cell(*after);
                 if(cp == 0xA0 || cp == 0x2007) set_glyph(*c, " ", 1);
                 else set_glyph(*c, start, size_t(s - start));
-                c->fg = fg;
+                c->fg = alpha == 255 ? fg : blend(c->bg, fg, float(alpha) / 255.f);
                 c->flags = CG_TEXT | flags;
                 if(w == 2)
                     if(cg_cell* tail = at(row, col + 1))
@@ -221,8 +234,8 @@ class grid_container : public document_container, public Grid
         auto f = reinterpret_cast<Font*>(font);
         if(f->zero || color.alpha == 0) return;
         uint32_t flags = (f->bold ? CG_BOLD : 0) | (f->italic ? CG_ITALIC : 0) | (f->underline ? CG_UNDERLINE : 0) |
-                         size_flags(f->size, body);
-        put(first_cell(pos.y, CH), first_cell(pos.x, CW), text, rgb(color), flags);
+                         (f->strike ? CG_STRIKE : 0) | size_flags(f->size, body);
+        put(first_cell(pos.y, CH), first_cell(pos.x, CW), text, rgb(color), color.alpha, flags);
     }
 
     [[nodiscard]] pixel_t pt_to_px(float pt) const override { return pt * 96 / 72; }
@@ -235,7 +248,7 @@ class grid_container : public document_container, public Grid
                             : m.marker_type == list_style_type_square ? "▪"
                                                                       : "•";
         int row = int(std::floor((float(m.pos.y) + float(m.pos.height) / 2) / CH));
-        put(row, first_cell(m.pos.x, CW), glyph, rgb(m.color), 0);
+        put(row, first_cell(m.pos.x, CW), glyph, rgb(m.color), m.color.alpha, 0);
     }
 
     // Images are never fetched: each one left shows its label, in the box
@@ -257,7 +270,7 @@ class grid_container : public document_container, public Grid
         if(r1 < r0 || c1 < c0) return;
         std::string alt = fit(*label, c1 - c0 + 1);
         int len = cells(alt.c_str());
-        put((r0 + r1) / 2, std::max(c0, (c0 + c1 + 1 - len) / 2), alt.c_str(), 0, CG_ALT, &layer.clip_box, c1);
+        put((r0 + r1) / 2, std::max(c0, (c0 + c1 + 1 - len) / 2), alt.c_str(), 0, 255, CG_ALT, &layer.clip_box, c1);
     }
 
     void draw_solid_fill(uint_ptr, const background_layer& layer, const web_color& color) override
@@ -275,12 +288,15 @@ class grid_container : public document_container, public Grid
         const border_radiuses& radius = layer.border_radius;
         if(round(radius.top_left_x, radius.top_left_y) && round(radius.bottom_right_x, radius.bottom_right_y))
             panel |= CG_BG_ROUND;
+        uint32_t colour = rgb(color);
         for(int r = r0; r <= r1; r++)
             for(int c = c0; c <= c1; c++)
                 if(cg_cell* cell = at(r, c); cell && (layer.is_root || visible(r, c, &layer.clip_box)))
-                    cell->bg =
-                        (color.alpha == 255 ? rgb(color) : blend(cell->bg, rgb(color), float(color.alpha) / 255.f)) |
-                        panel;
+                {
+                    uint32_t keep_round = (cell->bg & CG_BG_ROUND) && alike(colour, cell->bg) ? CG_BG_ROUND : 0;
+                    cell->bg = (color.alpha == 255 ? colour : blend(cell->bg, colour, float(color.alpha) / 255.f)) |
+                               panel | keep_round;
+                }
     }
 
     // A gradient is filled with its first colour.
@@ -310,27 +326,6 @@ class grid_container : public document_container, public Grid
         frames.push_back({{r0, r1, c0, c1}, b, clips});
     }
 
-    void line(int row, int col, const char* glyph, const border& b, uint32_t flags, bool corner = false)
-    {
-        cg_cell* c = at(row, col);
-        if(!c || ((c->flags & CG_TEXT) && !corner) || !visible(row, col)) return;
-        if(corner && !is(*c, "─") && !is(*c, "│")) return;
-        set_glyph(*c, glyph, std::strlen(glyph));
-        c->fg = rgb(b.color);
-        c->flags = flags;
-    }
-
-    [[nodiscard]] bool row_has_text(int row, int c0, int c1) const
-    {
-        if(row < 0 || row >= rows()) return false;
-        for(int c = std::max(c0, 0); c <= std::min(c1, cols - 1); c++)
-        {
-            const cg_cell& cell = drawn[size_t(row) * size_t(cols) + size_t(c)];
-            if((cell.flags & CG_TEXT) && !is(cell, " ")) return true;
-        }
-        return false;
-    }
-
     // The cells every glyph of the mail's lies within, before any border is
     // drawn.
     [[nodiscard]] Box content_box() const
@@ -343,60 +338,6 @@ class grid_container : public document_container, public Grid
                 box.c0 = std::min(box.c0, i % cols), box.c1 = std::max(box.c1, i % cols);
             }
         return box;
-    }
-
-    // A horizontal border on a row of text moves one row out, or is dropped
-    // when that row has text too.
-    void apply_borders()
-    {
-        auto on = [](const border& e) {
-            return float(e.width) > 0.f && e.style != border_style_none && e.style != border_style_hidden;
-        };
-        const Box mail = content_box();
-        for(auto& f : frames)
-        {
-            clips = f.clips;
-            auto [r0, r1, c0, c1] = f.box;
-            bool top = on(f.b.top), bottom = on(f.b.bottom), left = on(f.b.left), right = on(f.b.right);
-            lost_border = lost_border || (left && c0 < 0) || (right && c1 >= cols);
-            bool page = top && bottom && left && right && f.box.holds(mail);
-            uint32_t flags = page ? CG_BORDER | CG_PAGE_BOX : CG_BORDER;
-            int tr = r0, br = r1;
-            if(top && row_has_text(tr, c0 + left, c1 - right))
-            {
-                tr = r0 - 1;
-                if(row_has_text(tr, c0, c1))
-                {
-                    top = false;
-                    tr = r0;
-                }
-            }
-            if(bottom && row_has_text(br, c0 + left, c1 - right))
-            {
-                br = r1 + 1;
-                if(row_has_text(br, c0, c1))
-                {
-                    bottom = false;
-                    br = r1;
-                }
-            }
-            if(top)
-                for(int c = c0; c <= c1; c++) line(tr, c, "─", f.b.top, flags);
-            if(bottom)
-                for(int c = c0; c <= c1; c++) line(br, c, "─", f.b.bottom, flags);
-            if(left)
-                for(int r = tr; r <= br; r++) line(r, c0, "│", f.b.left, flags);
-            if(right)
-                for(int r = tr; r <= br; r++) line(r, c1, "│", f.b.right, flags);
-            const border_radiuses& rad = f.b.radius;
-            if(top && left) line(tr, c0, round(rad.top_left_x, rad.top_left_y) ? "╭" : "┌", f.b.top, flags, true);
-            if(top && right) line(tr, c1, round(rad.top_right_x, rad.top_right_y) ? "╮" : "┐", f.b.top, flags, true);
-            if(bottom && left)
-                line(br, c0, round(rad.bottom_left_x, rad.bottom_left_y) ? "╰" : "└", f.b.bottom, flags, true);
-            if(bottom && right)
-                line(br, c1, round(rad.bottom_right_x, rad.bottom_right_y) ? "╯" : "┘", f.b.bottom, flags, true);
-        }
-        clips.clear();
     }
 
     void set_clip(const position& pos, const border_radiuses&) override { clips.push_back(pos); }
@@ -422,9 +363,9 @@ class grid_container : public document_container, public Grid
 
     void transform_text(std::string& text, text_transform tt) override
     {
-        for(auto& ch : text)
-            if(tt == text_transform_uppercase) ch = char(toupper(static_cast<unsigned char>(ch)));
-            else if(tt == text_transform_lowercase) ch = char(tolower(static_cast<unsigned char>(ch)));
+        if(tt == text_transform_uppercase) transform_case(text, Case::upper);
+        else if(tt == text_transform_lowercase) transform_case(text, Case::lower);
+        else if(tt == text_transform_capitalize) transform_case(text, Case::capitalize);
     }
 
     element::ptr create_element(const char*, const string_map&, const document::ptr&) override { return nullptr; }
@@ -442,9 +383,10 @@ class grid_container : public document_container, public Grid
     void import_css(std::string&, const std::string&, std::string&) override {}
 };
 
-// A border is a whole cell, and a box's own background under it would show
-// round the line.
-const char* const user_css = "* { background-clip: padding-box !important; }";
+// A border is a whole cell, so the box's background stops inside it, and
+// HTML-hidden elements take no room.
+const char* const user_css = "* { background-clip: padding-box !important; }"
+                             "[hidden], template, noscript { display: none !important; }";
 } // namespace
 
 struct cg_grid
@@ -477,6 +419,27 @@ struct cg_grid
             }
         for(auto& child : el->children()) mark_links(child);
     }
+
+    void mark_code(const element::ptr& el)
+    {
+        if(el->is_comment() || el->css().get_display() == display_none) return;
+        if(tag_is(el, "code") || tag_is(el, "pre") || tag_is(el, "kbd") || tag_is(el, "samp"))
+        {
+            std::vector<position> boxes;
+            leaf_boxes(el, boxes);
+            for(auto& p : boxes)
+            {
+                auto [r0, r1, c0, c1] = cells_of(p);
+                for(int r = r0; r <= r1 && r < container.rows(); r++)
+                    for(int c = c0; c <= c1; c++)
+                        if(cg_cell* cell = container.at(r, c); cell && (cell->flags & CG_TEXT)) cell->flags |= CG_CODE;
+            }
+
+            return;
+        }
+
+        for(auto& child : el->children()) mark_code(child);
+    }
 };
 
 namespace
@@ -502,7 +465,7 @@ void draw(const document::ptr& doc, grid_container& container)
     // text there must be drawn to count as lost.
     position clip(0, 0, std::max(width, float(doc->width())), doc->height());
     doc->draw(0, 0, 0, &clip);
-    container.apply_borders();
+    apply_borders(container, container.frames, container.content_box(), container.lost_border);
 }
 
 std::unique_ptr<cg_grid> rendered(const char* html, size_t len, int32_t cols, Try how)
@@ -513,6 +476,7 @@ std::unique_ptr<cg_grid> rendered(const char* html, size_t len, int32_t cols, Tr
     auto doc =
         document::createFromString(estring(std::string(html, len), encoding::utf_8), &container, master_css, user_css);
     if(!doc) return nullptr;
+    hide_invisible(doc->root());
     container.images.label(doc->root(), cols);
     std::vector<element::ptr> buttons;
     {
@@ -539,6 +503,7 @@ std::unique_ptr<cg_grid> rendered(const char* html, size_t len, int32_t cols, Tr
     if(loose && container.spilt() && stack_spilt_tables(doc->root(), float(cols) * CW)) draw(doc, container);
     shape_buttons(buttons, container);
     grid->mark_links(doc->root());
+    grid->mark_code(doc->root());
     keep_small_print(container);
     return grid;
 }
