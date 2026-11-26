@@ -17,6 +17,11 @@ fn main() -> ExitCode {
         return code;
     }
 
+    #[cfg(target_os = "macos")]
+    if let Some(code) = account::contacts_process::serve() {
+        return code;
+    }
+
     let log = account::xdg::state_dir().map(|dir| ui::logging::path(&dir));
     let args = cli::args::parse(log.as_deref().ok());
     match args.command {

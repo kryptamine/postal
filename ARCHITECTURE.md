@@ -22,7 +22,8 @@ Lowest first:
 - `cache/`: the `SQLite` store of Messages, bodies, flags and queued moves.
 - `account/`: `config.toml`, the Providers, OAuth, secrets and the keychain, the
   XDG directories, an Account's signature, unlinking an Account, the people
-  in macOS Contacts (`account::contacts`), the
+  in macOS Contacts (`account::contacts`, read in a process of its own by
+  `account::contacts_process`), the
   system's mailto: handler that hands links to Postal (`account::mailto_handler`).
 - `render/`: an HTML part as Preview lines (html2text) or as the rendered View
   (litehtml in its layout process, the cell grid), Quotes, signatures, wrapping,
