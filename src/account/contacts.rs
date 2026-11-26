@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::account::config::ContactsChoice;
 
@@ -16,7 +16,7 @@ pub struct Contact {
 }
 
 /// A person as a source of Contacts holds them.
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Person {
     pub name: String,
     pub emails: Vec<String>,
@@ -59,8 +59,7 @@ pub fn read_or_log(choice: ContactsChoice) -> Vec<Contact> {
 
 #[cfg(target_os = "macos")]
 fn source() -> Box<dyn Source> {
-    let fake = crate::account::contacts_fake::from_env();
-    fake.unwrap_or_else(|| Box::new(crate::account::address_book::AddressBook))
+    Box::new(crate::account::contacts_process::ContactsProcess)
 }
 
 #[cfg(not(target_os = "macos"))]

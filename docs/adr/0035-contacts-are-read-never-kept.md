@@ -15,6 +15,13 @@ MCP tool `correspondent_list`, and by each Search the TUI opens. An edit in
 Contacts shows the next time, and turning the switch off leaves nothing
 behind.
 
+**In a process of its own.** The framework keeps about 10 MB after a
+read, and a TUI that had opened one Search stood at 50 MB, past the 30 MB
+of ADR 0001. So `postal` reads the store started again as a process of its
+own (`account::contacts_process`), as the rendered View is laid out (ADR
+0006), and writes the people to stdout; the memory is the system's again
+when it ends. The process costs about 20 ms beside the read's 240.
+
 **Ranking.** The name in Contacts wins over the one mail uses, since the
 user chose it. An address that also has mail ranks as ADR 0016 says. One
 known from Contacts alone ranks below every address with mail; those sort

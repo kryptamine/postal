@@ -8,6 +8,8 @@ pub mod config_file;
 pub mod contacts;
 #[cfg(target_os = "macos")]
 mod contacts_fake;
+#[cfg(target_os = "macos")]
+pub mod contacts_process;
 pub mod credential;
 #[cfg_attr(
     not(target_os = "macos"),
