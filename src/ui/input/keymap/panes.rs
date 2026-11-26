@@ -4,7 +4,7 @@ use crate::{
     compose::recipients::Recipients,
     ui::input::keymap::{Action, Binding, By, Direction, Hint, Key, Move, Scroll, pressed},
     ui::outside::open_outside::Outside,
-    ui::outside::wanted_attachments::Purpose,
+    ui::outside::wanted_parts::Purpose,
     ui::popup::layer,
     ui::state::mode::Mode,
 };
@@ -269,7 +269,7 @@ const PANES: [PaneKeys; 44] = [
             description: "open the Message in the browser",
             hint: None,
         },
-        &[Action::Open(Outside::Browser)],
+        &[Action::Original],
     ),
     listed(
         Binding {

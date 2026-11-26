@@ -5,7 +5,7 @@ use crate::{
     domain::message::Message,
     domain::message_ref::MessageRef,
     domain::per_account::AccountId,
-    ui::outside::wanted_attachments::{Purpose, Wanted},
+    ui::outside::wanted_parts::{Purpose, Wanted},
     ui::preview::hint_keys::{HintKeys, Typed},
     ui::state::toast::Toast,
     ui::state::ui::Ui,

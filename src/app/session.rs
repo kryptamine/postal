@@ -26,8 +26,7 @@ use crate::{
     ui::run::{self, Background},
     ui::terminal_slot::TerminalSlot,
     ui::theme::Theme,
-    ui::wanted_attachments::WantedAttachments,
-    ui::wanted_original::WantedOriginals,
+    ui::wanted_parts::WantedParts,
 };
 
 /// What a session opens on, besides its Accounts.
@@ -85,8 +84,7 @@ pub async fn session(
     let older = OlderPages::new(requests.clone(), configs.map(|_| false));
     let replies = ReplyFetch::new(requests.clone(), configs.map(|_| false));
     let forwards = ForwardFetch::new(requests.clone(), configs.map(|_| false));
-    let attachments = WantedAttachments::new(requests.clone(), configs.map(|_| false));
-    let originals = WantedOriginals::new(requests.clone(), configs.map(|_| false));
+    let parts = WantedParts::new(requests.clone(), configs.map(|_| false));
     let (tty, background) = slot.take()?;
     let mut theme = Theme::from_env(background, Icons::choose(shared.icons));
     let mut previews = Previews::start(requests, configs, sender, theme.mail_look());
@@ -96,8 +94,7 @@ pub async fn session(
         older,
         replies,
         forwards,
-        attachments,
-        originals,
+        parts,
         asks: Routes::new(asks.into_iter().collect()),
         accounts: Accounts(configs),
         outbox: &outbox,

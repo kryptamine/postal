@@ -1,6 +1,6 @@
 use crate::{
     compose::recipients::Recipients, ui::outside::open_outside::Outside,
-    ui::outside::wanted_attachments::Purpose,
+    ui::outside::wanted_parts::Purpose,
 };
 
 #[derive(Clone, Copy)]
@@ -18,6 +18,8 @@ pub enum Action {
     /// The selected Message outside the TUI; in Reading, the one at the
     /// cursor.
     Open(Outside),
+    /// The same Message in the browser, as its sender made it.
+    Original,
     /// Moves the selection, picking every Thread it passes for the next
     /// action.
     Stretch(Move),

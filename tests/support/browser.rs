@@ -46,6 +46,19 @@ impl Browser {
             .collect()
     }
 
+    /// Waits for the first target opened, and returns it.
+    pub fn wait_any(&self) -> String {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(first) = self.opened().into_iter().next() {
+                return first;
+            }
+
+            assert!(Instant::now() < deadline, "nothing opened");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     /// Waits for `urls` to be every URL opened so far.
     pub fn wait_for(&self, urls: &[&str]) {
         let deadline = Instant::now() + Duration::from_secs(10);
