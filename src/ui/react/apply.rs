@@ -48,8 +48,8 @@ pub fn apply(
             relist(ui, caches)?;
         }
         Update::Bodies(folder, fetched) => previews.fetched(account, &folder, fetched),
-        // Taken before the screen: an Attachment by the attachments asked
-        // for, inline images by the originals, arrivals by the Notifier.
+        // Taken before the screen: an Attachment and inline images by the
+        // parts asked for, arrivals by the Notifier.
         Update::Attachment(_) | Update::Inline(_) | Update::Arrived(_) => {}
         Update::BodyLink(link) => {
             previews.link(account, link);

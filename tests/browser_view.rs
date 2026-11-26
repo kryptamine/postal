@@ -45,16 +45,10 @@ fn opened(body: FakeBody, keys: &[Key]) -> String {
 
     t.wait_until(|s| s.contains("opened in the browser"))
         .unwrap();
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-    while browser.opened().is_empty() {
-        assert!(std::time::Instant::now() < deadline, "nothing opened");
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-
+    let path = browser.wait_any();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
 
-    let path = browser.opened().remove(0);
     let page = fs::read_to_string(&path).unwrap();
     assert!(path.starts_with(home.xdg_cache_home().join("postal").to_str().unwrap()));
     page

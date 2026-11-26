@@ -34,8 +34,7 @@ use crate::{
     ui::list::message_list,
     ui::list::older_pages::OlderPages,
     ui::outside::notifier::Notifier,
-    ui::outside::wanted_attachments::WantedAttachments,
-    ui::outside::wanted_original::WantedOriginals,
+    ui::outside::wanted_parts::WantedParts,
     ui::preview::preview_pane,
     ui::preview::previews::Previews,
     ui::react::apply,
@@ -61,9 +60,8 @@ pub enum Error {
 }
 
 /// The network work behind the screen and what it reports; what is asked of
-/// it (older pages, what a Reply or Forward waits on, attachments, the
-/// images of a Message opened in the browser) and of
-/// the sync connection; and where a Send leaves from.
+/// it (older pages, what a Reply or Forward waits on, the parts the cached
+/// body leaves out) and of the sync connection; and where a Send leaves from.
 pub struct Background<'a, W, U> {
     pub work: W,
     /// Each tells the Account it is of.
@@ -71,8 +69,7 @@ pub struct Background<'a, W, U> {
     pub older: OlderPages,
     pub replies: ReplyFetch,
     pub forwards: ForwardFetch,
-    pub attachments: WantedAttachments,
-    pub originals: WantedOriginals,
+    pub parts: WantedParts,
     pub asks: Routes<Ask>,
     pub accounts: Accounts<'a>,
     pub outbox: &'a Outbox,
@@ -109,8 +106,7 @@ pub struct Model<'a> {
     older: OlderPages,
     pub replies: ReplyFetch,
     pub forwards: ForwardFetch,
-    pub attachments: WantedAttachments,
-    pub originals: WantedOriginals,
+    pub parts: WantedParts,
     pub notifier: Notifier,
 }
 
@@ -149,8 +145,7 @@ pub async fn run(
         older: background.older,
         replies: background.replies,
         forwards: background.forwards,
-        attachments: background.attachments,
-        originals: background.originals,
+        parts: background.parts,
         notifier: Notifier::new(background.notify),
     };
 
@@ -254,11 +249,7 @@ impl Model<'_> {
         let arrived = self.replies.notice(account, &update, replying);
         let forwarding = self.ui.screen.forwarding.as_mut();
         let forwarded = self.forwards.notice(account, &update, forwarding);
-        if let Some(toast) = self.attachments.notice(account, &update) {
-            self.ui.screen.toast = Some(toast);
-        }
-
-        if let Some(toast) = self.originals.notice(account, &update) {
+        if let Some(toast) = self.parts.notice(account, &update) {
             self.ui.screen.toast = Some(toast);
         }
 

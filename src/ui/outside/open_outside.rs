@@ -2,13 +2,18 @@ use std::sync::Arc;
 
 use crate::{
     compose::editor,
+    domain::message::Message,
     render::preview_render::{self, Job},
     render::rendered_previews::PreviewKey,
+    ui::frame::theme::Theme,
     ui::outside::message_file::MessageFile,
     ui::outside::pager,
     ui::outside::pager_text,
-    ui::run::{Error, Model},
+    ui::run::Error,
     ui::state::toast::Toast,
+    ui::state::ui::Ui,
+    ui::terminal::tty::Tty,
+    ui::world::World,
 };
 
 /// Where a Message opens outside the TUI.
@@ -18,14 +23,14 @@ pub enum Outside {
     Pager,
     /// `$EDITOR`, read-only, as text.
     Editor,
-    /// The browser, as its sender made it.
-    Browser,
 }
 
-/// Opens the selected Message, in Reading the one at the cursor, in `to`.
-/// Returns the Toast to show instead; `None` drops any shown.
-pub fn open(to: Outside, model: &mut Model<'_>) -> Result<Option<Toast>, Error> {
-    let (tty, theme, world, ui) = (&mut model.tty, &*model.theme, model.world, &model.ui);
+/// The shown Message with its cached body, else the Toast to show instead:
+/// `None` drops any shown.
+pub type Shown<'u> = Result<(&'u Message, Vec<u8>), Option<Toast>>;
+
+/// The selected Message, in Reading the one at the cursor.
+pub fn shown<'u>(world: World<'_>, ui: &'u Ui) -> Result<Shown<'u>, Error> {
     let (view, reading) = (&ui.view, ui.screen.showing.reading());
     let message = reading.map_or_else(
         || view.selected_message(),
@@ -33,12 +38,26 @@ pub fn open(to: Outside, model: &mut Model<'_>) -> Result<Option<Toast>, Error> 
     );
 
     let Some(message) = message else {
-        return Ok(None);
+        return Ok(Err(None));
     };
 
     let found = world.caches[message.account].body(message.body_key);
-    let Some(body) = found? else {
-        return Ok(Some(Toast::new("not downloaded")));
+    Ok(found?
+        .map(|body| (message, body))
+        .ok_or_else(|| Some(Toast::new("not downloaded"))))
+}
+
+/// Opens the shown Message in `to`; returns the Toast to show instead.
+pub fn open(
+    to: Outside,
+    tty: &mut Tty,
+    theme: &Theme,
+    world: World<'_>,
+    ui: &Ui,
+) -> Result<Option<Toast>, Error> {
+    let (message, body) = match shown(world, ui)? {
+        Ok(found) => found,
+        Err(toast) => return Ok(toast),
     };
 
     match to {
@@ -49,7 +68,7 @@ pub fn open(to: Outside, model: &mut Model<'_>) -> Result<Option<Toast>, Error> 
                     account: message.account,
                     body: message.body_key,
                     width,
-                    view: view.html,
+                    view: ui.view.html,
                     // The pager shows the Message whole.
                     quoted: true,
                 },
@@ -70,7 +89,6 @@ pub fn open(to: Outside, model: &mut Model<'_>) -> Result<Option<Toast>, Error> 
 
             tty.outside(|| editor::edit(file.path()))?;
         }
-        Outside::Browser => return Ok(Some(model.originals.ask(message, &body))),
     }
 
     Ok(None)

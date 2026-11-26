@@ -1,5 +1,5 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
-use mail_parser::{MessageParser, PartType};
+use mail_parser::{MessageParser, MessagePart, PartType};
 
 use crate::domain::inline_image::InlineImage;
 
@@ -14,47 +14,37 @@ const POLICY: &str = "<meta http-equiv=\"Content-Security-Policy\" \
 
 /// A Message as its sender made it, for the browser. A cached body holds
 /// the text parts only (docs/adr/0024), so its `cid:` images come apart.
-pub struct Original {
-    html: Option<String>,
-    text: String,
+pub enum Original {
+    Html(String),
+    /// A Message with no HTML part.
+    Text(String),
 }
 
 impl Original {
     pub fn parse(raw: &[u8]) -> Self {
         let parsed = MessageParser::default().parse(raw);
-        let html = parsed
-            .as_ref()
-            .and_then(|message| match &message.html_part(0)?.body {
-                PartType::Html(html) => Some(html.to_string()),
-                _ => None,
-            });
-        let text = parsed
-            .as_ref()
-            .and_then(|message| match &message.text_part(0)?.body {
-                PartType::Text(text) => Some(text.to_string()),
-                _ => None,
-            });
+        let part = |at: Option<&MessagePart<'_>>| match at.map(|part| &part.body) {
+            Some(PartType::Html(html)) => Some(Self::Html(html.to_string())),
+            Some(PartType::Text(text)) => Some(Self::Text(text.to_string())),
+            _ => None,
+        };
 
-        Self {
-            html,
-            text: text.unwrap_or_default(),
-        }
+        // A Message without an HTML part answers `html_part` with its text.
+        parsed
+            .as_ref()
+            .and_then(|message| part(message.html_part(0)).or_else(|| part(message.text_part(0))))
+            .unwrap_or_else(|| Self::Text(String::new()))
     }
 
     /// The `Content-ID`s the HTML part names in `cid:` URLs, each once.
     pub fn inline_ids(&self) -> Vec<String> {
-        let Some(html) = &self.html else {
+        let Self::Html(html) = self else {
             return Vec::new();
         };
 
         let mut ids: Vec<String> = Vec::new();
-        for (at, _) in html.match_indices("cid:") {
-            let rest = html.get(at + 4..).unwrap_or_default();
-            let end = rest
-                .find(|c: char| matches!(c, '"' | '\'' | '>' | ')' | '<') || c.is_whitespace())
-                .unwrap_or(rest.len());
-            let id = rest.get(..end).unwrap_or_default();
-            if !id.is_empty() && !ids.iter().any(|seen| seen == id) {
+        for (_, id) in cid_urls(html) {
+            if !ids.iter().any(|seen| seen == id) {
                 ids.push(id.to_owned());
             }
         }
@@ -65,36 +55,48 @@ impl Original {
     /// The page: the HTML part as sent with `images` in place of their
     /// `cid:` URLs, else the text part as preformatted text.
     pub fn page(&self, images: &[InlineImage]) -> String {
-        let body = self.html.as_ref().map_or_else(
-            || {
-                format!(
-                    "<pre style=\"white-space: pre-wrap\">{}</pre>",
-                    escaped(&self.text)
-                )
-            },
-            |html| inlined(html, images),
-        );
+        let body = match self {
+            Self::Html(html) => inlined(html, images),
+            Self::Text(text) => format!(
+                "<pre style=\"white-space: pre-wrap\">{}</pre>",
+                escaped(text)
+            ),
+        };
 
         format!("{BOM}{}", with_policy(&body))
     }
 }
 
-fn inlined(html: &str, images: &[InlineImage]) -> String {
-    let mut images: Vec<_> = images.iter().collect();
-    // `cid:logo` would otherwise cut into `cid:logo2`.
-    images.sort_by_key(|image| std::cmp::Reverse(image.id.len()));
+/// Each `cid:` URL in `html`: where it starts, and the id after `cid:`.
+fn cid_urls(html: &str) -> impl Iterator<Item = (usize, &str)> {
+    html.match_indices("cid:").filter_map(|(at, scheme)| {
+        let rest = html.get(at + scheme.len()..)?;
+        let end = rest
+            .find(|c: char| matches!(c, '"' | '\'' | '>' | ')' | '<') || c.is_whitespace())
+            .unwrap_or(rest.len());
+        let id = rest.get(..end)?;
+        (!id.is_empty()).then_some((at, id))
+    })
+}
 
-    let mut html = html.to_owned();
-    for image in images {
-        let url = format!(
-            "data:{};base64,{}",
-            image.kind,
-            STANDARD.encode(&image.bytes)
-        );
-        html = html.replace(&format!("cid:{}", image.id), &url);
+fn inlined(html: &str, images: &[InlineImage]) -> String {
+    let mut page = String::with_capacity(html.len());
+    let mut copied = 0;
+    for (at, id) in cid_urls(html) {
+        let Some(image) = images.iter().find(|image| image.id == id) else {
+            continue;
+        };
+
+        page.push_str(html.get(copied..at).unwrap_or_default());
+        page.push_str("data:");
+        page.push_str(&image.kind);
+        page.push_str(";base64,");
+        page.push_str(&STANDARD.encode(&image.bytes));
+        copied = at + "cid:".len() + id.len();
     }
 
-    html
+    page.push_str(html.get(copied..).unwrap_or_default());
+    page
 }
 
 /// The policy goes after a doctype: anything before one puts the page in

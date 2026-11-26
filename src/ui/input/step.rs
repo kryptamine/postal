@@ -10,7 +10,7 @@ use crate::{
     ui::exit::Exit,
     ui::input::keymap::Direction,
     ui::outside::open_outside::Outside,
-    ui::outside::wanted_attachments::{Purpose, Wanted},
+    ui::outside::wanted_parts::{Purpose, Wanted},
 };
 
 /// What the event loop does after one input event.
@@ -26,6 +26,7 @@ pub enum Step {
     Attachments(Purpose),
     Attachment(Wanted),
     Open(Outside),
+    Original,
     LocalDrafts,
     Settings,
     /// The editor on the signature of the Account at this address.

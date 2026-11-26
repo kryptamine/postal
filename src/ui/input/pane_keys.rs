@@ -38,6 +38,7 @@ pub fn act(
             Step::Stay
         }
         Some(Action::Open(to)) => Step::Open(to),
+        Some(Action::Original) => Step::Original,
         Some(Action::SignIn) => screen
             .signed_out()
             .map_or(Step::Stay, |account| Step::Exit(Exit::SignIn(account))),
