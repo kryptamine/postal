@@ -238,8 +238,8 @@ fn no_visible_links_toasts_no_links() {
     quit(t);
 }
 
-// In the rendered View a label covers the start of its link, so the mail
-// keeps its columns.
+// In the rendered View a label uses blank space before its link when
+// available, else covers the link's start, so the mail keeps its columns.
 #[test]
 fn a_label_covers_its_link_in_the_rendered_view() {
     let body = format!(
@@ -260,7 +260,7 @@ fn a_label_covers_its_link_in_the_rendered_view() {
     let before = row(&t.screen());
 
     t.send(Key::Char('o')).unwrap();
-    t.wait_until(|s| row(s).contains("ahe notes")).unwrap();
+    t.wait_until(|s| row(s).contains("athe notes")).unwrap();
     let labelled = row(&t.screen());
     assert_eq!(labelled.find("right column"), before.find("right column"));
 

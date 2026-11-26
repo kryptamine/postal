@@ -1,4 +1,5 @@
 use ratatui::{buffer::Buffer, layout::Rect};
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     render::preview::Preview, ui::frame::theme::Theme, ui::preview::link_hints::LinkHints,
@@ -28,7 +29,7 @@ impl PreviewLines<'_> {
                 .hints
                 .and_then(|hints| hints.label(self.part, index, run));
             // Text moves right to make room for a label; a laid out mail
-            // keeps its columns, and the label covers the link's start.
+            // keeps its columns, and the label goes before or over the link.
             if let Some(label) = label.as_ref().filter(|_| !preview.laid_out) {
                 x = buf
                     .set_stringn(x, row.y, label.as_str(), room(x), theme.label)
@@ -43,8 +44,23 @@ impl PreviewLines<'_> {
             let style = theme.painted(segment.marks, segment.paint);
             x = buf.set_stringn(x, row.y, segment.text, room(x), style).0;
             if let Some(label) = label.filter(|_| preview.laid_out) {
-                buf.set_stringn(start, row.y, label.as_str(), room(start), theme.label);
+                let at = label_at(buf, row, start, label.as_str().width());
+                buf.set_stringn(at, row.y, label.as_str(), room(at), theme.label);
             }
         }
     }
+}
+
+/// Where a laid out link's label of `width` goes: in the blank cells the line
+/// already drew before the link at `start`, or else over the link's start.
+fn label_at(buf: &Buffer, row: Rect, start: u16, width: usize) -> u16 {
+    let blank = |x: u16| {
+        buf.cell((x, row.y))
+            .is_some_and(|cell| cell.symbol() == " ")
+    };
+    u16::try_from(width)
+        .ok()
+        .and_then(|width| start.checked_sub(width))
+        .filter(|&before| before >= row.x && (before..start).all(blank))
+        .unwrap_or(start)
 }
