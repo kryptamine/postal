@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.0](https://github.com/kryptamine/postal/compare/v0.9.0...v0.10.0) (2026-11-26)
+
+
+### Features
+
+* **rendered:** improve preheaders, borders, links, text and emoji ([8e98a90](https://github.com/kryptamine/postal/commit/8e98a90abd6a2773c5b53ee3d3ad106db24de94a))
+
+
+### Bug Fixes
+
+* **rendered:** collapse empty zero-height bordered blocks into rules ([433cbf2](https://github.com/kryptamine/postal/commit/433cbf253f68d14a65c8944f460ad51ed41e048c))
+* **rendered:** collapse transparent wrapper height around buttons ([bef627b](https://github.com/kryptamine/postal/commit/bef627babd8e3fa4bf21c5c958b3d7611492ebb2))
+* **rendered:** underline only single-row inline ink links ([0437016](https://github.com/kryptamine/postal/commit/043701654e56efcda8e6d202ff32a7c6b83a2018))
+
 ## [0.9.0](https://github.com/kryptamine/postal/compare/v0.8.0...v0.9.0) (2026-11-26)
 
 
