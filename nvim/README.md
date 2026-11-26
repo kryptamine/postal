@@ -26,6 +26,7 @@ on the release tag of the `postal` you run. From a clone, point lazy.nvim's
 | a Draft's body    | warns when it mentions an attachment and no `Attach:` names a file        |
 | a Markdown Draft  | parses what you write as Markdown: render-markdown.nvim renders it        |
 | `To:` and `Cc:`   | marks a recipient a send would refuse, and an address no mail holds       |
+| a Draft's headers | marks no recipient in `To:` nor `Cc:`, and an empty `Subject:`            |
 | `:PostalContacts` | picks a Correspondent and adds it to `To:`, or the `Cc:` under the cursor |
 | `:PostalSend`     | writes and sends the Draft, unless a check warns; `!` sends anyway        |
 | an `Attach:` line | shows the file's size, or that it is missing; `gf` edits the file         |
