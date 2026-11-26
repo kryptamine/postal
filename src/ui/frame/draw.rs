@@ -7,9 +7,11 @@ use crate::{
     ui::frame::layout,
     ui::frame::theme::Theme,
     ui::list::completion_menu::CompletionMenu,
+    ui::list::inbox_view::InboxView,
     ui::list::message_list::MessageList,
     ui::list::search::Search,
     ui::popup::help_popup::HelpPopup,
+    ui::popup::layer::Layer,
     ui::preview::attachment_hints::AttachmentHints,
     ui::preview::link_hints::LinkHints,
     ui::preview::preview_pane::{self, PreviewPane},
@@ -20,7 +22,7 @@ use crate::{
     ui::state::screen::Screen,
     ui::state::ui::Ui,
     ui::terminal::terminal_backend::TerminalBackend,
-    ui::widgets::hint_line::HintLine,
+    ui::widgets::hint_line::{HintLine, Hints},
 };
 
 pub fn draw(
@@ -61,34 +63,13 @@ pub fn draw(
             }
 
             let keys = screen.keys();
-            let (status, account) = screen.status();
-            let hint_line =
-                HintLine {
-                    theme,
-                    toast: screen.toast.as_ref(),
-                    status,
-                    account: account.map(|account| accounts.email(account)),
-                    outbox: screen.outbox,
-                    mode: keys,
-                    query: view.search.as_ref().map(Search::query).filter(|_| {
-                        !matches!(keys, Mode::Draft | Mode::LocalDrafts | Mode::Queued)
-                    }),
-                    parsed: view.search.as_ref().map(Search::parsed),
-                    capped: view.search.as_ref().is_some_and(Search::capped),
-                    indexing: screen.index_progress(),
-                    picks: if keys == Mode::List {
-                        view.count_picked()
-                    } else {
-                        0
-                    },
-                    now: Instant::now(),
-                };
-
-            if let Some(cursor) = hint_line.cursor(panes.hint) {
+            let hint_line = hint_line(theme, accounts, view, screen, keys);
+            let mut cursor = None;
+            frame.render_stateful_widget(hint_line, panes.hint, &mut cursor);
+            if let Some(cursor) = cursor {
                 frame.set_cursor_position(cursor);
             }
 
-            frame.render_widget(hint_line, panes.hint);
             if let Some(search) = view.search.as_ref().filter(|_| keys.typing()) {
                 frame.render_widget(menu(theme, search, panes.hint), frame.area());
             }
@@ -97,6 +78,52 @@ pub fn draw(
         })
         .map_err(Error::Terminal)?;
     Ok(())
+}
+
+fn hint_line<'a>(
+    theme: &'a Theme,
+    accounts: Accounts<'a>,
+    view: &'a InboxView,
+    screen: &'a Screen,
+    keys: Mode,
+) -> HintLine<'a> {
+    let (status, account) = screen.status();
+    HintLine {
+        theme,
+        toast: screen.toast.as_ref(),
+        status,
+        account: account.map(|account| accounts.email(account)),
+        outbox: screen.outbox,
+        hints: hints(screen, keys),
+        query: view
+            .search
+            .as_ref()
+            .map(Search::query)
+            .filter(|_| !matches!(keys, Mode::Draft | Mode::LocalDrafts | Mode::Queued)),
+        parsed: view.search.as_ref().map(Search::parsed),
+        capped: view.search.as_ref().is_some_and(Search::capped),
+        indexing: screen.index_progress(),
+        picks: if keys == Mode::List {
+            view.count_picked()
+        } else {
+            0
+        },
+        now: Instant::now(),
+    }
+}
+
+/// The hint line's keys: none under `?`, whose popup names its own, else
+/// those of the layer on top or of the mode.
+fn hints(screen: &Screen, keys: Mode) -> Hints {
+    if screen.help.is_some() {
+        return Hints::Fixed(&[]);
+    }
+
+    screen
+        .over
+        .top()
+        .and_then(Layer::hints)
+        .map_or(Hints::Keys(keys), Hints::Fixed)
 }
 
 /// The Search's suggestions over the hint line `hint`, from the word they

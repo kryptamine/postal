@@ -1,8 +1,8 @@
 use ratatui::{
     buffer::Buffer,
-    layout::{Position, Rect},
+    layout::{Margin, Position, Rect},
     style::{Modifier, Style},
-    widgets::{Block, Clear, Widget},
+    widgets::{Block, Clear, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -13,7 +13,7 @@ use crate::{
     ui::popup::settings_mode::{Field, Mode},
     ui::popup::settings_section::Section,
     ui::popup::settings_value::Value,
-    ui::widgets::{popup_area::popup_area, truncate},
+    ui::widgets::{centred::centred, input, popup_area::popup_area, truncate},
 };
 
 const TITLE: &str = " Settings ";
@@ -41,14 +41,17 @@ const CANCEL: &str = "cancel";
 
 /// Settings centred over `area`, a tab per Section: the tab's heading and
 /// what it sets, its rows, a line for a question or a failure, its keys,
-/// then a button for `Enter` and one for `Esc`.
+/// then a button for `Enter` and one for `Esc`. Its state is where the
+/// terminal's cursor goes: after the setting being typed.
 pub struct SettingsPopup<'a> {
     pub theme: &'a Theme,
     pub settings: &'a Settings,
 }
 
-impl Widget for SettingsPopup<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl StatefulWidget for SettingsPopup<'_> {
+    type State = Option<Position>;
+
+    fn render(self, area: Rect, buf: &mut Buffer, cursor: &mut Option<Position>) {
         let popup = popup(area, self.settings);
         Clear.render(popup, buf);
         Block::bordered()
@@ -58,6 +61,7 @@ impl Widget for SettingsPopup<'_> {
         buf.set_stringn(popup.x + 1, popup.y, TITLE, room, self.theme.title);
         let inner = inner(popup);
         if inner.height < HEADER + FOOTER + 1 || inner.width < 20 {
+            centred("terminal too small", popup.inner(Margin::new(1, 1)), buf);
             return;
         }
 
@@ -75,17 +79,22 @@ impl Widget for SettingsPopup<'_> {
             height: inner.height - HEADER - FOOTER,
             ..inner
         };
-        self.list(buf, list);
+        *cursor = self.list(buf, list);
         self.footer(buf, inner);
     }
 }
 
 impl SettingsPopup<'_> {
-    /// A label per Section, the one shown selected.
+    /// A label per Section, scrolled so the selected one stays in view.
     fn tabs(&self, buf: &mut Buffer, row: Rect) {
+        let active = Section::ALL
+            .iter()
+            .position(|&section| section == self.settings.section())
+            .unwrap_or(0);
+        let first = first_tab(active, row.width);
         let mut x = row.x;
-        for section in Section::ALL {
-            let style = if *section == self.settings.section() {
+        for &section in Section::ALL.get(first..).unwrap_or_default() {
+            let style = if section == self.settings.section() {
                 self.theme.chosen
             } else {
                 self.theme.muted
@@ -93,17 +102,23 @@ impl SettingsPopup<'_> {
 
             let label = format!(" {} ", section.label());
             let room = usize::from(row.right().saturating_sub(x));
+            if room == 0 {
+                break;
+            }
+
             (x, _) = buf.set_stringn(x, row.y, &label, room, style);
             x = x.saturating_add(1);
         }
     }
 
-    /// The tab's rows, scrolled to keep the selected one in view.
-    fn list(&self, buf: &mut Buffer, list: Rect) {
+    /// The tab's rows, scrolled to keep the selected one in view; returns
+    /// where the cursor goes.
+    fn list(&self, buf: &mut Buffer, list: Rect) -> Option<Position> {
         let settings = self.settings;
         let selected = settings.selected();
         let offset = offset(settings, list);
         let rows = settings.rows().skip(offset);
+        let mut cursor = None;
         for (row, y) in rows.zip(list.y..list.bottom()) {
             let chosen = row == selected;
             let style = if chosen {
@@ -122,12 +137,18 @@ impl SettingsPopup<'_> {
                 ..area
             };
 
-            self.row(buf, text, row, style);
+            // Every row draws; only the one typed into places the cursor.
+            if let Some(at) = self.row(buf, text, row, style) {
+                cursor = Some(at);
+            }
         }
+
+        cursor
     }
 
-    /// One row in `area`: its label, then what it holds, right-aligned.
-    fn row(&self, buf: &mut Buffer, area: Rect, row: Row, style: Style) {
+    /// One row in `area`: its label, then what it holds, right-aligned, or
+    /// what is typed into it; returns where the cursor goes while typed.
+    fn row(&self, buf: &mut Buffer, area: Rect, row: Row, style: Style) -> Option<Position> {
         let settings = self.settings;
         let muted = style.patch(self.theme.muted);
         // Written only for the Send row, so no other row allocates it.
@@ -143,12 +164,16 @@ impl SettingsPopup<'_> {
             },
             Row::Add => ("+ Add account", "", style),
             Row::Name => match (settings.mode(), &settings.name) {
-                (Mode::Typing(Field::Name, typed), _) => (typed.as_str(), "", style),
+                (Mode::Typing(Field::Name, typed), _) => {
+                    return input::draw(buf, area, typed, style);
+                }
                 (_, Some(name)) => (name.as_str(), "", style),
                 (_, None) => ("none", "", muted),
             },
             Row::SendDelay => match settings.mode() {
-                Mode::Typing(Field::SendDelay, typed) => (typed.as_str(), "", style),
+                Mode::Typing(Field::SendDelay, typed) => {
+                    return input::draw(buf, area, typed, style);
+                }
                 _ if settings.send_delay.is_zero() => ("0 seconds", "a Send leaves at once", muted),
                 _ => {
                     delay = format!("{} seconds", settings.send_delay.as_secs());
@@ -158,29 +183,20 @@ impl SettingsPopup<'_> {
             Row::Handler if settings.handler => ("Postal opens mailto: links", "on", style),
             Row::Handler => ("Postal opens mailto: links", "off", muted),
             Row::TerminalCommand => match (settings.mode(), &settings.terminal) {
-                (Mode::Typing(Field::TerminalCommand, typed), _) => (typed.as_str(), "", style),
+                (Mode::Typing(Field::TerminalCommand, typed), _) => {
+                    return input::draw(buf, area, typed, style);
+                }
                 (_, Terminal::Command(command)) => ("own command", command.as_str(), style),
                 (_, Terminal::App(_)) => ("own command", "none", muted),
             },
-            Row::Choice(value) => return self.choice(buf, area, value, style),
+            Row::Choice(value) => {
+                self.choice(buf, area, value, style);
+                return None;
+            }
         };
 
-        let width = u16::try_from(detail.width())
-            .unwrap_or(u16::MAX)
-            .min(area.width);
-        let label_area = Rect {
-            width: area.width.saturating_sub(width + 1),
-            ..area
-        };
-
-        truncate::draw(buf, label_area, label, style);
-        let detail_area = Rect {
-            x: area.right() - width,
-            width,
-            ..area
-        };
-
-        truncate::draw(buf, detail_area, detail, detail_style);
+        draw_labelled(buf, area, (label, style), (detail, detail_style));
+        None
     }
 
     /// `value`, a tick when it is in effect, then what it does, muted, in
@@ -255,30 +271,60 @@ impl SettingsPopup<'_> {
         put(" ", Style::new());
         put(close, Style::new());
     }
+}
 
-    /// Where the terminal's cursor goes while a setting is typed: after it,
-    /// on the selected row.
-    pub fn cursor(&self, area: Rect) -> Option<Position> {
-        let settings = self.settings;
-        let Mode::Typing(_, typed) = settings.mode() else {
-            return None;
-        };
-        let inner = inner(popup(area, settings));
-        let list = Rect {
-            y: inner.y + HEADER,
-            height: inner.height.saturating_sub(HEADER + FOOTER),
-            ..inner
-        };
+/// The leftmost tab shown: as far left as still shows tab `active` in
+/// `width` columns.
+fn first_tab(active: usize, width: u16) -> usize {
+    let tab_width =
+        |section: &Section| u16::try_from(section.label().width() + 2).unwrap_or(u16::MAX);
+    let mut used = Section::ALL.get(active).map_or(0, tab_width);
+    let mut first = active;
+    while let Some(before) = first.checked_sub(1).and_then(|at| Section::ALL.get(at)) {
+        used = used.saturating_add(tab_width(before) + 1);
+        if used > width {
+            break;
+        }
 
-        let at = settings.rows().position(|row| row == settings.selected());
-        let shown = at.unwrap_or(0).saturating_sub(offset(settings, list));
-        let typed = u16::try_from(typed.width()).unwrap_or(u16::MAX);
-        let x = (inner.x + TEXT).saturating_add(typed);
-        let y = list
-            .y
-            .saturating_add(u16::try_from(shown).unwrap_or(u16::MAX));
-        (x < inner.right() && y < inner.bottom()).then(|| Position::new(x, y))
+        first -= 1;
     }
+
+    first
+}
+
+/// Draws `label` at the left and `detail` right-aligned, preserving at least
+/// half the row (up to the label's width) for `label`.
+fn draw_labelled(
+    buf: &mut Buffer,
+    area: Rect,
+    (label, style): (&str, Style),
+    (detail, detail_style): (&str, Style),
+) {
+    if detail.is_empty() {
+        truncate::draw(buf, area, label, style);
+        return;
+    }
+
+    let label_min = u16::try_from(label.width())
+        .unwrap_or(u16::MAX)
+        .min(area.width / 2);
+    let max_detail = area.width.saturating_sub(label_min + 1);
+    let width = u16::try_from(detail.width())
+        .unwrap_or(u16::MAX)
+        .min(max_detail);
+    let label_area = Rect {
+        width: area.width.saturating_sub(width + 1),
+        ..area
+    };
+
+    truncate::draw(buf, label_area, label, style);
+    let detail_area = Rect {
+        x: area.right() - width,
+        width,
+        ..area
+    };
+
+    truncate::draw(buf, detail_area, detail, detail_style);
 }
 
 /// What `Enter` does on the selected row, as its button reads; none on

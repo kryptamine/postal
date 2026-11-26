@@ -19,6 +19,27 @@ pub fn draw(buf: &mut Buffer, area: Rect, text: &str, style: Style) -> u16 {
     end
 }
 
+/// The longest suffix of `text` that fits `width` columns, cut on a grapheme
+/// boundary.
+pub fn tail(text: &str, width: usize) -> &str {
+    if text.width() <= width {
+        return text;
+    }
+
+    let mut used = 0;
+    let mut start = text.len();
+    for (at, grapheme) in text.grapheme_indices(true).rev() {
+        used += grapheme.width();
+        if used > width {
+            break;
+        }
+
+        start = at;
+    }
+
+    text.split_at(start).1
+}
+
 /// The longest prefix of `text` that fits `width` columns, cut on a grapheme
 /// boundary, and whether it was cut. A cut prefix leaves one column for `…`.
 pub fn fit(text: &str, width: usize) -> (&str, bool) {

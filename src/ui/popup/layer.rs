@@ -4,12 +4,21 @@ use crossterm::event::KeyEvent;
 use ratatui::{Frame, layout::Rect};
 
 use crate::{
-    compose::accounts::Accounts, compose::local_drafts::LocalDrafts, ui::drafts::draft_layer,
-    ui::drafts::draft_preview::DraftPreview, ui::drafts::local_drafts_layer,
-    ui::frame::theme::Theme, ui::input::keymap::Binding, ui::popup::folder_picker::FolderPicker,
-    ui::popup::hints_layer, ui::popup::layer_act::Act, ui::popup::picker_layer,
-    ui::popup::settings::Settings, ui::popup::settings_layer,
-    ui::preview::attachment_hints::AttachmentHints, ui::preview::link_hints::LinkHints,
+    compose::accounts::Accounts,
+    compose::local_drafts::LocalDrafts,
+    ui::drafts::draft_layer,
+    ui::drafts::draft_preview::DraftPreview,
+    ui::drafts::local_drafts_layer,
+    ui::frame::theme::Theme,
+    ui::input::keymap::{Binding, Hint},
+    ui::popup::folder_picker::FolderPicker,
+    ui::popup::hints_layer,
+    ui::popup::layer_act::Act,
+    ui::popup::picker_layer,
+    ui::popup::settings::Settings,
+    ui::popup::settings_layer,
+    ui::preview::attachment_hints::AttachmentHints,
+    ui::preview::link_hints::LinkHints,
     ui::state::mode::Mode,
 };
 
@@ -57,6 +66,18 @@ impl Layer {
             Self::Draft(preview) => Some(draft_layer::mode(preview)),
             Self::LocalDrafts(_) => Some(Mode::LocalDrafts),
             Self::Picker(_) | Self::Hints(_) | Self::AttachmentHints(_) => None,
+        }
+    }
+
+    /// The hint line's keys while this layer takes them, in place of its
+    /// mode's.
+    pub const fn hints(&self) -> Option<&'static [Hint]> {
+        match self {
+            Self::Picker(_) => Some(picker_layer::HINTS),
+            Self::Settings(settings) => settings_layer::hints(settings),
+            Self::Draft(_) | Self::LocalDrafts(_) | Self::Hints(_) | Self::AttachmentHints(_) => {
+                None
+            }
         }
     }
 

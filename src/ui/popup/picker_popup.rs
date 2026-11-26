@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Position, Rect},
     style::Style,
     symbols::line,
-    widgets::{Block, Clear, Widget},
+    widgets::{Block, Clear, StatefulWidget, Widget},
 };
 use unicode_width::UnicodeWidthStr;
 
@@ -16,8 +16,7 @@ use crate::{
     ui::frame::theme::Theme,
     ui::popup::folder_picker::{FolderPicker, Purpose, Row},
     ui::widgets::centred::centred,
-    ui::widgets::truncate,
-    ui::widgets::{popup_area::popup_area, scrollbar::scrollbar},
+    ui::widgets::{input, popup_area::popup_area, scrollbar::scrollbar, truncate},
 };
 
 const TITLE: &str = " Folders ";
@@ -33,14 +32,17 @@ const BAR: u16 = 1;
 
 /// The Folder Picker centred over `area`: the Query, a rule, then a row per
 /// Folder with its counts right-aligned, under each Account's address when
-/// there are several; scrolled to keep the selected row in view.
+/// there are several; scrolled to keep the selected row in view. Its state is
+/// where the terminal's cursor goes: after the Query.
 pub struct PickerPopup<'a> {
     pub theme: &'a Theme,
     pub picker: &'a FolderPicker,
 }
 
-impl Widget for PickerPopup<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+impl StatefulWidget for PickerPopup<'_> {
+    type State = Option<Position>;
+
+    fn render(self, area: Rect, buf: &mut Buffer, cursor: &mut Option<Position>) {
         let popup = popup(area, self.picker);
         Clear.render(popup, buf);
         Block::bordered()
@@ -50,8 +52,12 @@ impl Widget for PickerPopup<'_> {
         let title = title(self.picker);
         buf.set_stringn(popup.x + 1, popup.y, title, room, self.theme.title);
 
+        if popup.height < 3 {
+            return;
+        }
+
         let inner = inner(popup);
-        self.query(buf, popup, inner);
+        *cursor = self.query(buf, popup, inner);
         let list = Rect {
             y: inner.y + 2,
             height: inner.height.saturating_sub(2),
@@ -62,9 +68,20 @@ impl Widget for PickerPopup<'_> {
             return centred("no matches", list, buf);
         }
 
+        self.draw_rows(buf, popup, list);
+    }
+}
+
+impl PickerPopup<'_> {
+    fn draw_rows(&self, buf: &mut Buffer, popup: Rect, list: Rect) {
         let fitting = usize::from(list.height);
+        let total = self.picker.rows().count();
+        let scrollable = total > fitting;
         let offset = (self.picker.selected() + 1).saturating_sub(fitting);
         let rows = self.picker.rows().enumerate().skip(offset).take(fitting);
+        let highlight_width = popup
+            .width
+            .saturating_sub(2 + if scrollable { BAR } else { 0 });
         for ((index, row), y) in rows.zip(list.y..) {
             let folder = match row {
                 Row::Folder(folder) => folder,
@@ -79,7 +96,7 @@ impl Widget for PickerPopup<'_> {
                 }
             };
 
-            let row = Rect::new(popup.x + 1, y, popup.width.saturating_sub(2), 1);
+            let row = Rect::new(popup.x + 1, y, highlight_width, 1);
             let style = if index == self.picker.selected() {
                 self.theme.chosen
             } else {
@@ -99,18 +116,17 @@ impl Widget for PickerPopup<'_> {
             );
         }
 
-        let track = Rect::new(list.right(), list.y, BAR, list.height);
-        let total = self.picker.rows().count();
+        // Leave a blank column between right-aligned counts and the thumb.
+        let track = Rect::new(popup.right().saturating_sub(2), list.y, BAR, list.height);
         scrollbar(buf, track, (offset, total), self.theme.muted);
     }
-}
 
-impl PickerPopup<'_> {
-    /// The Query on the first row of `inner`, and the rule under it.
-    fn query(&self, buf: &mut Buffer, popup: Rect, inner: Rect) {
+    /// The Query on the first row of `inner`, and the rule under it; returns
+    /// where the cursor goes.
+    fn query(&self, buf: &mut Buffer, popup: Rect, inner: Rect) -> Option<Position> {
         let (x, _) = buf.set_stringn(inner.x, inner.y, PROMPT, inner.width.into(), self.theme.key);
-        let left = usize::from(inner.right().saturating_sub(x));
-        buf.set_stringn(x, inner.y, self.picker.query(), left, Style::new());
+        let typed = Rect::new(x, inner.y, inner.right().saturating_sub(x), 1);
+        let cursor = input::draw(buf, typed, self.picker.query(), Style::new());
 
         let rule = Rect::new(popup.x, inner.y + 1, popup.width, 1);
         if rule.width >= 2 && rule.y < popup.bottom().saturating_sub(1) {
@@ -118,6 +134,8 @@ impl PickerPopup<'_> {
             let joined = format!("{}{middle}{}", line::VERTICAL_RIGHT, line::VERTICAL_LEFT);
             buf.set_string(rule.x, rule.y, joined, self.theme.border);
         }
+
+        cursor
     }
 
     /// One Folder in `row`: its icon and label, then its Unread count over
@@ -151,17 +169,6 @@ impl PickerPopup<'_> {
             count_width.into(),
             count_style,
         );
-    }
-
-    /// Where the terminal's cursor goes: after the Query.
-    pub fn cursor(&self, area: Rect) -> Position {
-        let inner = inner(popup(area, self.picker));
-        let typed = PROMPT.width() + self.picker.query().width();
-        let x = inner
-            .x
-            .saturating_add(u16::try_from(typed).unwrap_or(u16::MAX))
-            .min(inner.right().saturating_sub(1));
-        Position::new(x, inner.y)
     }
 }
 

@@ -397,3 +397,41 @@ fn n_keeps_the_account() {
     assert_eq!(config(&home), before);
     quit(t);
 }
+
+// On a narrow terminal, tabbing to a rightmost section keeps its tab visible
+// and a long value still leaves the row's label readable.
+#[test]
+fn narrow_settings_scrolls_tabs_and_keeps_row_labels() {
+    let server = inbox();
+    let home = Home::for_server(&server);
+    let mut t = home
+        .terminal()
+        .size(48, 22)
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(|s| s.contains("Weekly notes")).unwrap();
+    t.send(Key::Char(',')).unwrap();
+    // The tabs past the box's width are off screen, Secrets among them.
+    t.wait_until(|s| s.contains("Settings") && s.contains("Accounts"))
+        .unwrap();
+    for _ in 0..5 {
+        t.send(Key::Tab).unwrap();
+    }
+
+    t.wait_until(|s| s.contains("Mailto") && s.contains("own command"))
+        .unwrap();
+    let tab_row = t.screen().row_text(2);
+    assert!(tab_row.contains("Mailto"), "{tab_row}");
+
+    for _ in 0..7 {
+        t.send(Key::Char('j')).unwrap();
+    }
+
+    t.send(Key::Enter).unwrap();
+    t.send_str("/usr/local/bin/very-long-custom-terminal-launcher-wrapper-script")
+        .unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("own command") && s.contains("/usr/local/bin/"))
+        .unwrap();
+    quit(t);
+}
