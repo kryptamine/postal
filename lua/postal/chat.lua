@@ -94,10 +94,10 @@ function Chat:prompt(instruction)
 	end)
 end
 
---- Prompts with the first instruction waiting, once the session is up, no
---- turn runs and no edit of the agent's waits for review.
+--- Prompts with the first instruction waiting, once the session is up and
+--- no turn runs.
 function Chat:next()
-	if self.session and self.thread ~= nil and not self.busy and not self.review and #self.queue > 0 then
+	if self.session and self.thread ~= nil and not self.busy and #self.queue > 0 then
 		self:prompt(table.remove(self.queue, 1))
 	end
 end
@@ -105,9 +105,7 @@ end
 --- Sends `instruction` when the agent is free, the body as it is then.
 function Chat:send(instruction)
 	table.insert(self.queue, instruction)
-	if self.review then
-		self.pane:notice("Sent once the agent's edit is reviewed.")
-	elseif self.busy then
+	if self.busy then
 		self.pane:notice("Sent once the agent's turn ends.")
 	end
 
@@ -287,7 +285,6 @@ function M.start(mail, name, ended, actions)
 	local kind = kinds[vim.b[mail].postal_kind]
 	local self = setmetatable({ mail = mail, kind = kind, name = name, calls = {}, queue = {} }, Chat)
 	self.path = vim.api.nvim_buf_get_name(mail)
-	-- A review left open holds back the new chat's first prompt.
 	self.review = ended and ended.review
 	if self.review then
 		self.review.changed = function(summary, undone)

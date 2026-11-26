@@ -34,19 +34,30 @@ local function body()
 	return vim.api.nvim_buf_get_lines(draft_buf, 2, -1, false)
 end
 
+local chat, written
+-- How many writes of the agent's the pane has reported.
+local function writes()
+	return select(2, said(chat):gsub("✓ write_draft · ", ""))
+end
+
 -- Types `text` in the pane's input and sends it, as the user would.
 local function ask(text)
 	home()
 	vim.cmd("PostalAgent")
+	chat = vim.api.nvim_get_current_buf()
+	written = writes()
 	vim.api.nvim_buf_set_lines(0, -2, -1, false, { text })
 	vim.cmd.normal(vim.keycode("<CR>"))
 end
 
--- Each turn the stub asks four times
+-- Each turn the stub asks four times and writes once, even when the body
+-- it leaves is the one already shown
 local function turn(want)
-	if not vim.wait(10000, function()
-		return vim.deep_equal(body(), want) and #answers() == 4 * #prompts()
-	end) then
+	if
+		not vim.wait(10000, function()
+			return writes() > written and vim.deep_equal(body(), want) and #answers() == 4 * #prompts()
+		end)
+	then
 		fail("the body is " .. vim.inspect(body()) .. ", not " .. vim.inspect(want))
 	end
 end
@@ -214,20 +225,25 @@ if #second ~= 2 or second[1].resource.text ~= asked or second[2].text ~= "shorte
 	fail("the second prompt is " .. vim.inspect(second))
 end
 
--- An instruction waits for the review of the agent's last edit
-ask("slowly")
-vim.wait(200)
-if #prompts() ~= 2 then
-	fail("prompted while a review was open")
+-- An instruction while a review is open goes at once, with the edit as it
+-- stands; the next write replaces the review, against the user's own body
+ask("redo")
+turn({ "", "HELLO BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
+shows({ "hello bob", "see you", "", "drop me" })
+local third = prompts()[3].params.prompt
+if #third ~= 3 or not third[1].text:find("under the user's review", 1, true) or third[3].text ~= "redo" then
+	fail("the prompt over an open review is " .. vim.inspect(third))
 end
 
 press(4, "<leader>R")
 is({ "", "hello bob", "", "see you", "", "drop me", "", said_by, "> Shall we meet?" })
 shows({})
+
+ask("slowly")
 if not vim.wait(5000, function()
-	return #prompts() == 3
+	return #prompts() == 4
 end) then
-	fail("the waiting instruction was never sent")
+	fail("slowly was never sent")
 end
 
 -- The user's edit while the agent works is never overwritten unasked
@@ -265,7 +281,7 @@ if vim.fn.maparg("<leader>a", "n", false, true).buffer == 1 then
 end
 
 -- An agent that ends with its edit under review hands the review to the
--- next one, whose first instruction waits for it
+-- next one, which prompts at once and replaces it
 vim.api.nvim_buf_set_lines(draft_buf, 3, 4, false, { "bye bob" })
 ask("quit")
 turn({ "", "BYE BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
@@ -275,24 +291,12 @@ end) then
 	fail("the quitting agent never ended: " .. vim.inspect(said(pane_buf)))
 end
 
-local before_restart = #prompts()
 ask("after")
-vim.wait(500)
-if #prompts() ~= before_restart then
-	fail("the restarted chat prompted while a review was open")
-end
-
-left("1 hunk left")
+turn({ "", "BYE BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
+shows({ "bye bob" })
 press(4, "<leader>a")
 is({ "", "BYE BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 left("")
-if not vim.wait(10000, function()
-	return #prompts() == before_restart + 1
-end) then
-	fail("the restarted chat never sent the waiting instruction")
-end
-
-turn({ "", "BYE BOB", "", "SEE YOU", "", said_by, "> Shall we meet?" })
 
 -- `q` in the pane stops a turn, and the pane says so; a chunk after the
 -- user deleted the blank line over the input still ends the agent's text

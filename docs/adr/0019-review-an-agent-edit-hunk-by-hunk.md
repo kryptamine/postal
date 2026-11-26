@@ -20,9 +20,12 @@ all. Every other hunk is placed as usual.
 A later write in the same turn replaces the open review, its placed hunks
 taken back first; a read in that turn gets the agent's last write, so an
 agent editing twice builds on its own text. An instruction given while a
-review is open waits for it to end, so each prompt carries a body the
-user has settled. A chat started again after its agent ended takes over
-the review still open, and waits for it the same way.
+review is open goes at once, so the user can ask for another take on an
+edit they do not like without deciding it first: the prompt carries the
+body as it stands, undecided hunks included, and says the review is open.
+The next write replaces that review, and is diffed against the body with
+the undecided hunks rejected, the user's own text. A chat started again
+after its agent ended takes over the review still open the same way.
 
 The placed hunks are their own undo step. An undo past it ends the
 review, the body left as the undo made it, since the hunks' marks would
@@ -36,6 +39,9 @@ no longer sit on the lines they placed.
   wrap or take a cursor.
 - **A whole-body diff in a split (`:diffthis`).** No per-hunk accept
   beyond `do`/`dp`, and nothing to tell a conflict from a clean hunk.
+- **An instruction waits for the open review to end.** Each prompt would
+  carry a settled body, but asking to redo an edit would first take an
+  accept or a reject the user does not mean.
 - **A three-way merge of the user's edits into the agent's text.** It
   would apply a hunk the user never looked at over lines they were
   changing.

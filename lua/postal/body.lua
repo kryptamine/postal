@@ -39,13 +39,17 @@ function M.whole(buf)
 	return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n") .. "\n"
 end
 
-function M.get(buf)
-	local lines = vim.api.nvim_buf_get_lines(buf, (M.start(buf)), -1, false)
+--- Lines as a body's text: empty, or each line ending in a newline.
+function M.join(lines)
 	if #lines == 0 then
 		return ""
 	end
 
 	return table.concat(lines, "\n") .. "\n"
+end
+
+function M.get(buf)
+	return M.join(vim.api.nvim_buf_get_lines(buf, (M.start(buf)), -1, false))
 end
 
 --- Adds the blank line that ends the headers when there is none, and
