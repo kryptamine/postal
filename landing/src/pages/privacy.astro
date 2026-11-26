@@ -101,9 +101,9 @@ import Prose from '@app/layouts/Prose.astro';
   <p>
     Postal's developer never receives your Google user data: Postal has no servers, and the data
     goes only between your computer and Google. It is not sold, and not shared with or transferred
-    to any third party, with one exception you control: if you ask an AI agent you installed
-    yourself about a Message or a Draft (see "An agent you run" below), Postal hands that text to
-    your agent. Nothing goes to an agent until you ask.
+    to any third party, with one exception you control: an AI agent you installed and connected
+    yourself (see "An agent you run" below) receives the mail you ask it about, or that it reads
+    through Postal's MCP server once you connect it. Nothing goes to an agent you have not set up.
   </p>
 
   <h3>Storage and protection</h3>
@@ -149,11 +149,23 @@ import Prose from '@app/layouts/Prose.astro';
 
   <h2>An agent you run</h2>
   <p>
-    The Neovim plugin can open a chat with an AI agent that you install and configure yourself.
-    Postal ships no agent and starts none on its own. When you ask your agent about a Message or a
-    Draft, its text goes to that agent, and the agent's own privacy terms apply to it. Nothing is
-    shared with an agent until you ask.
+    Postal ships no AI agent and starts none on its own. Two features let an agent you install and
+    configure yourself work with your mail, and the agent's own privacy terms apply to what it
+    receives:
   </p>
+  <ul>
+    <li>
+      <strong>The Neovim plugin</strong> can open a chat with your agent. When you ask it about a
+      Message or a Draft, that text goes to the agent.
+    </li>
+    <li>
+      <strong>The MCP server</strong> (<code>postal mcp</code>) runs only when you register it with
+      an agent, and talks to that agent alone, over its standard input and output. The agent can
+      then list, search and read the mail in the Cache, and sync it; it cannot send, move or delete
+      mail.
+    </li>
+  </ul>
+  <p>Nothing is shared with an agent you have not set up.</p>
 
   <h2>No telemetry</h2>
   <p>Postal sends no analytics, no usage statistics and no crash reports.</p>
