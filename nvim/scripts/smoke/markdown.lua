@@ -79,4 +79,21 @@ if cut ~= 4 or vim.fn.foldclosed(5) ~= 5 or vim.fn.foldclosedend(5) ~= 7 then
 	fail(("wrapped attribution cut at %s, fold %d..%d"):format(cut, vim.fn.foldclosed(5), vim.fn.foldclosedend(5)))
 end
 
+-- A Reply with no words of the writer's yet sends its Quote as Markdown, as
+-- `quoted_text::cut` does, and still folds it
+vim.api.nvim_buf_set_lines(0, 0, -1, false, {
+	"To: bob@example.com",
+	"Subject: Plan",
+	"",
+	"On Mon, 1 Mar 2026, Ada <ada@example.com> wrote:",
+	"> # not mine",
+})
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+local _, _, whole = parser:parse(true)[1]:root():range()
+if whole ~= 5 or vim.fn.foldclosed(4) ~= 4 or vim.fn.foldclosedend(4) ~= 5 then
+	fail(
+		("a bare Quote's Markdown ends at %s, fold %d..%d"):format(whole, vim.fn.foldclosed(4), vim.fn.foldclosedend(4))
+	)
+end
+
 vim.cmd("bwipeout!")
