@@ -16,18 +16,12 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    quit,
 };
 use termlens::{Key, Screen, Terminal};
 
 fn postal(home: &Home, (cols, rows): (u16, u16), no_color: bool) -> Terminal {
-    let builder = Terminal::builder()
-        .size(cols, rows)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10));
+    let builder = home.terminal().size(cols, rows);
     let builder = if no_color {
         builder.env("NO_COLOR", "1")
     } else {
@@ -35,11 +29,6 @@ fn postal(home: &Home, (cols, rows): (u16, u16), no_color: bool) -> Terminal {
     };
 
     builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 fn fixture(name: &str) -> FakeBody {

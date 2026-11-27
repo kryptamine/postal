@@ -19,6 +19,7 @@ use support::{
     home::Home,
     notifier::Notifier,
     picker::picked,
+    quit, wait_for,
 };
 use termlens::{Key, Terminal, TerminalBuilder};
 
@@ -53,16 +54,7 @@ fn home(server: &FakeImap, notify: Option<&str>) -> Home {
 }
 
 fn builder(home: &Home, notifier: &Notifier) -> TerminalBuilder {
-    Terminal::builder()
-        .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("PATH", notifier.path())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
+    home.terminal().size(120, 30).env("PATH", notifier.path())
 }
 
 /// Postal once the Inbox shows and the sync connection idles on it.
@@ -71,19 +63,6 @@ fn idling(server: &FakeImap, t: TerminalBuilder) -> Terminal {
     t.wait_until(|s| s.contains("Weekly notes")).unwrap();
     wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
     t
-}
-
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(std::time::Instant::now() < deadline, "timed out");
-        std::thread::sleep(Duration::from_millis(10));
-    }
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 // By default the user is told only while looking elsewhere: mail that

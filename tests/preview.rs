@@ -7,12 +7,11 @@
 
 mod support;
 
-use std::time::{Duration, Instant};
-
 use support::{
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, Outage, Stall},
     home::Home,
+    quit, wait_for,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -20,29 +19,10 @@ use termlens::{Key, Screen, Terminal};
 const BODY: &str = "(UID BODY.PEEK[HEADER] BODY.PEEK[1])";
 
 fn postal(home: &Home, cols: u16) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(cols, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 fn idling(server: &FakeImap) -> bool {

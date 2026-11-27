@@ -57,15 +57,10 @@ pub fn started(body: FakeBody, run: &Run) -> (Terminal, FakeImap) {
     let server = FakeImap::start(vec![message]);
     let home = Home::for_server(&server);
     let (r, g, b) = run.background;
-    let builder = Terminal::builder()
+    let builder = home
+        .terminal()
         .size(run.size.0, run.size.1)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .background_rgb(r, g, b)
-        .timeout(Duration::from_secs(10));
+        .background_rgb(r, g, b);
     let builder = if run.no_color {
         builder.env("NO_COLOR", "1")
     } else {

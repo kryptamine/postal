@@ -15,22 +15,13 @@ use super::{
 pub const LIST: usize = 42;
 
 pub fn postal(home: &Home) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }
 
-pub fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
+pub use super::quit;
 
 pub fn message(sender: &'static str, subject: &str, date: &str, body: &str) -> FakeMessage {
     FakeMessage::new(sender, subject, date).body(FakeBody::plain(body))

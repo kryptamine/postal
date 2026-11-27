@@ -10,15 +10,13 @@
 
 mod support;
 
-use std::{
-    fs,
-    time::{Duration, Instant},
-};
+use std::{fs, time::Duration};
 
 use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    wait_for,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -27,14 +25,8 @@ use termlens::{Key, Screen, Terminal};
 const MESSAGES: i64 = 60;
 
 fn postal(home: &Home) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(80, 20)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }
@@ -83,14 +75,6 @@ fn frames(home: &Home) -> Vec<u64> {
             count.split_whitespace().next().unwrap().parse().unwrap()
         })
         .collect()
-}
-
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 /// The frames logged once no new one has come for a while, and past a

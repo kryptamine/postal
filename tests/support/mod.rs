@@ -1,4 +1,8 @@
-#![allow(dead_code, reason = "each test binary uses part of the harness")]
+#![allow(
+    dead_code,
+    unused_imports,
+    reason = "each test binary uses part of the harness"
+)]
 
 pub mod browser;
 pub mod client_config;
@@ -16,6 +20,11 @@ pub mod notifier;
 pub mod pager;
 pub mod picker;
 pub mod query;
+mod quit;
 mod relay;
 pub mod rendered;
 pub mod search;
+mod wait;
+
+pub use quit::quit;
+pub use wait::wait_for;

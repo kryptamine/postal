@@ -10,10 +10,7 @@
 
 mod support;
 
-use std::{
-    process::Output,
-    time::{Duration, Instant},
-};
+use std::{process::Output, time::Duration};
 
 use serde_json::Value;
 use support::{
@@ -22,6 +19,7 @@ use support::{
     home::Home,
     picker::wait_picked,
     search::{hint_line, list, postal, quit, wait_selected},
+    wait_for,
 };
 use termlens::{Key, Terminal};
 
@@ -61,14 +59,6 @@ fn found(home: &Home, query: &str) -> Vec<String> {
     rows.iter()
         .map(|row| row["subject"].as_str().unwrap().to_owned())
         .collect()
-}
-
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 fn idling(server: &FakeImap) -> bool {

@@ -26,16 +26,10 @@ use termlens::{Key, Terminal};
 
 fn spawn(home: &Home, browser: &Browser, args: &[&str]) -> Terminal {
     // Tall enough for the `?` popup to reach the App group, which lists `L`.
-    Terminal::builder()
+    home.terminal()
         .size(100, 36)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("PATH", browser.path())
-        .env("TZ", "UTC")
         .args(args)
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }

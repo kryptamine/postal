@@ -10,13 +10,14 @@
 
 mod support;
 
-use std::{fmt::Write, time::Duration};
+use std::fmt::Write;
 
 use support::{
     browser::Browser,
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
+    quit,
 };
 use termlens::{Color, Key, Screen, Terminal};
 
@@ -31,22 +32,11 @@ fn postal(home: &Home, browser: &Browser) -> Terminal {
 }
 
 fn spawn(home: &Home, browser: &Browser) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("PATH", browser.path())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 fn html(subject: &str, day: u32, html: &str) -> FakeMessage {

@@ -26,6 +26,7 @@ use support::{
     fake_smtp::FakeSmtp,
     home::Home,
     picker::picked,
+    quit, wait_for,
 };
 use tempfile::TempDir;
 use termlens::{Key, Screen, Signal, Terminal};
@@ -91,11 +92,6 @@ fn postal(home: &Home, editor: &str) -> Terminal {
 
 fn listed(screen: &Screen) -> bool {
     screen.contains("Weekly notes") && !screen.contains(ASKED)
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 /// The second TUI's answer `y`, once it asks.
@@ -297,13 +293,4 @@ fn a_sigterm_no_takeover_sent_quits_without_naming_a_terminal() {
     let text = left(&mut first);
     assert!(text.contains("postal: quit on SIGTERM"), "{text}");
     assert!(!text.contains("moved"), "{text}");
-}
-
-#[track_caller]
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(std::time::Instant::now() < deadline, "timed out");
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }

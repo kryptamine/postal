@@ -10,13 +10,12 @@
 
 mod support;
 
-use std::time::{Duration, Instant};
-
 use support::{
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, INBOX, Outage},
     home::Home,
     picker::{move_rows, mover, picked, picker},
+    quit, wait_for,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -27,34 +26,10 @@ const ALL_MAIL: &str = "[Gmail]/All Mail";
 const LIST: usize = 42;
 
 fn postal(home: &Home) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
-#[track_caller]
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out at {}",
-            std::panic::Location::caller()
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 fn message(sender: &'static str, subject: &str, date: &str) -> FakeMessage {

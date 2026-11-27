@@ -18,6 +18,7 @@ use support::{
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
     picker::wait_picked,
+    quit,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -25,21 +26,10 @@ use termlens::{Key, Screen, Terminal};
 const LIST: usize = 42;
 
 fn postal(home: &Home) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 fn message(sender: &'static str, (subject, body): (&str, &str), date: &str) -> FakeMessage {

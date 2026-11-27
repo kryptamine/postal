@@ -119,17 +119,11 @@ fn spawn(home: &Home, browser: &Browser, args: &[&str]) -> Terminal {
 }
 
 fn spawn_with(home: &Home, browser: &Browser, args: &[&str], envs: &[(&str, &str)]) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("PATH", browser.path())
-        .env("TZ", "UTC")
         .envs(envs.iter().copied())
         .args(args)
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }

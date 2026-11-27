@@ -15,7 +15,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Output,
-    time::Duration,
 };
 
 use serde_json::Value;
@@ -45,17 +44,9 @@ fn postal(home: &Home) -> Terminal {
 }
 
 fn postal_editing(home: &Home, editor: &str) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", editor)
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }

@@ -12,11 +12,7 @@
 
 mod support;
 
-use std::{
-    fs,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::{fs, path::PathBuf};
 
 use mail_parser::{Address, MessageParser};
 use support::{
@@ -26,6 +22,7 @@ use support::{
     fake_smtp::FakeSmtp,
     home::Home,
     picker::picked,
+    quit, wait_for,
 };
 use tempfile::TempDir;
 use termlens::{Key, Screen, Terminal};
@@ -95,18 +92,9 @@ fn named_home(imap: &FakeImap, smtp: &FakeSmtp, name: &str) -> Home {
 
 /// `PATH` stays, for `sh` to find the editor's commands.
 fn postal(home: &Home, editor: &str) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", editor)
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }
@@ -158,24 +146,6 @@ fn open_local(t: &mut Terminal) {
 fn quit_saved(mut t: Terminal) {
     t.wait_until(saved).unwrap();
     quit(t);
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
-#[track_caller]
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out at {}",
-            std::panic::Location::caller()
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 /// The Drafts' files with what each holds.
