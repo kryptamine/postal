@@ -103,5 +103,5 @@ pub fn bindings(mode: Mode, signed_out: bool) -> impl Iterator<Item = &'static B
         .chain(draft_layer::HELP)
         .chain(local_drafts_layer::HELP)
         .chain(settings_layer::HELP)
-        .filter(move |b| b.modes.contains(&mode) && (signed_out || !b.signed_out))
+        .filter(move |b| b.shown_in(mode, signed_out))
 }

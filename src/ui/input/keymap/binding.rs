@@ -12,6 +12,13 @@ pub struct Binding {
     pub hint: Option<Hint>,
 }
 
+impl Binding {
+    /// Whether the `?` popup and the hint line list it in `mode`.
+    pub fn shown_in(&self, mode: Mode, signed_out: bool) -> bool {
+        self.modes.contains(&mode) && (signed_out || !self.signed_out)
+    }
+}
+
 pub struct Hint {
     pub keys: &'static str,
     pub description: &'static str,
