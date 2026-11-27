@@ -27,7 +27,8 @@ needs `make landing` (Node and pnpm).
 
 `make coverage` (`cargo-llvm-cov`) shows the lines no test runs, and
 `make mutants FILE=src/...` (`cargo-mutants`) the changes to a file no test
-notices; neither is part of `make check`.
+notices, and `make mutants-diff` those among the lines a branch changed, a
+run of minutes before a pull request; none is part of `make check`.
 
 ## The rules
 
