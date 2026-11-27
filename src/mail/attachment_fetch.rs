@@ -1,5 +1,5 @@
 use crate::{
-    domain::message_ref::MessageRef, mail::body_fetch, mail::imap::MailServer, mail::sync::Error,
+    domain::message_ref::MessageRef, mail::imap::MailServer, mail::part_fetch, mail::sync::Error,
     mail::unfetched::Unfetched, mail::update::Update,
 };
 
@@ -28,18 +28,14 @@ pub async fn fetch(
 ) -> Result<(), Error> {
     let AttachmentRequest { message, index } = request;
     let index = *index;
-    let bytes = if body_fetch::open(server, &message.folder).await? {
-        match server.attachment(message.uid, index).await {
-            Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err(Unfetched::Failed("the server no longer has it".to_owned())),
-            Err(error) => match error.refusal() {
-                Some(reason) => Err(Unfetched::Failed(reason.to_owned())),
-                None => return Err(error.into()),
-            },
-        }
-    } else {
-        Err(Unfetched::Failed("its Folder is gone".to_owned()))
-    };
+    let uid = message.uid;
+    let fetched = part_fetch::in_folder(server, &message.folder, async |server| {
+        server.attachment(uid, index).await
+    });
+
+    let bytes = fetched
+        .await?
+        .and_then(|bytes| bytes.ok_or_else(|| Unfetched::Failed(part_fetch::NOT_HELD.to_owned())));
 
     send(Update::Attachment(AttachmentFetched {
         message: message.clone(),

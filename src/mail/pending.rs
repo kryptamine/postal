@@ -12,6 +12,7 @@ use crate::{
     mail::body_fetch::{self, AwaitedRequest, BodyRequest, Fetched, OneShot, Request, Standing},
     mail::imap::MailServer,
     mail::inline_fetch::{self, InlineFetched},
+    mail::part_fetch,
     mail::spare_work::SpareWork,
     mail::sync::Error,
     mail::unfetched::Unfetched,
@@ -194,12 +195,9 @@ async fn fetch_awaited(
     let (unanswered, reason) = if body_fetch::open(server, folder).await? {
         let answered = body_fetch::fetch_each(server, cache, folder, uids.clone(), send).await?;
         let unanswered = uids.iter().filter(|u| !answered.contains(u)).copied();
-        (
-            unanswered.collect::<Vec<_>>(),
-            "the server no longer has it",
-        )
+        (unanswered.collect::<Vec<_>>(), part_fetch::NOT_HELD)
     } else {
-        (uids.clone(), "its Folder is gone")
+        (uids.clone(), part_fetch::FOLDER_GONE)
     };
 
     if !unanswered.is_empty() {

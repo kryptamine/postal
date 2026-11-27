@@ -27,6 +27,7 @@ mod one_by_one;
 mod oneshot_attempt;
 pub mod outage;
 pub mod outbox_flush;
+mod part_fetch;
 mod pending;
 mod queued;
 mod reconnect;
