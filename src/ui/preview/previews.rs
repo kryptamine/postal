@@ -201,14 +201,17 @@ impl Previews {
         for (message, selected) in wanted {
             let key = key(message);
             let here = folder.is_some() && self.holds(message);
+            // A rendered Preview leaves the queue alone: each order sent may
+            // allocate a block of the channel, in a frame that must not.
+            if self.rendered.touch(key) {
+                continue;
+            }
+
             if selected {
                 self.queue.prefer(key);
             }
 
-            if self.rendered.touch(key)
-                || self.rendering.contains(&key)
-                || (here && self.unavailable(message.uid))
-            {
+            if self.rendering.contains(&key) || (here && self.unavailable(message.uid)) {
                 continue;
             }
 
