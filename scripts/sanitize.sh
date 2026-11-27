@@ -4,7 +4,6 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-cache=${1:-${XDG_CACHE_HOME:-$HOME/.cache}/postal/cache.sqlite3}
 out=$root/target/sanitize
 lite=$root/vendor/litehtml
 gumbo=$lite/src/gumbo/src
@@ -43,22 +42,7 @@ done
 wait
 clang++ "${flags[@]}" "$out"/obj/*.o -o "$out/drv"
 
-python3 -I - "$cache" "$out/corpus" "$root"/tests/fixtures/*.eml <<'EOF'
-import email, email.policy, os, sqlite3, sys
-
-cache, out, fixtures = sys.argv[1], sys.argv[2], sys.argv[3:]
-raws = [(os.path.basename(f), open(f, 'rb').read()) for f in fixtures]
-if os.path.exists(cache):
-    db = sqlite3.connect(f'file:{cache}?mode=ro', uri=True)
-    raws += [(str(k), r) for k, r in db.execute('select key, raw from body')]
-for name, raw in raws:
-    try:
-        part = email.message_from_bytes(raw, policy=email.policy.default).get_body(preferencelist=('html',))
-        if part is not None:
-            open(f'{out}/{name}.html', 'w').write(part.get_content())
-    except Exception:
-        pass
-EOF
+python3 -I "$root/scripts/corpus.py" "${1:-}" "$out/corpus"
 
 count=$(find "$out/corpus" -name '*.html' | wc -l | tr -d ' ')
 export ASAN_OPTIONS=detect_leaks=0:halt_on_error=0 UBSAN_OPTIONS=print_stacktrace=1
