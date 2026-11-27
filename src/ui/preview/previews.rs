@@ -145,6 +145,8 @@ impl Previews {
     ) -> Result<(), cache::Error> {
         let selected = view.selected;
         let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
+        // The selection first, so the queue hears it is preferred before the
+        // jobs of its neighbours.
         let rows = std::iter::once(selected).chain(around.filter(|&i| i != selected));
         let wanted = rows.filter_map(|index| Some((view.row(index)?, index == selected)));
         let folder = view
@@ -200,15 +202,14 @@ impl Previews {
         for (message, selected) in wanted {
             let key = key(message);
             let here = folder.is_some() && self.holds(message);
-            if self.rendered.touch(key) {
-                continue;
-            }
-
             if selected {
-                self.queue.want(key);
+                self.queue.prefer(key);
             }
 
-            if self.rendering.contains(&key) || (here && self.unavailable(message.uid)) {
+            if self.rendered.touch(key)
+                || self.rendering.contains(&key)
+                || (here && self.unavailable(message.uid))
+            {
                 continue;
             }
 

@@ -23,15 +23,15 @@ enum Work {
 
 enum Order {
     Work(Work),
-    Wanted(PreviewKey),
+    Prefer(PreviewKey),
 }
 
 /// The render thread and its queue. Work waiting is taken in the order of
-/// what is on screen: the wanted Preview, then the HTML of a Draft, then
-/// the Preview asked last, which is nearest the selection.
+/// what is on screen: the preferred Preview, then the HTML of a Draft,
+/// then the newest Preview.
 pub struct RenderQueue {
     orders: mpsc::Sender<Order>,
-    wanted: Option<PreviewKey>,
+    preferred: Option<PreviewKey>,
 }
 
 impl RenderQueue {
@@ -41,7 +41,7 @@ impl RenderQueue {
         thread::spawn(move || serve(&queue, &updates));
         Self {
             orders,
-            wanted: None,
+            preferred: None,
         }
     }
 
@@ -54,10 +54,10 @@ impl RenderQueue {
     }
 
     /// Puts the Preview of `key`, once asked, ahead of all the others.
-    pub fn want(&mut self, key: PreviewKey) {
-        if self.wanted != Some(key) {
-            self.wanted = Some(key);
-            self.send(Order::Wanted(key));
+    pub fn prefer(&mut self, key: PreviewKey) {
+        if self.preferred != Some(key) {
+            self.preferred = Some(key);
+            self.send(Order::Prefer(key));
         }
     }
 
@@ -69,21 +69,21 @@ impl RenderQueue {
 
 fn serve(queue: &Receiver<Order>, updates: &UnboundedSender<(AccountId, Update)>) {
     let mut waiting = Vec::new();
-    let mut wanted = None;
+    let mut preferred = None;
     loop {
         if waiting.is_empty() {
             let Ok(order) = queue.recv() else {
                 return;
             };
 
-            take(order, &mut waiting, &mut wanted);
+            take(order, &mut waiting, &mut preferred);
         }
 
         while let Ok(order) = queue.try_recv() {
-            take(order, &mut waiting, &mut wanted);
+            take(order, &mut waiting, &mut preferred);
         }
 
-        let Some(work) = next(&mut waiting, wanted) else {
+        let Some(work) = next(&mut waiting, preferred) else {
             continue;
         };
 
@@ -93,17 +93,17 @@ fn serve(queue: &Receiver<Order>, updates: &UnboundedSender<(AccountId, Update)>
     }
 }
 
-fn take(order: Order, waiting: &mut Vec<Work>, wanted: &mut Option<PreviewKey>) {
+fn take(order: Order, waiting: &mut Vec<Work>, preferred: &mut Option<PreviewKey>) {
     match order {
         Order::Work(work) => waiting.push(work),
-        Order::Wanted(key) => *wanted = Some(key),
+        Order::Prefer(key) => *preferred = Some(key),
     }
 }
 
-fn next(waiting: &mut Vec<Work>, wanted: Option<PreviewKey>) -> Option<Work> {
+fn next(waiting: &mut Vec<Work>, preferred: Option<PreviewKey>) -> Option<Work> {
     let at = waiting
         .iter()
-        .position(|work| matches!(work, Work::Preview(job) if Some(job.key) == wanted))
+        .position(|work| matches!(work, Work::Preview(job) if Some(job.key) == preferred))
         .or_else(|| {
             waiting
                 .iter()
