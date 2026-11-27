@@ -17,7 +17,7 @@ use mail_parser::{MessageParser, MimeHeaders};
 use support::{
     editor::{preview_newest, saved},
     fake_body::FakeBody,
-    fake_imap::{EMAIL, FakeImap, FakeMessage, Stall},
+    fake_imap::{EMAIL, FakeImap, FakeMessage, Outage, Stall},
     fake_oauth,
     fake_smtp::{FakeSmtp, Received},
     home::Home,
@@ -292,6 +292,39 @@ fn a_forward_opens_its_draft_once_the_attachments_are_in() {
     assert!(!saved(&t.screen()));
 
     imap.release();
+    t.wait_until(saved).unwrap();
+    assert!(draft(&home).0.contains("report.pdf\n"));
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
+// A Forward's in-flight request dies with the fetch connection and must be
+// asked again once the connection is back.
+#[test]
+fn a_forward_whose_fetch_connection_drops_asks_again_after_reconnect() {
+    let body = FakeBody::multipart(
+        "mixed",
+        vec![
+            FakeBody::plain("See the files."),
+            FakeBody::file("application", "pdf").disposition_param("filename", "report.pdf"),
+        ],
+    );
+    let imap = FakeImap::start(vec![from_ada("Contract", body)]);
+    let smtp = FakeSmtp::start();
+    let home = home(&imap, &smtp);
+    let mut t = postal(&home);
+    t.wait_until(|s| s.contains("See the files.")).unwrap();
+    imap.stall(Stall::Part);
+    t.send(Key::Char('F')).unwrap();
+    t.wait_until(|s| s.contains("fetching the Message…"))
+        .unwrap();
+
+    imap.fail(Outage::Offline);
+    imap.release();
+    t.wait_until(|s| s.contains("offline")).unwrap();
+    assert!(!saved(&t.screen()));
+
+    imap.recover();
     t.wait_until(saved).unwrap();
     assert!(draft(&home).0.contains("report.pdf\n"));
     t.send(Key::Ctrl('c')).unwrap();
