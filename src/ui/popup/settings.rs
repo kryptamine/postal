@@ -38,6 +38,25 @@ pub enum Row {
     TerminalCommand,
 }
 
+/// A setting change that takes effect on the running screen at once.
+#[derive(Clone, Copy)]
+pub enum Live {
+    Icons(IconChoice),
+    Notify(NotifyChoice),
+    /// Where Search finds Correspondents besides mail, read at once when
+    /// turned on so macOS asks for access then.
+    Contacts(ContactsChoice),
+}
+
+/// How a written change reaches the running TUI.
+enum Effect {
+    Live(Live),
+    /// Read at start, so closing Settings reloads the session.
+    Reload,
+    /// Written, and read anew wherever it is used.
+    Saved,
+}
+
 /// What a key in Settings leaves to the event loop.
 pub enum Step {
     Stay,
@@ -51,9 +70,7 @@ pub enum Step {
     Unlink(String),
     /// The editor on the signature of the Account at this address.
     Signature(String),
-    Icons(IconChoice),
-    Notify(NotifyChoice),
-    Contacts(ContactsChoice),
+    Live(Live),
     Quit,
 }
 
@@ -182,15 +199,15 @@ impl Settings {
                 match field::edit(&mut typed, key) {
                     Edit::Submit => {
                         let text = Some(typed.trim().to_owned()).filter(|text| !text.is_empty());
-                        match typing {
-                            Field::Name => self.change(|settings| settings.rename(text)),
+                        return match typing {
+                            Field::Name => self.apply(|settings| settings.rename(text)),
                             Field::SendDelay => {
-                                self.change(|settings| settings.set_send_delay(text.as_deref()))
+                                self.apply(|settings| settings.set_send_delay(text.as_deref()))
                             }
                             Field::TerminalCommand => {
                                 let terminal =
                                     text.map_or_else(Terminal::default, Terminal::Command);
-                                self.change(|settings| settings.set_terminal(terminal))
+                                self.apply(|settings| settings.set_terminal(terminal))
                             }
                         };
                     }
@@ -263,9 +280,7 @@ impl Settings {
 
                 self.mode = Mode::Typing(Field::TerminalCommand, command);
             }
-            Row::Handler => {
-                self.change(Self::switch_handler);
-            }
+            Row::Handler => return self.apply(Self::switch_handler),
             Row::Choice(value) => return self.choose(value),
         }
 
@@ -278,68 +293,74 @@ impl Settings {
             return Step::Stay;
         }
 
-        match value {
+        self.apply(|settings| match value {
             Value::Icons(icons) => {
-                if self.change(|settings| settings.write(|config| config.set_icons(icons))) {
-                    self.icons = icons;
-                    return Step::Icons(icons);
-                }
+                settings.write(|config| config.set_icons(icons))?;
+                settings.icons = icons;
+                Ok(Effect::Live(Live::Icons(icons)))
             }
             Value::Notify(notify) => {
-                if self.change(|settings| settings.write(|config| config.set_notify(notify))) {
-                    self.notify = notify;
-                    return Step::Notify(notify);
-                }
+                settings.write(|config| config.set_notify(notify))?;
+                settings.notify = notify;
+                Ok(Effect::Live(Live::Notify(notify)))
             }
-            Value::Secrets(store) => {
-                self.change(|settings| settings.switch_store(store));
-            }
-            Value::Terminal(app) => {
-                self.change(|settings| settings.set_terminal(Terminal::App(app)));
-            }
-            Value::Compose(format) => {
-                self.change(|settings| settings.set_compose_format(format));
-            }
+            Value::Secrets(store) => settings.switch_store(store),
+            Value::Terminal(app) => settings.set_terminal(Terminal::App(app)),
+            Value::Compose(format) => settings.set_compose_format(format),
             Value::Contacts(contacts) => {
-                if self.change(|settings| settings.write(|config| config.set_contacts(contacts))) {
-                    self.contacts = contacts;
-                    return Step::Contacts(contacts);
-                }
+                settings.write(|config| config.set_contacts(contacts))?;
+                settings.contacts = contacts;
+                Ok(Effect::Live(Live::Contacts(contacts)))
             }
-        }
-
-        Step::Stay
+        })
     }
 
-    /// Makes one change; true when it was made, else its failure is kept.
-    fn change(&mut self, change: impl FnOnce(&mut Self) -> Result<(), Box<dyn Error>>) -> bool {
-        self.failure = change(self).err().map(|error| {
-            tracing::warn!("settings: {error}");
-            error.to_string()
-        });
-        self.failure.is_none()
+    /// Makes one change and hands on its `Effect`; a failure is kept.
+    fn apply(&mut self, change: impl FnOnce(&mut Self) -> Result<Effect, Box<dyn Error>>) -> Step {
+        self.failure = None;
+        match change(self) {
+            Ok(Effect::Live(live)) => Step::Live(live),
+            Ok(Effect::Reload) => {
+                self.reload = true;
+                Step::Stay
+            }
+            Ok(Effect::Saved) => Step::Stay,
+            Err(error) => {
+                self.fail(&*error);
+                Step::Stay
+            }
+        }
+    }
+
+    fn fail(&mut self, error: &dyn Error) {
+        tracing::warn!("settings: {error}");
+        self.failure = Some(error.to_string());
     }
 
     /// What the editor left of an Account's signature: `true` when
     /// `config.toml` changed, which the running Accounts read at start.
     pub fn signature_edited(&mut self, edited: Result<bool, Box<dyn Error>>) {
-        self.change(|settings| {
-            settings.reload |= edited?;
-            let config = PartialConfig::load(&settings.dir.join("config.toml"))?;
-            settings.signatures = signatures(&config);
+        self.failure = None;
+        let reread = edited.and_then(|changed| {
+            self.reload |= changed;
+            let config = PartialConfig::load(&self.dir.join("config.toml"))?;
+            self.signatures = signatures(&config);
             Ok(())
         });
+
+        if let Err(error) = reread {
+            self.fail(&*error);
+        }
     }
 
-    fn rename(&mut self, name: Option<String>) -> Result<(), Box<dyn Error>> {
+    fn rename(&mut self, name: Option<String>) -> Result<Effect, Box<dyn Error>> {
         self.write(|config| config.set_name(name.as_deref()))?;
         self.name = name;
-        self.reload = true;
-        Ok(())
+        Ok(Effect::Reload)
     }
 
     /// `typed` whole seconds, or the default for none.
-    fn set_send_delay(&mut self, typed: Option<&str>) -> Result<(), Box<dyn Error>> {
+    fn set_send_delay(&mut self, typed: Option<&str>) -> Result<Effect, Box<dyn Error>> {
         let delay = match typed {
             Some(typed) => Duration::from_secs(
                 typed
@@ -352,26 +373,24 @@ impl Settings {
         self.write(|config| config.set_send_delay(delay))?;
         self.send_delay = delay;
         // The Outbox holds each Send for the delay it opened with.
-        self.reload = true;
-        Ok(())
+        Ok(Effect::Reload)
     }
 
-    fn set_compose_format(&mut self, format: ComposeFormat) -> Result<(), Box<dyn Error>> {
+    fn set_compose_format(&mut self, format: ComposeFormat) -> Result<Effect, Box<dyn Error>> {
         self.write(|config| config.set_compose_format(format))?;
         self.compose_format = format;
         // Each Account read its format at start.
-        self.reload = true;
-        Ok(())
+        Ok(Effect::Reload)
     }
 
-    fn set_terminal(&mut self, terminal: Terminal) -> Result<(), Box<dyn Error>> {
+    fn set_terminal(&mut self, terminal: Terminal) -> Result<Effect, Box<dyn Error>> {
         self.write(|config| config.set_terminal(&terminal))?;
         self.terminal = terminal;
-        Ok(())
+        Ok(Effect::Saved)
     }
 
     /// Sets Postal up as the mailto: handler, or removes it.
-    fn switch_handler(&mut self) -> Result<(), Box<dyn Error>> {
+    fn switch_handler(&mut self) -> Result<Effect, Box<dyn Error>> {
         if self.handler {
             mailto_handler::remove()?;
         } else {
@@ -379,12 +398,12 @@ impl Settings {
         }
 
         self.handler = !self.handler;
-        Ok(())
+        Ok(Effect::Saved)
     }
 
     /// Copies every Account's secret to `to`, then names it in
     /// `config.toml`, then deletes the old copies: no step loses a secret.
-    fn switch_store(&mut self, to: SecretStore) -> Result<(), Box<dyn Error>> {
+    fn switch_store(&mut self, to: SecretStore) -> Result<Effect, Box<dyn Error>> {
         let from = self.secrets;
         let dir = &self.dir;
         let keys: Vec<_> = self
@@ -411,8 +430,7 @@ impl Settings {
 
         written?;
         self.secrets = kept;
-        self.reload = true;
-        Ok(())
+        Ok(Effect::Reload)
     }
 
     /// Writes `config.toml` as it is now, with `change` made.

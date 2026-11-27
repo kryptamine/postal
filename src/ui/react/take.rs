@@ -9,7 +9,7 @@ use crate::{
     ui::exit::Exit,
     ui::input::step::Step,
     ui::outside::open_outside,
-    ui::popup::settings::Settings,
+    ui::popup::settings::{Live, Settings},
     ui::popup::signature_edit,
     ui::preview::attachment_hints::label_attachments,
     ui::preview::link_labels::{browse, label_links},
@@ -51,17 +51,19 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         Step::Signature(email) => {
             signature_edit::open(&mut model.tty, &mut ui.screen, world.config_dir, &email)?;
         }
-        Step::Icons(choice) => {
-            model.theme.icons = Icons::choose(choice);
-            model.previews.set_look(model.theme.mail_look());
-        }
-        Step::Notify(choice) => model.notifier.notify = choice,
-        Step::Contacts(choice) => {
-            model.world.contacts = choice;
-            if choice != ContactsChoice::None {
-                ui.screen.contacts_check.start(choice);
+        Step::Live(live) => match live {
+            Live::Icons(choice) => {
+                model.theme.icons = Icons::choose(choice);
+                model.previews.set_look(model.theme.mail_look());
             }
-        }
+            Live::Notify(choice) => model.notifier.notify = choice,
+            Live::Contacts(choice) => {
+                model.world.contacts = choice;
+                if choice != ContactsChoice::None {
+                    ui.screen.contacts_check.start(choice);
+                }
+            }
+        },
         Step::Exit(exit) => return Ok(Some(exit)),
     }
 
