@@ -2,6 +2,7 @@ use tokio::time::Instant;
 
 use crate::{
     cache::Cache,
+    compose::outbox::Outbox,
     domain::indexing::Indexing,
     domain::per_account::{AccountId, PerAccount},
     domain::thread::Key,
@@ -13,6 +14,7 @@ use crate::{
     ui::popup::layer::Layer,
     ui::popup::over::Over,
     ui::preview::link_hints::LinkHints,
+    ui::preview::reading::Reading,
     ui::state::dwell::Dwell,
     ui::state::mode::Mode,
     ui::state::showing::Showing,
@@ -25,23 +27,23 @@ use crate::{
 pub struct Screen {
     /// The `?` popup: over everything, `over` included, taking every key
     /// while open.
-    pub help: Option<Help>,
-    pub toast: Option<Toast>,
+    help: Option<Help>,
+    toast: Option<Toast>,
     /// Each Account's sync connection's.
     pub statuses: PerAccount<Status>,
     /// A page of older Messages under way on the fetch connection.
-    pub backfill: Option<Status>,
+    backfill: Option<Status>,
     /// How far each Account's search index is from every Message.
     pub indexing: PerAccount<Indexing>,
-    pub showing: Showing,
+    showing: Showing,
     pub over: Over,
     pub dwell: Dwell,
     /// What an Undo may take back, the latest last.
-    pub undo: Vec<Undo>,
+    undo: Vec<Undo>,
     /// What a Reply's or a Forward's Draft waits on before it opens.
-    pub awaited: Option<Waiting>,
+    awaited: Option<Waiting>,
     /// The Messages in the Outbox not yet accepted.
-    pub outbox: usize,
+    outbox: usize,
     /// The read of Contacts started by turning them on, while under way.
     pub contacts_check: ContactsCheck,
 }
@@ -71,6 +73,95 @@ impl Screen {
 
     pub fn list(&mut self) {
         self.showing = Showing::List;
+    }
+
+    pub const fn showing(&self) -> &Showing {
+        &self.showing
+    }
+
+    pub fn show(&mut self, showing: Showing) {
+        self.showing = showing;
+    }
+
+    pub const fn reading_mut(&mut self) -> Option<&mut Reading> {
+        self.showing.reading_mut()
+    }
+
+    /// Reading beside the layers over it, borrowed apart so one is drawn
+    /// while the other is read.
+    pub const fn reading_under(&mut self) -> (Option<&mut Reading>, &Over) {
+        (self.showing.reading_mut(), &self.over)
+    }
+
+    pub const fn toast(&self) -> Option<&Toast> {
+        self.toast.as_ref()
+    }
+
+    /// `None` takes down the Toast shown.
+    pub fn set_toast(&mut self, toast: impl Into<Option<Toast>>) {
+        self.toast = toast.into();
+    }
+
+    pub const fn help_mut(&mut self) -> Option<&mut Help> {
+        self.help.as_mut()
+    }
+
+    pub const fn helping(&self) -> bool {
+        self.help.is_some()
+    }
+
+    pub fn open_help(&mut self) {
+        self.help = Some(Help::default());
+    }
+
+    pub fn close_help(&mut self) {
+        self.help = None;
+    }
+
+    /// The Messages waiting in `outbox`, counted again after it changed.
+    pub fn recount(&mut self, outbox: &Outbox) {
+        self.outbox = outbox.count();
+    }
+
+    pub const fn outbox(&self) -> usize {
+        self.outbox
+    }
+
+    /// A page of older Messages under way, `None` once it is in or failed.
+    pub const fn set_backfill(&mut self, backfill: Option<Status>) {
+        self.backfill = backfill;
+    }
+
+    pub fn push_undo(&mut self, undo: Undo) {
+        self.undo.push(undo);
+    }
+
+    /// The latest change an Undo may take back.
+    pub fn pop_undo(&mut self) -> Option<Undo> {
+        self.undo.pop()
+    }
+
+    /// Drops the Undo of each Send that left the Outbox: `u` never unsends
+    /// what SMTP has, and moves on to the entry before.
+    pub fn forget_sent(&mut self) {
+        self.undo
+            .retain(|undo| !matches!(undo, Undo::Send(path) if !path.exists()));
+    }
+
+    pub const fn undo_len(&self) -> usize {
+        self.undo.len()
+    }
+
+    pub fn await_parts(&mut self, waiting: Waiting) {
+        self.awaited = Some(waiting);
+    }
+
+    pub const fn awaited_mut(&mut self) -> Option<&mut Waiting> {
+        self.awaited.as_mut()
+    }
+
+    pub const fn take_awaited(&mut self) -> Option<Waiting> {
+        self.awaited.take()
     }
 
     /// Opens `layer`, else shows the Toast saying why it cannot open.

@@ -191,7 +191,7 @@ impl Model<'_> {
     /// pages the screen wants, then draws it; returns where the Preview's
     /// text goes.
     fn frame(&mut self) -> Result<Option<Rect>, Error> {
-        let panes = self.tty.panes(self.ui.screen.showing.mode())?;
+        let panes = self.tty.panes(self.ui.screen.showing().mode())?;
         if let Some(list) = panes.list {
             let screen = message_list::capacity(list.height);
             self.ui.view.fill(self.world.caches, screen)?;
@@ -203,7 +203,7 @@ impl Model<'_> {
                 caches: self.world.caches,
                 fetch: &self.fetch,
             };
-            let reading = self.ui.screen.showing.reading();
+            let reading = self.ui.screen.showing().reading();
             self.previews
                 .want(sources, &self.ui.view, reading, text.width)?;
         }
@@ -236,7 +236,7 @@ impl Model<'_> {
         let screen = &mut self.ui.screen;
         let awaited = awaiting::notice(screen, account, &update);
         if let Some(toast) = self.parts.notice(account, &update) {
-            screen.toast = Some(toast);
+            screen.set_toast(toast);
         }
 
         self.older.notice(&update);
@@ -255,7 +255,7 @@ impl Model<'_> {
         text: Option<Rect>,
     ) -> Result<Option<Exit>, Error> {
         // A Draft opened, closed, discarded or brought back changes the list.
-        let drafts = |screen: &Screen| (screen.over.is_open::<DraftPreview>(), screen.undo.len());
+        let drafts = |screen: &Screen| (screen.over.is_open::<DraftPreview>(), screen.undo_len());
         let before = drafts(&self.ui.screen);
         match event {
             Some(Ok(Event::FocusGained)) => self.notifier.focus(true),
@@ -284,7 +284,7 @@ fn survive(step: Result<Option<Exit>, Error>, screen: &mut Screen) -> Result<Opt
     match step {
         Err(Error::Cache(error)) => {
             tracing::error!("{error}");
-            screen.toast = Some(Toast::error("cache error"));
+            screen.set_toast(Toast::error("cache error"));
             Ok(None)
         }
         step => step,

@@ -21,6 +21,6 @@ pub fn opening(
     show(&mut view, world.caches, Some(rows))?;
     let rebuilt = world.caches.values().any(Cache::rebuilt);
     let mut screen = Screen::opening(rebuilt, statuses, failure);
-    screen.outbox = world.outbox.count();
+    screen.recount(world.outbox);
     Ok(Ui { view, screen })
 }

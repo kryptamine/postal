@@ -77,7 +77,7 @@ pub fn reply(
 /// the Account, else its newest; in Reading, the one at the cursor.
 fn answered(ui: &Ui) -> Option<Message> {
     let view = &ui.view;
-    let message = ui.screen.showing.reading().map_or_else(
+    let message = ui.screen.showing().reading().map_or_else(
         || {
             view.stack()
                 .filter(|m| !m.from_me)

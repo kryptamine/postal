@@ -23,7 +23,7 @@ use crate::{
 pub fn delete(ui: &mut Ui, world: World) -> Result<(), Error> {
     // A Search never shows Trash.
     if ui.view.search.is_none() && ui.view.folder.role() == Some(Role::Trash) {
-        ui.screen.toast = Some(Toast::new("already in Trash"));
+        ui.screen.set_toast(Toast::new("already in Trash"));
         return Ok(());
     }
 
@@ -34,7 +34,7 @@ pub fn delete(ui: &mut Ui, world: World) -> Result<(), Error> {
 pub fn archive(ui: &mut Ui, world: World) -> Result<(), Error> {
     let shown = ui.view.folder.role();
     if ui.view.search.is_none() && matches!(shown, Some(Role::Archive | Role::All)) {
-        ui.screen.toast = Some(Toast::new("already archived"));
+        ui.screen.set_toast(Toast::new("already archived"));
         return Ok(());
     }
 
@@ -46,13 +46,13 @@ pub fn archive(ui: &mut Ui, world: World) -> Result<(), Error> {
 pub fn pick(ui: &mut Ui, world: World) -> Result<(), Error> {
     let Ui { view, screen } = ui;
     if view.search.is_none() && view.folder.role() == Some(Role::All) {
-        screen.toast = Some(Toast::new("All Mail keeps every Message"));
+        screen.set_toast(Toast::new("All Mail keeps every Message"));
         return Ok(());
     }
 
     let accounts = view.picked_accounts();
     if accounts.len() > 1 {
-        screen.toast = Some(Toast::new("pick one Account's Threads to move"));
+        screen.set_toast(Toast::new("pick one Account's Threads to move"));
         return Ok(());
     }
 
@@ -84,10 +84,10 @@ fn take(ui: &mut Ui, world: World, goal: &Goal, done: &str) -> Result<(), Error>
         let each = |thread| listing.stack(Some(thread));
         (per_account(listing, each), Some(listing.threads().len()))
     } else {
-        let cursor = screen.showing.cursor();
+        let cursor = screen.showing().cursor();
         let Some(taken) = shown(view.stack(), cursor) else {
             if cursor.is_some() {
-                screen.toast = Some(Toast::new("only in another Folder"));
+                screen.set_toast(Toast::new("only in another Folder"));
             }
 
             return Ok(());
@@ -104,14 +104,14 @@ fn take(ui: &mut Ui, world: World, goal: &Goal, done: &str) -> Result<(), Error>
     }
 
     if batches.is_empty() {
-        screen.toast = Some(Toast::new("nothing to move"));
+        screen.set_toast(Toast::new("nothing to move"));
         return Ok(());
     }
 
     let thread = view.selected_key();
     view.picks.clear();
     let accounts: Vec<_> = batches.iter().map(|&(account, _)| account).collect();
-    screen.undo.push(Undo::Move(batches, thread));
+    screen.push_undo(Undo::Move(batches, thread));
     show(view, caches, None)?;
     screen.over.close::<LinkHints>();
     screen.follow(view, thread);
@@ -126,7 +126,7 @@ fn take(ui: &mut Ui, world: World, goal: &Goal, done: &str) -> Result<(), Error>
         || format!("{done} · u to undo"),
         |threads| format!("{threads} {done} · u to undo"),
     );
-    ui.screen.toast = Some(Toast::new(toast));
+    ui.screen.set_toast(Toast::new(toast));
     Ok(())
 }
 
@@ -163,7 +163,7 @@ pub fn undo(
     }
 
     if restored.is_empty() {
-        screen.toast = Some(Toast::new("nothing to undo"));
+        screen.set_toast(Toast::new("nothing to undo"));
         return Ok(());
     }
 
@@ -186,7 +186,7 @@ pub fn undo(
     });
 
     let here = view.search.is_some() || shown;
-    screen.toast = Some(if here {
+    screen.set_toast(if here {
         Toast::new("restored")
     } else {
         let (account, folders) = &restored[0];

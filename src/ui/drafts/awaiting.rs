@@ -46,12 +46,12 @@ pub struct Done(Waiting, Result<(), String>);
 /// before, as each would open its own Draft over the other.
 pub fn start(screen: &mut Screen, fetch: &FetchRequests, waiting: Waiting) {
     fetch.send(waiting.parts.account(), waiting.parts.request());
-    screen.awaited = Some(waiting);
+    screen.await_parts(waiting);
 }
 
 /// Drops any wait under way, and the standing request it made.
 pub fn cancel(screen: &mut Screen, fetch: &FetchRequests) {
-    if let Some(previous) = screen.awaited.take() {
+    if let Some(previous) = screen.take_awaited() {
         let account = previous.parts.account();
         fetch.send(account, AwaitedParts::new(account).request());
     }
@@ -59,9 +59,9 @@ pub fn cancel(screen: &mut Screen, fetch: &FetchRequests) {
 
 /// Follows `update` of `account` for the awaited Reply or Forward.
 pub fn notice(screen: &mut Screen, account: AccountId, update: &Update) -> Option<Done> {
-    let waiting = screen.awaited.as_mut()?;
+    let waiting = screen.awaited_mut()?;
     let result = waiting.parts.notice(account, update)?;
-    Some(Done(screen.awaited.take()?, result))
+    Some(Done(screen.take_awaited()?, result))
 }
 
 /// The editor on what was awaited, or a Toast saying why not.
