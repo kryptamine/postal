@@ -9,12 +9,26 @@ use crate::{domain::body_key::BodyKey, domain::thread::Key};
 const DELAY: Duration = Duration::from_secs(1);
 
 /// The selection resting on an Unread Thread whose Preview shows its body.
-#[derive(Default)]
 pub struct Dwell {
     /// The Thread, the body key of its newest Message, and since when.
     on: Option<(Key, BodyKey, Instant)>,
     /// Marked Unread by hand: no Dwell on it until the selection leaves it.
     spared: Option<Key>,
+    delay: Duration,
+}
+
+impl Default for Dwell {
+    /// Tests set `POSTAL_DWELL` in seconds, a fraction too: a test that
+    /// checks no Mark Read comes waits out a whole Dwell.
+    fn default() -> Self {
+        let set = std::env::var("POSTAL_DWELL").ok();
+        let test = set.and_then(|secs| Duration::try_from_secs_f64(secs.parse().ok()?).ok());
+        Self {
+            on: None,
+            spared: None,
+            delay: test.unwrap_or(DELAY),
+        }
+    }
 }
 
 impl Dwell {
@@ -35,7 +49,7 @@ impl Dwell {
 
     /// When the Dwell under way ends.
     pub fn due(&self) -> Option<Instant> {
-        self.on.map(|(_, _, since)| since + DELAY)
+        self.on.map(|(_, _, since)| since + self.delay)
     }
 
     /// Whether the Dwell under way has ended by `now`; it is over then.
