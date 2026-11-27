@@ -10,7 +10,6 @@ use crate::{
     ui::exit::Exit,
     ui::input::step::Live,
     ui::input::step::Step,
-    ui::input::wanted::Purpose,
     ui::outside::open_outside,
     ui::popup::settings::Settings,
     ui::popup::signature_edit,
@@ -19,7 +18,6 @@ use crate::{
     ui::react::steer::steer,
     ui::run::Model,
     ui::state::toast::Toast,
-    ui::state::ui::Ui,
 };
 
 /// Does what one input event's `step` asks; the `Exit` when it ends the TUI.
@@ -30,7 +28,14 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         Step::Links => label_links(ui, model.previews, text),
         Step::Steer(to) => steer(to, ui, world)?,
         Step::Browse(url) => ui.screen.toast = browse(&url),
-        Step::Attachments(purpose) => label_attachments(ui, purpose),
+        Step::Attachments(purpose) => {
+            let message = ui.view.at_cursor(ui.screen.showing.cursor());
+            match message.map(|message| AttachmentHints::on(message, purpose)) {
+                Some(Ok(hints)) => ui.screen.over.open(hints),
+                Some(Err(toast)) => ui.screen.toast = Some(toast),
+                None => {}
+            }
+        }
         Step::Attachment(wanted) => {
             ui.screen.toast = Some(model.parts.ask(wanted, &model.fetch));
         }
@@ -74,23 +79,4 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
     }
 
     Ok(None)
-}
-
-/// Enters hint mode on the attachments of the selected Message, in Reading
-/// of the one at the cursor, or says why it cannot.
-fn label_attachments(ui: &mut Ui, purpose: Purpose) {
-    let Ui { view, screen } = ui;
-    let message = screen.showing.reading().map_or_else(
-        || view.selected_message(),
-        |reading| view.stack().find(|m| m.body_key == reading.cursor),
-    );
-
-    let Some(message) = message else {
-        return;
-    };
-
-    match AttachmentHints::on(message, purpose) {
-        Ok(hints) => screen.over.open(hints),
-        Err(toast) => screen.toast = Some(toast),
-    }
 }

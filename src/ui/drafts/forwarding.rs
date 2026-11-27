@@ -29,10 +29,7 @@ pub fn forward(
     fetch: &FetchRequests,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
-    let message = screen.showing.reading().map_or_else(
-        || view.selected_message(),
-        |reading| view.stack().find(|m| m.body_key == reading.cursor),
-    );
+    let message = view.at_cursor(screen.showing.cursor());
 
     let Some(message) = message.cloned() else {
         return Ok(());

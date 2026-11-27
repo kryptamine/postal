@@ -119,11 +119,7 @@ fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
             reading.reveal = true;
         }
     } else {
-        let cursor = screen.showing.reading().map(|reading| reading.cursor);
-        let message = cursor.map_or_else(
-            || view.selected_message(),
-            |cursor| view.stack().find(|m| m.body_key == cursor),
-        );
+        let message = view.at_cursor(screen.showing.cursor());
 
         if let Some((account, body)) = message.map(|m| (m.account, m.body_key)) {
             view.switch_quoted(account, body);

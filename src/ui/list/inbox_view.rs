@@ -353,6 +353,15 @@ impl InboxView {
         self.row(self.selected)
     }
 
+    /// The Message at `cursor` in the selected Thread's stack, as Reading
+    /// has it; without a cursor, the selected one.
+    pub fn at_cursor(&self, cursor: Option<BodyKey>) -> Option<&Message> {
+        cursor.map_or_else(
+            || self.selected_message(),
+            |cursor| self.stack().find(|m| m.body_key == cursor),
+        )
+    }
+
     /// Whether any of the selected Thread's Messages in its Folder is Unread.
     pub fn selected_unread(&self) -> bool {
         self.thread_at(self.selected).is_some_and(|t| t.unread)
