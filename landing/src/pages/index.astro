@@ -19,36 +19,43 @@ const budget = [
   ['≤500 ms', 'From a new message reaching the server to its row on your screen'],
 ];
 
+// Each description is HTML, for the keys and commands it names.
 const also = [
   ['All inboxes', 'The inboxes of all your accounts in one list, newest first.'],
   [
     'Undo',
-    'u undoes a delete, an archive, a move or a discarded draft, and for ten seconds a sent message.',
+    '<kbd>u</kbd> undoes a delete, an archive, a move or a discarded draft, and for ten seconds a sent message.',
   ],
   [
     'Act on several at once',
-    'J and K pick a run of threads to delete, archive or move together. One u brings them all back.',
+    '<kbd>J</kbd> and <kbd>K</kbd> pick a run of threads to delete, archive or move together. One <kbd>u</kbd> brings them all back.',
   ],
-  ['Archive and move', 'e archives a message. m moves it to a folder you find by typing.'],
+  [
+    'Archive and move',
+    '<kbd>e</kbd> archives a message. <kbd>m</kbd> moves it to a folder you find by typing.',
+  ],
   [
     'Meeting invitations',
     'An invitation shows as a card: when, in your time zone and the event’s, where, and the link to join.',
   ],
   [
     'Open in the browser',
-    'B opens an HTML mail in your browser, to see it exactly as it was sent.',
+    '<kbd>B</kbd> opens an HTML mail in your browser, to see it exactly as it was sent.',
   ],
   ['Attachments', 'Open or save an attachment by typing its label, no mouse needed.'],
-  ['Check now', '^r fetches new mail on every account at once, without waiting for the server.'],
+  [
+    'Check now',
+    '<kbd>^r</kbd> fetches new mail on every account at once, without waiting for the server.',
+  ],
   ['Notifications', 'A desktop notification for new mail while the terminal is in the background.'],
   [
     'Mail links',
-    'postal setup-mailto makes Postal the handler of mailto: links: a click in the browser opens a new draft in a terminal.',
+    '<code>postal setup-mailto</code> makes Postal the handler of <code>mailto:</code> links: a click in the browser opens a new draft in a terminal.',
   ],
   ['Works offline', 'Your mail loads from the local cache before the server answers.'],
   [
     'Mail for your agents',
-    'postal mcp serves your cached mail to any MCP client: folders, threads, messages, search and a sync. It never sends, moves or deletes.',
+    '<code>postal mcp</code> serves your cached mail to any MCP client: folders, threads, messages, search and a sync. It never sends, moves or deletes.',
   ],
 ];
 
@@ -300,7 +307,7 @@ const providers = [
       {also.map(([name, what]) => (
         <div>
           <dt>{name}</dt>
-          <dd>{what}</dd>
+          <dd set:html={what} />
         </div>
       ))}
     </dl>
