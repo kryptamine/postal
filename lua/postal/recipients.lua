@@ -1,7 +1,8 @@
 -- The recipients of a Postal Draft: where one starts under the cursor, and
 -- the Correspondents `postal correspondent list` offers for it.
+local address = require("postal.address")
 local config = require("postal.config")
-local header = require("postal.header")
+local mail = require("postal.mail")
 
 local M = {}
 
@@ -13,14 +14,14 @@ local drafts = {}
 --- the `To` or `Cc` header of buffer `buf` or a line folded into it; nil
 --- anywhere else. `row` is 1-based and `col` a 0-based byte column.
 function M.start(buf, row, col)
-	local name, at = header.at(buf, row)
-	if not vim.tbl_contains({ "to", "cc" }, name) then
+	local doc = mail.parse(buf)
+	local field = doc:field_at(row - 1)
+	if not field or not vim.tbl_contains({ "to", "cc" }, field.name) then
 		return nil
 	end
 
-	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-	local line = lines[row]
-	for _, piece in ipairs(header.pieces(lines, at - 1)) do
+	local line = doc.lines[row]
+	for _, piece in ipairs(address.pieces(doc.lines, field)) do
 		if piece.row == row - 1 and piece.from <= col and col <= piece.to then
 			local start = piece.from
 			while start < col and line:sub(start + 1, start + 1):match("%s") do

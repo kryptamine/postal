@@ -94,10 +94,17 @@ local function bar(option)
 	return vim.api.nvim_eval_statusline(vim.wo[win][option], { winid = win, use_winbar = option == "winbar" }).str
 end
 
--- The pane names its agent and the mail it is about
+-- The pane names its agent and the mail it is about, unfolding a folded Subject
 local status = bar("statusline")
 if not status:find("stub · Re: Hi", 1, true) then
 	fail("the pane's statusline is " .. vim.inspect(status))
+end
+
+vim.api.nvim_buf_set_lines(draft_buf, 1, 2, false, { "Subject: Re:", "  Hi" })
+local folded = bar("statusline")
+vim.api.nvim_buf_set_lines(draft_buf, 1, 3, false, { "Subject: Re: Hi" })
+if not folded:find("stub · Re: Hi", 1, true) then
+	fail("the pane's statusline cut a folded Subject: " .. vim.inspect(folded))
 end
 
 local first = prompts()[1].params.prompt

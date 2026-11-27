@@ -1,7 +1,7 @@
 -- What a chat is over each kind of mail buffer, by the name `postal_kind`
 -- gives it: the agent's rules and tools, the pane's review keys, the
 -- Thread it asks Postal for, and what goes in the first prompt and every one.
-local body = require("postal.body")
+local mail = require("postal.mail")
 local review = require("postal.review")
 local tools = require("postal.tools")
 
@@ -16,9 +16,10 @@ local REVIEWING = "Your last edit is still under the user's review: the text bel
 local function editing(scheme)
 	return function(chat)
 		chat.proposed = nil
-		chat.sent = chat.review and chat.review:base() or body.get(chat.mail)
+		local text = mail.parse(chat.mail):body()
+		chat.sent = chat.review and chat.review:base() or text
 		local blocks = chat.review and { { type = "text", text = REVIEWING } } or {}
-		table.insert(blocks, chat:resource(scheme .. chat.path, body.get(chat.mail)))
+		table.insert(blocks, chat:resource(scheme .. chat.path, text))
 		return blocks
 	end
 end
@@ -70,7 +71,7 @@ You are helping the user read the email Message open in their editor: find thing
 	tools = tools.message,
 	thread = { flag = "--message", says = "the Thread of the Message" },
 	context = function(chat)
-		return { chat:resource("postal-message://" .. chat.path, body.whole(chat.mail)) }
+		return { chat:resource("postal-message://" .. chat.path, mail.parse(chat.mail):whole()) }
 	end,
 	turn = function()
 		return {}

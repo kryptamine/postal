@@ -1,14 +1,11 @@
 -- A Draft whose Account sends Markdown, as `$POSTAL_COMPOSE_FORMAT` says:
 -- the text the user writes is parsed as Markdown, for Neovim's highlights
 -- and render-markdown.nvim, which takes any filetype with `markdown` in it.
-local body = require("postal.body")
+local mail = require("postal.mail")
 
 local M = {}
 
 local FILETYPE = "mail.markdown"
--- Postal keeps what follows either as written, out of Markdown.
-local SEPARATOR = "-- "
-local FORWARDED = "---------- Forwarded message ---------"
 
 --- Whether Postal opened this editor on a Draft it sends as Markdown.
 function M.on()
@@ -16,41 +13,10 @@ function M.on()
 end
 
 --- The 0-based rows `[first, last)` of buffer `buf` Postal converts, as
---- `compose::markdown` cuts them: before a Forward's original, else the
---- trailing Quote and the line naming whom it quotes, then the last `-- `.
+--- `compose::markdown` cuts them (ADR 0036).
 function M.own(buf)
-	local first = body.start(buf)
-	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-	local last
-	for row = first + 1, #lines do
-		if lines[row] == FORWARDED then
-			last = row - 1
-			break
-		end
-	end
-
-	if not last then
-		local quoted
-		last = #lines
-		while last > first and (lines[last]:match("^>") or vim.trim(lines[last]) == "") do
-			quoted = quoted or lines[last]:match("^>")
-			last = last - 1
-		end
-
-		if not quoted then
-			last = #lines
-		elseif last > first and lines[last]:match(":%s*$") then
-			last = last - 1
-		end
-	end
-
-	for row = last, first + 1, -1 do
-		if lines[row] == SEPARATOR then
-			return first, row - 1
-		end
-	end
-
-	return first, last
+	local doc = mail.parse(buf)
+	return doc.body_start, doc.own_end
 end
 
 --- Parses only the rows Postal converts, so a header or the signature's
