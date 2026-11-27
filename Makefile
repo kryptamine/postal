@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help launcher build run demo-build demo media stills install dist fmt lint deny test nvim sanitize brand landing landing-dev check
+.PHONY: help launcher build run demo-build demo media stills install dist fmt lint deny test nvim sanitize rendered-diff brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -19,7 +19,7 @@ LAUNCHER := $(if $(filter %-apple-darwin,$(TARGET)),$(abspath target/$(TARGET)/l
 SWIFT_TARGET := $(subst aarch64,arm64,$(firstword $(subst -, ,$(TARGET))))-apple-macos13.0
 
 help: ## list every target
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
 
 build: ## build the release binary
 	cargo build --release
@@ -100,6 +100,9 @@ nvim: ## format, lint and smoke-test the Neovim plugin
 
 sanitize: ## lay out every cached HTML mail under ASan and UBSan
 	scripts/sanitize.sh
+
+rendered-diff: ## diff laid-out HTML mails between BASE (default main) and the working tree
+	python3 -B scripts/rendered-diff.py $(if $(BASE),--base $(BASE)) $(if $(COLS),--cols $(COLS)) $(if $(CACHE),--cache $(CACHE)) $(if $(DIFF),--diff)
 
 brand: ## write the design tokens and draw the logo files in assets/brand
 	uv run scripts/tokens.py
