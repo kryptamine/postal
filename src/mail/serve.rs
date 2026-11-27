@@ -6,11 +6,13 @@ use crate::{
     cache::Cache,
     domain::folder_name::FolderName,
     mail::arrivals::Arrivals,
-    mail::body_fetch::{self, Request},
+    mail::body_fetch::Request,
     mail::idle,
     mail::imap::{ImapSession, Mode},
     mail::outbox_flush::Sender,
+    mail::pending::Pending,
     mail::reconnect,
+    mail::spare_work::SpareWork,
     mail::status::Status,
     mail::steering::{Ask, Steering},
     mail::sync::{self, Error},
@@ -47,17 +49,18 @@ async fn bodies(
     config: &Config,
     sign_in: &SignIn,
     cache: &Cache,
-    mut requests: UnboundedReceiver<Request>,
+    requests: UnboundedReceiver<Request>,
     send: impl Fn(Update),
 ) -> Result<(), Error> {
+    let (mut pending, mut spare) = (Pending::new(requests), SpareWork::new());
     let attempt = async |report: &dyn Fn(Status)| {
         let mut session = ImapSession::open(config, sign_in).await?;
         // Every run starts in the Inbox: its first Preview waits on no EXAMINE.
         sync::open(&mut session, FolderName::inbox(), Mode::Examine).await?;
-        // Asked for before an outage: the Preview asks again once told Live.
-        while requests.try_recv().is_ok() {}
+        // Sent while the screen saw the last connection live, which then dropped.
+        pending.forget_oneshots();
         report(Status::Live);
-        body_fetch::serve(&mut session, cache, &mut requests, &send).await
+        pending.serve(&mut session, cache, &mut spare, &send).await
     };
 
     // The status slot follows the sync connection alone, but for a refused Account.

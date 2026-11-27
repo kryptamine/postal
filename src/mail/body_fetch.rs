@@ -1,75 +1,43 @@
-use std::time::Duration;
-
-use futures::{StreamExt, channel::mpsc::UnboundedReceiver};
-
 use crate::{
     cache::Cache,
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::uid::Uid,
-    mail::attachment_fetch::{self, AttachmentRequest},
-    mail::backfill::{self, Backfill},
+    mail::attachment_fetch::AttachmentRequest,
     mail::imap::{MailServer, Mode},
-    mail::inline_fetch::{self, InlineRequest},
-    mail::spare_work::SpareWork,
+    mail::inline_fetch::InlineRequest,
     mail::sync::{self, Error},
     mail::update::Update,
 };
 
-/// Work for the fetch connection.
+/// Work for the fetch connection, as its channel carries it.
 pub enum Request {
+    Standing(Standing),
+    OneShot(OneShot),
+}
+
+/// Work kept across reconnects until served. Each replaces the one of its
+/// kind before it.
+pub enum Standing {
     Bodies(BodyRequest),
     /// The page of Messages of this Folder older than every cached one.
     Backfill(FolderName),
-    /// The bodies of these UIDs, each in its Folder, which a Reply or a
-    /// Forward waits on: served first, and never passed over for a later
-    /// request.
-    Awaited(Vec<MessageRef>),
-    /// Served after awaited bodies, each in turn.
+    /// What a Reply or a Forward waits on: served first, and never passed
+    /// over for a later request.
+    Awaited(AwaitedRequest),
+}
+
+/// Work served once, in turn. It is lost with the connection it was sent
+/// to, which the screen gives up on when told the link is down.
+pub enum OneShot {
     Attachment(AttachmentRequest),
-    /// Served with the attachments, for a Message opened in the browser.
+    /// The inline images of a Message opened in the browser.
     Inline(InlineRequest),
 }
 
-/// The requests received and not yet served.
-#[derive(Default)]
-struct Pending {
-    bodies: Option<BodyRequest>,
-    older: Option<FolderName>,
-    awaited: Option<Vec<MessageRef>>,
-    attachments: Vec<AttachmentRequest>,
-    inlines: Vec<InlineRequest>,
-}
-
-impl Pending {
-    const fn is_empty(&self) -> bool {
-        self.bodies.is_none()
-            && self.older.is_none()
-            && self.awaited.is_none()
-            && self.attachments.is_empty()
-            && self.inlines.is_empty()
-    }
-
-    /// Whether a request that goes before bodies waits.
-    const fn urgent(&self) -> bool {
-        self.awaited.is_some() || !self.attachments.is_empty() || !self.inlines.is_empty()
-    }
-
-    fn take(&mut self, request: Request) {
-        match request {
-            Request::Bodies(bodies) => self.bodies = Some(bodies),
-            Request::Backfill(folder) => self.older = Some(folder),
-            Request::Awaited(bodies) => self.awaited = Some(bodies),
-            Request::Attachment(attachment) => self.attachments.push(attachment),
-            Request::Inline(inline) => self.inlines.push(inline),
-        }
-    }
-
-    fn receive(&mut self, requests: &mut UnboundedReceiver<Request>) {
-        while let Ok(more) = requests.try_recv() {
-            self.take(more);
-        }
-    }
+pub struct AwaitedRequest {
+    pub bodies: Vec<MessageRef>,
+    pub attachments: Vec<AttachmentRequest>,
 }
 
 /// Bodies the Preview needs, by UID in `folder`. Each request replaces the
@@ -95,157 +63,6 @@ impl Fetched {
             Self::Stored(uids) | Self::Refused { uids, .. } => uids,
         }
     }
-}
-
-/// The attachments and inline images asked for, each in turn.
-async fn fetch_parts(
-    server: &mut impl MailServer,
-    pending: &mut Pending,
-    send: &impl Fn(Update),
-) -> Result<(), Error> {
-    for attachment in std::mem::take(&mut pending.attachments) {
-        attachment_fetch::fetch(server, attachment, send).await?;
-    }
-
-    for inline in std::mem::take(&mut pending.inlines) {
-        inline_fetch::fetch(server, inline, send).await?;
-    }
-
-    Ok(())
-}
-
-/// Serves `requests` until the channel closes, telling `send` how each went:
-/// a Reply's bodies, attachments, bodies, a page of older Messages, then
-/// `SpareWork` while none waits. Only a failure but a refusal ends it.
-pub async fn serve(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    requests: &mut UnboundedReceiver<Request>,
-    send: impl Fn(Update),
-) -> Result<(), Error> {
-    let (mut pending, mut spare) = (Pending::default(), SpareWork::new());
-    loop {
-        if pending.is_empty() {
-            match next(requests, spare.patience()).await {
-                Next::Request(request) => pending.take(request),
-                Next::Spare => {
-                    spare.step(server, cache, &send).await?;
-                    continue;
-                }
-                Next::Closed => return Ok(()),
-            }
-        }
-
-        pending.receive(requests);
-        if let Some(awaited) = pending.awaited.take() {
-            fetch_awaited(server, cache, awaited, &send).await?;
-        }
-
-        fetch_parts(server, &mut pending, &send).await?;
-
-        while let Some(request) = pending.bodies.take() {
-            if !open(server, &request.folder).await? {
-                continue;
-            }
-
-            let BodyRequest {
-                folder,
-                selected,
-                neighbours,
-            } = request;
-            if let Some(uid) = selected {
-                fetch_each(server, cache, &folder, vec![uid], &send).await?;
-            }
-
-            // The neighbours of a selection already left behind are not fetched.
-            pending.receive(requests);
-            if pending.bodies.is_none() && !neighbours.is_empty() {
-                fetch_each(server, cache, &folder, neighbours, &send).await?;
-            }
-
-            pending.receive(requests);
-            if pending.urgent() {
-                break;
-            }
-        }
-
-        if pending.urgent() {
-            continue;
-        }
-
-        if let Some(folder) = pending.older.take() {
-            let progress = |done, total| send(Update::Backfill(Backfill::Fetching { done, total }));
-            let page = backfill::page(server, cache, &folder, backfill::PAGE, progress).await?;
-            if page.below.is_some() {
-                send(Update::Inbox);
-            }
-
-            send(Update::Backfill(Backfill::Paged {
-                folder: folder.clone(),
-                nothing_below: page.nothing_below,
-            }));
-            spare.backfilled(folder, page.below);
-        }
-    }
-}
-
-enum Next {
-    Request(Request),
-    /// The patience asked for ran out first.
-    Spare,
-    Closed,
-}
-
-/// The next request, waiting no longer than `patience`.
-async fn next(requests: &mut UnboundedReceiver<Request>, patience: Duration) -> Next {
-    match tokio::time::timeout(patience, requests.next()).await {
-        Ok(Some(request)) => Next::Request(request),
-        Ok(None) => Next::Closed,
-        Err(_) => Next::Spare,
-    }
-}
-
-/// Fetches the bodies a Reply or Forward waits on, a Folder at a time; those
-/// the server no longer has, or whose Folder is gone, are refused.
-async fn fetch_awaited(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    bodies: Vec<MessageRef>,
-    send: &impl Fn(Update),
-) -> Result<(), Error> {
-    let mut folders: Vec<(FolderName, Vec<Uid>)> = Vec::new();
-    for MessageRef { folder, uid } in bodies {
-        match folders.iter_mut().find(|(f, _)| *f == folder) {
-            Some((_, uids)) => uids.push(uid),
-            None => folders.push((folder, vec![uid])),
-        }
-    }
-
-    for (folder, uids) in folders {
-        let (uids, reason) = if open(server, &folder).await? {
-            let answered = fetch_each(server, cache, &folder, uids.clone(), send).await?;
-            let unanswered = uids.into_iter().filter(|u| !answered.contains(u));
-            (
-                unanswered.collect::<Vec<_>>(),
-                "the server no longer has it",
-            )
-        } else {
-            (uids, "its Folder is gone")
-        };
-
-        if uids.is_empty() {
-            continue;
-        }
-
-        let gone = Fetched::Refused {
-            uids,
-            reason: reason.to_owned(),
-        };
-
-        send(Update::Bodies(folder, gone));
-    }
-
-    Ok(())
 }
 
 /// Fetches `uids` and says how it went. A `NO` names no UID: they are asked

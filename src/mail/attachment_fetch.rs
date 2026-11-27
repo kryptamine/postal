@@ -22,10 +22,11 @@ pub struct AttachmentFetched {
 /// than a refusal is returned.
 pub async fn fetch(
     server: &mut impl MailServer,
-    request: AttachmentRequest,
+    request: &AttachmentRequest,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     let AttachmentRequest { message, index } = request;
+    let index = *index;
     let bytes = if body_fetch::open(server, &message.folder).await? {
         match server.attachment(message.uid, index).await {
             Ok(Some(bytes)) => Ok(bytes),
@@ -40,7 +41,7 @@ pub async fn fetch(
     };
 
     send(Update::Attachment(AttachmentFetched {
-        message,
+        message: message.clone(),
         index,
         bytes,
     }));

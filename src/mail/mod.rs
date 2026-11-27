@@ -27,6 +27,7 @@ mod move_changes;
 mod one_by_one;
 pub mod outage;
 pub mod outbox_flush;
+mod pending;
 mod queued;
 mod reconnect;
 pub mod refresh;

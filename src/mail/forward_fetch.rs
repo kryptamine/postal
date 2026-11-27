@@ -1,28 +1,33 @@
 use crate::{
     compose::awaited_forward::AwaitedForward,
     mail::attachment_fetch::AttachmentRequest,
-    mail::body_fetch::{Fetched, Request},
+    mail::body_fetch::{AwaitedRequest, Fetched, Standing},
     mail::update::Update,
 };
 
 /// What the fetch connection is asked for while `awaited` waits: the body
 /// if the Cache lacks it, and each attachment not in yet.
-pub fn requests(awaited: &AwaitedForward) -> impl Iterator<Item = Request> + '_ {
+pub fn request(awaited: &AwaitedForward) -> Standing {
     let ours = &awaited.on_server;
-    let body = awaited
-        .body_missing
-        .then(|| Request::Awaited(vec![ours.clone()]));
+    let bodies = if awaited.body_missing {
+        vec![ours.clone()]
+    } else {
+        Vec::new()
+    };
+
     let attachments = (0..)
         .zip(&awaited.attachments)
         .filter(|(_, bytes)| bytes.is_none())
-        .map(|(index, _)| {
-            Request::Attachment(AttachmentRequest {
-                message: ours.clone(),
-                index,
-            })
-        });
+        .map(|(index, _)| AttachmentRequest {
+            message: ours.clone(),
+            index,
+        })
+        .collect();
 
-    body.into_iter().chain(attachments)
+    Standing::Awaited(AwaitedRequest {
+        bodies,
+        attachments,
+    })
 }
 
 /// Says when `update` of its Account brings the last part `awaited` waits

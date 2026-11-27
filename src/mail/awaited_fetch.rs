@@ -1,13 +1,13 @@
 use crate::{
-    compose::awaited::Awaited, domain::per_account::AccountId, mail::body_fetch::Request,
+    compose::awaited::Awaited, domain::per_account::AccountId, mail::body_fetch::Standing,
     mail::forward_fetch, mail::reply_fetch, mail::status::Status, mail::update::Update,
 };
 
 /// What the fetch connection is asked for while `awaited` waits.
-pub fn requests(awaited: &Awaited) -> Vec<Request> {
+pub fn request(awaited: &Awaited) -> Standing {
     match awaited {
-        Awaited::Reply(reply) => reply_fetch::requests(reply).into(),
-        Awaited::Forward(forward) => forward_fetch::requests(forward).collect(),
+        Awaited::Reply(reply) => reply_fetch::request(reply),
+        Awaited::Forward(forward) => forward_fetch::request(forward),
     }
 }
 

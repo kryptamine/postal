@@ -1,12 +1,15 @@
 use crate::{
     compose::awaited_reply::AwaitedReply,
-    mail::body_fetch::{Fetched, Request},
+    mail::body_fetch::{AwaitedRequest, Fetched, Standing},
     mail::update::Update,
 };
 
 /// What the fetch connection is asked for while `awaited` waits.
-pub fn requests(awaited: &AwaitedReply) -> [Request; 1] {
-    [Request::Awaited(awaited.missing.clone())]
+pub fn request(awaited: &AwaitedReply) -> Standing {
+    Standing::Awaited(AwaitedRequest {
+        bodies: awaited.missing.clone(),
+        attachments: Vec::new(),
+    })
 }
 
 /// Says when `update` of its Account brings the last body `awaited` waits

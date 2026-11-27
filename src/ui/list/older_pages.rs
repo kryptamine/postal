@@ -1,7 +1,5 @@
-use std::iter;
-
 use crate::{
-    mail::backfill::Backfill, mail::body_fetch::Request, mail::fetch_requests::FetchRequests,
+    mail::backfill::Backfill, mail::body_fetch::Standing, mail::fetch_requests::FetchRequests,
     mail::update::Update, ui::list::inbox_view::InboxView,
 };
 
@@ -33,16 +31,13 @@ impl OlderPages {
             return;
         };
 
-        // Lazy, so the Folder is cloned only when the request goes out.
-        let page = iter::once_with(|| Request::Backfill(folder.clone()));
-        self.asked = fetch.send(account, page);
+        fetch.send(account, Standing::Backfill(folder.clone()));
+        self.asked = true;
     }
 
-    /// Clears the in-flight mark once a page comes; a request in flight when
-    /// the connection changed was dropped with it.
+    /// Clears the in-flight mark once a page comes.
     pub const fn notice(&mut self, update: &Update) {
-        let paged = matches!(update, Update::Backfill(Backfill::Paged { .. }));
-        if paged || matches!(update, Update::FetchLink(_)) {
+        if matches!(update, Update::Backfill(Backfill::Paged { .. })) {
             self.asked = false;
         }
     }

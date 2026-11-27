@@ -15,7 +15,7 @@ use std::fs;
 use support::{
     browser::Browser,
     fake_body::FakeBody,
-    fake_imap::{FakeImap, FakeMessage},
+    fake_imap::{FakeImap, FakeMessage, Outage, Stall},
     home::Home,
 };
 use termlens::{Key, Screen};
@@ -108,4 +108,44 @@ fn a_text_message_opens_as_escaped_text() {
         ),
         "{page}"
     );
+}
+
+// Inline images in flight when the fetch connection drops fail cleanly and
+// open the page without them.
+#[test]
+fn an_inline_image_in_flight_when_the_connection_drops_opens_without_it() {
+    let html = "<p>Logo:</p><img src=\"cid:logo\">";
+    let related = FakeBody::multipart(
+        "related",
+        vec![
+            FakeBody::text("html", "7bit", html),
+            FakeBody::file("image", "png").inline("logo"),
+        ],
+    );
+    let message =
+        FakeMessage::new("Ada Lovelace", "Weekly notes", "2024-11-18T09:00:00Z").body(related);
+    let server = FakeImap::start(vec![message]);
+    let home = Home::for_server(&server);
+    let browser = Browser::new();
+    let mut t = home
+        .terminal()
+        .env("PATH", browser.path())
+        .spawn(env!("CARGO_BIN_EXE_postal"))
+        .unwrap();
+    t.wait_until(|s| main_screen(s) && s.contains("Logo:"))
+        .unwrap();
+
+    server.stall(Stall::Part);
+    t.send(Key::Char('B')).unwrap();
+    t.wait_until(|s| s.contains("downloading its images…"))
+        .unwrap();
+
+    server.fail(Outage::Offline);
+    server.release();
+    t.wait_until(|s| s.contains("opened without its images: offline"))
+        .unwrap();
+    let path = browser.wait_any();
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert!(fs::read_to_string(&path).unwrap().contains("cid:logo"));
 }

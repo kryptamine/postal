@@ -4,7 +4,7 @@ use crate::{
     domain::message_ref::MessageRef,
     domain::per_account::AccountId,
     mail::attachment_fetch::{AttachmentFetched, AttachmentRequest},
-    mail::body_fetch::Request,
+    mail::body_fetch::OneShot,
     mail::fetch_requests::FetchRequests,
     mail::inline_fetch::{InlineFetched, InlineRequest},
     mail::update::{FetchLink, Update},
@@ -75,7 +75,7 @@ impl WantedParts {
             index: wanted.index,
         };
 
-        if !fetch.send(wanted.account, [Request::Attachment(request)]) {
+        if !fetch.send_if_live(wanted.account, OneShot::Attachment(request)) {
             return Toast::error(OFFLINE);
         }
 
@@ -101,7 +101,7 @@ impl WantedParts {
             ids,
         };
 
-        if !fetch.send(account, [Request::Inline(request)]) {
+        if !fetch.send_if_live(account, OneShot::Inline(request)) {
             return opened(&name, &original, &[], None);
         }
 
