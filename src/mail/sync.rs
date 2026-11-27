@@ -4,7 +4,7 @@ use crate::{
     domain::sync_state::SyncState,
     domain::uid::Uid,
     mail::connection::outage::Outage,
-    mail::imap::{self, Examined, MailServer, Mode},
+    mail::imap::{self, Examined, ImapSession, Mode},
     mail::status::Status,
 };
 
@@ -38,17 +38,13 @@ impl Error {
 }
 
 /// Opens `folder` as `mode` unless the open Folder covers it; `Gone` when refused.
-pub async fn open(
-    server: &mut impl MailServer,
-    folder: &FolderName,
-    mode: Mode,
-) -> Result<(), Error> {
+pub async fn open(server: &mut ImapSession, folder: &FolderName, mode: Mode) -> Result<(), Error> {
     server.open(folder, mode).await.map_err(gone)
 }
 
 /// Opens `folder` as `mode` and returns what it saw; `Gone` when refused.
 pub async fn reopen(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     folder: &FolderName,
     mode: Mode,
 ) -> Result<Examined, Error> {
@@ -69,7 +65,7 @@ fn gone(error: imap::Error) -> Error {
 /// Returns what its open saw and what it wrote; `report` follows the first
 /// fetch, then says `Live`.
 pub async fn resync(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     mode: Mode,
@@ -104,7 +100,7 @@ pub async fn resync(
 }
 
 async fn refetch(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     folder: &FolderName,
     examined: &Examined,
     unread: usize,
@@ -127,7 +123,7 @@ async fn refetch(
 /// New mail by UID range, expunges over the cached range, then flags.
 /// `cached` is ascending and not empty.
 async fn update(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     examined: &Examined,
     known: SyncState,
     cached: &[Uid],
@@ -154,11 +150,7 @@ async fn update(
 
 /// The cached UIDs gone from the server. `older` counts the server's
 /// Messages up to the newest cached one.
-async fn expunged(
-    server: &mut impl MailServer,
-    older: u32,
-    cached: &[Uid],
-) -> Result<Vec<Uid>, Error> {
+async fn expunged(server: &mut ImapSession, older: u32, cached: &[Uid]) -> Result<Vec<Uid>, Error> {
     let (first, last) = (cached[0], cached[cached.len() - 1]);
     // No UID is ever assigned inside the cached range, so when the server
     // holds as many Messages from `first` on as the Cache does, none is gone.

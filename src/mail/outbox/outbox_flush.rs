@@ -15,7 +15,7 @@ use crate::{
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::thread_id::ThreadId,
-    mail::imap::MailServer,
+    mail::imap::ImapSession,
     mail::outbox::smtp,
     mail::role_folder,
     mail::sync::Error,
@@ -51,7 +51,7 @@ impl Sender<'_> {
 /// Gmail Thread it answers. Only an IMAP failure is returned: SMTP's
 /// failures leave a Message or give it back.
 pub async fn flush(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     sender: Sender<'_>,
     send: &impl Fn(Update),
@@ -238,7 +238,7 @@ fn accept(
 /// Saves the copy of a Message SMTP accepted to the Folder with the Sent
 /// role, then drops it from the Outbox. A refused copy is dropped too.
 async fn copy(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     queued: &Queued,
     sent_folder: &mut Option<FolderName>,

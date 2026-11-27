@@ -30,4 +30,4 @@ pub use error::Error;
 pub use moved::Moved;
 pub use opening::{Mode, Opening};
 pub use pushed::Pushed;
-pub use session::{Examined, ImapSession, MailServer};
+pub use session::{Examined, ImapSession};

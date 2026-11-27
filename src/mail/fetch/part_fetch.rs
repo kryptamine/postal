@@ -1,6 +1,6 @@
 use crate::{
     domain::folder_name::FolderName, mail::fetch::body_fetch, mail::fetch::unfetched::Unfetched,
-    mail::imap, mail::imap::MailServer, mail::sync::Error,
+    mail::imap, mail::imap::ImapSession, mail::sync::Error,
 };
 
 pub const NOT_HELD: &str = "the server no longer has it";
@@ -8,10 +8,10 @@ pub const FOLDER_GONE: &str = "its Folder is gone";
 
 /// `fetch` once `folder` is open. A refusal, or the Folder gone, is why the
 /// part will not come; only another failure is returned.
-pub async fn in_folder<S: MailServer, T>(
-    server: &mut S,
+pub async fn in_folder<T>(
+    server: &mut ImapSession,
     folder: &FolderName,
-    fetch: impl AsyncFnOnce(&mut S) -> Result<T, imap::Error>,
+    fetch: impl AsyncFnOnce(&mut ImapSession) -> Result<T, imap::Error>,
 ) -> Result<Result<T, Unfetched>, Error> {
     if !body_fetch::open(server, folder).await? {
         return Ok(Err(Unfetched::Failed(FOLDER_GONE.to_owned())));

@@ -1,6 +1,6 @@
 use crate::{
     domain::inline_image::InlineImage, domain::message_ref::MessageRef, mail::fetch::part_fetch,
-    mail::fetch::unfetched::Unfetched, mail::imap::MailServer, mail::sync::Error,
+    mail::fetch::unfetched::Unfetched, mail::imap::ImapSession, mail::sync::Error,
     mail::update::Update,
 };
 
@@ -20,7 +20,7 @@ pub struct InlineFetched {
 /// Fetches what `request` names and tells `send`; like an attachment, it
 /// is never cached. Only a failure other than a refusal is returned.
 pub async fn fetch(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     request: &InlineRequest,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {

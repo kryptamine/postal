@@ -15,7 +15,7 @@ use crate::{
     account::provider::Provider,
     account::sign_in::SignIn,
     domain::folder_name::FolderName,
-    mail::imap::{self, ImapSession, MailServer, Mode},
+    mail::imap::{self, ImapSession, Mode},
 };
 
 /// For connect, sign-in and `EXAMINE` together.
@@ -77,7 +77,7 @@ fn writes(partial: &PartialConfig, email: &str, provider: Provider) -> Writes {
 
 async fn verify(config: &Config, sign_in: &SignIn) -> Result<(), Error> {
     let verified = async {
-        let mut session = ImapSession::open(config, sign_in).await?;
+        let mut session = ImapSession::connect(config, sign_in).await?;
         session.open(FolderName::inbox(), Mode::Examine).await?;
         Ok::<(), Error>(())
     };

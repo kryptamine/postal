@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::{
     cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::fetch::body_fetch::open,
-    mail::imap::MailServer, mail::passes::body_index::BodyPass, mail::passes::envelope_pass,
+    mail::imap::ImapSession, mail::passes::body_index::BodyPass, mail::passes::envelope_pass,
     mail::passes::folder_pass::FolderPass, mail::passes::index_progress::IndexProgress,
     mail::passes::sent_pass, mail::passes::snippets, mail::sync::Error, mail::update::Update,
 };
@@ -118,7 +118,7 @@ impl SpareWork {
 
     pub async fn step(
         &mut self,
-        server: &mut impl MailServer,
+        server: &mut ImapSession,
         cache: &Cache,
         send: &impl Fn(Update),
     ) -> Result<(), Error> {

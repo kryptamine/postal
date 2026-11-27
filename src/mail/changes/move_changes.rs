@@ -3,7 +3,7 @@ use crate::{
     domain::folder::Role,
     domain::folder_name::FolderName,
     domain::uid::Uid,
-    mail::imap::{MailServer, Mode, Moved},
+    mail::imap::{ImapSession, Mode, Moved},
     mail::role_folder,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -12,7 +12,7 @@ use crate::{
 /// Makes every move the Cache queues for the server, selecting the Folder
 /// each starts from.
 pub async fn send(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
@@ -87,11 +87,7 @@ pub async fn send(
 
 /// Brings a cached Folder moved into up to the server, so the Messages
 /// show there before it is opened; one never synced waits for its opening.
-async fn resync(
-    server: &mut impl MailServer,
-    cache: &Cache,
-    folder: &FolderName,
-) -> Result<(), Error> {
+async fn resync(server: &mut ImapSession, cache: &Cache, folder: &FolderName) -> Result<(), Error> {
     if cache.state(folder)?.is_none() {
         return Ok(());
     }
@@ -113,7 +109,7 @@ struct Copies {
 }
 
 impl Copies {
-    fn of(server: &impl MailServer, cache: &Cache) -> Result<Self, Error> {
+    fn of(server: &ImapSession, cache: &Cache) -> Result<Self, Error> {
         let folders = if server.gmail() {
             cache.folders()?
         } else {
@@ -137,7 +133,7 @@ impl Copies {
 
 /// The Folder `to` names, each role's looked up once into `found`.
 async fn destination(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     to: &Destination,
     found: &mut Vec<(Role, Option<FolderName>)>,
@@ -162,7 +158,7 @@ async fn destination(
 /// The Folder with `role`; for Archive on Gmail, All Mail, as archiving
 /// there takes the Inbox label off.
 async fn with_role(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     role: Role,
     send: &impl Fn(Update),

@@ -59,135 +59,6 @@ pub struct Examined {
     pub opening: Opening,
 }
 
-/// What Postal needs from a mail server, kept apart from the IMAP library.
-pub trait MailServer {
-    /// Opens `folder` as `mode`, unless the open Folder already covers it;
-    /// later commands read it. An open on the wire is as `reopen`'s.
-    async fn open(&mut self, folder: &FolderName, mode: Mode) -> Result<(), Error>;
-
-    /// Opens `folder` as `mode` on the wire, for this moment's counts. Drops
-    /// what the server announced of the Folder open before.
-    async fn reopen(&mut self, folder: &FolderName, mode: Mode) -> Result<Examined, Error>;
-
-    /// The last open; `None` before one, and after one failed.
-    fn opening(&self) -> Option<&Opening>;
-
-    /// Adds `flag` to `uids` of the selected Folder, or removes it.
-    async fn store(&mut self, uids: &[Uid], flag: flag::Flag, added: bool) -> Result<(), Error>;
-
-    /// Moves `uids` of the selected Folder to the Folder named `to`, and
-    /// returns each move the server named.
-    async fn move_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error>;
-
-    /// As `move_to`, leaving `uids` where they are: on Gmail, a label added.
-    async fn copy_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error>;
-
-    /// Saves `message` to the Folder named `folder`, flagged `\Seen`.
-    async fn append(&mut self, folder: &FolderName, message: &[u8]) -> Result<(), Error>;
-
-    /// Gmail, which keeps a copy of each Message sent over SMTP itself.
-    fn gmail(&self) -> bool;
-
-    /// Every Folder the server lists that can be opened.
-    async fn folders(&mut self) -> Result<Vec<Folder<()>>, Error>;
-
-    /// The Unread and all Messages in a Folder other than the examined one,
-    /// by one `STATUS`.
-    async fn counts_in(&mut self, folder: &FolderName) -> Result<Counts, Error>;
-
-    /// The `UIDNEXT` of a Folder other than the examined one, by `STATUS`.
-    async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error>;
-
-    /// The newest `count` of the `exists` Messages, by sequence number;
-    /// `progress` gets how many have come so far, now and then.
-    async fn newest(
-        &mut self,
-        exists: u32,
-        count: u32,
-        progress: impl Fn(u32),
-    ) -> Result<Vec<NewMessage>, Error>;
-
-    /// Up to `count` Messages just before sequence number `before`, by
-    /// sequence number; `progress` as for `newest`.
-    async fn older(
-        &mut self,
-        before: u32,
-        count: u32,
-        progress: impl Fn(u32),
-    ) -> Result<Vec<NewMessage>, Error>;
-
-    /// The Messages whose UID is at least `first`.
-    async fn since_uid(&mut self, first: Uid) -> Result<Vec<NewMessage>, Error>;
-
-    /// As `older`, with nothing but each Message's UID and addresses read.
-    async fn envelopes_before(
-        &mut self,
-        before: u32,
-        count: u32,
-    ) -> Result<Vec<(Uid, Correspondence)>, Error>;
-
-    /// As `since_uid`, with nothing but each Message's UID and addresses read.
-    async fn envelopes_since(&mut self, first: Uid) -> Result<Vec<(Uid, Correspondence)>, Error>;
-
-    /// The Messages with these UIDs; a UID gone is left out.
-    async fn by_uid(&mut self, uids: &[Uid]) -> Result<Vec<NewMessage>, Error>;
-
-    /// The UIDs of the examined Folder's Messages in Gmail's Thread `id`.
-    async fn thread(&mut self, id: ThreadId) -> Result<Vec<Uid>, Error>;
-
-    /// `None` when no Message has this UID any more.
-    async fn sequence_number(&mut self, uid: Uid) -> Result<Option<u32>, Error>;
-
-    /// The UIDs in `first..=last` still in the Folder.
-    async fn uids(&mut self, first: Uid, last: Uid) -> Result<HashSet<Uid>, Error>;
-
-    /// The flags per UID in `first..=last`; with `changed_since`, only for the
-    /// Messages whose flags changed after that CONDSTORE mod-sequence.
-    async fn flags(
-        &mut self,
-        first: Uid,
-        last: Uid,
-        changed_since: Option<u64>,
-    ) -> Result<Vec<(Uid, MessageFlags)>, Error>;
-
-    /// Unread Messages in the whole examined Folder.
-    async fn unread_count(&mut self) -> Result<usize, Error>;
-
-    /// The first `octets` of part `section` of each of `uids`, as sent; a
-    /// UID the server did not answer for is left out.
-    async fn text_parts(
-        &mut self,
-        uids: &[Uid],
-        section: &str,
-        octets: u32,
-    ) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
-
-    /// Each of `uids` as the Preview needs it, its header and text parts in
-    /// MIME; a UID the server did not answer for is left out.
-    async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error>;
-
-    /// The attachment at `index` of `uid`, in the order the Message's
-    /// attachments are listed, decoded; `None` when there is none.
-    async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error>;
-
-    /// The parts of `uid` whose `Content-ID` is one of `ids`, decoded; those
-    /// the Message lacks are left out.
-    async fn inline_images(&mut self, uid: Uid, ids: &[String]) -> Result<Vec<InlineImage>, Error>;
-
-    /// What the server announced during earlier commands, in order.
-    fn pushed(&mut self) -> Vec<Pushed>;
-
-    /// Waits in `IDLE` for the server to announce a change, at most `period`
-    /// and no longer than `stop` takes; empty when none came.
-    async fn idle(
-        self,
-        period: Duration,
-        stop: impl Future<Output = ()>,
-    ) -> Result<(Self, Vec<Pushed>), Error>
-    where
-        Self: Sized;
-}
-
 pub struct ImapSession {
     session: Session<Box<dyn Transport>>,
     items: &'static str,
@@ -216,7 +87,7 @@ struct Listed {
 }
 
 impl ImapSession {
-    pub async fn open(config: &Config, sign_in: &SignIn) -> Result<Self, Error> {
+    pub async fn connect(config: &Config, sign_in: &SignIn) -> Result<Self, Error> {
         tracing::info!("connecting to {}:{}", config.imap.host, config.imap.port);
         let mut transport = super::connect::connect(&config.imap).await?;
         if wire_trace::enabled() {
@@ -254,6 +125,453 @@ impl ImapSession {
             listed,
             gmail,
         })
+    }
+
+    /// Opens `folder` as `mode`, unless the open Folder already covers it;
+    /// later commands read it. An open on the wire is as `reopen`'s.
+    pub async fn open(&mut self, folder: &FolderName, mode: Mode) -> Result<(), Error> {
+        if self
+            .opening
+            .as_ref()
+            .is_some_and(|o| o.covers(folder, mode))
+        {
+            return Ok(());
+        }
+
+        self.reopen(folder, mode).await.map(drop)
+    }
+
+    /// Opens `folder` as `mode` on the wire, for this moment's counts. Drops
+    /// what the server announced of the Folder open before.
+    pub async fn reopen(&mut self, folder: &FolderName, mode: Mode) -> Result<Examined, Error> {
+        self.opening = None;
+        self.pushed();
+        self.opens += 1;
+        let mailbox = match mode {
+            // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
+            // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
+            Mode::Examine => self.session.examine(folder).await?,
+            Mode::Select => self.session.select(folder).await?,
+        };
+        let opening = Opening::new(folder.clone(), mode, self.opens);
+        Ok(self.opened(&mailbox, opening))
+    }
+
+    /// The last open; `None` before one, and after one failed.
+    pub const fn opening(&self) -> Option<&Opening> {
+        self.opening.as_ref()
+    }
+
+    /// Adds `flag` to `uids` of the selected Folder, or removes it.
+    pub async fn store(
+        &mut self,
+        uids: &[Uid],
+        flag: flag::Flag,
+        added: bool,
+    ) -> Result<(), Error> {
+        // SILENT: the server need not echo the flags just set.
+        let sign = if added { '+' } else { '-' };
+        let query = format!("{sign}FLAGS.SILENT ({})", flag.name());
+        // What other clients changed may come along: it goes to `pushed`.
+        let command = format!("UID STORE {} {query}", uid_set(uids));
+        self.run(command, |_| false).await?;
+        tracing::info!("stored {query} on {} Messages", uids.len());
+        Ok(())
+    }
+
+    /// Moves `uids` of the selected Folder to the Folder named `to`, and
+    /// returns each move the server named.
+    pub async fn move_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
+        let (set, to) = (uid_set(uids), quoted(to.as_str()));
+        let command = if self.listed.moves { "MOVE" } else { "COPY" };
+        let mut moved = Vec::new();
+        let command = format!("UID {command} {set} {to}");
+        self.run(command, |response| moved_uids::read(response, &mut moved))
+            .await?;
+        if !self.listed.moves {
+            // The copy, flag and expunge a `MOVE` stands for (RFC 6851 3.3).
+            let command = format!("UID STORE {set} +FLAGS.SILENT (\\Deleted)");
+            self.run(command, |_| false).await?;
+            if self.listed.uidplus {
+                self.run(format!("UID EXPUNGE {set}"), |_| false).await?;
+            } else {
+                // A plain `EXPUNGE` would also take what another client flagged.
+                tracing::warn!("no UIDPLUS: {} Messages left flagged \\Deleted", uids.len());
+            }
+        }
+
+        tracing::info!("moved {} Messages", uids.len());
+        Ok(moved)
+    }
+
+    /// As `move_to`, leaving `uids` where they are: on Gmail, a label added.
+    pub async fn copy_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
+        let command = format!("UID COPY {} {}", uid_set(uids), quoted(to.as_str()));
+        let mut copied = Vec::new();
+        self.run(command, |response| moved_uids::read(response, &mut copied))
+            .await?;
+        tracing::info!("copied {} Messages", uids.len());
+        Ok(copied)
+    }
+
+    /// Saves `message` to the Folder named `folder`, flagged `\Seen`.
+    pub async fn append(&mut self, folder: &FolderName, message: &[u8]) -> Result<(), Error> {
+        self.session
+            .append(folder, Some("(\\Seen)"), None, message)
+            .await?;
+        tracing::info!("saved a copy to {folder}");
+        Ok(())
+    }
+
+    /// Gmail, which keeps a copy of each Message sent over SMTP itself.
+    pub const fn gmail(&self) -> bool {
+        self.gmail
+    }
+
+    /// Every Folder the server lists that can be opened.
+    pub async fn folders(&mut self) -> Result<Vec<Folder<()>>, Error> {
+        let names = self.session.list(Some(""), Some("*")).await?;
+        let names: Vec<_> = names.try_collect().await?;
+        let mut folders: Vec<_> = names
+            .iter()
+            .filter(|name| !name.attributes().contains(&NameAttribute::NoSelect))
+            .map(|name| Folder::new((), name.name(), role(name.attributes())))
+            .collect();
+        // A `LIST` cut short by a dropped connection ends as if complete,
+        // and every server lists INBOX (RFC 3501 5.1).
+        if !folders
+            .iter()
+            .any(|f| f.name.as_str().eq_ignore_ascii_case(INBOX))
+        {
+            return Err(Error::Closed);
+        }
+
+        named_roles::fill(&mut folders);
+        tracing::info!("listed {} Folders", folders.len());
+        Ok(folders)
+    }
+
+    /// The Unread and all Messages in a Folder other than the examined one,
+    /// by one `STATUS`.
+    pub async fn counts_in(&mut self, folder: &FolderName) -> Result<Counts, Error> {
+        let status = self.session.status(folder, "(UNSEEN MESSAGES)").await?;
+        let count = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
+        Ok(Counts {
+            unread: status.unseen.map_or(0, count),
+            total: count(status.exists),
+        })
+    }
+
+    /// The `UIDNEXT` of a Folder other than the examined one, by `STATUS`.
+    pub async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error> {
+        let status = self.session.status(folder, "(UIDNEXT)").await?;
+        Ok(status.uid_next.map(Uid::new))
+    }
+
+    /// The newest `count` of the `exists` Messages, by sequence number;
+    /// `progress` gets how many have come so far, now and then.
+    pub async fn newest(
+        &mut self,
+        exists: u32,
+        count: u32,
+        progress: impl Fn(u32),
+    ) -> Result<Vec<NewMessage>, Error> {
+        let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
+        let command = format!("FETCH {first}:* {}", self.items);
+        let messages = self.rows(command, progress).await?;
+        tracing::info!("fetched the newest {} Messages", messages.len());
+        Ok(messages)
+    }
+
+    /// Up to `count` Messages just before sequence number `before`, by
+    /// sequence number; `progress` as for `newest`.
+    pub async fn older(
+        &mut self,
+        before: u32,
+        count: u32,
+        progress: impl Fn(u32),
+    ) -> Result<Vec<NewMessage>, Error> {
+        let last = before.saturating_sub(1);
+        if last == 0 {
+            return Ok(Vec::new());
+        }
+
+        let first = before.saturating_sub(count).max(1);
+        let command = format!("FETCH {first}:{last} {}", self.items);
+        let messages = self.rows(command, progress).await?;
+        tracing::info!("fetched {} older Messages", messages.len());
+        Ok(messages)
+    }
+
+    /// The Messages whose UID is at least `first`.
+    pub async fn since_uid(&mut self, first: Uid) -> Result<Vec<NewMessage>, Error> {
+        let command = format!("UID FETCH {first}:* {}", self.items);
+        let mut messages = self.rows(command, |_| {}).await?;
+        // `first:*` always matches the last Message, even below `first`.
+        messages.retain(|m| m.row.uid >= first);
+        tracing::info!("fetched {} new Messages", messages.len());
+        Ok(messages)
+    }
+
+    /// As `older`, with nothing but each Message's UID and addresses read.
+    pub async fn envelopes_before(
+        &mut self,
+        before: u32,
+        count: u32,
+    ) -> Result<Vec<(Uid, Correspondence)>, Error> {
+        let last = before.saturating_sub(1);
+        if last == 0 {
+            return Ok(Vec::new());
+        }
+
+        let first = before.saturating_sub(count).max(1);
+        let command = format!("FETCH {first}:{last} {ENVELOPE_ITEMS}");
+        Ok(addressed(self.rows(command, |_| {}).await?, Uid::new(0)))
+    }
+
+    /// As `since_uid`, with nothing but each Message's UID and addresses read.
+    pub async fn envelopes_since(
+        &mut self,
+        first: Uid,
+    ) -> Result<Vec<(Uid, Correspondence)>, Error> {
+        let command = format!("UID FETCH {first}:* {ENVELOPE_ITEMS}");
+        // `first:*` always matches the last Message, even below `first`.
+        Ok(addressed(self.rows(command, |_| {}).await?, first))
+    }
+
+    /// The Messages with these UIDs; a UID gone is left out.
+    pub async fn by_uid(&mut self, uids: &[Uid]) -> Result<Vec<NewMessage>, Error> {
+        let command = format!("UID FETCH {} {}", uid_set(uids), self.items);
+        let messages = self.rows(command, |_| {}).await?;
+        tracing::info!("fetched {} Messages by UID", messages.len());
+        Ok(messages)
+    }
+
+    /// The UIDs of the examined Folder's Messages in Gmail's Thread `id`.
+    pub async fn thread(&mut self, id: ThreadId) -> Result<Vec<Uid>, Error> {
+        self.search(&format!("X-GM-THRID {id}")).await
+    }
+
+    /// `None` when no Message has this UID any more.
+    pub async fn sequence_number(&mut self, uid: Uid) -> Result<Option<u32>, Error> {
+        let mut found = None;
+        self.answered(format!("UID FETCH {uid} UID"), |sequence, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                found = Some(sequence);
+            }
+        })
+        .await?;
+        Ok(found)
+    }
+
+    /// The UIDs in `first..=last` still in the Folder.
+    pub async fn uids(&mut self, first: Uid, last: Uid) -> Result<HashSet<Uid>, Error> {
+        // `RETURN (ALL)` is out of reach, as for the Unread count:
+        // see docs/adr/0004-unread-count-by-uid-search.md.
+        let found = self.search(&format!("UID {first}:{last}")).await?;
+        Ok(found.into_iter().collect())
+    }
+
+    /// The flags per UID in `first..=last`; with `changed_since`, only for the
+    /// Messages whose flags changed after that CONDSTORE mod-sequence.
+    pub async fn flags(
+        &mut self,
+        first: Uid,
+        last: Uid,
+        changed_since: Option<u64>,
+    ) -> Result<Vec<(Uid, MessageFlags)>, Error> {
+        let items = changed_since.map_or_else(
+            || "(UID FLAGS)".to_owned(),
+            |modseq| format!("(UID FLAGS) (CHANGEDSINCE {modseq})"),
+        );
+        let mut flags = Vec::new();
+        let command = format!("UID FETCH {first}:{last} {items}");
+        self.answered(command, |_, answer| {
+            flags.extend(attributes::uid(answer).zip(attributes::flags(answer)));
+        })
+        .await?;
+        tracing::info!("fetched flags of {} Messages", flags.len());
+        Ok(flags)
+    }
+
+    /// Unread Messages in the whole examined Folder.
+    pub async fn unread_count(&mut self) -> Result<usize, Error> {
+        // async-imap cannot parse ESEARCH, so `RETURN (COUNT)` is out of reach:
+        // see docs/adr/0004-unread-count-by-uid-search.md.
+        Ok(self.search("UNSEEN").await?.len())
+    }
+
+    /// The first `octets` of part `section` of each of `uids`, as sent; a
+    /// UID the server did not answer for is left out.
+    pub async fn text_parts(
+        &mut self,
+        uids: &[Uid],
+        section: &str,
+        octets: u32,
+    ) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
+        let path = SectionPath::Part(
+            section.split('.').filter_map(|n| n.parse().ok()).collect(),
+            None,
+        );
+        // PEEK, or the server would mark every Message seen.
+        let items = format!("(BODY.PEEK[{section}]<0.{octets}>)");
+        let mut parts = Vec::new();
+        let command = format!("UID FETCH {} {items}", uid_set(uids));
+        self.answered(command, |_, answer| {
+            let part = attributes::section(answer, &path).map(<[u8]>::to_vec);
+            parts.extend(attributes::uid(answer).zip(part));
+        })
+        .await?;
+        Ok(parts)
+    }
+
+    /// Each of `uids` as the Preview needs it, its header and text parts in
+    /// MIME; a UID the server did not answer for is left out.
+    pub async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
+        bodies::fetch(&mut self.session, &mut self.pending, &uid_set(uids)).await
+    }
+
+    /// The attachment at `index` of `uid`, in the order the Message's
+    /// attachments are listed, decoded; `None` when there is none.
+    pub async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error> {
+        let mut part = None;
+        let command = format!("UID FETCH {uid} (UID BODYSTRUCTURE)");
+        self.answered(command, |_, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                part = attributes::structure(answer)
+                    .and_then(|structure| attachments::part(structure, index));
+            }
+        })
+        .await?;
+        let Some((path, encoding)) = part else {
+            return Ok(None);
+        };
+
+        let items = format!("(UID BODY.PEEK[{}])", body_plan::section(&path));
+        let path = SectionPath::Part(path, None);
+        let mut raw = None;
+        self.answered(format!("UID FETCH {uid} {items}"), |_, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                raw = attributes::section(answer, &path).map(|raw| encoding.decode(raw));
+            }
+        })
+        .await?;
+        tracing::info!("fetched attachment {index} of {uid}");
+        Ok(raw)
+    }
+
+    /// The parts of `uid` whose `Content-ID` is one of `ids`, decoded; those
+    /// the Message lacks are left out.
+    pub async fn inline_images(
+        &mut self,
+        uid: Uid,
+        ids: &[String],
+    ) -> Result<Vec<InlineImage>, Error> {
+        let mut parts = Vec::new();
+        let command = format!("UID FETCH {uid} (UID BODYSTRUCTURE)");
+        self.answered(command, |_, answer| {
+            if attributes::uid(answer) == Some(uid) {
+                parts = attributes::structure(answer)
+                    .map(|structure| inline_parts::find(structure, ids))
+                    .unwrap_or_default();
+            }
+        })
+        .await?;
+        if parts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let sections: Vec<_> = parts
+            .iter()
+            .map(|part| format!("BODY.PEEK[{}]", body_plan::section(&part.path)))
+            .collect();
+        let command = format!("UID FETCH {uid} (UID {})", sections.join(" "));
+        let mut images = Vec::new();
+        self.answered(command, |_, answer| {
+            if attributes::uid(answer) != Some(uid) {
+                return;
+            }
+
+            for part in &parts {
+                let path = SectionPath::Part(part.path.clone(), None);
+                if let Some(raw) = attributes::section(answer, &path) {
+                    images.push(InlineImage {
+                        id: part.id.clone(),
+                        kind: part.kind.clone(),
+                        bytes: part.encoding.decode(raw),
+                    });
+                }
+            }
+        })
+        .await?;
+        tracing::info!("fetched {} inline images of {uid}", images.len());
+        Ok(images)
+    }
+
+    /// What the server announced during earlier commands, in order.
+    pub fn pushed(&mut self) -> Vec<Pushed> {
+        Pushed::queued(&self.session, &mut self.pending);
+        std::mem::take(&mut self.pending)
+    }
+
+    /// Waits in `IDLE` for the server to announce a change, at most `period`
+    /// and no longer than `stop` takes; empty when none came.
+    pub async fn idle(
+        self,
+        period: Duration,
+        stop: impl Future<Output = ()>,
+    ) -> Result<(Self, Vec<Pushed>), Error> {
+        if !self.listed.idle {
+            return self.poll(period, stop).await;
+        }
+
+        let Self {
+            session,
+            items,
+            uid_validity,
+            opening,
+            opens,
+            pending,
+            email,
+            listed,
+            gmail,
+        } = self;
+        let mut handle = session.idle();
+        handle.init().await?;
+        let first = {
+            let (wait, _stop) = handle.wait_with_timeout(period);
+            // The library's own timeout restarts on every keepalive line.
+            tokio::select! {
+                response = wait => response?,
+                () = tokio::time::sleep(period) => IdleResponse::Timeout,
+                () = stop => IdleResponse::ManualInterrupt,
+            }
+        };
+
+        let mut server = Self {
+            session: handle.done().await?,
+            items,
+            uid_validity,
+            opening,
+            opens,
+            pending: Vec::new(),
+            email,
+            listed,
+            gmail,
+        };
+
+        let mut pushed = pending;
+        if let IdleResponse::NewData(response) = &first {
+            if let Some(text) = bye(response.parsed()) {
+                return Err(Error::Bye(text));
+            }
+
+            pushed.extend(Pushed::from_response(response.parsed()));
+        }
+
+        // The rest of the burst came in before the server answered `DONE`.
+        pushed.extend(server.pushed());
+        Ok((server, pushed))
     }
 
     /// `command`, a `FETCH` of `self.items`, read by hand.
@@ -349,403 +667,6 @@ impl ImapSession {
         .await?;
         found.sort_unstable();
         Ok(found)
-    }
-}
-
-impl MailServer for ImapSession {
-    async fn open(&mut self, folder: &FolderName, mode: Mode) -> Result<(), Error> {
-        if self
-            .opening
-            .as_ref()
-            .is_some_and(|o| o.covers(folder, mode))
-        {
-            return Ok(());
-        }
-
-        self.reopen(folder, mode).await.map(drop)
-    }
-
-    async fn reopen(&mut self, folder: &FolderName, mode: Mode) -> Result<Examined, Error> {
-        self.opening = None;
-        self.pushed();
-        self.opens += 1;
-        let mailbox = match mode {
-            // A plain EXAMINE suffices: a CONDSTORE server sends HIGHESTMODSEQ with
-            // every EXAMINE (RFC 7162 3.1.2.1), and `(CONDSTORE)` is BAD elsewhere.
-            Mode::Examine => self.session.examine(folder).await?,
-            Mode::Select => self.session.select(folder).await?,
-        };
-        let opening = Opening::new(folder.clone(), mode, self.opens);
-        Ok(self.opened(&mailbox, opening))
-    }
-
-    fn opening(&self) -> Option<&Opening> {
-        self.opening.as_ref()
-    }
-
-    async fn store(&mut self, uids: &[Uid], flag: flag::Flag, added: bool) -> Result<(), Error> {
-        // SILENT: the server need not echo the flags just set.
-        let sign = if added { '+' } else { '-' };
-        let query = format!("{sign}FLAGS.SILENT ({})", flag.name());
-        // What other clients changed may come along: it goes to `pushed`.
-        let command = format!("UID STORE {} {query}", uid_set(uids));
-        self.run(command, |_| false).await?;
-        tracing::info!("stored {query} on {} Messages", uids.len());
-        Ok(())
-    }
-
-    async fn move_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
-        let (set, to) = (uid_set(uids), quoted(to.as_str()));
-        let command = if self.listed.moves { "MOVE" } else { "COPY" };
-        let mut moved = Vec::new();
-        let command = format!("UID {command} {set} {to}");
-        self.run(command, |response| moved_uids::read(response, &mut moved))
-            .await?;
-        if !self.listed.moves {
-            // The copy, flag and expunge a `MOVE` stands for (RFC 6851 3.3).
-            let command = format!("UID STORE {set} +FLAGS.SILENT (\\Deleted)");
-            self.run(command, |_| false).await?;
-            if self.listed.uidplus {
-                self.run(format!("UID EXPUNGE {set}"), |_| false).await?;
-            } else {
-                // A plain `EXPUNGE` would also take what another client flagged.
-                tracing::warn!("no UIDPLUS: {} Messages left flagged \\Deleted", uids.len());
-            }
-        }
-
-        tracing::info!("moved {} Messages", uids.len());
-        Ok(moved)
-    }
-
-    async fn copy_to(&mut self, uids: &[Uid], to: &FolderName) -> Result<Vec<Moved>, Error> {
-        let command = format!("UID COPY {} {}", uid_set(uids), quoted(to.as_str()));
-        let mut copied = Vec::new();
-        self.run(command, |response| moved_uids::read(response, &mut copied))
-            .await?;
-        tracing::info!("copied {} Messages", uids.len());
-        Ok(copied)
-    }
-
-    async fn append(&mut self, folder: &FolderName, message: &[u8]) -> Result<(), Error> {
-        self.session
-            .append(folder, Some("(\\Seen)"), None, message)
-            .await?;
-        tracing::info!("saved a copy to {folder}");
-        Ok(())
-    }
-
-    fn gmail(&self) -> bool {
-        self.gmail
-    }
-
-    async fn folders(&mut self) -> Result<Vec<Folder<()>>, Error> {
-        let names = self.session.list(Some(""), Some("*")).await?;
-        let names: Vec<_> = names.try_collect().await?;
-        let mut folders: Vec<_> = names
-            .iter()
-            .filter(|name| !name.attributes().contains(&NameAttribute::NoSelect))
-            .map(|name| Folder::new((), name.name(), role(name.attributes())))
-            .collect();
-        // A `LIST` cut short by a dropped connection ends as if complete,
-        // and every server lists INBOX (RFC 3501 5.1).
-        if !folders
-            .iter()
-            .any(|f| f.name.as_str().eq_ignore_ascii_case(INBOX))
-        {
-            return Err(Error::Closed);
-        }
-
-        named_roles::fill(&mut folders);
-        tracing::info!("listed {} Folders", folders.len());
-        Ok(folders)
-    }
-
-    async fn counts_in(&mut self, folder: &FolderName) -> Result<Counts, Error> {
-        let status = self.session.status(folder, "(UNSEEN MESSAGES)").await?;
-        let count = |n: u32| usize::try_from(n).unwrap_or(usize::MAX);
-        Ok(Counts {
-            unread: status.unseen.map_or(0, count),
-            total: count(status.exists),
-        })
-    }
-
-    async fn uid_next_in(&mut self, folder: &FolderName) -> Result<Option<Uid>, Error> {
-        let status = self.session.status(folder, "(UIDNEXT)").await?;
-        Ok(status.uid_next.map(Uid::new))
-    }
-
-    async fn newest(
-        &mut self,
-        exists: u32,
-        count: u32,
-        progress: impl Fn(u32),
-    ) -> Result<Vec<NewMessage>, Error> {
-        let first = exists.saturating_sub(count.saturating_sub(1)).max(1);
-        let command = format!("FETCH {first}:* {}", self.items);
-        let messages = self.rows(command, progress).await?;
-        tracing::info!("fetched the newest {} Messages", messages.len());
-        Ok(messages)
-    }
-
-    async fn older(
-        &mut self,
-        before: u32,
-        count: u32,
-        progress: impl Fn(u32),
-    ) -> Result<Vec<NewMessage>, Error> {
-        let last = before.saturating_sub(1);
-        if last == 0 {
-            return Ok(Vec::new());
-        }
-
-        let first = before.saturating_sub(count).max(1);
-        let command = format!("FETCH {first}:{last} {}", self.items);
-        let messages = self.rows(command, progress).await?;
-        tracing::info!("fetched {} older Messages", messages.len());
-        Ok(messages)
-    }
-
-    async fn since_uid(&mut self, first: Uid) -> Result<Vec<NewMessage>, Error> {
-        let command = format!("UID FETCH {first}:* {}", self.items);
-        let mut messages = self.rows(command, |_| {}).await?;
-        // `first:*` always matches the last Message, even below `first`.
-        messages.retain(|m| m.row.uid >= first);
-        tracing::info!("fetched {} new Messages", messages.len());
-        Ok(messages)
-    }
-
-    async fn envelopes_before(
-        &mut self,
-        before: u32,
-        count: u32,
-    ) -> Result<Vec<(Uid, Correspondence)>, Error> {
-        let last = before.saturating_sub(1);
-        if last == 0 {
-            return Ok(Vec::new());
-        }
-
-        let first = before.saturating_sub(count).max(1);
-        let command = format!("FETCH {first}:{last} {ENVELOPE_ITEMS}");
-        Ok(addressed(self.rows(command, |_| {}).await?, Uid::new(0)))
-    }
-
-    async fn envelopes_since(&mut self, first: Uid) -> Result<Vec<(Uid, Correspondence)>, Error> {
-        let command = format!("UID FETCH {first}:* {ENVELOPE_ITEMS}");
-        // `first:*` always matches the last Message, even below `first`.
-        Ok(addressed(self.rows(command, |_| {}).await?, first))
-    }
-
-    async fn by_uid(&mut self, uids: &[Uid]) -> Result<Vec<NewMessage>, Error> {
-        let command = format!("UID FETCH {} {}", uid_set(uids), self.items);
-        let messages = self.rows(command, |_| {}).await?;
-        tracing::info!("fetched {} Messages by UID", messages.len());
-        Ok(messages)
-    }
-
-    async fn thread(&mut self, id: ThreadId) -> Result<Vec<Uid>, Error> {
-        self.search(&format!("X-GM-THRID {id}")).await
-    }
-
-    async fn sequence_number(&mut self, uid: Uid) -> Result<Option<u32>, Error> {
-        let mut found = None;
-        self.answered(format!("UID FETCH {uid} UID"), |sequence, answer| {
-            if attributes::uid(answer) == Some(uid) {
-                found = Some(sequence);
-            }
-        })
-        .await?;
-        Ok(found)
-    }
-
-    async fn uids(&mut self, first: Uid, last: Uid) -> Result<HashSet<Uid>, Error> {
-        // `RETURN (ALL)` is out of reach, as for the Unread count:
-        // see docs/adr/0004-unread-count-by-uid-search.md.
-        let found = self.search(&format!("UID {first}:{last}")).await?;
-        Ok(found.into_iter().collect())
-    }
-
-    async fn flags(
-        &mut self,
-        first: Uid,
-        last: Uid,
-        changed_since: Option<u64>,
-    ) -> Result<Vec<(Uid, MessageFlags)>, Error> {
-        let items = changed_since.map_or_else(
-            || "(UID FLAGS)".to_owned(),
-            |modseq| format!("(UID FLAGS) (CHANGEDSINCE {modseq})"),
-        );
-        let mut flags = Vec::new();
-        let command = format!("UID FETCH {first}:{last} {items}");
-        self.answered(command, |_, answer| {
-            flags.extend(attributes::uid(answer).zip(attributes::flags(answer)));
-        })
-        .await?;
-        tracing::info!("fetched flags of {} Messages", flags.len());
-        Ok(flags)
-    }
-
-    async fn unread_count(&mut self) -> Result<usize, Error> {
-        // async-imap cannot parse ESEARCH, so `RETURN (COUNT)` is out of reach:
-        // see docs/adr/0004-unread-count-by-uid-search.md.
-        Ok(self.search("UNSEEN").await?.len())
-    }
-
-    async fn text_parts(
-        &mut self,
-        uids: &[Uid],
-        section: &str,
-        octets: u32,
-    ) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
-        let path = SectionPath::Part(
-            section.split('.').filter_map(|n| n.parse().ok()).collect(),
-            None,
-        );
-        // PEEK, or the server would mark every Message seen.
-        let items = format!("(BODY.PEEK[{section}]<0.{octets}>)");
-        let mut parts = Vec::new();
-        let command = format!("UID FETCH {} {items}", uid_set(uids));
-        self.answered(command, |_, answer| {
-            let part = attributes::section(answer, &path).map(<[u8]>::to_vec);
-            parts.extend(attributes::uid(answer).zip(part));
-        })
-        .await?;
-        Ok(parts)
-    }
-
-    async fn bodies(&mut self, uids: &[Uid]) -> Result<Vec<(Uid, Vec<u8>)>, Error> {
-        bodies::fetch(&mut self.session, &mut self.pending, &uid_set(uids)).await
-    }
-
-    async fn attachment(&mut self, uid: Uid, index: usize) -> Result<Option<Vec<u8>>, Error> {
-        let mut part = None;
-        let command = format!("UID FETCH {uid} (UID BODYSTRUCTURE)");
-        self.answered(command, |_, answer| {
-            if attributes::uid(answer) == Some(uid) {
-                part = attributes::structure(answer)
-                    .and_then(|structure| attachments::part(structure, index));
-            }
-        })
-        .await?;
-        let Some((path, encoding)) = part else {
-            return Ok(None);
-        };
-
-        let items = format!("(UID BODY.PEEK[{}])", body_plan::section(&path));
-        let path = SectionPath::Part(path, None);
-        let mut raw = None;
-        self.answered(format!("UID FETCH {uid} {items}"), |_, answer| {
-            if attributes::uid(answer) == Some(uid) {
-                raw = attributes::section(answer, &path).map(|raw| encoding.decode(raw));
-            }
-        })
-        .await?;
-        tracing::info!("fetched attachment {index} of {uid}");
-        Ok(raw)
-    }
-
-    async fn inline_images(&mut self, uid: Uid, ids: &[String]) -> Result<Vec<InlineImage>, Error> {
-        let mut parts = Vec::new();
-        let command = format!("UID FETCH {uid} (UID BODYSTRUCTURE)");
-        self.answered(command, |_, answer| {
-            if attributes::uid(answer) == Some(uid) {
-                parts = attributes::structure(answer)
-                    .map(|structure| inline_parts::find(structure, ids))
-                    .unwrap_or_default();
-            }
-        })
-        .await?;
-        if parts.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let sections: Vec<_> = parts
-            .iter()
-            .map(|part| format!("BODY.PEEK[{}]", body_plan::section(&part.path)))
-            .collect();
-        let command = format!("UID FETCH {uid} (UID {})", sections.join(" "));
-        let mut images = Vec::new();
-        self.answered(command, |_, answer| {
-            if attributes::uid(answer) != Some(uid) {
-                return;
-            }
-
-            for part in &parts {
-                let path = SectionPath::Part(part.path.clone(), None);
-                if let Some(raw) = attributes::section(answer, &path) {
-                    images.push(InlineImage {
-                        id: part.id.clone(),
-                        kind: part.kind.clone(),
-                        bytes: part.encoding.decode(raw),
-                    });
-                }
-            }
-        })
-        .await?;
-        tracing::info!("fetched {} inline images of {uid}", images.len());
-        Ok(images)
-    }
-
-    fn pushed(&mut self) -> Vec<Pushed> {
-        Pushed::queued(&self.session, &mut self.pending);
-        std::mem::take(&mut self.pending)
-    }
-
-    async fn idle(
-        self,
-        period: Duration,
-        stop: impl Future<Output = ()>,
-    ) -> Result<(Self, Vec<Pushed>), Error> {
-        if !self.listed.idle {
-            return self.poll(period, stop).await;
-        }
-
-        let Self {
-            session,
-            items,
-            uid_validity,
-            opening,
-            opens,
-            pending,
-            email,
-            listed,
-            gmail,
-        } = self;
-        let mut handle = session.idle();
-        handle.init().await?;
-        let first = {
-            let (wait, _stop) = handle.wait_with_timeout(period);
-            // The library's own timeout restarts on every keepalive line.
-            tokio::select! {
-                response = wait => response?,
-                () = tokio::time::sleep(period) => IdleResponse::Timeout,
-                () = stop => IdleResponse::ManualInterrupt,
-            }
-        };
-
-        let mut server = Self {
-            session: handle.done().await?,
-            items,
-            uid_validity,
-            opening,
-            opens,
-            pending: Vec::new(),
-            email,
-            listed,
-            gmail,
-        };
-
-        let mut pushed = pending;
-        if let IdleResponse::NewData(response) = &first {
-            if let Some(text) = bye(response.parsed()) {
-                return Err(Error::Bye(text));
-            }
-
-            pushed.extend(Pushed::from_response(response.parsed()));
-        }
-
-        // The rest of the burst came in before the server answered `DONE`.
-        pushed.extend(server.pushed());
-        Ok((server, pushed))
     }
 }
 

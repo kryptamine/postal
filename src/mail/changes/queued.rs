@@ -3,7 +3,7 @@ use crate::{
     mail::changes::flag_changes,
     mail::changes::move_changes,
     mail::fetch::thread_fetch,
-    mail::imap::MailServer,
+    mail::imap::ImapSession,
     mail::outbox::outbox_flush::{self, Sender},
     mail::sync::Error,
     mail::update::Update,
@@ -12,7 +12,7 @@ use crate::{
 /// Sends the flag changes and the moves the Cache queues, flags first, as
 /// a move would leave them behind.
 pub async fn send_changes(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
@@ -23,7 +23,7 @@ pub async fn send_changes(
 /// Sends the Outbox; true when SMTP accepted a Message. After one: its
 /// `\Answered`, then the Thread it answers read again.
 pub async fn send_outbox(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     sender: Sender<'_>,
     send: &impl Fn(Update),

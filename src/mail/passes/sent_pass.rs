@@ -2,7 +2,7 @@ use crate::{
     cache::{Cache, SentPass},
     domain::folder::Role,
     domain::uid::Uid,
-    mail::imap::{MailServer, Mode},
+    mail::imap::{ImapSession, Mode},
     mail::role_folder,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -16,7 +16,7 @@ const WINDOW: u32 = 1000;
 /// role newer than the last pass read; does nothing when no Folder has the
 /// role or the server refused it.
 pub async fn read(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {

@@ -62,7 +62,7 @@ async fn bodies(
             send,
         };
 
-        let mut session = ImapSession::open(config, sign_in).await?;
+        let mut session = ImapSession::connect(config, sign_in).await?;
         // Every run starts in the Inbox: its first Preview waits on no EXAMINE.
         sync::open(&mut session, FolderName::inbox(), Mode::Examine).await?;
         // Sent while the screen saw the last connection live, which then dropped.
@@ -93,7 +93,7 @@ async fn sync(
 ) -> Result<(), Error> {
     let arrivals = Arrivals::new();
     let attempt = async |report: &dyn Fn(Status)| {
-        let session = ImapSession::open(sender.outgoing.config, sender.sign_in).await?;
+        let session = ImapSession::connect(sender.outgoing.config, sender.sign_in).await?;
         let arrivals = &arrivals;
         let tell = Tell {
             send,

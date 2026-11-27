@@ -2,13 +2,13 @@ use crate::{
     cache::Cache,
     domain::flag::Flag,
     domain::uid::Uid,
-    mail::imap::{MailServer, Mode},
+    mail::imap::{ImapSession, Mode},
     mail::sync::{self, Error},
 };
 
 /// Stores every flag change the Cache holds for the server, selecting each
 /// Folder it is in. A refused change is dropped and only logged.
-pub async fn send(server: &mut impl MailServer, cache: &Cache) -> Result<(), Error> {
+pub async fn send(server: &mut ImapSession, cache: &Cache) -> Result<(), Error> {
     for (folder, changes) in cache.pending_flags()? {
         match sync::open(server, &folder, Mode::Select).await {
             Err(Error::Gone(error)) => {

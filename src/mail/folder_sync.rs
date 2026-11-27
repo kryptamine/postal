@@ -21,7 +21,7 @@ const BODIES: usize = 50;
 pub async fn sync(cache: &Cache, sender: Sender<'_>, folder: &FolderName) -> Result<usize, Error> {
     // No screen is there to tell.
     let unseen = |_: Update| {};
-    let mut server = ImapSession::open(sender.outgoing.config, sender.sign_in).await?;
+    let mut server = ImapSession::connect(sender.outgoing.config, sender.sign_in).await?;
     send_changes(&mut server, cache, &unseen).await?;
     send_outbox(&mut server, cache, sender, &unseen).await?;
     let (_, changes) = sync::resync(&mut server, cache, folder, Mode::Examine, &|_| {}).await?;

@@ -5,7 +5,7 @@ use crate::{
     domain::folder::{Folder, Role},
     domain::folder_name::FolderName,
     mail::fetch::backfill,
-    mail::imap::{MailServer, Mode},
+    mail::imap::{ImapSession, Mode},
     mail::sync::{self, Error},
     mail::update::Update,
 };
@@ -42,7 +42,7 @@ impl FolderPass {
     /// first not yet whole.
     pub async fn step(
         &mut self,
-        server: &mut impl MailServer,
+        server: &mut ImapSession,
         cache: &Cache,
         send: &impl Fn(Update),
     ) -> Result<(), Error> {
@@ -82,7 +82,7 @@ fn walked(folders: Vec<Folder>) -> Vec<FolderName> {
 /// The newest Messages of `folder` when it was never synced, else the page
 /// older than every cached one. Returns whether more is left of it.
 async fn page(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     send: &impl Fn(Update),
@@ -119,7 +119,7 @@ async fn page(
 /// below means the server has nothing older, or the Folder is gone or
 /// renumbered: the sync connection's to refetch.
 async fn older(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
 ) -> Result<bool, Error> {

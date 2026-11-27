@@ -15,7 +15,7 @@ use crate::{
     mail::fetch::inline_fetch::{self, InlineFetched},
     mail::fetch::part_fetch,
     mail::fetch::unfetched::Unfetched,
-    mail::imap::MailServer,
+    mail::imap::ImapSession,
     mail::passes::spare_work::SpareWork,
     mail::sync::Error,
     mail::update::Update,
@@ -73,7 +73,7 @@ impl Pending {
     /// `SpareWork` while none waits. Only a failure but a refusal ends it.
     pub async fn serve(
         &mut self,
-        server: &mut impl MailServer,
+        server: &mut ImapSession,
         cache: &Cache,
         spare: &mut SpareWork,
         send: &impl Fn(Update),
@@ -96,7 +96,7 @@ impl Pending {
     /// served; false when none waits.
     async fn step(
         &mut self,
-        server: &mut impl MailServer,
+        server: &mut ImapSession,
         cache: &Cache,
         spare: &mut SpareWork,
         send: &impl Fn(Update),
@@ -182,7 +182,7 @@ fn parts(request: AwaitedRequest) -> VecDeque<AwaitedPart> {
 
 /// Bodies the server no longer has, or whose Folder is gone, are refused.
 async fn fetch_awaited(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     part: &AwaitedPart,
     send: &impl Fn(Update),
@@ -215,7 +215,7 @@ async fn fetch_awaited(
 }
 
 async fn fetch_backfill(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     spare: &mut SpareWork,
