@@ -42,7 +42,7 @@ impl OlderPages {
     /// the connection changed was dropped with it.
     pub const fn notice(&mut self, update: &Update) {
         let paged = matches!(update, Update::Backfill(Backfill::Paged { .. }));
-        if paged || update.fetch_link().is_some() {
+        if paged || matches!(update, Update::FetchLink(_)) {
             self.asked = false;
         }
     }

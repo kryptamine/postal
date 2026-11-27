@@ -3,17 +3,8 @@ use crate::{
     mail::body_fetch::Request,
     mail::routes::Routes,
     mail::status::Status,
-    mail::update::{BodyLink, Update},
+    mail::update::{FetchLink, Update},
 };
-
-/// The state of an Account's fetch connection.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum FetchLink {
-    /// Not yet up since Postal started: bodies wait on it before showing offline.
-    Starting,
-    Live,
-    Down,
-}
 
 /// Routes every fetch request of the session, sending one only while its
 /// Account's fetch connection is live.
@@ -55,11 +46,8 @@ impl FetchRequests {
 
     /// Follows the fetch connection of `account` through `update`.
     pub fn notice(&mut self, account: AccountId, update: &Update) {
-        if let Some(link) = update.fetch_link() {
-            self.links[account] = match link {
-                BodyLink::Up => FetchLink::Live,
-                BodyLink::Down => FetchLink::Down,
-            };
+        if let Update::FetchLink(link) = update {
+            self.links[account] = *link;
         }
     }
 }

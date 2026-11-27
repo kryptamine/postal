@@ -7,7 +7,7 @@ use crate::{
     mail::body_fetch::Request,
     mail::fetch_requests::FetchRequests,
     mail::inline_fetch::{InlineFetched, InlineRequest},
-    mail::update::{BodyLink, Update},
+    mail::update::{FetchLink, Update},
     render::file_size,
     render::original_page::Original,
     ui::outside::attachment_file,
@@ -120,7 +120,7 @@ impl WantedParts {
         match update {
             Update::Attachment(fetched) => self.attachment(account, fetched),
             Update::Inline(fetched) => self.images(account, fetched),
-            _ if update.fetch_link() == Some(BodyLink::Down) => self.lost(account),
+            Update::FetchLink(FetchLink::Down) => self.lost(account),
             _ => None,
         }
     }

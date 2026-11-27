@@ -16,8 +16,8 @@ use crate::{
     domain::per_account::{AccountId, PerAccount},
     domain::uid::Uid,
     mail::body_fetch::{BodyRequest, Fetched, Request},
-    mail::fetch_requests::{FetchLink, FetchRequests},
-    mail::update::{BodyLink, Update},
+    mail::fetch_requests::FetchRequests,
+    mail::update::{FetchLink, Update},
     render::body::Body,
     render::html_job::HtmlJob,
     render::mail_look::MailLook,
@@ -339,12 +339,12 @@ impl Previews {
 
     /// Down, what was asked for will not come; back up, every body that
     /// could not come is asked for again as it is wanted.
-    pub fn link(&mut self, account: AccountId, link: BodyLink) {
+    pub fn link(&mut self, account: AccountId, link: FetchLink) {
         if Some(account) != self.account {
             return;
         }
 
-        if link == BodyLink::Up {
+        if link == FetchLink::Live {
             self.offline.clear();
             self.refused.clear();
         } else {
