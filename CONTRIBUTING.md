@@ -21,9 +21,9 @@ make check    # lint, cargo deny, tests and the Neovim check
 make install  # a release build where a user has it
 ```
 
-`make check` needs `cargo-deny`, `clang-format`, `clang-tidy`, `stylua` and
-`nvim` on `PATH`. A change to `landing/` also needs `make landing` (Node and
-pnpm).
+`make check` needs `cargo-nextest`, `cargo-deny`, `clang-format`,
+`clang-tidy`, `stylua` and `nvim` on `PATH`. A change to `landing/` also
+needs `make landing` (Node and pnpm).
 
 ## The rules
 
