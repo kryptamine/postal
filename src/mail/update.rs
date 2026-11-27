@@ -16,7 +16,7 @@ pub enum Update {
     Bodies(FolderName, Fetched),
     Attachment(AttachmentFetched),
     Inline(InlineFetched),
-    BodyLink(BodyLink),
+    FetchLink(FetchLink),
     /// New Unread Messages reached the Inbox, all in one resync or IDLE burst.
     Arrived(Vec<Arrival>),
     Rendered(PreviewKey, Preview),
@@ -35,20 +35,11 @@ pub enum Update {
     Refused,
 }
 
-/// The state of the connection for bodies.
+/// The state of an Account's fetch connection.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum BodyLink {
-    Up,
+pub enum FetchLink {
+    /// Not yet up since Postal started: bodies wait on it before showing offline.
+    Starting,
+    Live,
     Down,
-}
-
-impl Update {
-    /// Where this leaves the fetch connection: signing out takes it down too.
-    pub const fn fetch_link(&self) -> Option<BodyLink> {
-        match self {
-            Self::BodyLink(link) => Some(*link),
-            Self::Status(Status::SignedOut) => Some(BodyLink::Down),
-            _ => None,
-        }
-    }
 }

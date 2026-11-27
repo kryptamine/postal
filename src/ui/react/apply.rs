@@ -34,10 +34,6 @@ pub fn apply(
     previews: &mut Previews,
 ) -> Result<(), Error> {
     let (caches, outbox) = (world.caches, world.outbox);
-    if let Some(link) = update.fetch_link() {
-        previews.link(account, link);
-    }
-
     match update {
         Update::Inbox => reshow_inbox(ui, caches)?,
         Update::Folders => relist(ui, caches)?,
@@ -55,7 +51,10 @@ pub fn apply(
         // Taken before the screen: an Attachment and inline images by the
         // parts asked for, arrivals by the Notifier.
         Update::Attachment(_) | Update::Inline(_) | Update::Arrived(_) => {}
-        Update::BodyLink(_) => ui.screen.backfill = None,
+        Update::FetchLink(link) => {
+            previews.link(account, link);
+            ui.screen.backfill = None;
+        }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
         Update::LaidOut(laid) => {
             if let Some(preview) = ui.screen.over.get_mut::<DraftPreview>() {

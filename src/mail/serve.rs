@@ -15,7 +15,7 @@ use crate::{
     mail::steering::{Ask, Steering},
     mail::sync::{self, Error},
     mail::tell::Tell,
-    mail::update::{BodyLink, Update},
+    mail::update::{FetchLink, Update},
 };
 
 /// The connections of the Account `sender` sends from until the screen
@@ -33,6 +33,7 @@ pub async fn serve(
     let fetched = bodies(config, sender.sign_in, cache, requested, &send);
     match futures::future::try_join(synced, fetched).await {
         Err(error) if error.signed_out() => {
+            send(Update::FetchLink(FetchLink::Down));
             tracing::warn!("{}: {error}", config.email);
             Ok(())
         }
@@ -61,8 +62,8 @@ async fn bodies(
 
     // The status slot follows the sync connection alone, but for a refused Account.
     reconnect::retry(attempt, |status| match status {
-        Status::Live => send(Update::BodyLink(BodyLink::Up)),
-        Status::Retrying { .. } => send(Update::BodyLink(BodyLink::Down)),
+        Status::Live => send(Update::FetchLink(FetchLink::Live)),
+        Status::Retrying { .. } => send(Update::FetchLink(FetchLink::Down)),
         Status::SignedOut => send(Update::Status(status)),
         Status::Syncing { .. } | Status::Connecting | Status::Fetching => {}
     })

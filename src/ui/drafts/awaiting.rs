@@ -3,7 +3,7 @@ use crate::{
     domain::per_account::AccountId,
     mail::awaited_fetch,
     mail::fetch_requests::FetchRequests,
-    mail::update::{BodyLink, Update},
+    mail::update::{FetchLink, Update},
     ui::drafts::composing,
     ui::drafts::forwarding,
     ui::run::Error,
@@ -31,7 +31,7 @@ pub fn notice(
 ) -> Option<Done> {
     let awaited = screen.awaited.as_mut()?;
     let ours = awaited.message().account == account;
-    if ours && update.fetch_link() == Some(BodyLink::Up) {
+    if ours && matches!(update, Update::FetchLink(FetchLink::Live)) {
         fetch.send(account, awaited_fetch::requests(awaited));
     }
 
