@@ -143,6 +143,7 @@ fn help_names_the_log_and_what_the_trace_holds() {
     let output = Command::new(env!("CARGO_BIN_EXE_postal"))
         .arg("--help")
         .env_clear()
+        .envs(support::home::coverage())
         .env("XDG_STATE_HOME", home.xdg_state_home())
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .output()
@@ -165,6 +166,7 @@ fn an_error_before_the_screen_is_logged_and_names_the_log() {
     let home = Home::new("email = 1\n");
     let output = Command::new(env!("CARGO_BIN_EXE_postal"))
         .env_clear()
+        .envs(support::home::coverage())
         .env("XDG_CONFIG_HOME", home.xdg_config_home())
         .env("XDG_STATE_HOME", home.xdg_state_home())
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
@@ -190,6 +192,7 @@ fn an_unknown_argument_is_refused() {
     let output = Command::new(env!("CARGO_BIN_EXE_postal"))
         .arg("--frobnicate")
         .env_clear()
+        .envs(support::home::coverage())
         .env("XDG_STATE_HOME", home.xdg_state_home())
         .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .output()

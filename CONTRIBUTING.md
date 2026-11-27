@@ -25,6 +25,10 @@ make install  # a release build where a user has it
 `clang-tidy`, `stylua` and `nvim` on `PATH`. A change to `landing/` also
 needs `make landing` (Node and pnpm).
 
+`make coverage` (`cargo-llvm-cov`) shows the lines no test runs, and
+`make mutants FILE=src/...` (`cargo-mutants`) the changes to a file no test
+notices; neither is part of `make check`.
+
 ## The rules
 
 [AGENTS.md](AGENTS.md) holds the rules every change follows, for people and
