@@ -3,8 +3,8 @@ use crate::{
     domain::folder_name::FolderName,
     domain::sync_state::SyncState,
     domain::uid::Uid,
+    mail::connection::outage::Outage,
     mail::imap::{self, Examined, MailServer, Mode},
-    mail::outage::Outage,
     mail::status::Status,
 };
 

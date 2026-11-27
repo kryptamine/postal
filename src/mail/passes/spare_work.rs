@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use crate::{
-    cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::body_fetch::open,
-    mail::body_index::BodyPass, mail::envelope_pass, mail::folder_pass::FolderPass,
-    mail::imap::MailServer, mail::index_progress::IndexProgress, mail::sent_pass, mail::snippets,
-    mail::sync::Error, mail::update::Update,
+    cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::fetch::body_fetch::open,
+    mail::imap::MailServer, mail::passes::body_index::BodyPass, mail::passes::envelope_pass,
+    mail::passes::folder_pass::FolderPass, mail::passes::index_progress::IndexProgress,
+    mail::passes::sent_pass, mail::passes::snippets, mail::sync::Error, mail::update::Update,
 };
 
 /// How long the fetch connection goes without a request before the pass

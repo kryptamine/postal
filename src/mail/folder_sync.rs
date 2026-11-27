@@ -1,12 +1,12 @@
 use crate::{
     cache::Cache,
     domain::folder_name::FolderName,
-    mail::body_fetch,
-    mail::body_index,
+    mail::changes::queued::{send_changes, send_outbox},
+    mail::fetch::body_fetch,
     mail::imap::{ImapSession, Mode},
-    mail::outbox_flush::Sender,
-    mail::queued::{send_changes, send_outbox},
-    mail::snippets,
+    mail::outbox::outbox_flush::Sender,
+    mail::passes::body_index,
+    mail::passes::snippets,
     mail::sync::{self, Error},
     mail::update::Update,
 };

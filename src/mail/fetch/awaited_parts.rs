@@ -1,8 +1,8 @@
 use crate::{
     domain::message_ref::MessageRef,
     domain::per_account::AccountId,
-    mail::attachment_fetch::AttachmentRequest,
-    mail::body_fetch::{AwaitedRequest, Fetched, Standing},
+    mail::fetch::attachment_fetch::AttachmentRequest,
+    mail::fetch::body_fetch::{AwaitedRequest, Fetched, Standing},
     mail::status::Status,
     mail::update::Update,
 };

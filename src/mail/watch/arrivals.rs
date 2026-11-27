@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use crate::{cache::Changes, domain::folder_name::FolderName, mail::arrival::Arrival};
+use crate::{cache::Changes, domain::folder_name::FolderName, mail::watch::arrival::Arrival};
 
 /// Which new Inbox rows are arrivals. It outlives each connection, so a
 /// reconnect's resync still tells of the mail that came during the outage.

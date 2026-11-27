@@ -1,4 +1,4 @@
-use crate::{mail::arrivals::Arrivals, mail::status::Status};
+use crate::{mail::status::Status, mail::watch::arrivals::Arrivals};
 
 /// What a sync connection tells the screen: `send` follows every Cache
 /// write, `report` the state of the connection, `arrivals` picks the new mail

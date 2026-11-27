@@ -2,7 +2,7 @@ use std::{fmt::Write, time::Duration};
 
 use tokio::time::Instant;
 
-use crate::{mail::outage::Outage, render::stack_str::StackStr};
+use crate::{mail::connection::outage::Outage, render::stack_str::StackStr};
 
 /// The connection state in the hint line's right slot; silent when live.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]

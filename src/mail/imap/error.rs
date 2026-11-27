@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::{account::oauth, mail::outage::Outage};
+use crate::{account::oauth, mail::connection::outage::Outage};
 
 /// What a server's answer holds, lowercased, when it is busy rather than
 /// refusing Postal. async-imap knows none of these codes and leaves them in

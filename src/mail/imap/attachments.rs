@@ -4,7 +4,8 @@ use async_imap::imap_proto::{
 
 use super::{encoding, file_name};
 use crate::{
-    domain::attachment::Attachments, domain::transfer_encoding::TransferEncoding, mail::header,
+    domain::attachment::Attachments, domain::transfer_encoding::TransferEncoding,
+    mail::imap::header,
 };
 
 /// Base64 as mail sends it: lines of 76 digits and a CRLF, 57 octets each.

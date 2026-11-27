@@ -1,6 +1,6 @@
 use std::{fs, io};
 
-use crate::mail::sync_lock::{self, Holder};
+use crate::mail::takeover::sync_lock::{self, Holder};
 
 /// Beside the lock: the terminal a takeover moves the session to.
 const TARGET: &str = "postal.moving";

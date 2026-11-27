@@ -5,10 +5,10 @@ use std::{
 
 use crate::{
     cache::{Cache, Indexed},
-    mail::body_fetch::open,
+    mail::fetch::body_fetch::open,
     mail::imap::MailServer,
-    mail::snippet,
-    mail::snippets,
+    mail::passes::snippet,
+    mail::passes::snippets,
     mail::sync::Error,
     mail::update::Update,
 };

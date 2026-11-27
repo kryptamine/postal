@@ -1,8 +1,9 @@
 use crate::{
     domain::folder::Role, domain::folder_name::FolderName, domain::indexing::Indexing,
-    mail::arrival::Arrival, mail::attachment_fetch::AttachmentFetched, mail::backfill::Backfill,
-    mail::body_fetch::Fetched, mail::inline_fetch::InlineFetched, mail::status::Status,
-    render::html_job::LaidOut, render::preview::Preview, render::rendered_previews::PreviewKey,
+    mail::fetch::attachment_fetch::AttachmentFetched, mail::fetch::backfill::Backfill,
+    mail::fetch::body_fetch::Fetched, mail::fetch::inline_fetch::InlineFetched,
+    mail::status::Status, mail::watch::arrival::Arrival, render::html_job::LaidOut,
+    render::preview::Preview, render::rendered_previews::PreviewKey,
 };
 
 /// Work done away from the event loop that changes what the screen shows.

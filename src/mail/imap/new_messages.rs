@@ -15,7 +15,7 @@ use crate::{
     domain::new_message::NewMessage,
     domain::root_id::RootId,
     domain::thread_id::ThreadId,
-    mail::header,
+    mail::imap::header,
 };
 
 /// Messages between two progress reports, each a redraw.

@@ -103,7 +103,7 @@ coverage: ## report the lines the tests run, in target/llvm-cov/html (needs carg
 
 # Each mutant rebuilds and runs the whole suite, so a run names one file.
 mutants: ## list the changes to FILE no test notices (needs cargo-mutants)
-	@test -n "$(FILE)" || { echo "usage: make mutants FILE=src/mail/backoff.rs"; exit 1; }
+	@test -n "$(FILE)" || { echo "usage: make mutants FILE=src/mail/connection/backoff.rs"; exit 1; }
 	cargo mutants --file $(FILE)
 
 nvim: ## format, lint and smoke-test the Neovim plugin

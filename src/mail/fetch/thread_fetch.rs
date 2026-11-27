@@ -7,9 +7,9 @@ use crate::{
     domain::folder_name::FolderName,
     domain::thread_id::ThreadId,
     domain::uid::Uid,
+    mail::fetch::one_by_one,
     mail::imap::{MailServer, Mode},
-    mail::one_by_one,
-    mail::snippets,
+    mail::passes::snippets,
     mail::sync::{self, Error},
     mail::update::Update,
 };

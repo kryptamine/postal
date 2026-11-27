@@ -8,7 +8,7 @@ use std::sync::{
 
 use tokio::sync::Notify;
 
-use crate::mail::sync_lock::{Busy, SyncLock};
+use crate::mail::takeover::sync_lock::{Busy, SyncLock};
 
 static HELD: Mutex<Option<SyncLock>> = Mutex::new(None);
 static OUTSIDE: AtomicBool = AtomicBool::new(false);

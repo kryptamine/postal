@@ -3,9 +3,9 @@ use crate::{
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::uid::Uid,
-    mail::attachment_fetch::AttachmentRequest,
+    mail::fetch::attachment_fetch::AttachmentRequest,
+    mail::fetch::inline_fetch::InlineRequest,
     mail::imap::{MailServer, Mode},
-    mail::inline_fetch::InlineRequest,
     mail::sync::{self, Error},
     mail::update::Update,
 };

@@ -1,6 +1,6 @@
 use crate::{
-    domain::message_ref::MessageRef, mail::imap::MailServer, mail::part_fetch, mail::sync::Error,
-    mail::unfetched::Unfetched, mail::update::Update,
+    domain::message_ref::MessageRef, mail::fetch::part_fetch, mail::fetch::unfetched::Unfetched,
+    mail::imap::MailServer, mail::sync::Error, mail::update::Update,
 };
 
 /// An attachment wanted, by its place among its Message's.
