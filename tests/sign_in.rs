@@ -21,6 +21,7 @@ use support::{
     fake_oauth::{CODE, FakeOAuth, REFRESH_TOKEN},
     home::Home,
     query::{self, Form},
+    wait_for,
 };
 use termlens::{Key, Terminal};
 
@@ -210,7 +211,10 @@ fn a_refused_account_shows_signed_out_in_red_and_lists_l() {
     let cell = screen.cell(screen.rows() - 1, column).unwrap();
     assert_eq!(cell.style().fg, termlens::Color::Indexed(1), "{hints}");
     assert_eq!(hints.matches("L sign in").count(), 2, "{hints}");
-    std::thread::sleep(Duration::from_millis(1500));
+    // Logged once both connections have ended: a retry would come before it.
+    let log = || fs::read_to_string(home.log_path()).unwrap_or_default();
+    wait_for(|| log().contains(&format!("connection::serve: {EMAIL}: ")));
+    assert!(!log().contains("retrying in"), "{}", log());
     let logins = server
         .commands()
         .iter()

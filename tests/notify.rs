@@ -11,7 +11,7 @@
 
 mod support;
 
-use std::{fs, time::Duration};
+use std::fs;
 
 use support::{
     fake_body::FakeBody,
@@ -23,8 +23,14 @@ use support::{
 };
 use termlens::{Key, Terminal, TerminalBuilder};
 
-/// Long enough for a notification the screen already shows to reach the file.
-const SETTLE: Duration = Duration::from_millis(300);
+/// Delivers one more new Message and waits for its notification to follow
+/// `before`: one that was not to come would have come ahead of it.
+fn last(server: &FakeImap, notifier: &Notifier, before: &[&str]) {
+    server.deliver(message("Zoe", "Last one", "2024-07-01T00:00:00Z").unread());
+    let mut expected: Vec<String> = before.iter().map(|&n| n.to_owned()).collect();
+    expected.push("Zoe | Last one".to_owned());
+    assert_eq!(notifier.wait_for(expected.len()), expected);
+}
 
 fn message(sender: &'static str, subject: &str, date: &str) -> FakeMessage {
     FakeMessage::new(sender, subject, date).body(FakeBody::plain(&format!("Body of {subject}")))
@@ -77,22 +83,18 @@ fn new_mail_notifies_once_only_while_the_terminal_has_no_focus() {
 
     server.deliver(message("Bob", "Seen arriving", "2024-06-01T00:00:00Z").unread());
     t.wait_until(|s| s.contains("Seen arriving")).unwrap();
-    std::thread::sleep(SETTLE);
-    assert_eq!(notifier.notified(), Vec::<String>::new());
 
     t.focus_out().unwrap();
     server.deliver(message("Erin", "Brand new", "2024-06-02T00:00:00Z").unread());
     t.wait_until(|s| s.contains("Brand new")).unwrap();
     assert_eq!(notifier.wait_for(1), ["Erin | Brand new"]);
-    std::thread::sleep(SETTLE);
-    assert_eq!(notifier.notified(), ["Erin | Brand new"]);
 
     t.focus_in().unwrap();
     server.deliver(message("Finn", "Back again", "2024-06-03T00:00:00Z").unread());
     t.wait_until(|s| s.contains("Back again")).unwrap();
-    std::thread::sleep(SETTLE);
+    t.focus_out().unwrap();
+    last(&server, &notifier, &["Erin | Brand new"]);
     quit(t);
-    assert_eq!(notifier.notified(), ["Erin | Brand new"]);
 }
 
 // Mail read elsewhere already, or sent by the Account to itself, is no news.
@@ -109,9 +111,8 @@ fn mail_seen_already_or_from_the_account_notifies_of_nothing() {
     server.deliver(own);
     server.deliver(message("Erin", "Brand new", "2024-06-03T00:00:00Z").unread());
     assert_eq!(notifier.wait_for(1), ["Erin | Brand new"]);
-    std::thread::sleep(SETTLE);
+    last(&server, &notifier, &["Erin | Brand new"]);
     quit(t);
-    assert_eq!(notifier.notified(), ["Erin | Brand new"]);
 }
 
 // IDLE watches the shown Folder alone; `STATUS` finds the Inbox's new mail,
@@ -186,9 +187,8 @@ fn the_first_sync_and_a_backfill_notify_of_nothing() {
         .unwrap();
     t.send(Key::Char('G')).unwrap();
     t.wait_until(|s| s.contains("Message 1\u{20}")).unwrap();
-    std::thread::sleep(SETTLE);
+    last(&server, &notifier, &[]);
     quit(t);
-    assert_eq!(notifier.notified(), Vec::<String>::new());
 }
 
 // A terminal known to show `OSC 9` as a desktop notification gets the

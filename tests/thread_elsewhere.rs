@@ -10,8 +10,6 @@
 
 mod support;
 
-use std::time::Duration;
-
 use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage, Outage, Stall},
@@ -185,9 +183,7 @@ fn offline_reading_shows_the_folders_messages_only() {
     t.wait_until(|s| s.contains("Count me in") && s.contains("offline"))
         .unwrap();
     t.send(Key::Enter).unwrap();
-    t.wait_until(reading).unwrap();
-    std::thread::sleep(Duration::from_millis(500));
-    let screen = t.snapshot_after(|_| true).unwrap();
+    let screen = t.snapshot_after(reading).unwrap();
     assert!(screen.row_text(0).contains(" 1/1 "), "{screen}");
     assert!(!screen.contains("The coast?"), "{screen}");
     quit(t);
@@ -203,7 +199,13 @@ fn a_server_without_gmail_is_not_searched_for_the_thread() {
 
     t.send(Key::Enter).unwrap();
     t.wait_until(reading).unwrap();
-    std::thread::sleep(Duration::from_millis(500));
+    // Asked after Reading opened: the IDLE after its store follows any search.
+    t.send(Key::Char('U')).unwrap();
+    wait_for(|| {
+        let commands = server.commands();
+        let store = commands.iter().position(|c| c.starts_with("UID STORE"));
+        store.is_some_and(|store| commands[store..].iter().any(|c| c == "IDLE"))
+    });
     assert!(!searched_thread(&server), "{:#?}", server.commands());
     quit(t);
 }
