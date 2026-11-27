@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help launcher build run demo-build demo media stills install dist fmt lint deny test coverage mutants nvim sanitize rendered-diff brand landing landing-dev check
+.PHONY: help launcher build run demo-build demo media stills install dist fmt lint deny test coverage mutants mutants-diff nvim sanitize rendered-diff brand landing landing-dev check
 
 # Homebrew's llvm is keg-only: its clang tools are not on PATH by default.
 LLVM := /opt/homebrew/opt/llvm/bin
@@ -105,6 +105,12 @@ coverage: ## report the lines the tests run, in target/llvm-cov/html (needs carg
 mutants: ## list the changes to FILE no test notices (needs cargo-mutants)
 	@test -n "$(FILE)" || { echo "usage: make mutants FILE=src/mail/connection/backoff.rs"; exit 1; }
 	cargo mutants --file $(FILE)
+
+# Mutates only the lines this branch changed, uncommitted ones included.
+mutants-diff: ## list the changes in this branch no test notices (needs cargo-mutants)
+	@mkdir -p target
+	git diff $$(git merge-base main HEAD) > target/mutants.diff
+	cargo mutants --in-diff target/mutants.diff
 
 nvim: ## format, lint and smoke-test the Neovim plugin
 	$(MAKE) -C nvim check
