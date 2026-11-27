@@ -64,7 +64,13 @@ local function find_cuts(lines, first)
 	end
 
 	local quoted = quote.start(lines, first)
-	local tail = forward or quoted or #lines
+	-- As `quoted_text::cut`, a Quote under no words of the writer's stays in.
+	local said = quoted
+		and vim.iter(vim.list_slice(lines, first + 1, quoted)):any(function(line)
+			return line:find("%S") ~= nil
+		end)
+
+	local tail = forward or (said and quoted) or #lines
 	for row = tail - 1, first, -1 do
 		if lines[row + 1] == SEPARATOR then
 			return quoted, row
