@@ -41,6 +41,16 @@ pub fn html(content: &str) -> FakeBody {
     FakeBody::text("html", "7bit", content)
 }
 
+/// The page `tests/fixtures/html/{name}.html`, without the newline it ends in.
+pub fn page(name: &str) -> FakeBody {
+    let path = format!(
+        "{}/tests/fixtures/html/{name}.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let content = std::fs::read_to_string(path).unwrap();
+    html(content.strip_suffix('\n').unwrap_or(&content))
+}
+
 /// Postal on the one Message `body`, once sync is done.
 pub fn started(body: FakeBody, run: &Run) -> (Terminal, FakeImap) {
     let message = FakeMessage::new("Sender", "Subject", "2024-11-18T09:00:00Z").body(body);

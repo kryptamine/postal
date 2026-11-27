@@ -10,18 +10,14 @@
 
 mod support;
 
-use support::rendered::{DEFAULT, Run, at, bg, fg, frames, html, pane, preview};
+use support::rendered::{DEFAULT, Run, at, bg, fg, frames, html, page, pane, preview};
 use termlens::Color;
 
 // litehtml split an inline around a block inside it even through an
 // inline-block, which cut a link-wrapped button's box in two empty halves.
 #[test]
 fn a_link_around_an_inline_block_button_keeps_it_whole() {
-    let body = html(
-        "<p>x</p><a href=\"https://shop.example\"><span style=\"background:#1f883d;\
-         display:inline-block;padding:16px\"><span style=\"display:block\">Shop now</span>\
-         </span></a><p>x</p>",
-    );
+    let body = page("a-link-around-an-inline-block-button-keeps-it-whole");
     let screen = preview(body, &DEFAULT, "Shop now");
     let (row, col) = at(&screen, "Shop now");
     assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
@@ -34,10 +30,7 @@ fn a_link_around_an_inline_block_button_keeps_it_whole() {
 // slab three rows high or a label in a frame the fill was moved against.
 #[test]
 fn a_filled_button_is_one_row_with_no_border() {
-    let body = html(
-        "<p>x</p><a href=\"https://ci.example\" style=\"display:inline-block;color:#fff;\
-         background:#1f883d;border:1px solid #0b5a20;padding:12px 24px\">View run</a>",
-    );
+    let body = page("a-filled-button-is-one-row-with-no-border");
     let screen = preview(body, &DEFAULT, "View run");
     let (row, col) = at(&screen, "View run");
     assert!(
@@ -55,12 +48,7 @@ fn a_filled_button_is_one_row_with_no_border() {
 // with its `height: 50px` it stood as a slab of fill round the label.
 #[test]
 fn a_cell_in_the_fill_of_its_button_is_cut_back_with_it() {
-    let body = html(
-        "<p>x</p><table width=\"400\"><tr><td align=\"center\" bgcolor=\"#892de1\" \
-         style=\"height:50px\"><a href=\"https://learn.example\" style=\"display:inline-block;\
-         background:#892de1;color:#fff;padding:10px 40px\">Explore courses</a></td></tr></table>\
-         <p>x</p>",
-    );
+    let body = page("a-cell-in-the-fill-of-its-button-is-cut-back-with-it");
     let screen = preview(body, &DEFAULT, "Explore courses");
     let (row, col) = at(&screen, "Explore courses");
     assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
@@ -110,14 +98,7 @@ fn a_button_is_labelled_in_white_where_white_reads() {
 // box. Each is its label in bold on two cells of fill at either side.
 #[test]
 fn every_button_has_one_shape() {
-    let body = html(
-        "<p>x</p><a href=\"https://shop.example/a\" style=\"display:block;background:#1f883d;\
-         color:#fff;padding:12px 0;text-align:center\">Wide one</a>\
-         <p>x</p><div style=\"padding-left:40px\"><a href=\"https://shop.example/b\" \
-         style=\"background:#1f883d;color:#fff\">Tight one</a></div>\
-         <p>x</p><a href=\"https://shop.example/c\" style=\"display:inline-block;\
-         border:1px solid #1a73e8;color:#1a73e8;padding:12px 40px\">Outlined one</a><p>x</p>",
-    );
+    let body = page("every-button-has-one-shape");
     let screen = preview(body, &DEFAULT, "Outlined one");
     assert_eq!(frames(&screen), 0, "{}", screen.text());
     for label in ["Wide one", "Tight one", "Outlined one"] {
@@ -143,11 +124,7 @@ fn every_button_has_one_shape() {
 // table of one cell is a button built as a table.
 #[test]
 fn a_bordered_cell_with_a_link_is_no_button() {
-    let body = html(
-        "<table><tr><td style=\"border:1px solid #888888\">Invoice 12</td>\
-         <td style=\"border:1px solid #888888\"><a href=\"https://pay.example/12\">Download</a>\
-         </td></tr></table>",
-    );
+    let body = page("a-bordered-cell-with-a-link-is-no-button");
     let screen = preview(body, &DEFAULT, "Download");
     let (row, col) = at(&screen, "Download");
     assert_eq!(bg(&screen, row, col), Color::Default, "{}", screen.text());
@@ -158,12 +135,7 @@ fn a_bordered_cell_with_a_link_is_no_button() {
 // into a three-row slab.
 #[test]
 fn a_table_height_round_a_button_collapses_with_it() {
-    let body = html(
-        "<p>x</p><table height=\"48\"><tr><td align=\"center\" bgcolor=\"#222325\" \
-         height=\"48\" style=\"border-radius:8px;padding:0 27px\">\
-         <a href=\"https://shop.example\" style=\"color:#fff;display:inline-block\">\
-         Browse services</a></td></tr></table><p>x</p>",
-    );
+    let body = page("a-table-height-round-a-button-collapses-with-it");
     let screen = preview(body, &DEFAULT, "Browse services");
     let (row, col) = at(&screen, "Browse services");
     assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
@@ -176,12 +148,7 @@ fn a_table_height_round_a_button_collapses_with_it() {
 // as the mail drew it, not a slab.
 #[test]
 fn a_rounded_button_has_round_ends_in_a_nerd_font() {
-    let body = || {
-        html(
-            "<p>Text</p><a href=\"https://app.example\" style=\"background:#1a73e8;color:#fff;\
-             padding:12px 24px;border-radius:20px;display:inline-block\">Launch App</a><p>End</p>",
-        )
-    };
+    let body = || page("a-rounded-button-has-round-ends-in-a-nerd-font");
     let nerd = Run {
         nerd: true,
         ..DEFAULT

@@ -16,6 +16,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    rendered::page,
 };
 use termlens::{Key, Screen, Terminal, TerminalBuilder};
 
@@ -28,11 +29,6 @@ const CUT: &str = "… quoted text hidden (z)";
 const PLAIN: &str = "Sounds good\r\n\r\n\
     On Mon, 4 Mar 2024 at 09:00, Bob <bob@example.com> wrote:\r\n\
     > Where to?\r\n";
-
-const GMAIL: &str = "<div>Sounds good</div>\
-    <div class=\"gmail_quote\"><div class=\"gmail_attr\">On Mon, 4 Mar 2024 at 09:00, Bob \
-    &lt;<a href=\"mailto:bob@example.com\">bob@example.com</a>&gt; wrote:<br></div>\
-    <blockquote class=\"gmail_quote\">Where to?</blockquote></div>";
 
 fn terminal(home: &Home) -> TerminalBuilder {
     Terminal::builder()
@@ -48,10 +44,6 @@ fn terminal(home: &Home) -> TerminalBuilder {
 fn quit(mut t: Terminal) {
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
-}
-
-fn html(content: &str) -> FakeBody {
-    FakeBody::text("html", "7bit", content)
 }
 
 /// A Message from Ada that answers another.
@@ -106,7 +98,7 @@ fn a_reply_ends_where_its_quote_starts_and_z_shows_it() {
 // View lose it alike.
 #[test]
 fn an_html_reply_loses_its_blockquote_in_both_views() {
-    let (mut t, _server) = shown(reply(html(GMAIL)));
+    let (mut t, _server) = shown(reply(page("gmail-quote")));
     for _ in 0..2 {
         let screen = t.snapshot_after(|s| preview(s).contains(CUT)).unwrap();
         let pane = preview(&screen);
@@ -152,8 +144,7 @@ fn a_quote_with_words_after_it_stays() {
     assert!(!preview(&screen).contains(CUT), "{screen}");
     quit(t);
 
-    let inline = "<blockquote>Where to?</blockquote><div>The coast</div>";
-    let (mut t, _server) = shown(reply(html(inline)));
+    let (mut t, _server) = shown(reply(page("inline-quote")));
     let screen = t
         .snapshot_after(|s| preview(s).contains("The coast"))
         .unwrap();
@@ -193,11 +184,8 @@ fn a_line_above_the_quote_wrapped_in_two_goes_whole() {
 // in `References` alone: its header block is where the quote starts.
 #[test]
 fn an_outlook_reply_ends_at_the_header_of_the_quoted_mail() {
-    let outlook = "<p>Agreed</p>\
-        <p><b>From:</b> Bob &lt;bob@example.com&gt;<br><b>Sent:</b> Monday<br>\
-        <b>To:</b> Ada<br><b>Subject:</b> Plans</p><p>Where to?</p>";
     let message = FakeMessage::new("Ada", "RE: Plans", "2024-03-05T09:00:00Z")
-        .body(html(outlook))
+        .body(page("outlook-reply"))
         .header("References", "<plans@example.com>");
     let (mut t, _server) = shown(message);
     let screen = t.snapshot_after(|s| preview(s).contains(CUT)).unwrap();
