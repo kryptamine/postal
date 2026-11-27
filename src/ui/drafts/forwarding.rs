@@ -1,10 +1,10 @@
 use std::{io, path::PathBuf};
 
 use crate::{
-    compose::awaited_forward::AwaitedForward, compose::draft_file,
+    compose::awaited::Awaited, compose::awaited_forward::AwaitedForward, compose::draft_file,
     compose::draft_notes::DraftNotes, compose::forward_draft, compose::forwarded,
-    domain::message::Message, mail::fetch_requests::FetchRequests, mail::forward_fetch,
-    mail::status::Status, ui::drafts::composing, ui::run::Error, ui::state::screen::Screen,
+    domain::message::Message, mail::fetch_requests::FetchRequests, mail::status::Status,
+    ui::drafts::awaiting, ui::drafts::composing, ui::run::Error, ui::state::screen::Screen,
     ui::state::toast::Toast, ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
 };
 
@@ -27,9 +27,8 @@ pub fn forward(
         return Ok(());
     };
 
-    // Either would open its own Draft over this one.
-    screen.replying = None;
-    screen.forwarding = None;
+    // A Reply or Forward still waiting would open its own Draft over this one.
+    screen.awaited = None;
     let body_missing = !world.caches[message.account].has_body(message.body_key)?;
     let attachments = message.attachments.iter().count();
     let Some(on_server) = message.on_server() else {
@@ -57,22 +56,18 @@ pub fn forward(
         return Ok(());
     }
 
-    fetch.send(awaited.message.account, forward_fetch::requests(&awaited));
-    screen.forwarding = Some(awaited);
+    awaiting::start(screen, fetch, Awaited::Forward(awaited));
     Ok(())
 }
 
 /// The end of the fetch a Forward waits on: its editor, or why not.
 pub fn forwarded(
+    awaited: AwaitedForward,
     result: Result<(), String>,
     tty: &mut Tty,
     screen: &mut Screen,
     world: World,
 ) -> Result<(), Error> {
-    let Some(awaited) = screen.forwarding.take() else {
-        return Ok(());
-    };
-
     if let Err(reason) = result {
         tracing::warn!("fetching the Message to forward failed: {reason}");
         screen.toast = Some(Toast::error(format!("couldn't forward: {reason}")));

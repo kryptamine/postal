@@ -13,19 +13,16 @@ use crate::{
     compose::outbox::Outbox,
     domain::per_account::{AccountId, PerAccount},
     mail::fetch_requests::FetchRequests,
-    mail::forward_fetch,
-    mail::reply_fetch,
     mail::routes::Routes,
     mail::status::Status,
     mail::steering::Ask,
     mail::sync,
-    mail::update::{BodyLink, Update},
+    mail::update::Update,
     ui::alloc_count,
-    ui::drafts::composing,
+    ui::drafts::awaiting,
     ui::drafts::draft_layer,
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::drafting,
-    ui::drafts::forwarding,
     ui::drafts::local_list::relist_local,
     ui::exit::Exit,
     ui::frame::draw,
@@ -239,15 +236,9 @@ impl Model<'_> {
     }
 
     fn arrive(&mut self, account: AccountId, update: Update) -> Result<(), Error> {
-        if self.fetch.notice(account, &update) == Some(BodyLink::Up) {
-            self.ask_awaited(account);
-        }
-
+        self.fetch.notice(account, &update);
         let screen = &mut self.ui.screen;
-        let replied = (screen.replying.as_mut())
-            .and_then(|awaited| reply_fetch::notice(account, &update, awaited));
-        let forwarded = (screen.forwarding.as_mut())
-            .and_then(|awaited| forward_fetch::notice(account, &update, awaited));
+        let awaited = awaiting::notice(screen, &self.fetch, account, &update);
         if let Some(toast) = self.parts.notice(account, &update) {
             screen.toast = Some(toast);
         }
@@ -258,36 +249,7 @@ impl Model<'_> {
         }
 
         apply::apply(account, update, &mut self.ui, self.world, self.previews)?;
-        if let Some(result) = replied {
-            composing::fetched(result, &mut self.tty, &mut self.ui.screen, self.world)?;
-        }
-
-        if let Some(result) = forwarded {
-            forwarding::forwarded(result, &mut self.tty, &mut self.ui.screen, self.world)?;
-        }
-
-        Ok(())
-    }
-
-    /// What a Reply or Forward of `account` asked for went down with the
-    /// fetch connection: back up, it asks again.
-    fn ask_awaited(&self, account: AccountId) {
-        let screen = &self.ui.screen;
-        if let Some(awaited) = screen
-            .replying
-            .as_ref()
-            .filter(|a| a.message.account == account)
-        {
-            self.fetch.send(account, reply_fetch::requests(awaited));
-        }
-
-        if let Some(awaited) = screen
-            .forwarding
-            .as_ref()
-            .filter(|a| a.message.account == account)
-        {
-            self.fetch.send(account, forward_fetch::requests(awaited));
-        }
+        awaiting::finish(awaited, &mut self.tty, &mut self.ui.screen, self.world)
     }
 
     /// Takes one input event; the `Exit` when it ends the TUI.

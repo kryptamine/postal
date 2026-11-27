@@ -7,6 +7,7 @@ use tokio::time::Instant;
 
 use crate::{
     compose::accounts::Accounts,
+    compose::awaited::Awaited,
     compose::awaited_reply::AwaitedReply,
     compose::draft_file,
     compose::draft_notes::DraftNotes,
@@ -19,9 +20,9 @@ use crate::{
     domain::message::Message,
     domain::per_account::AccountId,
     mail::fetch_requests::FetchRequests,
-    mail::reply_fetch,
     mail::status::Status,
     mail::steering::Ask,
+    ui::drafts::awaiting,
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
     ui::run::Error,
@@ -45,8 +46,7 @@ pub fn compose(
 ) -> Result<(), Error> {
     let accounts = world.accounts;
     // A Reply or Forward still waiting would open over this Draft.
-    screen.replying = None;
-    screen.forwarding = None;
+    screen.awaited = None;
     let signature = from.map_or(Ok(None), |from| accounts.outgoing(from).signature());
     let template = draft_file::template(block(&signature));
     let text = link.map_or_else(|| template.clone(), |link| link.draft(block(&signature)));
@@ -115,8 +115,7 @@ pub fn reply(
     mut awaited: AwaitedReply,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
-    screen.replying = None;
-    screen.forwarding = None;
+    screen.awaited = None;
     let message = &awaited.message;
     if let Some(path) = answered_by(message, world.accounts) {
         // It was found among the Drafts of the Account the Message reached.
@@ -159,8 +158,7 @@ pub fn reply(
             Ok(())
         }
         _ => {
-            fetch.send(message.account, reply_fetch::requests(&awaited));
-            screen.replying = Some(awaited);
+            awaiting::start(screen, fetch, Awaited::Reply(awaited));
             Ok(())
         }
     }
@@ -180,15 +178,12 @@ fn answered_by(message: &Message, accounts: Accounts) -> Option<PathBuf> {
 
 /// The end of the fetch a Reply waits on: its editor, or why not.
 pub fn fetched(
+    awaited: &AwaitedReply,
     result: Result<(), String>,
     tty: &mut Tty,
     screen: &mut Screen,
     world: World,
 ) -> Result<(), Error> {
-    let Some(awaited) = screen.replying.take() else {
-        return Ok(());
-    };
-
     // The answered body may be cached though the rest of its Thread failed.
     if let Err(reason) = result {
         tracing::warn!("fetching the bodies to reply to failed: {reason}");
@@ -202,7 +197,7 @@ pub fn fetched(
         return Ok(());
     };
 
-    answer(tty, screen, &raw, &awaited, world)
+    answer(tty, screen, &raw, awaited, world)
 }
 
 /// A Reply's Draft from the answered Message's body `raw`, in the editor,

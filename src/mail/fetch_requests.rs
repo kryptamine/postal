@@ -53,14 +53,13 @@ impl FetchRequests {
         true
     }
 
-    /// Follows the fetch connection of `account`; the link `update` leaves.
-    pub fn notice(&mut self, account: AccountId, update: &Update) -> Option<BodyLink> {
-        let link = update.fetch_link()?;
-        self.links[account] = match link {
-            BodyLink::Up => FetchLink::Live,
-            BodyLink::Down => FetchLink::Down,
-        };
-
-        Some(link)
+    /// Follows the fetch connection of `account` through `update`.
+    pub fn notice(&mut self, account: AccountId, update: &Update) {
+        if let Some(link) = update.fetch_link() {
+            self.links[account] = match link {
+                BodyLink::Up => FetchLink::Live,
+                BodyLink::Down => FetchLink::Down,
+            };
+        }
     }
 }

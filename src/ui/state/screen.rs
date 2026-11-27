@@ -2,8 +2,7 @@ use tokio::time::Instant;
 
 use crate::{
     cache::Cache,
-    compose::awaited_forward::AwaitedForward,
-    compose::awaited_reply::AwaitedReply,
+    compose::awaited::Awaited,
     domain::indexing::Indexing,
     domain::per_account::{AccountId, PerAccount},
     domain::thread::Key,
@@ -39,8 +38,8 @@ pub struct Screen {
     pub dwell: Dwell,
     /// What an Undo may take back, the latest last.
     pub undo: Vec<Undo>,
-    pub replying: Option<AwaitedReply>,
-    pub forwarding: Option<AwaitedForward>,
+    /// What a Reply's or a Forward's Draft waits on before it opens.
+    pub awaited: Option<Awaited>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
     /// The read of Contacts started by turning them on, while under way.
@@ -114,7 +113,7 @@ impl Screen {
     }
 
     const fn fetching(&self) -> bool {
-        self.replying.is_some() || self.forwarding.is_some()
+        self.awaited.is_some()
     }
 
     /// The first Account the server no longer accepts.

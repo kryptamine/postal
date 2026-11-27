@@ -1,3 +1,4 @@
+pub mod awaiting;
 pub mod composing;
 pub mod draft_layer;
 mod draft_pane;
