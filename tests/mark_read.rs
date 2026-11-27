@@ -1,14 +1,7 @@
 //! Mark Read after a Dwell, at once on entering Reading, and Mark Unread
 //! with `U`, through the fake server's `UID STORE`.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::time::Duration;
 

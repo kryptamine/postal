@@ -1,14 +1,7 @@
 //! Buttons in the rendered View of HTML mail: one shape, whatever markup
 //! made them.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::rendered::{DEFAULT, Run, at, bg, fg, frames, html, page, pane, preview};
 use termlens::Color;

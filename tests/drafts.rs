@@ -3,14 +3,7 @@
 //! lists every Draft and Outbox Message to take up again; a Reply to a
 //! Message already answered by a Draft opens that Draft.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, path::PathBuf};
 

@@ -3,14 +3,8 @@
 //! Contacts are faked through `POSTAL_CONTACTS_FAKE`, see ADR 0035.
 
 #![cfg(target_os = "macos")]
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
 
-mod support;
+use crate::support;
 
 use std::{fs, path::Path};
 

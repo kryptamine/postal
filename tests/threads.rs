@@ -2,14 +2,7 @@
 //! `X-GM-THRID`, else by `References`: its senders, count, oldest subject
 //! and newest Snippet.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::time::{Duration, Instant};
 

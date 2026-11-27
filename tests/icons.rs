@@ -1,14 +1,7 @@
 //! Nerd Font icons: `icons = "auto"` draws them only in a terminal that
 //! bundles the symbols, `nerd` always, `none` never.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::fs;
 

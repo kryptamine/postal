@@ -1,14 +1,7 @@
 //! `B` writes the Message as a page and hands it to the desktop's opener,
 //! here a recording stand-in for `open` and `xdg-open`.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::fs;
 

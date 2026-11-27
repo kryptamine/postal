@@ -3,14 +3,7 @@
 //! `make smoke` gives it: the CLI's answer is what the plugin reads. Needs
 //! `nvim`.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{path::Path, process::Command};
 

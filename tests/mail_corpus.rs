@@ -2,14 +2,7 @@
 //! own headers, and `|` hands it whole to the pager in the rendered and the
 //! text View. Its `X-Postal-Case` header says what the snapshot protects.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use mail_parser::MessageParser;
 use support::{fake_imap::FakeMessage, pager::paged};

@@ -2,14 +2,7 @@
 //! when none is open, else beside the open one, which lists it in Local
 //! Drafts.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{
     fs::{self, File},

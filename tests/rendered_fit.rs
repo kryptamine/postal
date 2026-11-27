@@ -1,14 +1,7 @@
 //! HTML mail too wide for the pane: what the rendered View lets go of
 //! before the text View takes it.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::rendered::{DEFAULT, at, bg, html, page, pane, preview, quit, started};
 use termlens::{Color, Screen};

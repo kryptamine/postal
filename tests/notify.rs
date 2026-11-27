@@ -2,14 +2,7 @@
 //! fake `osascript` and `notify-send` ahead on `PATH`, or the terminal's
 //! own escape.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::fs;
 

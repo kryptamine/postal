@@ -4,14 +4,7 @@
 //! Drafts when refused, and is never sent twice once accepted. A Send is
 //! held for `send-delay` first, and `u` takes it back inside that window.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{
     fs,

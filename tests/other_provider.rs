@@ -2,14 +2,7 @@
 //! as the domain publishes them or guessed from it, and a password checked
 //! by `LOGIN` before anything is written. The fake lists no extension past UIDPLUS.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, os::unix::fs::PermissionsExt};
 

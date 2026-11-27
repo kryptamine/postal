@@ -1,14 +1,7 @@
 //! Search by operators, `from:ada is:unread`, and the menu over the Query
 //! line that completes them.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::time::{Duration, Instant};
 

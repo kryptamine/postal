@@ -2,14 +2,7 @@
 //! `LOGIN` on the IMAP server before anything is written, and sends with it
 //! over SMTP. The fake serves iCloud's capabilities and Folder names.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::fs;
 

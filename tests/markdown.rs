@@ -2,14 +2,7 @@
 //! `multipart/alternative`: as written in `text/plain`, and as HTML, its
 //! Markdown converted and its signature, Quote and Forward kept as written.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::fs;
 

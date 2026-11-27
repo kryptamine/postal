@@ -1,14 +1,7 @@
 //! The rendered View of HTML mail: its layout on the cell grid, in colours
 //! moved onto the terminal's background.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::rendered::{
     DEFAULT, LIGHT, Run, at, bg, fixture, html, page, pane, preview, quit, started,

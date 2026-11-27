@@ -1,14 +1,7 @@
 //! Move with `m` through the Folder Picker and Archive with `e`, through
 //! the fake server's `UID MOVE`, and their Undo with `u`.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::{
     fake_body::FakeBody,

@@ -2,14 +2,7 @@
 //! stdio, one to one: the same arguments, the `--json` array under
 //! `items`, a failure as the CLI words it. See ADR 0030.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{
     io::{BufRead, BufReader, Write},

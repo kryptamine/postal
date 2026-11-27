@@ -1,14 +1,7 @@
 //! Reading a Gmail Thread finds its Messages in other Folders through All
 //! Mail, by `X-GM-THRID`, and adds them to the stack and to the row's count.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::{
     fake_body::FakeBody,

@@ -2,14 +2,7 @@
 //! name each Thread and Message by an ID another command takes; they only
 //! read the Cache. See ADR 0017 and ADR 0030.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::process::Output;
 

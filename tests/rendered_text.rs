@@ -1,14 +1,7 @@
 //! The text of HTML mail in the rendered View: how it is aligned, and the
 //! roles its colours are reduced to.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::rendered::{DEFAULT, at, bg, dim, fg, html, page, pane, preview};
 use termlens::Color;

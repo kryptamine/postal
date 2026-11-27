@@ -1,13 +1,6 @@
 //! The layer direction and the import invariants of ARCHITECTURE.md, read
 //! from the paths each file of `src/` names; see ADR 0038.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
 use std::{
     collections::BTreeSet,
     fs,
