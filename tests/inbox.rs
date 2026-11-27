@@ -12,7 +12,7 @@ use support::{
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
     picker::wait_picked,
-    quit,
+    quit, settled,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -49,7 +49,7 @@ fn wait_selected(t: &mut Terminal, subject: &str) {
 }
 
 fn loaded(screen: &Screen) -> bool {
-    screen.contains(" · 1/")
+    screen.contains(" · 1/") && settled(screen)
 }
 
 fn four_messages() -> Vec<FakeMessage> {

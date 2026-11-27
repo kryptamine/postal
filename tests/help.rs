@@ -16,7 +16,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage, Stall},
     home::Home,
-    quit,
+    quit, settled,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -55,7 +55,9 @@ fn the_hint_line_drops_entries_from_the_right_and_keeps_help() {
     let mut lines = String::new();
     for cols in [100, 62, 61, 40, 20, 9] {
         let mut t = postal(&home, (cols, 12));
-        let screen = t.snapshot_after(|s| hint_line(s).contains("help")).unwrap();
+        let screen = t
+            .snapshot_after(|s| hint_line(s).contains("help") && settled(s))
+            .unwrap();
         writeln!(lines, "{cols:>3} |{}|", hint_line(&screen)).unwrap();
         quit(t);
     }
@@ -98,14 +100,16 @@ fn the_help_popup_lists_the_keymap_by_group() {
     let server = FakeImap::start(two_messages());
     let home = Home::for_server(&server);
     // The tall one stops at the popup's cap and scrolls like the others.
+    // Each waits for what its snapshot shows beside the popup, the body last.
     let sizes = [
-        ("popup_80", (80, 24)),
-        ("popup_44", (44, 18)),
-        ("popup_tall", (80, 56)),
+        ("popup_80", (80, 24), "Newer body"),
+        ("popup_44", (44, 18), " · 1/"),
+        ("popup_tall", (80, 56), "Newer body"),
     ];
-    for (name, size) in sizes {
+    for (name, size, shown) in sizes {
         let mut t = postal(&home, size);
-        t.wait_until(loaded).unwrap();
+        t.wait_until(|s| loaded(s) && s.contains(shown) && settled(s))
+            .unwrap();
         t.send(Key::Char('?')).unwrap();
         let screen = t.snapshot_after(popup_open).unwrap();
         insta::assert_snapshot!(name, screen);

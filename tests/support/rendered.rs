@@ -90,7 +90,10 @@ pub fn quit(mut t: Terminal) {
 /// The screen once the Preview of `body` shows `shown`.
 pub fn preview(body: FakeBody, run: &Run, shown: &str) -> Screen {
     let (mut t, _server) = started(body, run);
-    let screen = t.snapshot_after(|s| s.contains(shown)).unwrap();
+    // The list's Snippet can show it first.
+    let screen = t
+        .snapshot_after(|s| pane(s).iter().any(|row| row.contains(shown)))
+        .unwrap();
     quit(t);
     screen
 }

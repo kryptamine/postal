@@ -247,6 +247,9 @@ fn the_pager_shows_the_quote() {
         std::thread::sleep(Duration::from_millis(10));
     };
 
+    // A Ctrl-c before the TUI takes the screen back interrupts it.
+    t.wait_until(|s| s.alternate_screen() && preview(s).contains(CUT))
+        .unwrap();
     quit(t);
     assert!(paged.contains("> Where to?"), "{paged}");
     assert!(!paged.contains(CUT), "{paged}");
