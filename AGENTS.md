@@ -73,6 +73,8 @@ are faked, at the protocol level, and the whole behaviour is checked. Cover an
 edge case with a short synthetic scenario through the same harness. A unit test
 is allowed only for a function with many invariants that is far cheaper to
 cover directly; it says so in a comment. See `docs/adr/0002-test-boundary.md`.
+`tests/architecture.rs` is the one test that reads the source: it checks the
+imports of each layer (`docs/adr/0038-a-test-reads-the-imports-of-each-layer.md`).
 
 ## Lint rules (mandatory)
 

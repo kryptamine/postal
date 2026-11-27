@@ -65,6 +65,9 @@ Lowest first:
 
 ## Direction
 
+`tests/architecture.rs` checks the direction and the imports the Invariants
+name (ADR 0038); a change here changes its tables too.
+
 A layer imports only from the layers listed before it. `ui` and `cli` are
 peers: neither imports the other. `app` may import any layer but `cli`, and
 `main.rs` any layer.

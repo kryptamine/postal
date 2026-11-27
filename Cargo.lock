@@ -2726,6 +2726,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "syn 2.0.119",
  "tempfile",
  "termlens",
  "thiserror 2.0.21",
