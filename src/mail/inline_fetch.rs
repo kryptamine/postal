@@ -1,6 +1,6 @@
 use crate::{
-    domain::inline_image::InlineImage, domain::message_ref::MessageRef, mail::body_fetch,
-    mail::imap::MailServer, mail::sync::Error, mail::unfetched::Unfetched, mail::update::Update,
+    domain::inline_image::InlineImage, domain::message_ref::MessageRef, mail::imap::MailServer,
+    mail::part_fetch, mail::sync::Error, mail::unfetched::Unfetched, mail::update::Update,
 };
 
 /// The parts a Message's HTML shows by `cid:`, by their `Content-ID`.
@@ -24,17 +24,11 @@ pub async fn fetch(
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     let InlineRequest { message, ids } = request;
-    let images = if body_fetch::open(server, &message.folder).await? {
-        match server.inline_images(message.uid, ids).await {
-            Ok(images) => Ok(images),
-            Err(error) => match error.refusal() {
-                Some(reason) => Err(Unfetched::Failed(reason.to_owned())),
-                None => return Err(error.into()),
-            },
-        }
-    } else {
-        Err(Unfetched::Failed("its Folder is gone".to_owned()))
-    };
+    let fetched = part_fetch::in_folder(server, &message.folder, async |server| {
+        server.inline_images(message.uid, ids).await
+    });
+
+    let images = fetched.await?;
 
     send(Update::Inline(InlineFetched {
         message: message.clone(),
