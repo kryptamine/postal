@@ -61,4 +61,22 @@ if moved ~= 7 then
 	fail("after an edit the Markdown ends at row " .. tostring(moved))
 end
 
+-- A wrapped two-line attribution folds and leaves Markdown with the Quote
+-- (ADR 0015), while the writer's own line ending in a colon stays in
+local wrapped = {
+	"To: bob@example.com",
+	"Subject: Plan",
+	"",
+	"this is the part I mean:",
+	"On Mon, 1 Mar 2026 at 14:30, Alexander Satretdinov <alex@example.com>",
+	"wrote:",
+	"> # not mine",
+}
+vim.api.nvim_buf_set_lines(0, 0, -1, false, wrapped)
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = 0 })
+local _, _, cut = parser:parse(true)[1]:root():range()
+if cut ~= 4 or vim.fn.foldclosed(5) ~= 5 or vim.fn.foldclosedend(5) ~= 7 then
+	fail(("wrapped attribution cut at %s, fold %d..%d"):format(cut, vim.fn.foldclosed(5), vim.fn.foldclosedend(5)))
+end
+
 vim.cmd("bwipeout!")

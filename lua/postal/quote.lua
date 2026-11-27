@@ -2,6 +2,7 @@
 -- them, matching `src/render/quoted_text.rs` (ADR 0015).
 local M = {}
 
+local WRAP = 72
 local LONGEST = 200
 
 -- Matches `src/render/attribution.rs`: a colon at the end, and a date or an
@@ -9,6 +10,14 @@ local LONGEST = 200
 local function names(line)
 	line = vim.trim(line)
 	return vim.endswith(line, ":") and vim.fn.strchars(line) <= LONGEST and line:find("[%d@]") ~= nil
+end
+
+-- Whether `line` was broken off `above` because its first word would not fit
+-- in 72 columns.
+local function wrapped(above, line)
+	local word = line:match("%S+") or ""
+	above = above:gsub("%s+$", "")
+	return above ~= "" and vim.fn.strchars(above) + 1 + vim.fn.strchars(word) > WRAP
 end
 
 --- The 0-based row in `lines` (at or after 0-based `first`) where the
@@ -24,7 +33,9 @@ function M.start(lines, first)
 		return nil
 	end
 
-	if n > first and names(lines[n]) then
+	if n > first + 1 and wrapped(lines[n - 1], lines[n]) and names(lines[n - 1] .. "\n" .. lines[n]) then
+		n = n - 2
+	elseif n > first and names(lines[n]) then
 		n = n - 1
 	end
 
