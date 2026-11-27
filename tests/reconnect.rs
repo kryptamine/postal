@@ -118,10 +118,12 @@ fn a_dropped_connection_counts_down_then_recovers_and_resyncs() {
     quit(t);
 
     assert!(!hint_line(&screen).contains("offline"), "{screen}");
+    // Only the idling connection selects; the bodies one examines on its
+    // own backoff, in no order against IDLE.
     let commands = server.commands();
-    let examine = commands.iter().position(|c| c.starts_with("EXAMINE"));
+    let select = commands.iter().position(|c| c.starts_with("SELECT"));
     let idle = commands.iter().position(|c| c == "IDLE");
-    assert!(examine.is_some() && examine < idle, "{commands:#?}");
+    assert!(select.is_some() && select < idle, "{commands:#?}");
     let log = log(&home);
     assert!(
         log.lines()
