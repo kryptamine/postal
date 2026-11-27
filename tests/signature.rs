@@ -10,7 +10,7 @@
 
 mod support;
 
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
 use mail_parser::MessageParser;
 use support::{
@@ -20,6 +20,7 @@ use support::{
     fake_oauth,
     fake_smtp::FakeSmtp,
     home::Home,
+    quit,
 };
 use tempfile::TempDir;
 use termlens::{Key, Screen, Terminal};
@@ -95,19 +96,11 @@ fn home(imap: &FakeImap, smtp: &FakeSmtp, top: &str) -> Home {
 }
 
 fn postal(home: &Home, editor: &str) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("HOME", home.xdg_config_home())
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", editor)
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }
@@ -129,11 +122,6 @@ fn listed(screen: &Screen) -> bool {
 
 fn previewed(screen: &Screen) -> bool {
     screen.contains(" Draft ") && screen.contains("y send")
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 /// `key` on the Message List, then the editor's Send of the Draft it
@@ -335,13 +323,7 @@ fn a_signature_given_twice_names_the_path_and_line() {
     let home = Home::new(&format!(
         "email = \"{EMAIL}\"\nsignature = \"Zoë\"\nsignature-file = \"signature.txt\"\n"
     ));
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_postal"))
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .output()
-        .unwrap();
+    let output = home.command(env!("CARGO_BIN_EXE_postal")).output().unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).unwrap();
     let at = format!("{}:3:18:", home.config_path().display());

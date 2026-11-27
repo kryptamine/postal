@@ -12,13 +12,14 @@
 
 mod support;
 
-use std::{fs, path::Path, time::Duration};
+use std::{fs, path::Path};
 
 use serde_json::Value;
 use support::{
     fake_imap::{EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     home::Home,
+    quit,
 };
 use tempfile::TempDir;
 use termlens::{Key, Terminal};
@@ -59,23 +60,11 @@ const PEOPLE: &str = r#"[
 ]"#;
 
 fn postal(home: &Home, fake: &str) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("POSTAL_CONTACTS_FAKE", fake)
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 /// The Inbox synced into the Cache, for the CLI to read.

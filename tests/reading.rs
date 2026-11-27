@@ -10,25 +10,18 @@
 
 mod support;
 
-use std::time::Duration;
-
 use support::{
     browser::Browser,
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage},
     home::Home,
+    quit,
 };
 use termlens::{Key, Screen, Terminal};
 
 fn postal(home: &Home) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(100, 16)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }
@@ -111,14 +104,9 @@ fn reading_ends_when_the_message_is_expunged() {
 fn the_help_popup_lists_the_reading_keys() {
     let server = FakeImap::start(two_messages());
     let home = Home::for_server(&server);
-    let mut t = Terminal::builder()
+    let mut t = home
+        .terminal()
         .size(80, 24)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     t.wait_until(|s| s.contains(" · 1/")).unwrap();
@@ -134,23 +122,13 @@ fn the_help_popup_lists_the_reading_keys() {
     assert!(t.wait_exit().unwrap().success());
 }
 
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
 /// Postal at 30 rows, past its first frame: a key sent before it goes with
 /// the answer to the colour query.
 fn tall(home: &Home, browser: &Browser) -> Terminal {
-    let mut t = Terminal::builder()
+    let mut t = home
+        .terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("PATH", browser.path())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     t.wait_until(|s| s.contains(" Inbox ")).unwrap();

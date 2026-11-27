@@ -7,16 +7,13 @@
 
 mod support;
 
-use std::{
-    fs,
-    process::Command,
-    time::{Duration, Instant},
-};
+use std::{fs, process::Command};
 
 use support::{
     fake_imap::{ACCESS_TOKEN, FakeImap, FakeMessage},
     fake_oauth::REFRESH_TOKEN,
     home::Home,
+    wait_for,
 };
 use termlens::{Key, Terminal};
 
@@ -33,14 +30,7 @@ fn messages() -> Vec<FakeMessage> {
 }
 
 fn spawn(home: &Home, args: &[&str], env: &[(&str, &str)]) -> Terminal {
-    let mut builder = Terminal::builder()
-        .size(80, 12)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .args(args)
-        .timeout(Duration::from_secs(10));
+    let mut builder = home.terminal().size(80, 12).args(args);
     for (key, value) in env {
         builder = builder.env(key, value);
     }
@@ -69,14 +59,6 @@ fn run(
     t.send(Key::Char('q')).unwrap();
     assert!(t.wait_exit().unwrap().success());
     fs::read_to_string(home.log_path()).unwrap()
-}
-
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 #[test]

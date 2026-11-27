@@ -15,14 +15,13 @@ use std::{
     fs,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    thread,
-    time::{Duration, Instant},
 };
 
 use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage, Outage, Stall},
     home::Home,
+    quit, wait_for,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -33,11 +32,6 @@ fn postal(home: &Home, cols: u16) -> Terminal {
         .size(cols, 30)
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 fn message(sender: &'static str, subject: &str, day: u32, body: FakeBody) -> FakeMessage {
@@ -226,14 +220,6 @@ fn the_pager_and_the_editor_list_the_attachments_after_the_header() {
     assert!(paged.contains(&header), "{paged}");
     let header = format!("Subject: Contract\nAttachments: {listed}\n\n");
     assert!(edited.contains(&header), "{edited}");
-}
-
-fn wait_for(mut condition: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
-        thread::sleep(Duration::from_millis(20));
-    }
 }
 
 fn cached_sizes(home: &Home) -> Vec<i64> {

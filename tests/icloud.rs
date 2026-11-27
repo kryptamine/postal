@@ -11,10 +11,7 @@
 
 mod support;
 
-use std::{
-    fs,
-    time::{Duration, Instant},
-};
+use std::fs;
 
 use support::{
     browser::Browser,
@@ -22,6 +19,7 @@ use support::{
     fake_imap::{APP_PASSWORD, EMAIL, FakeImap, FakeMessage, LOGIN_USER},
     fake_smtp::FakeSmtp,
     home::Home,
+    quit, wait_for,
 };
 use tempfile::TempDir;
 use termlens::{Key, Terminal};
@@ -87,39 +85,13 @@ impl Editor {
 }
 
 fn spawn(home: &Home, browser: &Browser, editor: &Editor, args: &[&str]) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
         .env("PATH", browser.path())
         .env("EDITOR", editor.command())
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
         .args(args)
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
-#[track_caller]
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out at {}",
-            std::panic::Location::caller()
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 fn secret(home: &Home) -> Option<String> {

@@ -7,26 +7,19 @@
 
 mod support;
 
-use std::{
-    process::{Command, Output},
-    time::Duration,
-};
+use std::process::Output;
 
 use support::{
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
 };
-use termlens::{Key, Terminal};
+use termlens::Key;
 
 const LOCKED: &str = "the test locked the keychain";
 
 /// Runs Postal with the keychain refusing access.
 fn postal_locked_keychain(home: &Home) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_postal"))
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
+    home.command(env!("CARGO_BIN_EXE_postal"))
         .env("POSTAL_KEYCHAIN_FAIL", LOCKED)
         .output()
         .unwrap()
@@ -78,14 +71,10 @@ fn the_file_store_never_touches_the_keychain() {
         "2024-03-02T09:00:00Z",
     )]);
     let home = Home::for_server(&server);
-    let mut t = Terminal::builder()
+    let mut t = home
+        .terminal()
         .size(80, 25)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .env("POSTAL_KEYCHAIN_FAIL", LOCKED)
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
 

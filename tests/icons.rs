@@ -10,7 +10,7 @@
 
 mod support;
 
-use std::{fs, time::Duration};
+use std::fs;
 
 use support::{
     editor::sending,
@@ -19,6 +19,7 @@ use support::{
     fake_smtp::FakeSmtp,
     home::Home,
     picker::picked,
+    quit,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -41,29 +42,16 @@ fn home(icons: &str, imap: &FakeImap, smtp: &FakeSmtp) -> Home {
 fn postal(home: &Home, terminal: Option<&str>) -> Terminal {
     let next = home.xdg_config_home().join("next");
     fs::write(&next, "To: bob@example.com\nSubject: Plans\n\nHi Bob\n").unwrap();
-    let builder = Terminal::builder()
+    let builder = home
+        .terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("EDITOR", sending(&format!("cp '{}'", next.display())))
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10));
+        .env("EDITOR", sending(&format!("cp '{}'", next.display())));
     let builder = match terminal {
         Some(terminal) => builder.env("TERM_PROGRAM", terminal),
         None => builder,
     };
 
     builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 fn inbox() -> FakeImap {

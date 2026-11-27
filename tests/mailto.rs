@@ -22,6 +22,7 @@ use support::{
     fake_oauth,
     home::Home,
     picker::picked,
+    quit,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -90,11 +91,6 @@ fn listed(screen: &Screen) -> bool {
 
 fn local(screen: &Screen) -> bool {
     screen.contains(" Local Drafts ")
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 /// The Drafts' files, notes left out.

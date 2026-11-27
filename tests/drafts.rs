@@ -12,7 +12,7 @@
 
 mod support;
 
-use std::{fs, path::PathBuf, time::Duration};
+use std::{fs, path::PathBuf};
 
 use support::{
     editor::{saved, sending},
@@ -21,6 +21,7 @@ use support::{
     fake_smtp::FakeSmtp,
     home::Home,
     picker::picked,
+    quit,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -48,18 +49,9 @@ fn sending_postal(home: &Home) -> Terminal {
 fn launch(home: &Home, editor: impl Fn(&str) -> String) -> Terminal {
     let next = home.xdg_config_home().join("next");
     fs::write(&next, WRITTEN).unwrap();
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", editor(&format!("cp '{}'", next.display())))
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }
@@ -103,11 +95,6 @@ fn open_local(t: &mut Terminal) {
         .unwrap();
     t.send(Key::Enter).unwrap();
     t.wait_until(local).unwrap();
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 /// The Drafts' files, notes left out.

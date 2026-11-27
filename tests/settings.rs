@@ -10,17 +10,14 @@
 
 mod support;
 
-use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
-    time::{Duration, Instant},
-};
+use std::{fs, os::unix::fs::PermissionsExt};
 
 use support::{
     fake_body::FakeBody,
     fake_imap::{APP_PASSWORD, EMAIL, FakeImap, FakeMessage},
     fake_oauth,
     home::Home,
+    quit, wait_for,
 };
 use termlens::{Key, Terminal};
 
@@ -36,16 +33,7 @@ fn inbox() -> FakeImap {
 }
 
 fn postal(home: &Home, keychain_fails: bool) -> Terminal {
-    let builder = Terminal::builder()
-        .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10));
+    let builder = home.terminal().size(100, 30);
     let builder = if keychain_fails {
         builder.env("POSTAL_KEYCHAIN_FAIL", "locked")
     } else {
@@ -65,24 +53,6 @@ fn settings(t: &mut Terminal) {
 
 fn config(home: &Home) -> String {
     fs::read_to_string(home.config_path()).unwrap()
-}
-
-#[track_caller]
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out at {}",
-            std::panic::Location::caller()
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 // A tab per Section, with a heading and what it sets, the keys and the

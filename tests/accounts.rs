@@ -11,11 +11,7 @@
 
 mod support;
 
-use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
-    time::{Duration, Instant},
-};
+use std::{fs, os::unix::fs::PermissionsExt};
 
 use support::{
     editor::{saved, sending},
@@ -25,6 +21,7 @@ use support::{
     fake_smtp::FakeSmtp,
     home::Home,
     picker::{picked, picker},
+    quit, wait_for,
 };
 use tempfile::TempDir;
 use termlens::{Key, Screen, Terminal};
@@ -107,37 +104,12 @@ fn copying(two: &Two) -> String {
 }
 
 fn spawn(two: &Two, editor: &str) -> Terminal {
-    Terminal::builder()
+    two.home
+        .terminal()
         .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", two.home.xdg_config_home())
-        .env("XDG_STATE_HOME", two.home.xdg_state_home())
-        .env("XDG_CACHE_HOME", two.home.xdg_cache_home())
-        .env("XDG_DATA_HOME", two.home.xdg_data_home())
         .env("EDITOR", editor)
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
-#[track_caller]
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out at {}",
-            std::panic::Location::caller()
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 /// The Folder Picker's rows once both Accounts have listed their Folders.
@@ -330,15 +302,9 @@ fn with_one_account_no_header_names_it() {
             .body(FakeBody::plain("Body of Alpha news")),
     ]);
     let home = Home::for_server(&server);
-    let mut t = Terminal::builder()
+    let mut t = home
+        .terminal()
         .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     let screen = t

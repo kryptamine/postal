@@ -13,13 +13,7 @@
 
 mod support;
 
-use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
-    path::PathBuf,
-    process::Output,
-    time::{Duration, Instant},
-};
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Output};
 
 use serde_json::Value;
 use support::{
@@ -28,6 +22,7 @@ use support::{
     fake_oauth,
     fake_smtp::FakeSmtp,
     home::Home,
+    quit, wait_for,
 };
 use tempfile::TempDir;
 use termlens::{Key, Terminal};
@@ -56,26 +51,13 @@ fn postal(home: &Home, draft: &str) -> (Terminal, TempDir) {
     let editor = tempfile::tempdir().unwrap();
     let next = editor.path().join("next");
     fs::write(&next, draft).unwrap();
-    let t = Terminal::builder()
+    let t = home
+        .terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", sending(&format!("cp '{}'", next.display())))
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     (t, editor)
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 /// `postal correspondent` with `args`.
@@ -103,19 +85,6 @@ fn listed(home: &Home, args: &[&str]) -> Vec<(String, Option<String>, bool)> {
             )
         })
         .collect()
-}
-
-#[track_caller]
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out at {}",
-            std::panic::Location::caller()
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 fn from(name: &'static str, address: &'static str, subject: &str, date: &str) -> FakeMessage {

@@ -7,44 +7,23 @@
 
 mod support;
 
-use std::{
-    fs,
-    time::{Duration, Instant},
-};
+use std::fs;
 
 use base64::Engine;
 use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage, Stall},
     home::Home,
+    quit, wait_for,
 };
-use termlens::{Key, Screen, Terminal};
+use termlens::{Screen, Terminal};
 
 fn postal(home: &Home, args: &[&str]) -> Terminal {
-    Terminal::builder()
+    home.terminal()
         .size(80, 48)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
         .args(args)
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
-}
-
-fn wait_for(condition: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !condition() {
-        assert!(Instant::now() < deadline, "timed out");
-        std::thread::sleep(Duration::from_millis(10));
-    }
 }
 
 /// The Snippet line of the card whose subject is `subject`; `None` when no

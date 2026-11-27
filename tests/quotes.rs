@@ -16,6 +16,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
+    quit,
     rendered::page,
 };
 use termlens::{Key, Screen, Terminal, TerminalBuilder};
@@ -31,19 +32,7 @@ const PLAIN: &str = "Sounds good\r\n\r\n\
     > Where to?\r\n";
 
 fn terminal(home: &Home) -> TerminalBuilder {
-    Terminal::builder()
-        .size(120, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Ctrl('c')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
+    home.terminal().size(120, 30)
 }
 
 /// A Message from Ada that answers another.

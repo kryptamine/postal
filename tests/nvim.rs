@@ -12,7 +12,7 @@
 
 mod support;
 
-use std::{path::Path, process::Command, time::Duration};
+use std::{path::Path, process::Command};
 
 use support::{
     fake_imap::{EMAIL, FakeImap, FakeMessage},
@@ -30,15 +30,9 @@ fn synced(imap: &FakeImap, smtp: &FakeSmtp) -> Home {
         server(smtp.port),
         fake_oauth::shared().config()
     ));
-    let mut t = Terminal::builder()
+    let mut t = home
+        .terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     t.wait_until(|s| s.contains("Notes")).unwrap();
@@ -91,18 +85,9 @@ fn sent_from_neovim(home: &Home, to: &str, subject: &str) -> Terminal {
          --cmd 'lua require(\"postal\").setup({{ cmd = \"{bin}\" }})' \
          -c '1s/$/ {to}/' -c '3s/$/ {subject}/' -c 'PostalSend' -c 'wqall!' </dev/null"
     );
-    Terminal::builder()
+    home.terminal()
         .size(100, 30)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("XDG_DATA_HOME", home.xdg_data_home())
-        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("EDITOR", editor)
-        .env("TZ", "UTC")
-        .env("POSTAL_SEND_DELAY", "0")
-        .timeout(Duration::from_secs(10))
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap()
 }

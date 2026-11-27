@@ -7,13 +7,12 @@
 
 mod support;
 
-use std::time::Duration;
-
 use chrono::{Datelike, Utc};
 use support::{
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
     picker::wait_picked,
+    quit,
 };
 use termlens::{Key, Screen, Terminal};
 
@@ -24,14 +23,7 @@ fn postal(home: &Home) -> Terminal {
 }
 
 fn postal_with(home: &Home, (cols, rows): (u16, u16), env: &[(&str, &str)]) -> Terminal {
-    let mut builder = Terminal::builder()
-        .size(cols, rows)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
-        .env("TZ", "UTC")
-        .timeout(Duration::from_secs(10));
+    let mut builder = home.terminal().size(cols, rows);
     for (key, value) in env {
         builder = builder.env(key, value);
     }
@@ -58,11 +50,6 @@ fn wait_selected(t: &mut Terminal, subject: &str) {
 
 fn loaded(screen: &Screen) -> bool {
     screen.contains(" · 1/")
-}
-
-fn quit(mut t: Terminal) {
-    t.send(Key::Char('q')).unwrap();
-    assert!(t.wait_exit().unwrap().success());
 }
 
 fn four_messages() -> Vec<FakeMessage> {
