@@ -15,11 +15,11 @@ use crate::{
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::thread_id::ThreadId,
-    mail::held,
     mail::imap::MailServer,
+    mail::outbox::smtp,
     mail::role_folder,
-    mail::smtp,
     mail::sync::Error,
+    mail::takeover::held,
     mail::update::Update,
 };
 

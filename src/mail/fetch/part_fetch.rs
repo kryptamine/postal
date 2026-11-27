@@ -1,6 +1,6 @@
 use crate::{
-    domain::folder_name::FolderName, mail::body_fetch, mail::imap, mail::imap::MailServer,
-    mail::sync::Error, mail::unfetched::Unfetched,
+    domain::folder_name::FolderName, mail::fetch::body_fetch, mail::fetch::unfetched::Unfetched,
+    mail::imap, mail::imap::MailServer, mail::sync::Error,
 };
 
 pub const NOT_HELD: &str = "the server no longer has it";

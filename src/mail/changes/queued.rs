@@ -1,11 +1,11 @@
 use crate::{
     cache::Cache,
-    mail::flag_changes,
+    mail::changes::flag_changes,
+    mail::changes::move_changes,
+    mail::fetch::thread_fetch,
     mail::imap::MailServer,
-    mail::move_changes,
-    mail::outbox_flush::{self, Sender},
+    mail::outbox::outbox_flush::{self, Sender},
     mail::sync::Error,
-    mail::thread_fetch,
     mail::update::Update,
 };
 

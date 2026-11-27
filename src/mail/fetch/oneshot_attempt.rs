@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::{mail::pending::Pending, mail::update::Update};
+use crate::{mail::fetch::pending::Pending, mail::update::Update};
 
 /// `Pending` lent to one fetch connection: the one-shots left when it ends
 /// fail as offline, also when a wake from sleep drops it mid-await.

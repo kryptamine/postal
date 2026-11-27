@@ -4,7 +4,7 @@ use crate::{
     cache::Cache,
     domain::folder::{Folder, Role},
     domain::folder_name::FolderName,
-    mail::backfill,
+    mail::fetch::backfill,
     mail::imap::{MailServer, Mode},
     mail::sync::{self, Error},
     mail::update::Update,

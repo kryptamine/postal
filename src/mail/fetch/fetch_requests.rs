@@ -1,6 +1,6 @@
 use crate::{
     domain::per_account::{AccountId, PerAccount},
-    mail::body_fetch::{OneShot, Request, Standing},
+    mail::fetch::body_fetch::{OneShot, Request, Standing},
     mail::routes::Routes,
     mail::status::Status,
     mail::update::{FetchLink, Update},

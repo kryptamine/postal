@@ -3,7 +3,8 @@ use std::cell::Cell;
 use tokio::time::Instant;
 
 use crate::{
-    mail::backoff::Backoff, mail::refresh, mail::status::Status, mail::sync::Error, mail::wake,
+    mail::connection::backoff::Backoff, mail::connection::refresh, mail::connection::wake,
+    mail::status::Status, mail::sync::Error,
 };
 
 /// Runs `attempt` on a fresh connection after every failure, after the

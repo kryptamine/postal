@@ -8,10 +8,10 @@ private: `mod`, not `pub mod`, so the compiler keeps the others out of it.
 `cache` is the one layer that is a single module: its `mod.rs` re-exports
 `Cache` and the few items callers use.
 
-`ui` is large enough to group its modules by feature, one directory each:
-`crate::ui::<group>::<module>`. A group's module another group names is
-`pub mod`; the few other layers name are re-exported from `ui/mod.rs`, so
-their paths stay `crate::ui::<module>`.
+`ui` and `mail` are large enough to group their modules by feature, one
+directory each: `crate::ui::<group>::<module>`. A group's module another
+group names is `pub mod`; the few other layers name are re-exported from the
+layer's `mod.rs`, so their paths stay `crate::ui::<module>`.
 
 ## Codemap
 
@@ -31,13 +31,19 @@ Lowest first:
 - `compose/`: Drafts and their notes, Replies, Forwards and the files they
   attach, the `mailto:` link a Draft is filled from, the Outbox on disk, the
   editor, the Account a Message goes out from, its signature in the editor.
-- `mail/`: IMAP and SMTP, the sync, IDLE, the fetches, the Outbox flush,
-  reconnecting, the sign-in check, the servers a domain publishes
-  (autoconfig, DNS SRV), one Account's two connections
-  (`mail::serve`), one sync on demand (`mail::folder_sync`) and the lock
-  it shares with the TUI (`mail::sync_lock`), what a takeover from
-  another terminal waits on and sends (`mail::held`, `mail::handover`),
-  and what they tell the screen (`Update`, `Status`, `Steering`).
+- `mail/`: IMAP and SMTP. At its root what the screen is told and asks
+  (`Update`, `Status`, `Steering`, `Routes`), opening and resyncing a Folder
+  (`sync`), one sync on demand (`folder_sync`), the sign-in check (`login`)
+  and the servers a domain publishes (`discover`: autoconfig, DNS SRV); then
+  `connection/` (one Account's two connections, `serve`, reconnecting after
+  a backoff, waking from sleep), `watch/` (the sync connection's IDLE, the
+  Folder counts, the new mail worth a notification), `changes/` (the flags
+  and moves queued for the server), `fetch/` (what the screen asks of the
+  fetch connection: bodies, parts, Threads, older pages), `passes/` (what
+  the fetch connection does while idle: envelopes, whole Folders, Sent,
+  Snippets, the search index), `outbox/` (the Outbox flush over SMTP) and
+  `takeover/` (the lock a TUI shares with a folder sync, what a takeover
+  from another terminal waits on and sends).
 - `ui/`: the TUI. At its root the event loop (`run`) and what it hands
   each reaction (`World`); then `state/` (the Screen, what the panes show,
   the Mode, Toasts, Undo), `input/` (the keymap, a key's `Step`), `react/`
@@ -99,8 +105,8 @@ Where a module could sit in two layers, its imports decided:
   addresses and envelopes with lettre; only `mail` sends.
 - `render` reads no files and opens no sockets; its one I/O is the layout
   process `render::render_process` runs.
-- `ui` never speaks IMAP: `mail::imap` and `mail::smtp` are private to
-  `mail`, and the screen asks the connections through `Steering` and the
+- `ui` never speaks IMAP: `mail::imap` and `mail::outbox::smtp` are private
+  to `mail`, and the screen asks the connections through `Steering` and the
   fetch requests.
 - Nothing outside `ui` draws: ratatui and crossterm are imported in `ui` alone.
 - `ui::widgets` only draws: it names nothing else of `ui`, no state, no

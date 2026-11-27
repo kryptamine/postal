@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use charset::Charset;
 
-use crate::mail::header;
+use crate::mail::imap::header;
 
 type Params<'a> = [(Cow<'a, str>, Cow<'a, str>)];
 

@@ -1,6 +1,7 @@
 use crate::{
-    domain::inline_image::InlineImage, domain::message_ref::MessageRef, mail::imap::MailServer,
-    mail::part_fetch, mail::sync::Error, mail::unfetched::Unfetched, mail::update::Update,
+    domain::inline_image::InlineImage, domain::message_ref::MessageRef, mail::fetch::part_fetch,
+    mail::fetch::unfetched::Unfetched, mail::imap::MailServer, mail::sync::Error,
+    mail::update::Update,
 };
 
 /// The parts a Message's HTML shows by `cid:`, by their `Content-ID`.

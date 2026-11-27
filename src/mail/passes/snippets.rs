@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     cache::Cache, domain::folder_name::FolderName, domain::text_part::TextPart, domain::uid::Uid,
-    mail::imap::MailServer, mail::one_by_one, mail::snippet, mail::sync::Error,
+    mail::fetch::one_by_one, mail::imap::MailServer, mail::passes::snippet, mail::sync::Error,
 };
 
 /// Messages per batch: each batch is one Cache write and one redraw.
