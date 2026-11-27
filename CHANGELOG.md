@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.11.0](https://github.com/kryptamine/postal/compare/v0.10.0...v0.11.0) (2026-11-27)
+
+
+### Features
+
+* **preview:** name hidden attachments' hint keys ([2b83e7e](https://github.com/kryptamine/postal/commit/2b83e7e2cb6761848fa09f066b43a6483ce58897))
+* **render:** print a laid-out grid as text ([2500e78](https://github.com/kryptamine/postal/commit/2500e78a879b79714dd53be2059b2707c54c977f))
+* **ui:** fit popups and the hint line to narrow terminals ([2a3b1c8](https://github.com/kryptamine/postal/commit/2a3b1c8965c8adf5b9f3ea1381757d1dffbb3be9))
+
+
+### Bug Fixes
+
+* **mail:** answer one-shots lost with their connection as offline ([23b52a2](https://github.com/kryptamine/postal/commit/23b52a288fc5e76ae827c10f1cc4feb249e14a3b))
+* **mail:** ask again for an awaited fetch only on its own reconnect ([88f8e34](https://github.com/kryptamine/postal/commit/88f8e347a1721b5ddb90865bdce8a6b982afe1e0))
+* **nvim:** convert a bare Quote as compose::markdown does ([7a5ba9a](https://github.com/kryptamine/postal/commit/7a5ba9a80333095e4ddf4a661007444611e8cff3))
+* **nvim:** read a two-line attribution as the renderer does ([13fcf5e](https://github.com/kryptamine/postal/commit/13fcf5ec2f02d49de8a31a35eaf521b334eb10f3))
+* **preview:** put a link's label in the blank before it ([747b8aa](https://github.com/kryptamine/postal/commit/747b8aa4d46bc1d129fe59942045e0a68f511acc))
+* **ui:** cut pane titles and menu rows to fit ([8382626](https://github.com/kryptamine/postal/commit/83826260142e1208844b33577536c51004bbeb39))
+* **ui:** lay out a Draft's newest HTML first ([c1ab596](https://github.com/kryptamine/postal/commit/c1ab596ce7e44d1de8102ff6c112dc665bb2b660))
+* **ui:** tell the render queue of a selection only when not rendered ([65f6eeb](https://github.com/kryptamine/postal/commit/65f6eebad26fe21480308ee84862484131cf63b0))
+
+
+### Performance Improvements
+
+* **ui:** render the selected preview ahead of those scrolled past ([67c9c86](https://github.com/kryptamine/postal/commit/67c9c8652fca70ae1c2252e7e4a835b69b4a70c1)), closes [#249](https://github.com/kryptamine/postal/issues/249)
+
 ## [0.10.0](https://github.com/kryptamine/postal/compare/v0.9.0...v0.10.0) (2026-11-26)
 
 
