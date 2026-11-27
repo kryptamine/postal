@@ -13,20 +13,17 @@ use crate::{
     compose::outbox::Outbox,
     compose::outgoing::Outgoing,
     domain::per_account::PerAccount,
-    mail::forward_fetch::ForwardFetch,
+    mail::fetch_requests::FetchRequests,
     mail::outbox_flush::Sender,
-    mail::reply_fetch::ReplyFetch,
     mail::routes::Routes,
     mail::serve::serve,
     mail::status::Status,
     render::icons::Icons,
     ui::exit::Exit,
-    ui::older_pages::OlderPages,
     ui::previews::Previews,
     ui::run::{self, Background},
     ui::terminal_slot::TerminalSlot,
     ui::theme::Theme,
-    ui::wanted_parts::WantedParts,
 };
 
 /// What a session opens on, besides its Accounts.
@@ -80,25 +77,19 @@ pub async fn session(
         works.push(Box::pin(serve(cache, asked, requested, sender, send)));
     }
 
-    let requests = Routes::new(requests.into_iter().collect());
-    let older = OlderPages::new(requests.clone(), configs.map(|_| false));
-    let replies = ReplyFetch::new(requests.clone(), configs.map(|_| false));
-    let forwards = ForwardFetch::new(requests.clone(), configs.map(|_| false));
-    let parts = WantedParts::new(requests.clone(), configs.map(|_| false));
+    let statuses = sign_ins.map(|sign_in| starting(sign_in.as_ref()));
+    let fetch = FetchRequests::new(Routes::new(requests.into_iter().collect()), &statuses);
     let (tty, background) = slot.take()?;
     let mut theme = Theme::from_env(background, Icons::choose(shared.icons));
-    let mut previews = Previews::start(requests, configs, sender, theme.mail_look());
+    let mut previews = Previews::start(configs, sender, theme.mail_look());
     let background = Background {
         work: futures::future::try_join_all(works).map_ok(drop),
         updates,
-        older,
-        replies,
-        forwards,
-        parts,
+        fetch,
         asks: Routes::new(asks.into_iter().collect()),
         accounts: Accounts(configs),
         outbox: &outbox,
-        statuses: sign_ins.map(|sign_in| starting(sign_in.as_ref())),
+        statuses,
         failure: opening.failure,
         link: opening.link,
         config_dir: dir,

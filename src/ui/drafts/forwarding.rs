@@ -3,9 +3,9 @@ use std::{io, path::PathBuf};
 use crate::{
     compose::awaited_forward::AwaitedForward, compose::draft_file,
     compose::draft_notes::DraftNotes, compose::forward_draft, compose::forwarded,
-    domain::message::Message, mail::forward_fetch::ForwardFetch, mail::status::Status,
-    ui::drafts::composing, ui::run::Error, ui::state::screen::Screen, ui::state::toast::Toast,
-    ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
+    domain::message::Message, mail::fetch_requests::FetchRequests, mail::forward_fetch,
+    mail::status::Status, ui::drafts::composing, ui::run::Error, ui::state::screen::Screen,
+    ui::state::toast::Toast, ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
 };
 
 /// Forward of the selected Message, in Reading of the one at the cursor,
@@ -15,7 +15,7 @@ pub fn forward(
     tty: &mut Tty,
     ui: &mut Ui,
     world: World,
-    fetch: &ForwardFetch,
+    fetch: &FetchRequests,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
     let message = screen.showing.reading().map_or_else(
@@ -57,7 +57,7 @@ pub fn forward(
         return Ok(());
     }
 
-    fetch.ask(&awaited);
+    fetch.send(awaited.message.account, forward_fetch::requests(&awaited));
     screen.forwarding = Some(awaited);
     Ok(())
 }

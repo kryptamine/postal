@@ -27,20 +27,22 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         Step::Steer(to) => steer(to, ui, world)?,
         Step::Browse(url) => ui.screen.toast = browse(&url),
         Step::Attachments(purpose) => label_attachments(ui, purpose),
-        Step::Attachment(wanted) => ui.screen.toast = Some(model.parts.ask(wanted)),
+        Step::Attachment(wanted) => {
+            ui.screen.toast = Some(model.parts.ask(wanted, &model.fetch));
+        }
         Step::Open(to) => {
             let tty = &mut model.tty;
             ui.screen.toast = open_outside::open(to, tty, model.theme, world, ui)?;
         }
         Step::Original => {
             ui.screen.toast = match open_outside::shown(world, ui)? {
-                Ok((message, body)) => Some(model.parts.original(message, &body)),
+                Ok((message, body)) => Some(model.parts.original(message, &body, &model.fetch)),
                 Err(toast) => toast,
             };
         }
         Step::Draft(drafting) => drafting::draft(drafting, &mut model.tty, ui, world)?,
-        Step::Reply(to) => drafting::reply(to, &mut model.tty, ui, world, &model.replies)?,
-        Step::Forward => forwarding::forward(&mut model.tty, ui, world, &model.forwards)?,
+        Step::Reply(to) => drafting::reply(to, &mut model.tty, ui, world, &model.fetch)?,
+        Step::Forward => forwarding::forward(&mut model.tty, ui, world, &model.fetch)?,
         Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
         Step::Settings => match Settings::open(world.config_dir) {
             Ok(settings) => ui.screen.over.open(settings),

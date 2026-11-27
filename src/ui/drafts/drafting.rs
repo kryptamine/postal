@@ -1,7 +1,7 @@
 use crate::{
     compose::awaited_reply::AwaitedReply, compose::draft_notes::DraftNotes,
     compose::mailto::Mailto, compose::recipients::Recipients, domain::message::Message,
-    domain::per_account::AccountId, domain::shown::Shown, mail::reply_fetch::ReplyFetch,
+    domain::per_account::AccountId, domain::shown::Shown, mail::fetch_requests::FetchRequests,
     ui::drafts::composing, ui::drafts::draft_preview::DraftPreview, ui::input::step::Drafting,
     ui::list::inbox_view::InboxView, ui::run::Error, ui::state::ui::Ui, ui::terminal::tty::Tty,
     ui::world::World,
@@ -46,7 +46,7 @@ pub fn reply(
     tty: &mut Tty,
     ui: &mut Ui,
     world: World,
-    replies: &ReplyFetch,
+    fetch: &FetchRequests,
 ) -> Result<(), Error> {
     let Some(message) = answered(ui) else {
         return Ok(());
@@ -58,7 +58,7 @@ pub fn reply(
         missing: Vec::new(),
     };
 
-    composing::reply(tty, ui, world, replies, awaited)
+    composing::reply(tty, ui, world, fetch, awaited)
 }
 
 /// What a Reply answers: the newest Message of the selected Thread not from

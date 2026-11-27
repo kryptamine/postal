@@ -24,8 +24,8 @@ pub enum Request {
     /// The bodies of these UIDs, each in its Folder, which a Reply or a
     /// Forward waits on: served first, and never passed over for a later
     /// request.
-    Reply(Vec<MessageRef>),
-    /// Served after a Reply's bodies, each in turn.
+    Awaited(Vec<MessageRef>),
+    /// Served after awaited bodies, each in turn.
     Attachment(AttachmentRequest),
     /// Served with the attachments, for a Message opened in the browser.
     Inline(InlineRequest),
@@ -36,7 +36,7 @@ pub enum Request {
 struct Pending {
     bodies: Option<BodyRequest>,
     older: Option<FolderName>,
-    reply: Option<Vec<MessageRef>>,
+    awaited: Option<Vec<MessageRef>>,
     attachments: Vec<AttachmentRequest>,
     inlines: Vec<InlineRequest>,
 }
@@ -45,21 +45,21 @@ impl Pending {
     const fn is_empty(&self) -> bool {
         self.bodies.is_none()
             && self.older.is_none()
-            && self.reply.is_none()
+            && self.awaited.is_none()
             && self.attachments.is_empty()
             && self.inlines.is_empty()
     }
 
     /// Whether a request that goes before bodies waits.
     const fn urgent(&self) -> bool {
-        self.reply.is_some() || !self.attachments.is_empty() || !self.inlines.is_empty()
+        self.awaited.is_some() || !self.attachments.is_empty() || !self.inlines.is_empty()
     }
 
     fn take(&mut self, request: Request) {
         match request {
             Request::Bodies(bodies) => self.bodies = Some(bodies),
             Request::Backfill(folder) => self.older = Some(folder),
-            Request::Reply(bodies) => self.reply = Some(bodies),
+            Request::Awaited(bodies) => self.awaited = Some(bodies),
             Request::Attachment(attachment) => self.attachments.push(attachment),
             Request::Inline(inline) => self.inlines.push(inline),
         }
@@ -137,8 +137,8 @@ pub async fn serve(
         }
 
         pending.receive(requests);
-        if let Some(reply) = pending.reply.take() {
-            fetch_reply(server, cache, reply, &send).await?;
+        if let Some(awaited) = pending.awaited.take() {
+            fetch_awaited(server, cache, awaited, &send).await?;
         }
 
         fetch_parts(server, &mut pending, &send).await?;
@@ -205,9 +205,9 @@ async fn next(requests: &mut UnboundedReceiver<Request>, patience: Duration) -> 
     }
 }
 
-/// Fetches the bodies a Reply waits on, a Folder at a time; those the
-/// server no longer has, or whose Folder is gone, are refused.
-async fn fetch_reply(
+/// Fetches the bodies a Reply or Forward waits on, a Folder at a time; those
+/// the server no longer has, or whose Folder is gone, are refused.
+async fn fetch_awaited(
     server: &mut impl MailServer,
     cache: &Cache,
     bodies: Vec<MessageRef>,

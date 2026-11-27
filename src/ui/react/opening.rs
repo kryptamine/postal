@@ -1,8 +1,8 @@
 use crate::{
-    cache::Cache, domain::per_account::PerAccount, mail::status::Status, mail::update::BodyLink,
+    cache::Cache, domain::per_account::PerAccount, mail::status::Status,
     ui::list::folder_show::show, ui::list::inbox_view::InboxView, ui::list::message_list,
-    ui::preview::previews::Previews, ui::run::Error, ui::state::mode::Mode,
-    ui::state::screen::Screen, ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
+    ui::run::Error, ui::state::mode::Mode, ui::state::screen::Screen, ui::state::ui::Ui,
+    ui::terminal::tty::Tty, ui::world::World,
 };
 
 /// The screen as the TUI opens: as many rows of the list from the Cache as
@@ -13,7 +13,6 @@ pub fn opening(
     tty: &Tty,
     statuses: PerAccount<Status>,
     failure: Option<&'static str>,
-    previews: &mut Previews,
 ) -> Result<Ui, Error> {
     let list = tty.panes(Mode::List)?.list;
     let rows = message_list::capacity(list.map_or(0, |list| list.height));
@@ -23,9 +22,5 @@ pub fn opening(
     let rebuilt = world.caches.values().any(Cache::rebuilt);
     let mut screen = Screen::opening(rebuilt, statuses, failure);
     screen.outbox = world.outbox.count();
-    for (account, &status) in screen.statuses.iter() {
-        (status == Status::SignedOut).then(|| previews.link(account, BodyLink::Down));
-    }
-
     Ok(Ui { view, screen })
 }

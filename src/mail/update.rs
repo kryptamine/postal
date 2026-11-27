@@ -41,3 +41,14 @@ pub enum BodyLink {
     Up,
     Down,
 }
+
+impl Update {
+    /// Where this leaves the fetch connection: signing out takes it down too.
+    pub const fn fetch_link(&self) -> Option<BodyLink> {
+        match self {
+            Self::BodyLink(link) => Some(*link),
+            Self::Status(Status::SignedOut) => Some(BodyLink::Down),
+            _ => None,
+        }
+    }
+}
