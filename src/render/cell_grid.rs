@@ -175,6 +175,33 @@ impl CellGrid {
         out
     }
 
+    /// Whether it fits, each row's glyphs with the trailing blanks cut, then
+    /// each href after its link id: what a diff of two layouts reads.
+    pub fn text(&self) -> String {
+        let fits = if self.fits { "fits" } else { "overflows" };
+        let rows = self.rows().map(|row| {
+            let line: String = row
+                .iter()
+                .filter(|cell| !cell.has(WIDE_TAIL))
+                .map(|cell| match cell.glyph() {
+                    "" => " ",
+                    glyph => glyph,
+                })
+                .collect();
+            line.trim_end().to_owned()
+        });
+
+        let hrefs = (1..)
+            .zip(&self.hrefs)
+            .map(|(id, href)| format!("[{id}] {href}"));
+        let mut lines: Vec<String> = std::iter::once(fits.to_owned())
+            .chain(rows)
+            .chain(hrefs)
+            .collect();
+        lines.push(String::new());
+        lines.join("\n")
+    }
+
     /// `None` when `bytes` is not what `encode` writes.
     pub fn decode(bytes: &[u8]) -> Option<Self> {
         let mut input = Input(bytes);

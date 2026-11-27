@@ -58,19 +58,31 @@ pub fn lay_out(html: &str, cols: u16) -> Option<CellGrid> {
 }
 
 /// The layout process's whole run, when `postal` was started as one:
-/// HTML on stdin, the grid on stdout.
+/// HTML on stdin, the grid on stdout: encoded, or as text after `text`.
 pub fn serve() -> Option<ExitCode> {
     let mut args = std::env::args_os().skip(1);
     if args.next()? != ARG {
         return None;
     }
 
-    let cols = args.next().and_then(|cols| cols.to_str()?.parse().ok());
+    // `text` goes before the cols, so a build without it fails on it.
+    let first = args.next();
+    let text = first.as_deref().is_some_and(|arg| arg == "text");
+    let cols = if text { args.next() } else { first };
+    let cols = cols.and_then(|cols| cols.to_str()?.parse().ok());
     let mut html = String::new();
     let grid = cols
         .filter(|_| io::stdin().read_to_string(&mut html).is_ok())
         .and_then(|cols| litehtml::lay_out(&html, cols));
-    let written = grid.is_some_and(|grid| io::stdout().write_all(&grid.encode()).is_ok());
+    let bytes = grid.map(|grid| {
+        if text {
+            grid.text().into_bytes()
+        } else {
+            grid.encode()
+        }
+    });
+
+    let written = bytes.is_some_and(|bytes| io::stdout().write_all(&bytes).is_ok());
     Some(if written {
         ExitCode::SUCCESS
     } else {
