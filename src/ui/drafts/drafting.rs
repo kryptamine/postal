@@ -1,17 +1,35 @@
 use crate::{
-    compose::awaited_reply::AwaitedReply, compose::draft_notes::DraftNotes,
-    compose::mailto::Mailto, compose::recipients::Recipients, domain::message::Message,
-    domain::per_account::AccountId, domain::shown::Shown, mail::fetch_requests::FetchRequests,
-    ui::drafts::composing, ui::drafts::draft_preview::DraftPreview, ui::input::step::Drafting,
-    ui::list::inbox_view::InboxView, ui::run::Error, ui::state::ui::Ui, ui::terminal::tty::Tty,
+    compose::draft_notes::DraftNotes,
+    compose::mailto::Mailto,
+    compose::recipients::Recipients,
+    domain::message::Message,
+    domain::per_account::AccountId,
+    domain::shown::Shown,
+    mail::fetch_requests::FetchRequests,
+    ui::drafts::awaiting,
+    ui::drafts::composing::{self, Reply},
+    ui::drafts::draft_preview::DraftPreview,
+    ui::input::step::Drafting,
+    ui::list::inbox_view::InboxView,
+    ui::run::Error,
+    ui::state::ui::Ui,
+    ui::terminal::tty::Tty,
     ui::world::World,
 };
 
 /// Compose, or the shown Draft edited again, sent, kept or discarded.
-pub fn draft(drafting: Drafting, tty: &mut Tty, ui: &mut Ui, world: World) -> Result<(), Error> {
+pub fn draft(
+    drafting: Drafting,
+    tty: &mut Tty,
+    ui: &mut Ui,
+    world: World,
+    fetch: &FetchRequests,
+) -> Result<(), Error> {
     let screen = &mut ui.screen;
     match drafting {
         Drafting::Compose => {
+            // A Reply or Forward still waiting would open over this Draft.
+            awaiting::cancel(screen, fetch);
             let from = composing_from(&ui.view);
             composing::compose(tty, screen, world, from, None)?;
         }
@@ -52,13 +70,7 @@ pub fn reply(
         return Ok(());
     };
 
-    let awaited = AwaitedReply {
-        message,
-        to,
-        missing: Vec::new(),
-    };
-
-    composing::reply(tty, ui, world, fetch, awaited)
+    composing::reply(tty, ui, world, fetch, Reply { message, to })
 }
 
 /// What a Reply answers: the newest Message of the selected Thread not from

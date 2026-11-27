@@ -1,11 +1,22 @@
 use std::{io, path::PathBuf};
 
 use crate::{
-    compose::awaited::Awaited, compose::awaited_forward::AwaitedForward, compose::draft_file,
-    compose::draft_notes::DraftNotes, compose::forward_draft, compose::forwarded,
-    domain::message::Message, mail::fetch_requests::FetchRequests, mail::status::Status,
-    ui::drafts::awaiting, ui::drafts::composing, ui::run::Error, ui::state::screen::Screen,
-    ui::state::toast::Toast, ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
+    compose::draft_file,
+    compose::draft_notes::DraftNotes,
+    compose::forward_draft,
+    compose::forwarded,
+    domain::message::Message,
+    mail::awaited_parts::AwaitedParts,
+    mail::fetch_requests::FetchRequests,
+    mail::status::Status,
+    ui::drafts::awaiting::{self, Waiting},
+    ui::drafts::composing,
+    ui::run::Error,
+    ui::state::screen::Screen,
+    ui::state::toast::Toast,
+    ui::state::ui::Ui,
+    ui::terminal::tty::Tty,
+    ui::world::World,
 };
 
 /// Forward of the selected Message, in Reading of the one at the cursor,
@@ -28,7 +39,7 @@ pub fn forward(
     };
 
     // A Reply or Forward still waiting would open its own Draft over this one.
-    screen.awaited = None;
+    awaiting::cancel(screen, fetch);
     let body_missing = !world.caches[message.account].has_body(message.body_key)?;
     let attachments = message.attachments.iter().count();
     let Some(on_server) = message.on_server() else {
@@ -40,42 +51,46 @@ pub fn forward(
         return open(tty, screen, &message, &[], world);
     };
 
-    let awaited = AwaitedForward {
-        message,
-        on_server,
-        body_missing,
-        attachments: vec![None; attachments],
-    };
-
-    if awaited.complete() {
-        return open(tty, screen, &awaited.message, &[], world);
+    let mut parts = AwaitedParts::new(message.account);
+    if body_missing {
+        parts.add_body(on_server.clone(), true);
     }
 
-    if screen.statuses[awaited.message.account] == Status::SignedOut {
+    for index in 0..attachments {
+        parts.add_attachment(on_server.clone(), index);
+    }
+
+    if parts.complete() {
+        return open(tty, screen, &message, &[], world);
+    }
+
+    if screen.statuses[message.account] == Status::SignedOut {
         screen.toast = Some(Toast::new("not downloaded · signed out"));
         return Ok(());
     }
 
-    awaiting::start(screen, fetch, Awaited::Forward(awaited));
+    awaiting::start(screen, fetch, Waiting::forward(message, parts));
     Ok(())
 }
 
 /// The end of the fetch a Forward waits on: its editor, or why not.
 pub fn forwarded(
-    awaited: AwaitedForward,
-    result: Result<(), String>,
+    message: &Message,
+    result: Result<Vec<Vec<u8>>, String>,
     tty: &mut Tty,
     screen: &mut Screen,
     world: World,
 ) -> Result<(), Error> {
-    if let Err(reason) = result {
-        tracing::warn!("fetching the Message to forward failed: {reason}");
-        screen.toast = Some(Toast::error(format!("couldn't forward: {reason}")));
-        return Ok(());
-    }
+    let attachments = match result {
+        Ok(attachments) => attachments,
+        Err(reason) => {
+            tracing::warn!("fetching the Message to forward failed: {reason}");
+            screen.toast = Some(Toast::error(format!("couldn't forward: {reason}")));
+            return Ok(());
+        }
+    };
 
-    let attachments: Vec<Vec<u8>> = awaited.attachments.into_iter().flatten().collect();
-    open(tty, screen, &awaited.message, &attachments, world)
+    open(tty, screen, message, &attachments, world)
 }
 
 /// A Forward's Draft of `message` in the editor, the `attachments` fetched

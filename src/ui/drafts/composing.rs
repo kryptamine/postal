@@ -7,8 +7,6 @@ use tokio::time::Instant;
 
 use crate::{
     compose::accounts::Accounts,
-    compose::awaited::Awaited,
-    compose::awaited_reply::AwaitedReply,
     compose::draft_file,
     compose::draft_notes::DraftNotes,
     compose::editor,
@@ -16,13 +14,16 @@ use crate::{
     compose::mailto::Mailto,
     compose::notes::{self, Notes},
     compose::outbox::Outbox,
+    compose::recipients::Recipients,
     compose::reply_draft,
     domain::message::Message,
     domain::per_account::AccountId,
+    mail::awaited_parts::AwaitedParts,
     mail::fetch_requests::FetchRequests,
     mail::status::Status,
     mail::steering::Ask,
-    ui::drafts::awaiting,
+    mail::update::FetchLink,
+    ui::drafts::awaiting::{self, Waiting},
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
     ui::run::Error,
@@ -33,6 +34,12 @@ use crate::{
     ui::terminal::tty::Tty,
     ui::world::World,
 };
+
+/// What a Reply answers and whom it goes out to.
+pub struct Reply {
+    pub message: Message,
+    pub to: Recipients,
+}
 
 /// Compose from the Account `from`: a new Draft's file in the editor,
 /// holding its signature and what a `link` fills, then what the editor
@@ -45,8 +52,6 @@ pub fn compose(
     link: Option<&Mailto>,
 ) -> Result<(), Error> {
     let accounts = world.accounts;
-    // A Reply or Forward still waiting would open over this Draft.
-    screen.awaited = None;
     let signature = from.map_or(Ok(None), |from| accounts.outgoing(from).signature());
     let template = draft_file::template(block(&signature));
     let text = link.map_or_else(|| template.clone(), |link| link.draft(block(&signature)));
@@ -112,11 +117,11 @@ pub fn reply(
     ui: &mut Ui,
     world: World,
     fetch: &FetchRequests,
-    mut awaited: AwaitedReply,
+    reply: Reply,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
-    screen.awaited = None;
-    let message = &awaited.message;
+    awaiting::cancel(screen, fetch);
+    let message = &reply.message;
     if let Some(path) = answered_by(message, world.accounts) {
         // It was found among the Drafts of the Account the Message reached.
         let notes = DraftNotes {
@@ -131,24 +136,25 @@ pub fn reply(
 
     let cache = &world.caches[message.account];
     let raw = cache.body(message.body_key)?;
+    let mut parts = AwaitedParts::new(message.account);
     // The answered Message may be the List's selection, outside the stack.
-    let answered = (message.on_server(), message.body_key);
-    let each = view.stack().map(|m| (m.on_server(), m.body_key));
-    for (on_server, key) in each.chain([answered]) {
+    let answered = message.on_server();
+    for (on_server, key, required) in view
+        .stack()
+        .map(|m| (m.on_server(), m.body_key, false))
+        .chain([(answered, message.body_key, true)])
+    {
         if let Some(on_server) = on_server
             && !cache.has_body(key)?
-            && !awaited.missing.contains(&on_server)
         {
-            awaited.missing.push(on_server);
+            parts.add_body(on_server, required);
         }
     }
 
-    let status = screen.statuses[message.account];
-    let signed_out = status == Status::SignedOut;
+    let live = fetch.link(message.account) == FetchLink::Live;
+    let signed_out = screen.statuses[message.account] == Status::SignedOut;
     match raw {
-        Some(raw) if awaited.missing.is_empty() || status != Status::Live => {
-            answer(tty, screen, &raw, &awaited, world)
-        }
+        Some(raw) if parts.complete() || !live => answer(tty, screen, &raw, &reply, world),
         None if message.folder.is_none() => {
             screen.toast = Some(Toast::new("not downloaded"));
             Ok(())
@@ -158,7 +164,7 @@ pub fn reply(
             Ok(())
         }
         _ => {
-            awaiting::start(screen, fetch, Awaited::Reply(awaited));
+            awaiting::start(screen, fetch, Waiting::reply(reply, parts));
             Ok(())
         }
     }
@@ -178,7 +184,7 @@ fn answered_by(message: &Message, accounts: Accounts) -> Option<PathBuf> {
 
 /// The end of the fetch a Reply waits on: its editor, or why not.
 pub fn fetched(
-    awaited: &AwaitedReply,
+    reply: &Reply,
     result: Result<(), String>,
     tty: &mut Tty,
     screen: &mut Screen,
@@ -189,7 +195,7 @@ pub fn fetched(
         tracing::warn!("fetching the bodies to reply to failed: {reason}");
     }
 
-    let message = &awaited.message;
+    let message = &reply.message;
     let body = world.caches[message.account].body(message.body_key)?;
 
     let Some(raw) = body else {
@@ -197,7 +203,7 @@ pub fn fetched(
         return Ok(());
     };
 
-    answer(tty, screen, &raw, awaited, world)
+    answer(tty, screen, &raw, reply, world)
 }
 
 /// A Reply's Draft from the answered Message's body `raw`, in the editor,
@@ -206,15 +212,15 @@ fn answer(
     tty: &mut Tty,
     screen: &mut Screen,
     raw: &[u8],
-    awaited: &AwaitedReply,
+    reply: &Reply,
     world: World,
 ) -> Result<(), Error> {
     let accounts = world.accounts;
-    let account = awaited.message.account;
+    let account = reply.message.account;
     let email = accounts.email(account);
     let signature = accounts.outgoing(account).signature();
     let (text, answering) =
-        reply_draft::reply(raw, &awaited.message, email, awaited.to, block(&signature));
+        reply_draft::reply(raw, &reply.message, email, reply.to, block(&signature));
     let Some(path) = create(screen, &text) else {
         return Ok(());
     };
