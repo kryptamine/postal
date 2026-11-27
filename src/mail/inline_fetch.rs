@@ -1,6 +1,6 @@
 use crate::{
     domain::inline_image::InlineImage, domain::message_ref::MessageRef, mail::body_fetch,
-    mail::imap::MailServer, mail::sync::Error, mail::update::Update,
+    mail::imap::MailServer, mail::sync::Error, mail::unfetched::Unfetched, mail::update::Update,
 };
 
 /// The parts a Message's HTML shows by `cid:`, by their `Content-ID`.
@@ -13,7 +13,7 @@ pub struct InlineRequest {
 /// they will not come.
 pub struct InlineFetched {
     pub message: MessageRef,
-    pub images: Result<Vec<InlineImage>, String>,
+    pub images: Result<Vec<InlineImage>, Unfetched>,
 }
 
 /// Fetches what `request` names and tells `send`; like an attachment, it
@@ -28,12 +28,12 @@ pub async fn fetch(
         match server.inline_images(message.uid, ids).await {
             Ok(images) => Ok(images),
             Err(error) => match error.refusal() {
-                Some(reason) => Err(reason.to_owned()),
+                Some(reason) => Err(Unfetched::Failed(reason.to_owned())),
                 None => return Err(error.into()),
             },
         }
     } else {
-        Err("its Folder is gone".to_owned())
+        Err(Unfetched::Failed("its Folder is gone".to_owned()))
     };
 
     send(Update::Inline(InlineFetched {

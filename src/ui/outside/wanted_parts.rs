@@ -7,7 +7,8 @@ use crate::{
     mail::body_fetch::OneShot,
     mail::fetch_requests::FetchRequests,
     mail::inline_fetch::{InlineFetched, InlineRequest},
-    mail::update::{FetchLink, Update},
+    mail::unfetched::Unfetched,
+    mail::update::Update,
     render::file_size,
     render::original_page::Original,
     ui::outside::attachment_file,
@@ -48,15 +49,6 @@ struct WantedOriginal {
 enum Waiting {
     Attachment(Wanted),
     Original(WantedOriginal),
-}
-
-impl Waiting {
-    const fn account(&self) -> AccountId {
-        match self {
-            Self::Attachment(wanted) => wanted.account,
-            Self::Original(wanted) => wanted.account,
-        }
-    }
 }
 
 /// Asks the fetch connection for the parts the cached body leaves out (the
@@ -114,28 +106,13 @@ impl WantedParts {
         Toast::lasting("downloading its images…")
     }
 
-    /// The Toast to show when `update` of `account` brings a part asked for,
-    /// or loses those in flight.
+    /// The Toast to show when `update` of `account` brings a part asked for.
     pub fn notice(&mut self, account: AccountId, update: &Update) -> Option<Toast> {
         match update {
             Update::Attachment(fetched) => self.attachment(account, fetched),
             Update::Inline(fetched) => self.images(account, fetched),
-            Update::FetchLink(FetchLink::Down) => self.lost(account),
             _ => None,
         }
-    }
-
-    /// What was in flight went down with the connection.
-    fn lost(&mut self, account: AccountId) -> Option<Toast> {
-        let mut toast = None;
-        for lost in self.waiting.extract_if(.., |w| w.account() == account) {
-            toast = Some(match lost {
-                Waiting::Attachment(_) => Toast::error(OFFLINE),
-                Waiting::Original(w) => opened(&w.name, &w.original, &[], Some("offline")),
-            });
-        }
-
-        toast
     }
 
     fn attachment(&mut self, account: AccountId, fetched: &AttachmentFetched) -> Option<Toast> {
@@ -150,6 +127,7 @@ impl WantedParts {
 
         let bytes = match &fetched.bytes {
             Ok(bytes) => bytes,
+            Err(Unfetched::Offline) => return Some(Toast::error(OFFLINE)),
             Err(reason) => return Some(Toast::error(format!("couldn't download: {reason}"))),
         };
 
@@ -178,10 +156,15 @@ impl WantedParts {
 
         let (images, missing) = match &fetched.images {
             Ok(images) => (images.as_slice(), None),
-            Err(reason) => (&[][..], Some(reason.as_str())),
+            Err(reason) => (&[][..], Some(reason.to_string())),
         };
 
-        Some(opened(&wanted.name, &wanted.original, images, missing))
+        Some(opened(
+            &wanted.name,
+            &wanted.original,
+            images,
+            missing.as_deref(),
+        ))
     }
 }
 

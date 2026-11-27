@@ -7,13 +7,14 @@ use crate::{
     domain::folder_name::FolderName,
     domain::message_ref::MessageRef,
     domain::uid::Uid,
-    mail::attachment_fetch::{self, AttachmentRequest},
+    mail::attachment_fetch::{self, AttachmentFetched, AttachmentRequest},
     mail::backfill::{self, Backfill},
     mail::body_fetch::{self, AwaitedRequest, BodyRequest, Fetched, OneShot, Request, Standing},
     mail::imap::MailServer,
-    mail::inline_fetch,
+    mail::inline_fetch::{self, InlineFetched},
     mail::spare_work::SpareWork,
     mail::sync::Error,
+    mail::unfetched::Unfetched,
     mail::update::Update,
 };
 
@@ -45,10 +46,24 @@ impl Pending {
         }
     }
 
-    /// Drops the one-shots sent to a connection that has since dropped.
-    pub fn forget_oneshots(&mut self) {
+    /// Fails the one-shots sent to a connection that has since dropped.
+    pub fn fail_oneshots(&mut self, send: &impl Fn(Update)) {
         self.receive();
-        self.oneshots.clear();
+        for oneshot in self.oneshots.drain(..) {
+            let update = match oneshot {
+                OneShot::Attachment(request) => Update::Attachment(AttachmentFetched {
+                    message: request.message,
+                    index: request.index,
+                    bytes: Err(Unfetched::Offline),
+                }),
+                OneShot::Inline(request) => Update::Inline(InlineFetched {
+                    message: request.message,
+                    images: Err(Unfetched::Offline),
+                }),
+            };
+
+            send(update);
+        }
     }
 
     /// Serves until the channel closes, telling `send` how each went, then

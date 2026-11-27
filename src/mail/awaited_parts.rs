@@ -110,7 +110,7 @@ impl AwaitedParts {
                 })?;
                 match &fetched.bytes {
                     Ok(bytes) => slot.bytes = Some(bytes.clone()),
-                    Err(reason) => return Some(Err(reason.clone())),
+                    Err(reason) => return Some(Err(reason.to_string())),
                 }
             }
             _ => return None,

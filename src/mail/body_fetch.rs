@@ -27,8 +27,8 @@ pub enum Standing {
     Awaited(AwaitedRequest),
 }
 
-/// Work served once, in turn. It is lost with the connection it was sent
-/// to, which the screen gives up on when told the link is down.
+/// Work served once, in turn. When its connection drops, it is answered
+/// with an offline failure.
 pub enum OneShot {
     Attachment(AttachmentRequest),
     /// The inline images of a Message opened in the browser.
