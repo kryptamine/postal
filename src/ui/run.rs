@@ -7,7 +7,7 @@ use tokio::time::Instant;
 
 use crate::{
     account::config::{ContactsChoice, NotifyChoice},
-    cache::{self, Cache},
+    cache::Cache,
     compose::accounts::Accounts,
     compose::mailto::Mailto,
     compose::outbox::Outbox,
@@ -24,6 +24,7 @@ use crate::{
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::drafting,
     ui::drafts::local_list::relist_local,
+    ui::error::Error,
     ui::exit::Exit,
     ui::frame::draw,
     ui::frame::theme::Theme,
@@ -34,7 +35,7 @@ use crate::{
     ui::outside::notifier::Notifier,
     ui::outside::wanted_parts::WantedParts,
     ui::preview::preview_pane,
-    ui::preview::previews::Previews,
+    ui::preview::previews::{Previews, Sources},
     ui::react::apply,
     ui::react::opening::opening,
     ui::react::take::take,
@@ -46,16 +47,6 @@ use crate::{
     ui::terminal::tty::Tty,
     ui::world::World,
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("terminal: {0}")]
-    Terminal(io::Error),
-    #[error(transparent)]
-    Cache(#[from] cache::Error),
-    #[error(transparent)]
-    Sync(#[from] sync::Error),
-}
 
 /// The network work behind the screen and what it reports; what is asked of
 /// the fetch and sync connections; and where a Send leaves from.
@@ -208,8 +199,13 @@ impl Model<'_> {
 
         let text = panes.preview.map(preview_pane::text_area);
         if let Some(text) = text {
+            let sources = Sources {
+                caches: self.world.caches,
+                fetch: &self.fetch,
+            };
+            let reading = self.ui.screen.showing.reading();
             self.previews
-                .want(self.world.caches, &self.ui, text.width, &self.fetch)?;
+                .want(sources, &self.ui.view, reading, text.width)?;
         }
 
         if let Some(preview) = self.ui.screen.over.get_mut::<DraftPreview>() {

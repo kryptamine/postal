@@ -1,5 +1,3 @@
-use std::iter;
-
 use crossterm::event::KeyEvent;
 use ratatui::{Frame, layout::Rect};
 
@@ -10,7 +8,7 @@ use crate::{
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_drafts_layer,
     ui::frame::theme::Theme,
-    ui::input::keymap::{Binding, Hint},
+    ui::input::keymap::{self, Binding, Hint},
     ui::popup::folder_picker::FolderPicker,
     ui::popup::hints_layer,
     ui::popup::layer_act::Act,
@@ -98,10 +96,12 @@ impl Layer {
     }
 }
 
-/// Every layer's rows of the `?` popup and the hint line.
-pub fn help() -> impl Iterator<Item = &'static Binding> + Clone {
-    iter::empty()
+/// The bindings listed in `mode` now, for the `?` popup and the hint line:
+/// the panes' and the shared ones, then every layer's.
+pub fn bindings(mode: Mode, signed_out: bool) -> impl Iterator<Item = &'static Binding> + Clone {
+    keymap::pane_bindings()
         .chain(draft_layer::HELP)
         .chain(local_drafts_layer::HELP)
         .chain(settings_layer::HELP)
+        .filter(move |b| b.modes.contains(&mode) && (signed_out || !b.signed_out))
 }

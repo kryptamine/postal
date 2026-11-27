@@ -11,8 +11,9 @@ use unicode_width::UnicodeWidthStr;
 use crate::{
     render::stack_str::StackStr,
     ui::frame::theme::Theme,
-    ui::input::keymap::{self, Binding, Key},
+    ui::input::keymap::{Binding, Key},
     ui::popup::help::Help,
+    ui::popup::layer,
     ui::state::mode::Mode,
     ui::widgets::{
         centred::centred, input, popup_area::popup_area, scrollbar::scrollbar, truncate,
@@ -31,7 +32,7 @@ const PLACEHOLDER: &str = " to filter by key or description";
 const KEYS: &str = "/ filter · j/k scroll · esc close";
 const FILTERING: &str = "type to filter · ↑/↓ scroll · enter keep · esc clear";
 
-/// The keymap of `mode`, grouped as `keymap::bindings` lists it, centred over
+/// The keymap of `mode`, grouped as `layer::bindings` lists it, centred over
 /// `area`: a filter line, a heading per group then key, aliases and
 /// description per row, scrolled, and the popup's own keys at the bottom.
 pub struct HelpPopup<'a> {
@@ -44,7 +45,7 @@ impl StatefulWidget for HelpPopup<'_> {
     type State = Help;
 
     fn render(self, area: Rect, buf: &mut Buffer, help: &mut Help) {
-        let bindings = keymap::bindings(self.mode, self.signed_out);
+        let bindings = layer::bindings(self.mode, self.signed_out);
         let keys = column(bindings.clone(), |b| spelled(b.keys));
         let aliases = column(bindings.clone(), |b| spelled(b.aliases));
         let descriptions = column(bindings.clone(), |b| b.description.width());

@@ -6,7 +6,7 @@ use crate::{
     mail::update::Update,
     ui::drafts::composing::{self, Reply},
     ui::drafts::forwarding,
-    ui::run::Error,
+    ui::error::Error,
     ui::state::screen::Screen,
     ui::terminal::tty::Tty,
     ui::world::World,

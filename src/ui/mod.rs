@@ -1,5 +1,6 @@
 mod alloc_count;
 mod drafts;
+mod error;
 pub mod exit;
 mod frame;
 mod input;

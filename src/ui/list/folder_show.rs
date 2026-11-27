@@ -1,8 +1,8 @@
 use crate::{
     account::config::ContactsChoice, cache::Cache, domain::folder::Folder,
-    domain::per_account::PerAccount, domain::shown::Shown, ui::list::all_inboxes,
+    domain::per_account::PerAccount, domain::shown::Shown, ui::error::Error, ui::list::all_inboxes,
     ui::list::inbox_view::InboxView, ui::list::search::Search,
-    ui::popup::folder_picker::FolderPicker, ui::preview::link_hints::LinkHints, ui::run::Error,
+    ui::popup::folder_picker::FolderPicker, ui::preview::link_hints::LinkHints,
     ui::state::showing::Showing, ui::state::ui::Ui,
 };
 

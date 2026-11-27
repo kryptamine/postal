@@ -1,7 +1,13 @@
-use crate::{
-    compose::recipients::Recipients, ui::outside::open_outside::Outside,
-    ui::outside::wanted_parts::Purpose,
-};
+use crate::{compose::recipients::Recipients, ui::input::wanted::Purpose};
+
+/// Where a Message opens outside the TUI.
+#[derive(Clone, Copy)]
+pub enum Outside {
+    /// `$PAGER`, styled as the Preview shows it.
+    Pager,
+    /// `$EDITOR`, read-only, as text.
+    Editor,
+}
 
 #[derive(Clone, Copy)]
 pub enum Action {

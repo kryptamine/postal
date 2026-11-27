@@ -38,6 +38,9 @@ impl Allowed {
     }
 }
 
+/// Modules of `ui` that draw only, so they name nothing else of `ui`.
+const UI_LEAVES: &[&str] = &["widgets"];
+
 /// Layers that never touch the network.
 const OFFLINE: &[&str] = &["domain", "cache", "render"];
 
@@ -88,12 +91,16 @@ fn layers_respect_architecture_boundaries() {
         let mut paths = NamedPaths::default();
         paths.visit_file(&file);
 
+        let leaf = ui_leaf_of(relative);
         let file = relative.display();
         violations.extend(
             paths
                 .0
                 .iter()
-                .filter_map(|named| violation(layer, named))
+                .filter_map(|named| {
+                    violation(layer, named)
+                        .or_else(|| leaf.and_then(|leaf| leaf_violation(leaf, named)))
+                })
                 .map(|violation| format!("{file}: {violation}")),
         );
     }
@@ -107,7 +114,9 @@ fn layers_respect_architecture_boundaries() {
 }
 
 fn violation(layer: &str, named: &str) -> Option<String> {
-    if let Some(target) = named.strip_prefix("crate::")
+    if let Some(target) = named
+        .strip_prefix("crate::")
+        .and_then(|rest| rest.split("::").next())
         && LAYERS.contains(&target)
         && !may_import(layer, target)
     {
@@ -118,6 +127,19 @@ fn violation(layer: &str, named: &str) -> Option<String> {
         .iter()
         .find(|(path, allowed)| starts_with_path(named, path) && !allowed.admits(layer))
         .map(|(path, _)| format!("`{path}` is not allowed in `{layer}`"))
+}
+
+fn leaf_violation(leaf: &str, named: &str) -> Option<String> {
+    let target = named.strip_prefix("crate::ui::")?.split("::").next()?;
+    (target != leaf).then(|| format!("`ui::{leaf}` must not import `ui::{target}`"))
+}
+
+/// The leaf of `UI_LEAVES` a file of `src/` is in, if any.
+fn ui_leaf_of(relative: &Path) -> Option<&'static str> {
+    let mut components = relative.components();
+    (components.next()?.as_os_str() == "ui").then_some(())?;
+    let group = components.next()?.as_os_str();
+    UI_LEAVES.iter().copied().find(|&leaf| group == leaf)
 }
 
 /// `ui` and `cli` are peers; `app` may import any layer except `cli`.
@@ -162,15 +184,15 @@ fn collect_rust_files(dir: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-/// Every path a file names, in `use` or in code, cut to its first two
-/// segments: `crate::ui`, `std::fs`, `rusqlite::Connection`.
+/// Every path a file names, in `use` or in code, cut to its first three
+/// segments: `crate::ui::frame`, `std::fs`, `rusqlite::Connection`.
 #[derive(Default)]
 struct NamedPaths(BTreeSet<String>);
 
 impl NamedPaths {
     fn record(&mut self, segments: &[String]) {
         if !segments.is_empty() {
-            self.0.insert(segments[..segments.len().min(2)].join("::"));
+            self.0.insert(segments[..segments.len().min(3)].join("::"));
         }
     }
 
@@ -208,7 +230,7 @@ impl<'ast> Visit<'ast> for NamedPaths {
         let segments: Vec<String> = path
             .segments
             .iter()
-            .take(2)
+            .take(3)
             .map(|segment| segment.ident.to_string())
             .collect();
         self.record(&segments);

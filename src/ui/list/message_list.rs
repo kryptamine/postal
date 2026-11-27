@@ -13,7 +13,7 @@ use crate::{
     domain::message::Message,
     domain::thread::{self, Thread},
     render::stack_str::StackStr,
-    ui::frame::layout::PADDING,
+    ui::frame::layout::{MIN_LIST_WIDTH, PADDING},
     ui::frame::theme::Theme,
     ui::list::date_group::DateGroup,
     ui::list::date_label::DateLabel,
@@ -36,7 +36,6 @@ const GROUP_GAP: u16 = 1;
 const MIN_WIDTH_WITH_DATE: u16 = 29;
 /// The date, a `DateLabel` of at most 10 columns, and the gap before it.
 const DATE_ROOM: u16 = 11;
-pub const MIN_WIDTH: u16 = 20;
 /// Down the padding left of a picked card's text, on each of its rows.
 const PICKED: &str = "▌";
 
@@ -57,7 +56,7 @@ impl StatefulWidget for MessageList<'_> {
     type State = InboxView;
 
     fn render(self, area: Rect, buf: &mut Buffer, view: &mut InboxView) {
-        if area.width < MIN_WIDTH {
+        if area.width < MIN_LIST_WIDTH {
             return centred("terminal too small", area, buf);
         }
 

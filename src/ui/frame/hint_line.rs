@@ -17,8 +17,9 @@ use crate::{
     render::icons::Icons,
     render::stack_str::StackStr,
     ui::frame::theme::Theme,
-    ui::input::keymap::{self, HELP_HINT, Hint},
+    ui::input::keymap::{HELP_HINT, Hint},
     ui::list::search::LIMIT,
+    ui::popup::layer,
     ui::state::mode::Mode,
     ui::state::toast::{Text, Toast},
     ui::widgets::{input, truncate},
@@ -193,7 +194,7 @@ impl HintLine<'_> {
         let used = usize::from(x - row.x);
         let left = room.saturating_sub(used + width(&HELP_HINT));
         let signed_out = self.status == Status::SignedOut;
-        let hints = keymap::bindings(mode, signed_out).filter_map(|b| b.hint.as_ref());
+        let hints = layer::bindings(mode, signed_out).filter_map(|b| b.hint.as_ref());
         let rest = Rect {
             x,
             width: row.right().saturating_sub(x),

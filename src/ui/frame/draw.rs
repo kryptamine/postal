@@ -4,6 +4,8 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::{
     compose::accounts::Accounts,
+    ui::error::Error,
+    ui::frame::hint_line::{HintLine, Hints},
     ui::frame::layout,
     ui::frame::theme::Theme,
     ui::list::completion_menu::CompletionMenu,
@@ -17,12 +19,10 @@ use crate::{
     ui::preview::preview_pane::{self, PreviewPane},
     ui::preview::previews::Previews,
     ui::preview::thread_pane::ThreadPane,
-    ui::run::Error,
     ui::state::mode::Mode,
     ui::state::screen::Screen,
     ui::state::ui::Ui,
     ui::terminal::terminal_backend::TerminalBackend,
-    ui::widgets::hint_line::{HintLine, Hints},
 };
 
 pub fn draw(

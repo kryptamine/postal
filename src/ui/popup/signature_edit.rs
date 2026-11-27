@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::{
-    compose::signature_edit, ui::popup::settings::Settings, ui::run::Error,
+    compose::signature_edit, ui::error::Error, ui::popup::settings::Settings,
     ui::state::screen::Screen, ui::terminal::tty::Tty,
 };
 
