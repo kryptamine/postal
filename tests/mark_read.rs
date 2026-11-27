@@ -161,7 +161,9 @@ fn mark_unread_holds_until_the_selection_comes_back() {
         message("Carol", "Newest", "2024-03-02T09:00:00Z").unread(),
     ]);
     let home = Home::for_server(&server);
-    let mut t = ready(&server, &home, "Newest");
+    let t = home.terminal().size(120, 30).env("POSTAL_DWELL", "0.2");
+    let mut t = t.spawn(env!("CARGO_BIN_EXE_postal")).unwrap();
+    t.wait_until(|s| s.contains("Body of Newest")).unwrap();
     wait_for(|| server.seen(INBOX, FIRST_UID + 1));
 
     t.send(Key::Char('U')).unwrap();
@@ -169,7 +171,8 @@ fn mark_unread_holds_until_the_selection_comes_back() {
         .snapshot_after(|s| card(s, "Carol") == Some(true) && s.contains("marked Unread"))
         .unwrap();
     wait_for(|| !server.seen(INBOX, FIRST_UID + 1));
-    std::thread::sleep(Duration::from_millis(1500));
+    // Twice the Dwell set above.
+    std::thread::sleep(Duration::from_millis(400));
     assert_eq!(stores(&server).len(), 2, "{screen}");
     assert!(!server.seen(INBOX, FIRST_UID + 1));
 
