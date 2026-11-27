@@ -49,4 +49,21 @@ import Logo from '@app/components/Logo.astro';
     color: var(--link-fg);
     text-decoration: underline;
   }
+
+  /* On a phone the nav wraps under the logo: keep both rows tight. */
+  @media (max-width: 47.99rem) {
+    header {
+      row-gap: 0;
+      padding-block: var(--space-2) 0;
+    }
+
+    nav {
+      column-gap: var(--space-2);
+      margin-left: calc(var(--space-half) * -1);
+    }
+
+    nav a {
+      padding-inline: var(--space-half);
+    }
+  }
 </style>
