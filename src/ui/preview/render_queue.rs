@@ -27,8 +27,8 @@ enum Order {
 }
 
 /// The render thread and its queue. Work waiting is taken in the order of
-/// what is on screen: the preferred Preview, then the HTML of a Draft,
-/// then the newest Preview.
+/// what is on screen: the preferred Preview, then the newest HTML of a
+/// Draft, then the newest Preview.
 pub struct RenderQueue {
     orders: mpsc::Sender<Order>,
     preferred: Option<PreviewKey>,
@@ -107,7 +107,7 @@ fn next(waiting: &mut Vec<Work>, preferred: Option<PreviewKey>) -> Option<Work> 
         .or_else(|| {
             waiting
                 .iter()
-                .position(|work| matches!(work, Work::Html(..)))
+                .rposition(|work| matches!(work, Work::Html(..)))
         })
         .or_else(|| waiting.len().checked_sub(1))?;
     Some(waiting.remove(at))
