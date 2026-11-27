@@ -7,20 +7,15 @@
 
 mod support;
 
-use std::process::Command;
-
 use support::home::Home;
 
 const LOCKUP: &str = include_str!("../assets/brand/postal-lockup.txt");
 
 fn help(args: &[&str]) -> String {
     let home = Home::new("");
-    let output = Command::new(env!("CARGO_BIN_EXE_postal"))
+    let output = home
+        .command(env!("CARGO_BIN_EXE_postal"))
         .args(args)
-        .env_clear()
-        .env("XDG_CONFIG_HOME", home.xdg_config_home())
-        .env("XDG_STATE_HOME", home.xdg_state_home())
-        .env("XDG_CACHE_HOME", home.xdg_cache_home())
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");

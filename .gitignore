@@ -3,3 +3,5 @@ target/
 .afk.toml
 .claude/worktrees/
 dist/
+mutants.out/
+mutants.out.old/

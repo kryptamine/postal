@@ -50,6 +50,7 @@ impl Installed {
         Command::new(self.binary())
             .arg("update")
             .env_clear()
+            .envs(support::home::coverage())
             .env("HOME", self.home.path())
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("POSTAL_RELEASES_URL", releases.url())

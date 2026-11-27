@@ -1,0 +1,5 @@
+# `make mutants FILE=src/...`: a whole run is some 6,500 mutants.
+test_tool = "nextest"
+# A hanging mutant is cut at twice the clean run, not five times: every
+# wait in the tests gives up after ten seconds anyway.
+timeout_multiplier = 2.0

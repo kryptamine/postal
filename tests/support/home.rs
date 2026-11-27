@@ -2,7 +2,10 @@
 //! `$XDG_STATE_HOME` for its log, an `$XDG_CACHE_HOME` for its Cache and an
 //! `$XDG_DATA_HOME` for its Drafts and its Outbox.
 
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command, time::Duration};
+use std::{
+    ffi::OsString, fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command,
+    time::Duration,
+};
 
 use tempfile::TempDir;
 use termlens::{Terminal, TerminalBuilder};
@@ -55,6 +58,7 @@ impl Home {
             .env("TZ", "UTC")
             // A Send leaves at once; the hold has its own tests.
             .env("POSTAL_SEND_DELAY", "0")
+            .envs(coverage())
             .timeout(Duration::from_secs(10))
     }
 
@@ -68,7 +72,8 @@ impl Home {
             .env("XDG_STATE_HOME", self.xdg_state_home())
             .env("XDG_CACHE_HOME", self.xdg_cache_home())
             .env("XDG_DATA_HOME", self.xdg_data_home())
-            .env("TZ", "UTC");
+            .env("TZ", "UTC")
+            .envs(coverage());
         command
     }
 
@@ -127,4 +132,10 @@ impl Home {
     fn postal_dir(&self) -> PathBuf {
         self.dir.path().join("postal")
     }
+}
+
+/// Where `make coverage` has an instrumented Postal write its profile; the
+/// cleared environment would drop it.
+pub fn coverage() -> Option<(&'static str, OsString)> {
+    std::env::var_os("LLVM_PROFILE_FILE").map(|file| ("LLVM_PROFILE_FILE", file))
 }
