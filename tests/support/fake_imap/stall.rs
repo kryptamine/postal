@@ -33,48 +33,59 @@ pub enum Stall {
     Store,
 }
 
-pub(super) async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall) {
-    while inbox.lock().unwrap().stall == Some(stall) {
+pub(super) async fn wait_unless_stalled(inbox: &Mutex<Inbox>, stall: Stall, cut: Option<u64>) {
+    while {
+        let inbox = inbox.lock().unwrap();
+        inbox.stall == Some(stall) && cut.is_none_or(|c| inbox.cut == c)
+    } {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 
 /// Holds a `FETCH`, a `UID MOVE` or a `UID STORE` while a stall covers it.
-pub(super) async fn wait_unless_command_stalled(inbox: &Mutex<Inbox>, body: &CommandBody<'static>) {
+/// Returns false when `fail` cut the connection while it waited.
+pub(super) async fn wait_unless_command_stalled(
+    inbox: &Mutex<Inbox>,
+    body: &CommandBody<'static>,
+    cut: u64,
+) -> bool {
     match body {
         CommandBody::Fetch {
             macro_or_item_names,
             uid,
             ..
-        } => wait_unless_fetch_stalled(inbox, macro_or_item_names, *uid).await,
-        CommandBody::Move { .. } => wait_unless_stalled(inbox, Stall::Move).await,
-        CommandBody::Store { .. } => wait_unless_stalled(inbox, Stall::Store).await,
+        } => wait_unless_fetch_stalled(inbox, macro_or_item_names, *uid, cut).await,
+        CommandBody::Move { .. } => wait_unless_stalled(inbox, Stall::Move, Some(cut)).await,
+        CommandBody::Store { .. } => wait_unless_stalled(inbox, Stall::Store, Some(cut)).await,
         _ => {}
     }
+
+    inbox.lock().unwrap().cut == cut
 }
 
 pub(super) async fn wait_unless_fetch_stalled(
     inbox: &Mutex<Inbox>,
     items: &MacroOrMessageDataItemNames<'static>,
     uid: bool,
+    cut: u64,
 ) {
-    wait_unless_stalled(inbox, Stall::Fetch).await;
+    wait_unless_stalled(inbox, Stall::Fetch, Some(cut)).await;
     if !uid {
-        wait_unless_stalled(inbox, Stall::Sequence).await;
+        wait_unless_stalled(inbox, Stall::Sequence, Some(cut)).await;
     }
 
     // A body fetch asks for parts too, along with the header.
     let parts = body_parts(items);
     let header = parts.iter().any(|p| p.section == Asking::Header);
     if !parts.is_empty() && !header {
-        wait_unless_stalled(inbox, Stall::Part).await;
+        wait_unless_stalled(inbox, Stall::Part, Some(cut)).await;
         let past_a_snippet = |p: &PartAsked| p.partial.is_some_and(|(_, len)| len.get() > 2048);
         if parts.iter().any(past_a_snippet) {
-            wait_unless_stalled(inbox, Stall::Index).await;
+            wait_unless_stalled(inbox, Stall::Index, Some(cut)).await;
         }
     }
 
     if whole_body(items) || header {
-        wait_unless_stalled(inbox, Stall::Body).await;
+        wait_unless_stalled(inbox, Stall::Body, Some(cut)).await;
     }
 }

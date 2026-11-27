@@ -608,7 +608,7 @@ impl Drop for Open {
 }
 
 async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
-    wait_unless_stalled(&inbox, Stall::Greeting).await;
+    wait_unless_stalled(&inbox, Stall::Greeting, None).await;
     let (open, outage) = Open::register(&inbox);
     let cut = open.cut;
     let bye = outage == Some(Outage::Bye);
@@ -661,9 +661,10 @@ async fn serve(mut stream: Stream, inbox: Arc<Mutex<Inbox>>) {
                     (opened, view) = examined;
                 }
 
-                wait_unless_command_stalled(&inbox, &command.body).await;
                 let appending = matches!(command.body, CommandBody::Append { .. });
-                if appending && inbox.lock().unwrap().cut_appends {
+                if !wait_unless_command_stalled(&inbox, &command.body, cut).await
+                    || (appending && inbox.lock().unwrap().cut_appends)
+                {
                     return;
                 }
 
