@@ -411,7 +411,13 @@ const providers = [
   .hero {
     display: grid;
     gap: var(--space-6);
-    padding-block: var(--space-6) var(--space-8);
+    padding-block: var(--space-4) var(--space-8);
+  }
+
+  @media (min-width: 48rem) {
+    .hero {
+      padding-top: var(--space-6);
+    }
   }
 
   .pitch {
@@ -716,6 +722,7 @@ const providers = [
   }
 
   .small {
+    max-width: none;
     font-size: var(--text-caption);
   }
 
