@@ -24,7 +24,9 @@ mod quit;
 mod relay;
 pub mod rendered;
 pub mod search;
+mod settled;
 mod wait;
 
 pub use quit::quit;
+pub use settled::settled;
 pub use wait::wait_for;

@@ -17,6 +17,7 @@ use support::{
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage, Outage, Stall},
     home::Home,
+    wait_for,
 };
 use termlens::{Key, Screen};
 
@@ -38,6 +39,8 @@ fn opened(body: FakeBody, keys: &[Key]) -> String {
         .spawn(env!("CARGO_BIN_EXE_postal"))
         .unwrap();
     t.wait_until(main_screen).unwrap();
+    // Before its body is cached, `B` only says "not downloaded".
+    wait_for(|| home.cached_bodies() == 1);
 
     for key in keys {
         t.send(*key).unwrap();
@@ -134,6 +137,7 @@ fn an_inline_image_in_flight_when_the_connection_drops_opens_without_it() {
         .unwrap();
     t.wait_until(|s| main_screen(s) && s.contains("Logo:"))
         .unwrap();
+    wait_for(|| home.cached_bodies() == 1);
 
     server.stall(Stall::Part);
     t.send(Key::Char('B')).unwrap();

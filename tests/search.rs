@@ -163,10 +163,12 @@ fn an_uppercase_letter_makes_the_query_case_sensitive() {
 
     t.send(Key::Char('/')).unwrap();
     t.send_str("inv").unwrap();
-    let screen = t
-        .snapshot_after(|s| list(s).contains("Lunch") && list(s).contains("Invoice"))
-        .unwrap();
-    assert!(!list(&screen).contains("Holiday"), "{screen}");
+    // The unfiltered list has Lunch and Invoice too: Holiday gone is the query.
+    t.wait_until(|s| {
+        let list = list(s);
+        list.contains("Lunch") && list.contains("Invoice") && !list.contains("Holiday")
+    })
+    .unwrap();
 
     t.send(Key::Backspace).unwrap();
     t.send(Key::Backspace).unwrap();
@@ -282,9 +284,13 @@ fn a_search_finds_messages_in_every_cached_folder_but_trash() {
     assert!(!body_cached(&home, "Flight booking"));
     t.send(Key::Char('/')).unwrap();
     t.send_str("flight").unwrap();
-    // Its body is asked of Sent, not of the shown Inbox.
-    let screen = t.snapshot_after(|s| s.contains("Seat 14A")).unwrap();
-    assert_eq!(selected_subject(&screen).as_deref(), Some("Flight booking"));
+    // Its body is asked of Sent, not of the shown Inbox; the Snippet in the
+    // list can show the text before the cursor reaches it.
+    let screen = t
+        .snapshot_after(|s| {
+            s.contains("Seat 14A") && selected_subject(s).as_deref() == Some("Flight booking")
+        })
+        .unwrap();
     assert!(!list(&screen).contains("Flight refund"), "{screen}");
     assert_eq!(
         list(&screen).matches("Flight booking").count(),
@@ -391,6 +397,10 @@ fn a_message_deleted_while_a_search_is_open_leaves_the_results() {
 
     t.send(Key::Char('/')).unwrap();
     t.send_str("pay").unwrap();
+    // A match found later in the bodies joins the results and can move the
+    // cursor's row: delete only once both are in.
+    t.wait_until(|s| list(s).contains("Quarterly report"))
+        .unwrap();
     wait_selected(&mut t, "Invoice 1042");
     t.send(Key::Enter).unwrap();
     t.send(Key::Backspace).unwrap();

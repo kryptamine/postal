@@ -312,10 +312,18 @@ fn a_search_match_in_another_folder_is_deleted_from_there() {
     t.send(Key::Backspace).unwrap();
     t.wait_until(|s| !list(s).contains("Budget")).unwrap();
     wait_for(|| server.subjects(TRASH) == ["Budget"]);
+    let moved = format!("UID MOVE {FIRST_UID} \"{TRASH}\"");
+    wait_for(|| {
+        let commands = server.commands();
+        commands
+            .iter()
+            .skip_while(|c| **c != moved)
+            .any(|c| c == "SELECT \"INBOX\"")
+    });
     quit(t);
     let commands = server.commands();
     let at = |wanted: &str| commands.iter().rposition(|c| c == wanted).unwrap();
-    let moved = at(&format!("UID MOVE {FIRST_UID} \"{TRASH}\""));
+    let moved = at(&moved);
     assert!(at("SELECT \"Work\"") < moved, "{commands:#?}");
     assert!(moved < at("SELECT \"INBOX\""), "{commands:#?}");
 }

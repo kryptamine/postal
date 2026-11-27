@@ -100,6 +100,13 @@ impl Home {
         self.xdg_cache_home().join("postal/cache.sqlite3")
     }
 
+    pub fn cached_bodies(&self) -> i64 {
+        let cache = rusqlite::Connection::open(self.cache_path()).unwrap();
+        cache
+            .query_row("SELECT count(*) FROM body", [], |row| row.get(0))
+            .unwrap()
+    }
+
     pub fn log_path(&self) -> PathBuf {
         self.xdg_state_home().join("postal/postal.log")
     }

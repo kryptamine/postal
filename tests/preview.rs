@@ -124,13 +124,6 @@ fn previewed(screen: &Screen, n: u32) -> bool {
     screen.row_text(5).contains(&format!("Body number {n}"))
 }
 
-fn bodies(home: &Home) -> i64 {
-    let cache = rusqlite::Connection::open(home.cache_path()).unwrap();
-    cache
-        .query_row("SELECT count(*) FROM body", [], |row| row.get(0))
-        .unwrap()
-}
-
 fn uid_fetch(uids: &str) -> String {
     format!("UID FETCH {uids} {BODY}")
 }
@@ -143,7 +136,7 @@ fn selecting_a_row_fetches_it_and_its_neighbours() {
     t.wait_until(|s| previewed(s, 6)).unwrap();
     t.send(Key::Char('G')).unwrap();
     t.wait_until(|s| previewed(s, 1)).unwrap();
-    wait_for(|| bodies(&home) == 6);
+    wait_for(|| home.cached_bodies() == 6);
     quit(t);
 
     // The selection is fetched alone, so it never waits on its neighbours.
@@ -252,7 +245,7 @@ fn scrolling_past_unfetched_rows_fetches_only_where_it_stops() {
 
     server.release();
     t.wait_until(|s| previewed(s, 25)).unwrap();
-    wait_for(|| bodies(&home) == 6);
+    wait_for(|| home.cached_bodies() == 6);
     quit(t);
 
     let commands = server.commands();
@@ -343,7 +336,7 @@ fn a_body_missing_while_offline_says_so_and_comes_after_the_reconnect() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, 120);
     t.wait_until(|s| previewed(s, 6)).unwrap();
-    wait_for(|| bodies(&home) == 3);
+    wait_for(|| home.cached_bodies() == 3);
 
     // The fake drops connections on a tick: until then a fetch still succeeds.
     server.fail(Outage::Offline);
@@ -365,7 +358,7 @@ fn a_body_missing_while_offline_says_so_and_comes_after_the_reconnect() {
         .unwrap();
     server.recover();
     t.wait_until(|s| previewed(s, 1)).unwrap();
-    wait_for(|| bodies(&home) == 6);
+    wait_for(|| home.cached_bodies() == 6);
     quit(t);
 }
 
@@ -378,7 +371,7 @@ fn a_refused_body_says_why_and_keeps_the_connection() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, 120);
     t.wait_until(|s| previewed(s, 6)).unwrap();
-    wait_for(|| bodies(&home) == 3);
+    wait_for(|| home.cached_bodies() == 3);
     let before = logins(&server);
 
     for _ in 0..3 {
@@ -389,7 +382,7 @@ fn a_refused_body_says_why_and_keeps_the_connection() {
         .snapshot_after(|s| s.contains(" 4/6 ") && s.contains("Couldn't load: Some messages"))
         .unwrap();
     assert!(screen.contains("Subject Subject 3"), "{screen}");
-    wait_for(|| bodies(&home) == 5);
+    wait_for(|| home.cached_bodies() == 5);
     t.send(Key::Char('j')).unwrap();
     t.wait_until(|s| previewed(s, 2)).unwrap();
     quit(t);
@@ -415,7 +408,7 @@ fn a_refused_neighbour_leaves_the_rest_of_its_batch_loadable() {
     let home = Home::for_server(&server);
     let mut t = postal(&home, 120);
     t.wait_until(|s| previewed(s, 6)).unwrap();
-    wait_for(|| bodies(&home) == 3);
+    wait_for(|| home.cached_bodies() == 3);
 
     t.send(Key::Char('G')).unwrap();
     t.wait_until(|s| previewed(s, 1)).unwrap();
