@@ -2,11 +2,11 @@ use tokio::time::Instant;
 
 use crate::{
     cache::Cache,
-    compose::awaited::Awaited,
     domain::indexing::Indexing,
     domain::per_account::{AccountId, PerAccount},
     domain::thread::Key,
     mail::status::Status,
+    ui::drafts::awaiting::Waiting,
     ui::list::inbox_view::InboxView,
     ui::outside::contacts_check::ContactsCheck,
     ui::popup::help::Help,
@@ -39,7 +39,7 @@ pub struct Screen {
     /// What an Undo may take back, the latest last.
     pub undo: Vec<Undo>,
     /// What a Reply's or a Forward's Draft waits on before it opens.
-    pub awaited: Option<Awaited>,
+    pub awaited: Option<Waiting>,
     /// The Messages in the Outbox not yet accepted.
     pub outbox: usize,
     /// The read of Contacts started by turning them on, while under way.

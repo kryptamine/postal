@@ -1,23 +1,66 @@
 use crate::{
-    compose::awaited::Awaited, domain::per_account::AccountId, mail::awaited_fetch,
-    mail::fetch_requests::FetchRequests, mail::update::Update, ui::drafts::composing,
-    ui::drafts::forwarding, ui::run::Error, ui::state::screen::Screen, ui::terminal::tty::Tty,
+    domain::message::Message,
+    domain::per_account::AccountId,
+    mail::awaited_parts::AwaitedParts,
+    mail::fetch_requests::FetchRequests,
+    mail::update::Update,
+    ui::drafts::composing::{self, Reply},
+    ui::drafts::forwarding,
+    ui::run::Error,
+    ui::state::screen::Screen,
+    ui::terminal::tty::Tty,
     ui::world::World,
 };
 
-/// What was awaited, taken off the screen, and how its fetch ended.
-pub struct Done(Awaited, Result<(), String>);
+enum Kind {
+    Reply(Reply),
+    Forward(Message),
+}
 
-/// Asks for what `awaited` lacks and holds it in place of any other.
-pub fn start(screen: &mut Screen, fetch: &FetchRequests, awaited: Awaited) {
-    fetch.send(awaited.message().account, awaited_fetch::request(&awaited));
-    screen.awaited = Some(awaited);
+/// A Reply or Forward waiting on the fetch connection for the parts it lacks.
+pub struct Waiting {
+    parts: AwaitedParts,
+    kind: Kind,
+}
+
+impl Waiting {
+    pub const fn reply(reply: Reply, parts: AwaitedParts) -> Self {
+        Self {
+            parts,
+            kind: Kind::Reply(reply),
+        }
+    }
+
+    pub const fn forward(message: Message, parts: AwaitedParts) -> Self {
+        Self {
+            parts,
+            kind: Kind::Forward(message),
+        }
+    }
+}
+
+/// What was awaited, taken off the screen, and how its fetch ended.
+pub struct Done(Waiting, Result<(), String>);
+
+/// Asks for what `waiting` lacks and holds it; a prior wait is cancelled
+/// before, as each would open its own Draft over the other.
+pub fn start(screen: &mut Screen, fetch: &FetchRequests, waiting: Waiting) {
+    fetch.send(waiting.parts.account(), waiting.parts.request());
+    screen.awaited = Some(waiting);
+}
+
+/// Drops any wait under way, and the standing request it made.
+pub fn cancel(screen: &mut Screen, fetch: &FetchRequests) {
+    if let Some(previous) = screen.awaited.take() {
+        let account = previous.parts.account();
+        fetch.send(account, AwaitedParts::new(account).request());
+    }
 }
 
 /// Follows `update` of `account` for the awaited Reply or Forward.
 pub fn notice(screen: &mut Screen, account: AccountId, update: &Update) -> Option<Done> {
-    let awaited = screen.awaited.as_mut()?;
-    let result = awaited_fetch::notice(account, update, awaited)?;
+    let waiting = screen.awaited.as_mut()?;
+    let result = waiting.parts.notice(account, update)?;
     Some(Done(screen.awaited.take()?, result))
 }
 
@@ -28,13 +71,15 @@ pub fn finish(
     screen: &mut Screen,
     world: World,
 ) -> Result<(), Error> {
-    match done {
-        None => Ok(()),
-        Some(Done(Awaited::Reply(reply), result)) => {
-            composing::fetched(&reply, result, tty, screen, world)
-        }
-        Some(Done(Awaited::Forward(forward), result)) => {
-            forwarding::forwarded(forward, result, tty, screen, world)
+    let Some(Done(Waiting { parts, kind }, result)) = done else {
+        return Ok(());
+    };
+
+    match kind {
+        Kind::Reply(reply) => composing::fetched(&reply, result, tty, screen, world),
+        Kind::Forward(message) => {
+            let attachments = result.map(|()| parts.into_attachments());
+            forwarding::forwarded(&message, attachments, tty, screen, world)
         }
     }
 }

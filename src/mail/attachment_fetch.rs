@@ -4,6 +4,7 @@ use crate::{
 };
 
 /// An attachment wanted, by its place among its Message's.
+#[derive(Clone)]
 pub struct AttachmentRequest {
     pub message: MessageRef,
     pub index: usize,

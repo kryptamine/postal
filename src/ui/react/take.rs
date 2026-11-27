@@ -40,7 +40,9 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
                 Err(toast) => toast,
             };
         }
-        Step::Draft(drafting) => drafting::draft(drafting, &mut model.tty, ui, world)?,
+        Step::Draft(drafting) => {
+            drafting::draft(drafting, &mut model.tty, ui, world, &model.fetch)?;
+        }
         Step::Reply(to) => drafting::reply(to, &mut model.tty, ui, world, &model.fetch)?,
         Step::Forward => forwarding::forward(&mut model.tty, ui, world, &model.fetch)?,
         Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
