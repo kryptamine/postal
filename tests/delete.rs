@@ -217,8 +217,13 @@ fn u_undoes_the_latest_delete_and_then_the_one_before() {
     t.send(Key::Char('j')).unwrap();
     t.wait_until(|s| s.contains("Body of Middle")).unwrap();
     quit(t);
+    // Counted by UID: two Undos queued together go out as one `UID MOVE`.
     let moves = moves(&server);
-    let back = moves.iter().filter(|m| m.ends_with(" \"INBOX\"")).count();
+    let back: usize = moves
+        .iter()
+        .filter_map(|m| m.strip_suffix(" \"INBOX\""))
+        .map(|m| m.trim_start_matches("UID MOVE ").split(',').count())
+        .sum();
     assert_eq!(back, 2, "{moves:#?}");
 }
 
