@@ -23,11 +23,7 @@ pub type Shown<'u> = Result<(&'u Message, Vec<u8>), Option<Toast>>;
 
 /// The selected Message, in Reading the one at the cursor.
 pub fn shown<'u>(world: World<'_>, ui: &'u Ui) -> Result<Shown<'u>, Error> {
-    let (view, reading) = (&ui.view, ui.screen.showing.reading());
-    let message = reading.map_or_else(
-        || view.selected_message(),
-        |reading| view.stack().find(|m| m.body_key == reading.cursor),
-    );
+    let message = ui.view.at_cursor(ui.screen.showing.cursor());
 
     let Some(message) = message else {
         return Ok(Err(None));

@@ -1,4 +1,4 @@
-use crate::{ui::preview::reading::Reading, ui::state::mode::Mode};
+use crate::{domain::body_key::BodyKey, ui::preview::reading::Reading, ui::state::mode::Mode};
 
 /// What the panes show under whatever is open over them.
 #[derive(Default)]
@@ -29,6 +29,11 @@ impl Showing {
             Self::Reading(reading) => Some(reading),
             Self::List | Self::Query | Self::Menu => None,
         }
+    }
+
+    /// The Message Reading points at; `None` outside Reading.
+    pub fn cursor(&self) -> Option<BodyKey> {
+        self.reading().map(|reading| reading.cursor)
     }
 
     pub const fn reading_mut(&mut self) -> Option<&mut Reading> {

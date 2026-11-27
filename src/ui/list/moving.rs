@@ -84,7 +84,7 @@ fn take(ui: &mut Ui, world: World, goal: &Goal, done: &str) -> Result<(), Error>
         let each = |thread| listing.stack(Some(thread));
         (per_account(listing, each), Some(listing.threads().len()))
     } else {
-        let cursor = screen.showing.reading().map(|reading| reading.cursor);
+        let cursor = screen.showing.cursor();
         let Some(taken) = shown(view.stack(), cursor) else {
             if cursor.is_some() {
                 screen.toast = Some(Toast::new("only in another Folder"));
