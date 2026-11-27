@@ -1,14 +1,7 @@
 //! A Folder far longer than the window of cards the Message List reads
 //! around the selection: docs/adr/0022-the-message-list-holds-thread-keys-and-reads-cards-for-the-window.md.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::{
     fake_body::FakeBody,

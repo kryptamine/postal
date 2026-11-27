@@ -1,14 +1,7 @@
 //! `postal setup-mailto` makes Postal the system's mailto: handler, and a
 //! link reaches `postal` in a terminal as one unchanged argument.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{
     ffi::OsStr,

@@ -1,12 +1,6 @@
 //! The layout process prints a grid as text when asked, which
 //! `scripts/rendered-diff.py` diffs between two builds.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "a test fails by panicking"
-)]
-
 use std::{
     io::Write,
     process::{Command, Stdio},

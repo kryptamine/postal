@@ -2,14 +2,7 @@
 //! Message below a forwarded-message header, its attachments on `Attach:`
 //! lines; the fake SMTP server receives it as a new Thread.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, path::PathBuf};
 

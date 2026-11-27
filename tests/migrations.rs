@@ -2,14 +2,7 @@
 //! has not seen yet survives the migration. See
 //! docs/adr/0021-migrate-stored-data-across-releases.md.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fmt::Write, fs, path::PathBuf, process::Command};
 

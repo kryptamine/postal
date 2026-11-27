@@ -1,14 +1,7 @@
 //! `E` opens the Message read-only in `$EDITOR`, and the file goes once the
 //! editor exits.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::path::Path;
 

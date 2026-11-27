@@ -1,14 +1,7 @@
 //! Section fills in the rendered View of HTML mail, drawn as frames in
 //! their colour.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use support::rendered::{DEFAULT, at, bg, fg, frames, html, page, pane, preview};
 use termlens::Color;

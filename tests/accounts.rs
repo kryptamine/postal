@@ -2,14 +2,7 @@
 //! Folder Picker lists a section per Account, and what is done to a
 //! Message reaches the server of the Account it belongs to.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, os::unix::fs::PermissionsExt};
 

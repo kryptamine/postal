@@ -135,8 +135,9 @@ checks this.
   Neovim check; `make install` puts a release build where a user has it.
 - After a feature or a bug fix is committed, run `make install`, so the
   user can try the change in their own Postal at once.
-- While working, run the single test file you touch. Run the full suite once,
-  as the last step before the commit: after the code review and its fixes.
+- While working, run the single test file you touch:
+  `cargo nextest run inbox::`. Run the full suite once, as the last step
+  before the commit: after the code review and its fixes.
 - The code is the source of truth, then the docs, then a comment. A doc that
   contradicts the code is a bug in the doc: fix it in the change that found it.
 

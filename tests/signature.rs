@@ -1,14 +1,7 @@
 //! An Account's signature from `config.toml` is in the Draft the editor
 //! opens, under a `-- ` line, and a received one shows dimmed.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 

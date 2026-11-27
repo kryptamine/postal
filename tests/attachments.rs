@@ -2,14 +2,7 @@
 //! and a line naming each under the header of the Preview, the Thread, the
 //! pager and the editor's file; each fetched on demand, to open or save.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{
     fs,

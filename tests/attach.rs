@@ -2,14 +2,7 @@
 //! into the Outbox, so a retry sends the same bytes, and a file that cannot
 //! be read is refused before anything goes out.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, path::Path};
 

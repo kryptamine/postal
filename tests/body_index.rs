@@ -1,14 +1,7 @@
 //! Every cached Message's body joins the search index in the background,
 //! so a word past the Snippet finds it, offline too.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{process::Output, time::Duration};
 

@@ -6,6 +6,7 @@ rust-version = "1.89"
 description = "A keyboard-driven mail client for the terminal: Gmail, iCloud and any IMAP server"
 license = "MIT"
 publish = false
+autotests = false
 
 [dependencies]
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
@@ -74,7 +75,12 @@ tempfile = "3.27.0"
 termlens = "0.11.10"
 
 [[test]]
+name = "it"
+path = "tests/it.rs"
+
+[[test]]
 name = "frame_allocations"
+path = "tests/frame_allocations.rs"
 required-features = ["alloc-count"]
 
 # `make demo`: Postal over the fake servers of the tests, see demo/README.md.

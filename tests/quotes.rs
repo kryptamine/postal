@@ -1,14 +1,7 @@
 //! A Reply is shown without the quote it ends in: one line stands for it,
 //! and `z` shows it again.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::time::{Duration, Instant};
 

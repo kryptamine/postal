@@ -3,14 +3,7 @@
 //! `:PostalSend` does; once the fake SMTP server takes it, the original gets
 //! `\Answered` on the fake IMAP server.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::fs;
 

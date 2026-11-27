@@ -2,14 +2,7 @@
 //! sending what the TUI left queued first, and steps aside for a TUI that
 //! keeps the Cache live itself. See ADR 0033.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, process::Output};
 

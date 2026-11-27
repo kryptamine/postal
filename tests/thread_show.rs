@@ -2,14 +2,7 @@
 //! Message `E` opened is of, oldest first, for an agent to read; it only
 //! reads the Cache, so a Reply fetches its Thread's bodies first (ADR 0017).
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{
     fs,

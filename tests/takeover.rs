@@ -2,14 +2,7 @@
 //! it here: the old TUI quits saying where it went, finishing a Send under
 //! way first, and a folder sync holding the lock is waited for instead.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{
     fs,

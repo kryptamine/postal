@@ -4,14 +4,7 @@
 //! Mail or else the Inbox, and the Outbox. It only reads the Cache a TUI
 //! synced. See ADR 0016 and ADR 0017.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "a test fails by panicking"
-)]
-
-mod support;
+use crate::support;
 
 use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Output};
 
