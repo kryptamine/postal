@@ -103,3 +103,5 @@ Where a module could sit in two layers, its imports decided:
   `mail`, and the screen asks the connections through `Steering` and the
   fetch requests.
 - Nothing outside `ui` draws: ratatui and crossterm are imported in `ui` alone.
+- `ui::widgets` only draws: it names nothing else of `ui`, no state, no
+  keymap, no feature.

@@ -2,10 +2,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     compose::recipients::Recipients,
+    ui::input::keymap::Outside,
     ui::input::keymap::{Action, Binding, By, Direction, Hint, Key, Move, Scroll, pressed},
-    ui::outside::open_outside::Outside,
-    ui::outside::wanted_parts::Purpose,
-    ui::popup::layer,
+    ui::input::wanted::Purpose,
     ui::state::mode::Mode,
 };
 
@@ -685,14 +684,9 @@ const _: () = {
     }
 };
 
-/// The bindings listed in `mode` now: the panes' and the shared ones in
-/// `PANES` order, then the layers'.
-pub fn bindings(mode: Mode, signed_out: bool) -> impl Iterator<Item = &'static Binding> + Clone {
-    PANES
-        .iter()
-        .map(|keys| &keys.binding)
-        .chain(layer::help())
-        .filter(move |b| b.modes.contains(&mode) && (signed_out || !b.signed_out))
+/// The panes' bindings and the shared ones, in `PANES` order.
+pub fn pane_bindings() -> impl Iterator<Item = &'static Binding> + Clone {
+    PANES.iter().map(|keys| &keys.binding)
 }
 
 /// The first row acting in `mode` that binds `key`; while the Query is

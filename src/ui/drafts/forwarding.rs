@@ -11,7 +11,7 @@ use crate::{
     mail::status::Status,
     ui::drafts::awaiting::{self, Waiting},
     ui::drafts::composing,
-    ui::run::Error,
+    ui::error::Error,
     ui::state::screen::Screen,
     ui::state::toast::Toast,
     ui::state::ui::Ui,

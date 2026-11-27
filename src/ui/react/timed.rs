@@ -6,9 +6,8 @@ use tokio::time::Instant;
 use crate::{
     compose::local_drafts::LocalDrafts, domain::body_key::BodyKey, domain::thread::Key,
     ui::drafts::draft_preview::DraftPreview, ui::drafts::local_list::relist_local,
-    ui::list::marking::mark_read, ui::popup::folder_picker::FolderPicker,
-    ui::preview::previews::Previews, ui::run::Error, ui::state::mode::Mode, ui::state::ui::Ui,
-    ui::world::World,
+    ui::error::Error, ui::list::marking::mark_read, ui::popup::folder_picker::FolderPicker,
+    ui::preview::previews::Previews, ui::state::mode::Mode, ui::state::ui::Ui, ui::world::World,
 };
 
 // `postal <mailto>` writes a Draft beside the TUI, which an open Local

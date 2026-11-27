@@ -1,6 +1,6 @@
 use ratatui::layout::Rect;
 
-use crate::{ui::list::message_list, ui::state::mode::Mode};
+use crate::ui::state::mode::Mode;
 
 /// From this width the Preview sits right of the Message List, else below.
 const SIDE_BY_SIDE: u16 = 84;
@@ -10,6 +10,8 @@ const LIST_WIDTH: u32 = 35;
 const LIST_HEIGHT: u32 = 45;
 /// Columns between a pane's border and its text, each side.
 pub const PADDING: u16 = 1;
+/// Narrower, the Message List fills the body alone.
+pub const MIN_LIST_WIDTH: u16 = 20;
 
 /// Where the main screen's parts go: the panes, and the hint line on the
 /// bottom row. Too narrow for a list, there is no Preview, so the list says
@@ -53,7 +55,7 @@ pub fn split(area: Rect, mode: Mode) -> Panes {
 }
 
 fn panes(area: Rect) -> (Rect, Option<Rect>) {
-    if area.width < message_list::MIN_WIDTH {
+    if area.width < MIN_LIST_WIDTH {
         return (area, None);
     }
 

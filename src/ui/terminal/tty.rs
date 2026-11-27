@@ -4,8 +4,8 @@ use ratatui::{Terminal, layout::Rect};
 
 use crate::{
     mail::held,
+    ui::error::Error,
     ui::frame::layout::{self, Panes},
-    ui::run::Error,
     ui::state::mode::Mode,
     ui::terminal::input::Input,
     ui::terminal::terminal_backend::{self, TerminalBackend},

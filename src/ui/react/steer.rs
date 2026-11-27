@@ -1,6 +1,7 @@
 use crate::{
     mail::refresh,
     mail::steering::Ask,
+    ui::error::Error,
     ui::input::keymap::Direction,
     ui::input::step::Steer,
     ui::list::folder_show::{accept, complete, folders, start_search, switch, type_query},
@@ -9,7 +10,6 @@ use crate::{
     ui::list::search::Search,
     ui::popup::folder_picker::FolderPicker,
     ui::react::undoing,
-    ui::run::Error,
     ui::state::ui::Ui,
     ui::world::World,
 };

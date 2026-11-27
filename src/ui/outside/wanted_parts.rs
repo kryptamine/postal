@@ -11,31 +11,12 @@ use crate::{
     mail::update::Update,
     render::file_size,
     render::original_page::Original,
+    ui::input::wanted::{Purpose, Wanted},
     ui::outside::attachment_file,
     ui::state::toast::Toast,
 };
 
 const OFFLINE: &str = "offline · not downloaded";
-
-/// What a picked attachment is for.
-#[derive(Clone, Copy)]
-pub enum Purpose {
-    /// In the program the desktop picks for it.
-    Open,
-    /// Into the download directory.
-    Save,
-}
-
-/// One attachment picked, and what for.
-pub struct Wanted {
-    pub account: AccountId,
-    pub message: MessageRef,
-    /// Its place among its Message's attachments.
-    pub index: usize,
-    pub name: String,
-    pub size: u64,
-    pub purpose: Purpose,
-}
 
 /// A Message to open in the browser once its inline images come.
 struct WantedOriginal {

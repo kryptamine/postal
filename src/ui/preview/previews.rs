@@ -25,7 +25,6 @@ use crate::{
     ui::list::inbox_view::InboxView,
     ui::preview::reading::Reading,
     ui::preview::render_queue::RenderQueue,
-    ui::state::ui::Ui,
 };
 
 /// Rows on each side of the selection whose Preview is made ready too.
@@ -33,10 +32,11 @@ const NEIGHBOURS: usize = 2;
 
 const OFFLINE: &str = "Not downloaded yet · offline";
 
+/// Where a Preview's body comes from: the Cache, else the fetch connection.
 #[derive(Clone, Copy)]
-struct Sources<'a> {
-    caches: &'a PerAccount<Cache>,
-    fetch: &'a FetchRequests,
+pub struct Sources<'a> {
+    pub caches: &'a PerAccount<Cache>,
+    pub fetch: &'a FetchRequests,
 }
 
 /// Gets Previews ready: fetches bodies the Cache lacks, renders on a thread
@@ -120,19 +120,18 @@ impl Previews {
             .map_or(Body::Loading, |message| self.body(view, message, width))
     }
 
-    /// Readies the Previews of the Messages `ui` unfolds in Reading, or else
-    /// of the selection and its neighbours, at `width`.
+    /// Readies the Previews of the Messages `reading` unfolds, or else of the
+    /// selection and its neighbours, at `width`.
     pub fn want(
         &mut self,
-        caches: &PerAccount<Cache>,
-        ui: &Ui,
+        sources: Sources<'_>,
+        view: &InboxView,
+        reading: Option<&Reading>,
         width: u16,
-        fetch: &FetchRequests,
     ) -> Result<(), cache::Error> {
-        let sources = Sources { caches, fetch };
-        match ui.screen.showing.reading() {
-            Some(reading) => self.want_stack(sources, &ui.view, reading, width),
-            None => self.want_around(sources, &ui.view, width),
+        match reading {
+            Some(reading) => self.want_stack(sources, view, reading, width),
+            None => self.want_around(sources, view, width),
         }
     }
 

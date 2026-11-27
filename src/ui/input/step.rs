@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
+    account::config::{ContactsChoice, IconChoice, NotifyChoice},
     compose::recipients::Recipients,
     domain::folder::Folder,
     domain::per_account::AccountId,
@@ -8,9 +9,8 @@ use crate::{
     domain::thread_id::ThreadId,
     ui::exit::Exit,
     ui::input::keymap::Direction,
-    ui::outside::open_outside::Outside,
-    ui::outside::wanted_parts::{Purpose, Wanted},
-    ui::popup::settings::Live,
+    ui::input::keymap::Outside,
+    ui::input::wanted::{Purpose, Wanted},
 };
 
 /// What the event loop does after one input event.
@@ -75,4 +75,14 @@ pub enum Drafting {
     Discard,
     /// The Draft at this path, as from its preview.
     DiscardFile(PathBuf),
+}
+
+/// A setting change that takes effect on the running screen at once.
+#[derive(Clone, Copy)]
+pub enum Live {
+    Icons(IconChoice),
+    Notify(NotifyChoice),
+    /// Where Search finds Correspondents besides mail, read at once when
+    /// turned on so macOS asks for access then.
+    Contacts(ContactsChoice),
 }

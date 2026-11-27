@@ -5,25 +5,17 @@ use crate::{
     domain::message::Message,
     render::preview_render::{self, Job},
     render::rendered_previews::PreviewKey,
+    ui::error::Error,
     ui::frame::theme::Theme,
+    ui::input::keymap::Outside,
     ui::outside::message_file::MessageFile,
     ui::outside::pager,
     ui::outside::pager_text,
-    ui::run::Error,
     ui::state::toast::Toast,
     ui::state::ui::Ui,
     ui::terminal::tty::Tty,
     ui::world::World,
 };
-
-/// Where a Message opens outside the TUI.
-#[derive(Clone, Copy)]
-pub enum Outside {
-    /// `$PAGER`, styled as the Preview shows it.
-    Pager,
-    /// `$EDITOR`, read-only, as text.
-    Editor,
-}
 
 /// The shown Message with its cached body, else the Toast to show instead:
 /// `None` drops any shown.

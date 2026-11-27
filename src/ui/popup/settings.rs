@@ -15,6 +15,7 @@ use crate::{
     account::partial_config::PartialConfig,
     account::provider::Provider,
     account::sign_in::smtp_key,
+    ui::input::step::Live,
     ui::onboarding::field::{self, Edit},
     ui::popup::settings_mode::{Field, Mode},
     ui::popup::settings_section::Section,
@@ -36,16 +37,6 @@ pub enum Row {
     Handler,
     /// The program a mailto: link runs in place of a terminal.
     TerminalCommand,
-}
-
-/// A setting change that takes effect on the running screen at once.
-#[derive(Clone, Copy)]
-pub enum Live {
-    Icons(IconChoice),
-    Notify(NotifyChoice),
-    /// Where Search finds Correspondents besides mail, read at once when
-    /// turned on so macOS asks for access then.
-    Contacts(ContactsChoice),
 }
 
 /// How a written change reaches the running TUI.

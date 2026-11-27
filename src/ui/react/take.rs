@@ -6,16 +6,20 @@ use crate::{
     ui::drafts::drafting,
     ui::drafts::forwarding,
     ui::drafts::local_list::open_local,
+    ui::error::Error,
     ui::exit::Exit,
+    ui::input::step::Live,
     ui::input::step::Step,
+    ui::input::wanted::Purpose,
     ui::outside::open_outside,
-    ui::popup::settings::{Live, Settings},
+    ui::popup::settings::Settings,
     ui::popup::signature_edit,
-    ui::preview::attachment_hints::label_attachments,
+    ui::preview::attachment_hints::AttachmentHints,
     ui::preview::link_labels::{browse, label_links},
     ui::react::steer::steer,
-    ui::run::{Error, Model},
+    ui::run::Model,
     ui::state::toast::Toast,
+    ui::state::ui::Ui,
 };
 
 /// Does what one input event's `step` asks; the `Exit` when it ends the TUI.
@@ -70,4 +74,23 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
     }
 
     Ok(None)
+}
+
+/// Enters hint mode on the attachments of the selected Message, in Reading
+/// of the one at the cursor, or says why it cannot.
+fn label_attachments(ui: &mut Ui, purpose: Purpose) {
+    let Ui { view, screen } = ui;
+    let message = screen.showing.reading().map_or_else(
+        || view.selected_message(),
+        |reading| view.stack().find(|m| m.body_key == reading.cursor),
+    );
+
+    let Some(message) = message else {
+        return;
+    };
+
+    match AttachmentHints::on(message, purpose) {
+        Ok(hints) => screen.over.open(hints),
+        Err(toast) => screen.toast = Some(toast),
+    }
 }

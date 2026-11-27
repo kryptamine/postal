@@ -26,7 +26,7 @@ use crate::{
     ui::drafts::awaiting::{self, Waiting},
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
-    ui::run::Error,
+    ui::error::Error,
     ui::state::screen::Screen,
     ui::state::toast::Toast,
     ui::state::ui::Ui,
