@@ -21,7 +21,7 @@ use mail_parser::{Address, MessageParser};
 use support::{
     editor::{preview_newest, saved, sending},
     fake_body::FakeBody,
-    fake_imap::{EMAIL, FIRST_UID, FakeImap, FakeMessage, INBOX, Stall},
+    fake_imap::{EMAIL, FIRST_UID, FakeImap, FakeMessage, INBOX, Outage, Stall},
     fake_oauth,
     fake_smtp::{FakeSmtp, Received},
     home::Home,
@@ -341,8 +341,9 @@ fn bodies(home: &Home) -> Vec<i64> {
         .unwrap()
 }
 
-#[test]
-fn a_reply_to_a_message_whose_body_was_evicted_fetches_it_first() {
+/// A Thread whose Unread Message from Ada had its body fetched in a first
+/// run, then taken out of the Cache, so a Reply must fetch it again.
+fn evicted() -> (FakeImap, FakeSmtp, Home) {
     let imap = FakeImap::start(vec![from_ada(plain()).unread(), mine()]);
     let smtp = FakeSmtp::start();
     let home = home(&imap, &smtp);
@@ -362,7 +363,12 @@ fn a_reply_to_a_message_whose_body_was_evicted_fetches_it_first() {
         .execute("DELETE FROM body WHERE key = ?1", [ada])
         .unwrap();
     drop(cache);
+    (imap, smtp, home)
+}
 
+#[test]
+fn a_reply_to_a_message_whose_body_was_evicted_fetches_it_first() {
+    let (imap, _smtp, home) = evicted();
     let mut t = postal(&home, "true");
     t.wait_until(|s| listed(s) && s.contains("My answer"))
         .unwrap();
@@ -381,6 +387,31 @@ fn a_reply_to_a_message_whose_body_was_evicted_fetches_it_first() {
     imap.release();
     t.wait_until(saved).unwrap();
     assert!(!t.screen().contains("fetching the Message…"));
+    t.send(Key::Ctrl('c')).unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert!(drafts(&home)[0].contains("> Line one"));
+}
+
+// A Reply's in-flight request dies with the fetch connection and must be
+// asked again once the connection is back.
+#[test]
+fn a_reply_whose_fetch_connection_drops_asks_again_after_reconnect() {
+    let (imap, _smtp, home) = evicted();
+    let mut t = postal(&home, "true");
+    t.wait_until(|s| listed(s) && s.contains("My answer"))
+        .unwrap();
+    imap.stall(Stall::Body);
+    t.send(Key::Char('r')).unwrap();
+    t.wait_until(|s| s.contains("fetching the Message…"))
+        .unwrap();
+
+    imap.fail(Outage::Offline);
+    imap.release();
+    t.wait_until(|s| s.contains("offline")).unwrap();
+    assert!(drafts(&home).is_empty(), "the editor waits for the body");
+
+    imap.recover();
+    t.wait_until(saved).unwrap();
     t.send(Key::Ctrl('c')).unwrap();
     assert!(t.wait_exit().unwrap().success());
     assert!(drafts(&home)[0].contains("> Line one"));
