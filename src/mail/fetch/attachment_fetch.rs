@@ -1,6 +1,6 @@
 use crate::{
     domain::message_ref::MessageRef, mail::fetch::part_fetch, mail::fetch::unfetched::Unfetched,
-    mail::imap::MailServer, mail::sync::Error, mail::update::Update,
+    mail::imap::ImapSession, mail::sync::Error, mail::update::Update,
 };
 
 /// An attachment wanted, by its place among its Message's.
@@ -22,7 +22,7 @@ pub struct AttachmentFetched {
 /// (docs/adr/0024-the-preview-fetches-text-parts.md). Only a failure other
 /// than a refusal is returned.
 pub async fn fetch(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     request: &AttachmentRequest,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {

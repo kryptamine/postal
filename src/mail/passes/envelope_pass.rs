@@ -4,7 +4,7 @@ use crate::{
     domain::folder::{INBOX, Role},
     domain::folder_name::FolderName,
     domain::uid::Uid,
-    mail::imap::{MailServer, Mode},
+    mail::imap::{ImapSession, Mode},
     mail::role_folder,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -19,7 +19,7 @@ type Envelopes = Vec<(Uid, Correspondence)>;
 /// Gmail, else the Inbox: newest first, then older ones, then those past
 /// the last UID read. Returns whether older ones are still to read.
 pub async fn step(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     send: &impl Fn(Update),
 ) -> Result<bool, Error> {
@@ -83,7 +83,7 @@ pub async fn step(
 /// batch, else nothing in an Inbox whose newest the Cache holds already,
 /// so the walk starts below them.
 async fn start(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     exists: u32,
@@ -105,7 +105,7 @@ fn highest(read: &Envelopes) -> Option<Uid> {
 
 /// All Mail on Gmail, else the Inbox.
 async fn target(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     send: &impl Fn(Update),
 ) -> Result<FolderName, Error> {
@@ -120,16 +120,13 @@ async fn target(
 
 /// The batch just before sequence number `before`, with the UID below
 /// which more are left, if any.
-async fn older(
-    server: &mut impl MailServer,
-    before: u32,
-) -> Result<(Envelopes, Option<Uid>), Error> {
+async fn older(server: &mut ImapSession, before: u32) -> Result<(Envelopes, Option<Uid>), Error> {
     let read = server.envelopes_before(before, BATCH).await?;
     let oldest = read.iter().map(|(uid, _)| *uid).min();
     Ok((read, oldest.filter(|_| before.saturating_sub(BATCH) > 1)))
 }
 
-async fn sequence_number(server: &mut impl MailServer, uid: Uid) -> Result<u32, Error> {
+async fn sequence_number(server: &mut ImapSession, uid: Uid) -> Result<u32, Error> {
     if let Some(found) = server.sequence_number(uid).await? {
         return Ok(found);
     }

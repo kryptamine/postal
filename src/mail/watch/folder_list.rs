@@ -1,5 +1,5 @@
 use crate::{
-    cache::Cache, domain::folder_name::FolderName, mail::imap::MailServer, mail::sync::Error,
+    cache::Cache, domain::folder_name::FolderName, mail::imap::ImapSession, mail::sync::Error,
     mail::update::Update,
 };
 
@@ -7,7 +7,7 @@ use crate::{
 /// `shown` by `STATUS`, telling `send` after every write so the counts show
 /// as they come. Returns whether `shown` is still listed.
 pub async fn refresh(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     shown: &FolderName,
     send: &impl Fn(Update),

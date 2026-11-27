@@ -5,7 +5,7 @@ use crate::{
     domain::uid::Uid,
     mail::fetch::attachment_fetch::AttachmentRequest,
     mail::fetch::inline_fetch::InlineRequest,
-    mail::imap::{MailServer, Mode},
+    mail::imap::{ImapSession, Mode},
     mail::sync::{self, Error},
     mail::update::Update,
 };
@@ -69,7 +69,7 @@ impl Fetched {
 /// again one by one, so a single refused body does not take its batch with it.
 /// Returns the UIDs the server answered for, stored or refused.
 pub async fn fetch_each(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     uids: Vec<Uid>,
@@ -95,7 +95,7 @@ pub async fn fetch_each(
 
 /// Examines `folder` unless it is open already; false when the server no
 /// longer has it.
-pub async fn open(server: &mut impl MailServer, folder: &FolderName) -> Result<bool, Error> {
+pub async fn open(server: &mut ImapSession, folder: &FolderName) -> Result<bool, Error> {
     match sync::open(server, folder, Mode::Examine).await {
         Ok(()) => Ok(true),
         Err(Error::Gone(error)) => {
@@ -107,7 +107,7 @@ pub async fn open(server: &mut impl MailServer, folder: &FolderName) -> Result<b
 }
 
 async fn fetch(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     uids: Vec<Uid>,

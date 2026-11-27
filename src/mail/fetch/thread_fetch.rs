@@ -8,7 +8,7 @@ use crate::{
     domain::thread_id::ThreadId,
     domain::uid::Uid,
     mail::fetch::one_by_one,
-    mail::imap::{MailServer, Mode},
+    mail::imap::{ImapSession, Mode},
     mail::passes::snippets,
     mail::sync::{self, Error},
     mail::update::Update,
@@ -18,7 +18,7 @@ use crate::{
 /// their bodies and Snippets, leaving All Mail open. A refusal is only
 /// logged. See docs/adr/0009-threads-from-gmail-thread-id.md.
 pub async fn fetch(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     id: ThreadId,
     send: &impl Fn(Update),
@@ -37,7 +37,7 @@ pub async fn fetch(
 }
 
 async fn fetched(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     id: ThreadId,
     send: &impl Fn(Update),
@@ -94,7 +94,7 @@ async fn fetched(
 /// The name of the Folder that holds every Message but those in Trash and
 /// Spam, listing the Folders first when the Cache knows none.
 async fn all_mail(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     send: &impl Fn(Update),
 ) -> Result<Option<FolderName>, Error> {

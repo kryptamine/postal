@@ -2,7 +2,7 @@ use crate::{
     cache::Cache,
     domain::folder_name::FolderName,
     domain::uid::Uid,
-    mail::imap::{MailServer, Mode},
+    mail::imap::{ImapSession, Mode},
     mail::sync::{self, Error},
 };
 
@@ -33,7 +33,7 @@ pub struct Page {
 /// Fetches the `size` Messages of `folder` just older than every cached one
 /// (phase 1); `progress` follows it, `done` of `total`.
 pub async fn page(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     size: u32,

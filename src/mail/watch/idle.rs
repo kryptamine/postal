@@ -8,7 +8,7 @@ use crate::{
     domain::folder_name::FolderName,
     mail::changes::queued::{send_changes, send_outbox},
     mail::fetch::thread_fetch,
-    mail::imap::{MailServer, Mode, Pushed},
+    mail::imap::{ImapSession, Mode, Pushed},
     mail::outbox::outbox_flush::Sender,
     mail::passes::snippets,
     mail::steering::{Asked, Steering},
@@ -28,8 +28,8 @@ const PERIOD: Duration = Duration::from_secs(10 * 60);
 /// Resyncs the Folder `steering` follows, then keeps its Cache live and sends
 /// the Outbox until the screen stops asking; IDLE gives way to each ask (ADR
 /// 0008), and to a `STATUS` of the Inbox while another Folder shows (ADR 0025).
-pub async fn listen<S: MailServer>(
-    mut server: S,
+pub async fn listen(
+    mut server: ImapSession,
     cache: &Cache,
     steering: &mut Steering,
     sender: Sender<'_>,
@@ -117,7 +117,7 @@ pub async fn listen<S: MailServer>(
 /// Writes what `pushed` changed in the Folder of `sequence` to the Cache,
 /// with the Snippets of new rows.
 async fn take_in(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     sequence: &mut SequenceNumbers,
     pushed: Vec<Pushed>,
@@ -150,7 +150,7 @@ async fn take_in(
 
 /// Resyncs the Folder `steering` follows; back to the Inbox when it is gone.
 async fn shown(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     steering: &mut Steering,
     tell: Tell<'_, impl Fn(Update)>,
@@ -183,13 +183,13 @@ fn idle_for(held: Option<DateTime<Utc>>) -> Duration {
 /// IDLEs on the shown Folder for `wait` at most, until the server
 /// announces a change or the screen asks; with no `wait`, the Inbox is due
 /// a look instead: gives it that and returns at once, leaving it open.
-async fn idle<S: MailServer>(
-    mut server: S,
+async fn idle(
+    mut server: ImapSession,
     cache: &Cache,
     steering: &mut Steering,
     wait: Option<Duration>,
     tell: Tell<'_, impl Fn(Update)>,
-) -> Result<(S, Vec<Pushed>), Error> {
+) -> Result<(ImapSession, Vec<Pushed>), Error> {
     let Some(period) = wait else {
         poll_inbox(&mut server, cache, tell).await?;
         return Ok((server, Vec::new()));
@@ -200,7 +200,7 @@ async fn idle<S: MailServer>(
 
 /// Resyncs the Inbox when `STATUS` says it holds mail the Cache does not.
 async fn poll_inbox(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     tell: Tell<'_, impl Fn(Update)>,
 ) -> Result<(), Error> {
@@ -255,7 +255,7 @@ fn resync_for(
 /// Resyncs `folder` and cuts its Snippets; numbers the cached UIDs as the
 /// resync's `SELECT` did.
 async fn resynced(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     folder: &FolderName,
     tell: Tell<'_, impl Fn(Update)>,
@@ -279,7 +279,7 @@ async fn resynced(
 /// The rows of the Folder of `sequence` that `pushed` changes, plus the
 /// Unread count; `None` before the first resync has written the Folder.
 async fn changes(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     sequence: &mut SequenceNumbers,
     pushed: Vec<Pushed>,

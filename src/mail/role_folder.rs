@@ -1,12 +1,12 @@
 use crate::{
-    cache::Cache, domain::folder::Role, domain::folder_name::FolderName, mail::imap::MailServer,
+    cache::Cache, domain::folder::Role, domain::folder_name::FolderName, mail::imap::ImapSession,
     mail::sync::Error, mail::update::Update,
 };
 
 /// The Folder with `role`, listing the Folders first when the Cache knows
 /// none.
 pub async fn find(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     role: Role,
     send: &impl Fn(Update),

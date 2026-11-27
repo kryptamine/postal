@@ -6,7 +6,7 @@ use std::{
 use crate::{
     cache::{Cache, Indexed},
     mail::fetch::body_fetch::open,
-    mail::imap::MailServer,
+    mail::imap::ImapSession,
     mail::passes::snippet,
     mail::passes::snippets,
     mail::sync::Error,
@@ -60,7 +60,7 @@ impl BodyPass {
 
     pub async fn step(
         &mut self,
-        server: &mut impl MailServer,
+        server: &mut ImapSession,
         cache: &Cache,
         send: &impl Fn(Update),
     ) -> Result<(), Error> {
@@ -81,7 +81,7 @@ impl BodyPass {
 /// Indexes the bodies of the `count` newest Messages the index lacks, or of
 /// all of them when fewer lack it.
 pub async fn index_newest(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     count: usize,
 ) -> Result<(), Error> {
@@ -99,7 +99,7 @@ pub async fn index_newest(
 /// Indexes the bodies of up to `limit` of the newest Messages whose body
 /// the index lacks, a Folder at a time, cutting their Snippets too when missing.
 async fn batch(
-    server: &mut impl MailServer,
+    server: &mut ImapSession,
     cache: &Cache,
     limit: usize,
     send: &impl Fn(Update),
