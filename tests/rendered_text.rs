@@ -10,17 +10,14 @@
 
 mod support;
 
-use support::rendered::{DEFAULT, at, bg, dim, fg, html, pane, preview};
+use support::rendered::{DEFAULT, at, bg, dim, fg, html, page, pane, preview};
 use termlens::Color;
 
 // Justified, one-cell glyphs are padded with whole cells, which tears
 // holes in a narrow column.
 #[test]
 fn justified_text_is_set_left() {
-    let body = html(
-        "<div style=\"width:200px;text-align:justify\">Order a party of food for three \
-         weeks at a closed sale price today</div>",
-    );
+    let body = page("justified-text-is-set-left");
     let screen = preview(body, &DEFAULT, "today");
     let rows = pane(&screen);
     assert!(
@@ -58,7 +55,7 @@ fn a_centred_paragraph_is_set_left() {
 // an item.
 #[test]
 fn a_centred_list_item_is_set_left() {
-    let body = html("<ul style=\"text-align:center\"><li>Vote for ideas</li></ul>");
+    let body = page("a-centred-list-item-is-set-left");
     let screen = preview(body, &DEFAULT, "Vote for ideas");
     let rows = pane(&screen);
     assert!(
@@ -73,13 +70,7 @@ fn a_centred_list_item_is_set_left() {
 // and the body above keeps its own.
 #[test]
 fn the_footer_is_muted() {
-    let body = html(
-        "<p style=\"color:#cc0000\">Your order has shipped.</p>\
-         <p>Track it from your account.</p>\
-         <p style=\"color:#cc0000\">Acme Ltd, 1 Main Street<br>\
-         <a href=\"https://mail.example/unsub?u=1\" style=\"background:#1f883d;color:#fff\">\
-         Stop these emails</a></p><p style=\"color:#cc0000\">Sent by a robot.</p>",
-    );
+    let body = page("the-footer-is-muted");
     let screen = preview(body, &DEFAULT, "Sent by a robot");
     assert!(!dim(&screen, "Your order"), "{}", screen.with_styles());
     for text in ["Acme Ltd", "Stop these emails", "Sent by a robot"] {
@@ -105,10 +96,7 @@ fn a_copyright_line_in_the_body_is_not_the_footer() {
 // muted style, and the mail's ordinary text is the terminal's own.
 #[test]
 fn text_greyer_than_the_ordinary_is_muted() {
-    let body = html(
-        "<p style=\"color:#222222\">Receipt for the month of May, paid in full.</p>\
-         <p style=\"color:#8a8a8a\">Invoice number</p><p style=\"color:#999999\">Paid on</p>",
-    );
+    let body = page("text-greyer-than-the-ordinary-is-muted");
     let screen = preview(body, &DEFAULT, "Paid on");
     let (row, col) = at(&screen, "Receipt");
     assert_eq!(fg(&screen, row, col), Color::Default);
@@ -124,10 +112,7 @@ fn text_greyer_than_the_ordinary_is_muted() {
 // whole body would be hard to read.
 #[test]
 fn a_mail_set_in_grey_is_not_muted() {
-    let body = html(
-        "<div style=\"color:#666666\"><p>The whole body of the mail is set in one grey.</p>\
-         <p style=\"color:#aaaaaa\">A lighter note</p></div>",
-    );
+    let body = page("a-mail-set-in-grey-is-not-muted");
     let screen = preview(body, &DEFAULT, "A lighter note");
     assert!(!dim(&screen, "The whole body"), "{}", screen.with_styles());
     assert!(dim(&screen, "A lighter note"), "{}", screen.with_styles());
@@ -137,11 +122,7 @@ fn a_mail_set_in_grey_is_not_muted() {
 // each drew in its own. A colour of another hue means something else.
 #[test]
 fn shades_of_one_colour_are_one_colour() {
-    let body = html(
-        "<p style=\"color:#1a73e8\">A title in the brand blue, the most used shade</p>\
-         <p style=\"color:#4285f4\">A lighter blue link</p>\
-         <p style=\"color:#d93025\">An overdue amount in red</p>",
-    );
+    let body = page("shades-of-one-colour-are-one-colour");
     let screen = preview(body, &DEFAULT, "overdue");
     let colour = |text: &str| {
         let (row, col) = at(&screen, text);
@@ -158,10 +139,7 @@ fn shades_of_one_colour_are_one_colour() {
 // pane from its bullet.
 #[test]
 fn a_centred_item_beside_a_bullet_cell_is_set_left() {
-    let body = html(
-        "<table width=\"100%\"><tr><td align=\"center\"><table width=\"100%\"><tr>\
-         <td width=\"24\">&bull;</td><td>Antalya</td></tr></table></td></tr></table>",
-    );
+    let body = page("a-centred-item-beside-a-bullet-cell-is-set-left");
     let screen = preview(body, &DEFAULT, "Antalya");
     let (row, bullet) = at(&screen, "•");
     let (item_row, item) = at(&screen, "Antalya");
@@ -173,10 +151,7 @@ fn a_centred_item_beside_a_bullet_cell_is_set_left() {
 // first glyph of its row: it stays a cell, a column off the one before.
 #[test]
 fn a_floated_cell_stays_a_cell() {
-    let body = html(
-        "<table><tr><td style=\"float:left\">Distance</td>\
-         <td style=\"float:right\">7 km</td></tr></table>",
-    );
+    let body = page("a-floated-cell-stays-a-cell");
     let screen = preview(body, &DEFAULT, "7 km");
     assert!(screen.contains("Distance 7 km"), "{}", screen.text());
 }
@@ -215,10 +190,7 @@ fn a_space_between_two_floats_hides_no_letter() {
 // rule and put a blank row between the lines of a title.
 #[test]
 fn an_important_line_height_keeps_lines_together() {
-    let body = html(
-        "<p style=\"width:240px;line-height:1.5 !important\">One two three four five six \
-         seven eight nine ten eleven twelve</p><p>Next</p>",
-    );
+    let body = page("an-important-line-height-keeps-lines-together");
     let screen = preview(body, &DEFAULT, "Next");
     // Three lines, and no blank row between them.
     let (first, last) = (at(&screen, "One").0, at(&screen, "twelve").0);
@@ -229,12 +201,7 @@ fn an_important_line_height_keeps_lines_together() {
 // rows read; what a style centres stays centred, as does a block's text.
 #[test]
 fn a_table_under_an_align_attribute_is_set_left() {
-    let body = html(
-        "<table width=\"100%\"><tr><td align=\"center\">\
-         <table width=\"500\"><tr><td>Total due</td></tr></table>\
-         <table width=\"500\"><tr><td style=\"text-align:center\">Centred by its style</td></tr></table>\
-         <div>Centred block</div></td></tr></table>",
-    );
+    let body = page("a-table-under-an-align-attribute-is-set-left");
     let screen = preview(body, &DEFAULT, "Centred block");
     let total = at(&screen, "Total due").1;
     assert!(
@@ -253,11 +220,7 @@ fn a_table_under_an_align_attribute_is_set_left() {
 // holds, as in Blink: a security alert's card stood at the pane's left.
 #[test]
 fn a_narrow_table_under_an_align_attribute_stands_centred() {
-    let body = html(
-        "<table width=\"100%\"><tr><td>Edge</td></tr><tr align=\"center\"><td><div>\
-         <table style=\"max-width:240px\"><tr><td>Card</td></tr></table>\
-         </div></td></tr></table>",
-    );
+    let body = page("a-narrow-table-under-an-align-attribute-stands-centred");
     let screen = preview(body, &DEFAULT, "Card");
     assert!(
         at(&screen, "Card").1 > at(&screen, "Edge").1 + 20,
@@ -270,11 +233,7 @@ fn a_narrow_table_under_an_align_attribute_stands_centred() {
 // above the body's last words is a caption and reads as the body.
 #[test]
 fn the_small_print_under_the_body_is_muted() {
-    let body = html(
-        "<p>The first paragraph of the body.</p><p style=\"font-size:12px\">A caption</p>\
-         <p>The second paragraph of the body.</p><p>The third paragraph.</p>\
-         <p style=\"font-size:12px\">Registered office of the sender</p>",
-    );
+    let body = page("the-small-print-under-the-body-is-muted");
     let screen = preview(body, &DEFAULT, "Registered");
     assert!(dim(&screen, "Registered office"), "{}", screen.text());
     assert!(!dim(&screen, "A caption"), "{}", screen.text());
@@ -285,12 +244,7 @@ fn the_small_print_under_the_body_is_muted() {
 // words of such a cell over each other, and a section of the mail was lost.
 #[test]
 fn a_cell_shown_as_a_table_group_keeps_its_words() {
-    let body = html(
-        "<style>.last{display:table-footer-group !important}</style>\
-         <table width=\"100%\"><tr><td class=\"last\"><h6>Supercharge your skills</h6>\
-         <p>Achieve your goals with tailored trainings.</p></td>\
-         <td width=\"155\">Side</td></tr></table>",
-    );
+    let body = page("a-cell-shown-as-a-table-group-keeps-its-words");
     let screen = preview(body, &DEFAULT, "Side");
     let rows = pane(&screen);
     for words in [
@@ -309,7 +263,7 @@ fn a_cell_shown_as_a_table_group_keeps_its_words() {
 // spread them, in the pane `Support` met `Unsubscribe`.
 #[test]
 fn the_words_of_two_cells_are_set_apart() {
-    let body = html("<table><tr><td>Support</td><td>Unsubscribe</td></tr></table>");
+    let body = page("the-words-of-two-cells-are-set-apart");
     let screen = preview(body, &DEFAULT, "Unsubscribe");
     assert!(screen.contains("Support Unsubscribe"), "{}", screen.text());
 }
@@ -318,11 +272,7 @@ fn the_words_of_two_cells_are_set_apart() {
 // only the row's own, and the lines of a receipt ran together.
 #[test]
 fn a_spacer_cell_keeps_its_row() {
-    let body = html(
-        "<table><tr><td>Total</td></tr></table>\
-         <table width=\"100%\"><tr><td height=\"32\" style=\"max-height:1px\"></td></tr></table>\
-         <table><tr><td>Paid</td></tr></table>",
-    );
+    let body = page("a-spacer-cell-keeps-its-row");
     let screen = preview(body, &DEFAULT, "Paid");
     let (total, paid) = (at(&screen, "Total").0, at(&screen, "Paid").0);
     assert_eq!(paid - total, 2, "{}", screen.text());
@@ -331,11 +281,7 @@ fn a_spacer_cell_keeps_its_row() {
 // Cents set in `<sup>` read as part of the price: `5846 €` for 58.46.
 #[test]
 fn the_digits_of_a_sup_are_raised() {
-    let body = html(
-        "<p>Price 58<sup>46</sup> €</p>\
-         <table cellspacing=\"0\" cellpadding=\"0\"><tr><td>14</td><td><sup>17</sup></td>\
-         <td>€</td></tr></table>",
-    );
+    let body = page("the-digits-of-a-sup-are-raised");
     let screen = preview(body, &DEFAULT, "Price");
     assert!(screen.contains("Price 58⁴⁶ €"), "{}", screen.text());
     assert!(screen.contains("14¹⁷ €"), "{}", screen.text());
@@ -345,8 +291,7 @@ fn the_digits_of_a_sup_are_raised() {
 // style: a heading the mail set in no colour of its own takes Postal's.
 #[test]
 fn a_heading_takes_the_title_style() {
-    let body =
-        html("<h1 style=\"font-size:32px\">Your market recap</h1><p>Body text of the mail.</p>");
+    let body = page("a-heading-takes-the-title-style");
     let screen = preview(body, &DEFAULT, "Body text");
     let (row, col) = at(&screen, "Your market");
     assert_eq!(
@@ -363,10 +308,7 @@ fn a_heading_takes_the_title_style() {
 // one space, inside it keeps every space and line.
 #[test]
 fn a_run_of_spaces_keeps_its_width_only_in_pre() {
-    let body = html(
-        "<table>\n        <tr>\n            <td>Flowing      words</td>\n        </tr>\n    </table>\
-         <pre>Set    apart\n    indented</pre>",
-    );
+    let body = page("a-run-of-spaces-keeps-its-width-only-in-pre");
     let screen = preview(body, &DEFAULT, "indented");
     assert!(screen.contains("Flowing words"), "{}", screen.text());
     assert!(screen.contains("Set    apart"), "{}", screen.text());
@@ -377,12 +319,7 @@ fn a_run_of_spaces_keeps_its_width_only_in_pre() {
 // Hidden preheaders never draw and never keep the sender logo right after them.
 #[test]
 fn hidden_preheaders_stay_hidden_and_do_not_keep_the_logo() {
-    let body = html(
-        "<div style=\"visibility:hidden;opacity:0;max-height:0;overflow:hidden\">Secret preheader</div>\
-         <div hidden>Hidden attr</div><template>Template text</template><noscript>No script</noscript>\
-         <a href=\"https://acme.example\"><img src=\"https://cdn.example/logo.png\" width=\"120\" alt=\"Acme\"></a>\
-         <p>Visible body</p>",
-    );
+    let body = page("hidden-preheaders-stay-hidden-and-do-not-keep-the-logo");
     let screen = preview(body, &DEFAULT, "Visible body");
     let rows = pane(&screen).join("\n");
     for absent in [
@@ -399,10 +336,7 @@ fn hidden_preheaders_stay_hidden_and_do_not_keep_the_logo() {
 // Translucent grey text blends onto the white page so secondary copy reads muted.
 #[test]
 fn translucent_text_blends_with_the_page() {
-    let body = html(
-        "<p style=\"color:#222222\">Main body copy of the message.</p>\
-         <p style=\"color:rgba(0,0,0,0.45)\">Secondary note</p>",
-    );
+    let body = page("translucent-text-blends-with-the-page");
     let screen = preview(body, &DEFAULT, "Secondary note");
     assert!(!dim(&screen, "Main body"), "{}", screen.with_styles());
     assert!(dim(&screen, "Secondary note"), "{}", screen.with_styles());
@@ -411,7 +345,7 @@ fn translucent_text_blends_with_the_page() {
 // Struck text stays crossed out and code takes Postal's code colour.
 #[test]
 fn strikethrough_and_code_keep_their_marks() {
-    let body = html("<p>Was <del>$99</del> now $49. Run <code>cargo test</code> to verify.</p>");
+    let body = page("strikethrough-and-code-keep-their-marks");
     let screen = preview(body, &DEFAULT, "verify");
     let (row, col) = at(&screen, "$99");
     assert!(screen.cell(row, col).unwrap().style().strikethrough);
@@ -430,16 +364,7 @@ fn strikethrough_and_code_keep_their_marks() {
 // clickable, while multi-line clickable cards and footers stay clean.
 #[test]
 fn unstyled_body_links_are_underlined() {
-    let body = html(
-        "<p style=\"color:#222222\">Read <a href=\"https://news.example/story\" \
-         style=\"color:#222222;text-decoration:none\">full story</a> today.</p>\
-         <div><a href=\"https://jobs.example/1\" style=\"text-decoration:none\">\
-         <div style=\"color:#0a66c2\">Senior Engineer</div>\
-         <div style=\"color:#222222\">Acme Corp</div>\
-         <div style=\"color:#777777\">Easy Apply</div></a></div>\
-         <p>Footer <a href=\"https://news.example/unsub\" \
-         style=\"color:#222222;text-decoration:none\">Unsubscribe</a></p>",
-    );
+    let body = page("unstyled-body-links-are-underlined");
     let screen = preview(body, &DEFAULT, "Unsubscribe");
     let (row, col) = at(&screen, "full story");
     assert!(screen.cell(row, col).unwrap().style().underline);
@@ -464,10 +389,7 @@ fn unstyled_body_links_are_underlined() {
 // Russian footers mute like English ones.
 #[test]
 fn a_russian_footer_is_muted() {
-    let body = html(
-        "<p>Привет, заказ готов.</p><p>Подробности в кабинете.</p>\
-         <p>Отписаться от рассылки</p>",
-    );
+    let body = page("a-russian-footer-is-muted");
     let screen = preview(body, &DEFAULT, "Отписаться");
     assert!(!dim(&screen, "Привет"), "{}", screen.with_styles());
     assert!(dim(&screen, "Отписаться"), "{}", screen.with_styles());
@@ -476,10 +398,7 @@ fn a_russian_footer_is_muted() {
 // Non-ASCII case transforms map Cyrillic and capitalize words.
 #[test]
 fn cyrillic_text_transform_changes_case() {
-    let body = html(
-        "<p style=\"text-transform:uppercase\">привет ёжик</p>\
-         <p style=\"text-transform:capitalize\">добрый день</p>",
-    );
+    let body = page("cyrillic-text-transform-changes-case");
     let screen = preview(body, &DEFAULT, "Добрый");
     assert!(screen.contains("ПРИВЕТ ЁЖИК"), "{}", screen.text());
     assert!(screen.contains("Добрый День"), "{}", screen.text());
@@ -489,13 +408,7 @@ fn cyrillic_text_transform_changes_case() {
 // columns after them line up.
 #[test]
 fn wide_bmp_emoji_and_skin_tones_keep_alignment() {
-    let body = html(
-        "<table>\
-         <tr><td>✅</td><td>Done</td></tr>\
-         <tr><td>⚠️</td><td>Warn</td></tr>\
-         <tr><td>👋🏽</td><td>Wave</td></tr>\
-         </table>",
-    );
+    let body = page("wide-bmp-emoji-and-skin-tones-keep-alignment");
     let screen = preview(body, &DEFAULT, "Wave");
     let col_of = |word: &str| {
         let first = word.chars().next().unwrap();

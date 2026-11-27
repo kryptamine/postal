@@ -10,7 +10,7 @@
 
 mod support;
 
-use support::rendered::{DEFAULT, at, bg, fg, frames, html, pane, preview};
+use support::rendered::{DEFAULT, at, bg, fg, frames, html, page, pane, preview};
 use termlens::Color;
 
 // A slab of the mail's colour had its text moved against it, differently on
@@ -18,10 +18,7 @@ use termlens::Color;
 // its text on the terminal's own background. A small control keeps its fill.
 #[test]
 fn a_section_fill_becomes_a_frame_in_its_colour() {
-    let body = html(
-        "<div style=\"background:#1e50f5;color:#fff;padding:32px\">Banner</div>\
-         <p><span style=\"background:#000;color:#fff\">Go</span></p>",
-    );
+    let body = page("a-section-fill-becomes-a-frame-in-its-colour");
     let screen = preview(body, &DEFAULT, "Go");
     let (row, col) = at(&screen, "Banner");
     assert_eq!(bg(&screen, row, col), Color::Default);
@@ -37,10 +34,7 @@ fn a_section_fill_becomes_a_frame_in_its_colour() {
 // words: with text on its edge, the edge moves out into the blank row there.
 #[test]
 fn a_frame_steps_off_text_on_the_edge_of_its_section() {
-    let body = html(
-        "<p>Above</p><div style=\"background:#1e50f5;color:#fff\">First line<br>Second line\
-         <br>Third line</div><p>Below</p>",
-    );
+    let body = page("a-frame-steps-off-text-on-the-edge-of-its-section");
     let screen = preview(body, &DEFAULT, "Below");
     let (row, _) = at(&screen, "First line");
     let corner = screen.row_text(row - 1).chars().position(|c| c == '┌');
@@ -69,10 +63,7 @@ fn sections_of_one_colour_that_touch_share_a_frame() {
 // The mail's own border already gives the section its shape.
 #[test]
 fn a_section_with_a_border_of_its_own_gets_no_second_frame() {
-    let body = html(
-        "<p>x</p><div style=\"background:#1e50f5;color:#fff;border:1px solid #888;\
-         padding:32px\">Boxed</div>",
-    );
+    let body = page("a-section-with-a-border-of-its-own-gets-no-second-frame");
     let screen = preview(body, &DEFAULT, "Boxed");
     let (row, col) = at(&screen, "Boxed");
     assert_eq!(bg(&screen, row, col), Color::Default);
@@ -98,10 +89,7 @@ fn a_box_as_wide_as_the_pane_keeps_its_right_side() {
 // line of it; a band against it still takes it as its shape.
 #[test]
 fn a_border_round_the_whole_mail_is_not_drawn() {
-    let body = html(
-        "<div style=\"border:1px solid #888\"><div style=\"background:#1e50f5;color:#fff;\
-         padding:16px\">Band</div><p>Body</p></div>",
-    );
+    let body = page("a-border-round-the-whole-mail-is-not-drawn");
     let screen = preview(body, &DEFAULT, "Body");
     let (row, col) = at(&screen, "Band");
     assert_eq!(bg(&screen, row, col), Color::Default);
@@ -117,10 +105,7 @@ fn a_border_round_the_whole_mail_is_not_drawn() {
 // white one, and a frame round the whole Preview would say nothing.
 #[test]
 fn a_dark_page_goes_without_a_frame() {
-    let body = html(
-        "<body style=\"background:#101418;color:#eee\"><p>One</p><p>Two</p><p>Three</p>\
-         <p>Four</p></body>",
-    );
+    let body = page("a-dark-page-goes-without-a-frame");
     let screen = preview(body, &DEFAULT, "Four");
     let (row, col) = at(&screen, "One");
     assert_eq!(bg(&screen, row, col), Color::Default);
@@ -149,9 +134,7 @@ fn fills_that_make_no_rectangle_stay_fills() {
 // the cards of a mail ran together: one set apart from the page is framed.
 #[test]
 fn a_light_card_on_the_page_gets_a_frame() {
-    let body = html(
-        "<p>Page</p><div style=\"background:#f0f0ff;padding:32px\">Card</div><p>More page</p>",
-    );
+    let body = page("a-light-card-on-the-page-gets-a-frame");
     let screen = preview(body, &DEFAULT, "More page");
     let (row, col) = at(&screen, "Card");
     assert_eq!(bg(&screen, row, col), Color::Default);
@@ -208,10 +191,7 @@ fn a_cover_band_left_with_its_title_is_a_title() {
 // of two bars: the frame sets the card apart without them.
 #[test]
 fn a_frame_keeps_no_blank_row_inside_its_edges() {
-    let body = html(
-        "<p>Page</p><div style=\"background:#1e50f5;color:#fff;padding:32px\">One<br><br>Two\
-         </div><p>More page</p>",
-    );
+    let body = page("a-frame-keeps-no-blank-row-inside-its-edges");
     let screen = preview(body, &DEFAULT, "More page");
     let (one, _) = at(&screen, "One");
     let (two, _) = at(&screen, "Two");
@@ -225,10 +205,7 @@ fn a_frame_keeps_no_blank_row_inside_its_edges() {
 // round nothing, beside the text or between its blocks.
 #[test]
 fn a_section_that_shows_nothing_gets_no_frame() {
-    let body = html(
-        "<p>Above</p><div style=\"background:#1e50f5;height:64px\"></div><p>Below</p>\
-         <div style=\"background:#1e50f5;color:#fff;padding:32px\">Card</div><p>End</p>",
-    );
+    let body = page("a-section-that-shows-nothing-gets-no-frame");
     let screen = preview(body, &DEFAULT, "End");
     let (above, _) = at(&screen, "Above");
     let (below, _) = at(&screen, "Below");
@@ -253,11 +230,7 @@ fn the_card_a_long_mail_is_written_on_gets_no_frame() {
 // A box the mail rounds has round corners: a card read as a table cell.
 #[test]
 fn a_rounded_box_has_round_corners() {
-    let body = html(
-        "<p>Above</p><div style=\"border:1px solid #888888;border-radius:8px;padding:8px\">\
-         A bordered card</div><p>Middle</p><div style=\"background:#6d28d2;color:#ffffff;\
-         border-radius:12px;padding:16px\">A filled card<br>with two lines</div><p>Below</p>",
-    );
+    let body = page("a-rounded-box-has-round-corners");
     let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen).join("\n");
     assert_eq!(rows.matches('╭').count(), 2, "{rows}");
@@ -269,10 +242,7 @@ fn a_rounded_box_has_round_corners() {
 // rather than cutting through them.
 #[test]
 fn touching_borders_join_at_t_junctions() {
-    let body = html(
-        "<p>Above</p><div style=\"border:1px solid #888;border-radius:8px\">\
-         <div>Header</div><div style=\"border-top:1px solid #888\">Body</div></div><p>End</p>",
-    );
+    let body = page("touching-borders-join-at-t-junctions");
     let screen = preview(body, &DEFAULT, "End");
     let rows = pane(&screen).join("\n");
     assert!(rows.contains('├') && rows.contains('┤'), "{rows}");
@@ -281,10 +251,7 @@ fn touching_borders_join_at_t_junctions() {
 // Dashed and double borders keep their line style rather than all drawing solid.
 #[test]
 fn dashed_and_double_borders_use_their_own_lines() {
-    let body = html(
-        "<p>Top</p><div style=\"border-top:1px dashed #888\">Subtotal</div>\
-         <div style=\"border-top:3px double #888\">Total</div><p>End</p>",
-    );
+    let body = page("dashed-and-double-borders-use-their-own-lines");
     let screen = preview(body, &DEFAULT, "End");
     let rows = pane(&screen).join("\n");
     assert!(rows.contains("┄┄┄┄"), "{rows}");
@@ -295,10 +262,7 @@ fn dashed_and_double_borders_use_their_own_lines() {
 // and near-invisible ones drop.
 #[test]
 fn translucent_borders_blend_with_their_background() {
-    let body = html(
-        "<p>Top</p><div style=\"border:1px solid rgba(255,0,0,0.1)\">Faint</div>\
-         <div style=\"border:1px solid rgba(0,0,0,0.02)\">Gone</div><p>End</p>",
-    );
+    let body = page("translucent-borders-blend-with-their-background");
     let screen = preview(body, &DEFAULT, "End");
     let (faint, _) = at(&screen, "Faint");
     let top = screen.row_text(faint - 1);

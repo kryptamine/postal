@@ -10,7 +10,9 @@
 
 mod support;
 
-use support::rendered::{DEFAULT, LIGHT, Run, at, bg, fixture, html, pane, preview, quit, started};
+use support::rendered::{
+    DEFAULT, LIGHT, Run, at, bg, fixture, html, page, pane, preview, quit, started,
+};
 use termlens::{Color, Key, Screen};
 
 // Box edges snap to rows: every row separator of the table shows, and the
@@ -40,10 +42,7 @@ fn a_statement_on_a_light_terminal() {
 // `v` switches every HTML Preview to the text View and back.
 #[test]
 fn v_switches_between_the_rendered_and_the_text_view() {
-    let body = html(
-        "<table width=\"100%\"><tr><td>Left column</td><td align=\"right\">Right column</td>\
-         </tr></table>",
-    );
+    let body = page("v-switches-between-the-rendered-and-the-text-view");
     let (mut t, _server) = started(body, &DEFAULT);
     let side_by_side = |s: &Screen| {
         pane(s)
@@ -64,10 +63,7 @@ fn v_switches_between_the_rendered_and_the_text_view() {
 // whether written as `<hr>` or an empty bordered `<div>`.
 #[test]
 fn a_rule_is_one_line() {
-    let body = html(
-        "<p>Above</p><hr><p>Middle</p>\
-         <div style=\"border:1px solid #dadce0;margin:16px 0\"></div><p>Below</p>",
-    );
+    let body = page("a-rule-is-one-line");
     let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
@@ -90,10 +86,7 @@ fn a_rule_is_one_line() {
 // box two rows taller.
 #[test]
 fn padding_under_a_border_adds_no_blank_row() {
-    let body = html(
-        "<p>x</p><div style=\"display:inline-block;border:1px solid #888;\
-         padding:12px 24px\">Run 12</div>",
-    );
+    let body = page("padding-under-a-border-adds-no-blank-row");
     let screen = preview(body, &DEFAULT, "Run 12");
     let (row, _) = at(&screen, "Run 12");
     assert!(screen.row_text(row - 1).contains('┌'), "{}", screen.text());
@@ -104,10 +97,7 @@ fn padding_under_a_border_adds_no_blank_row() {
 // in a frame of the terminal's own colour.
 #[test]
 fn a_transparent_border_takes_no_room() {
-    let body = html(
-        "<p>x</p><a href=\"https://ci.example\"><span style=\"display:inline-block;\
-         border:1px solid transparent\">Learn more</span></a>",
-    );
+    let body = page("a-transparent-border-takes-no-room");
     let screen = preview(body, &DEFAULT, "Learn more");
     assert!(
         !pane(&screen)
@@ -122,10 +112,7 @@ fn a_transparent_border_takes_no_room() {
 // looks, not on top of it.
 #[test]
 fn a_box_background_stays_inside_its_border() {
-    let body = html(
-        "<p>x</p><div style=\"width:200px;color:#fff;background:#1f883d;\
-         border:1px solid #888\">Inside</div>",
-    );
+    let body = page("a-box-background-stays-inside-its-border");
     let screen = preview(body, &DEFAULT, "Inside");
     let (row, col) = at(&screen, "Inside");
     assert!(matches!(bg(&screen, row, col), Color::Rgb(..)));
@@ -164,10 +151,7 @@ fn fluid_columns_line_up_at_the_top() {
 // the column before the first, outside its grid, and wrapped it word by word.
 #[test]
 fn a_cell_spanning_no_columns_spans_one() {
-    let body = html(
-        "<table><tr><td colspan=\"0\">One two</td><td>B</td></tr>\
-         <tr><td>One two three</td><td>D</td></tr></table>",
-    );
+    let body = page("a-cell-spanning-no-columns-spans-one");
     let screen = preview(body, &DEFAULT, "three");
     assert!(
         pane(&screen)
@@ -182,11 +166,7 @@ fn a_cell_spanning_no_columns_spans_one() {
 // layout's viewport, and the box stood a thousand rows high.
 #[test]
 fn a_percentage_height_is_the_height_of_what_it_holds() {
-    let body = html(
-        "<html style=\"height:100%\"><body style=\"height:100%\">\
-         <div style=\"height:100%;min-height:100%;border:1px solid #cc0000\"><p>Inside</p></div>\
-         <p>After</p></body></html>",
-    );
+    let body = page("a-percentage-height-is-the-height-of-what-it-holds");
     let screen = preview(body, &DEFAULT, "After");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
@@ -197,10 +177,7 @@ fn a_percentage_height_is_the_height_of_what_it_holds() {
 // blocks apart as well as eight, and a frame's edge needs none inside it.
 #[test]
 fn a_run_of_blank_rows_is_one() {
-    let body = html(
-        "<p>Above</p><div style=\"height:128px\"></div>\
-         <div style=\"border:1px solid #cc0000;padding:64px 16px\">Inside</div><p>Below</p>",
-    );
+    let body = page("a-run-of-blank-rows-is-one");
     let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();

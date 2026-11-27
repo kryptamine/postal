@@ -12,7 +12,7 @@ mod support;
 
 use std::net::TcpListener;
 
-use support::rendered::{DEFAULT, at, frames, html, pane, preview};
+use support::rendered::{DEFAULT, at, frames, html, page, pane, preview};
 
 // A remote image is a tracking risk: nothing is fetched. One with nothing to
 // say takes no room, so a banner leaves no blank rows behind.
@@ -63,10 +63,7 @@ fn an_alt_is_one_row_and_a_name_shows_whole() {
 // its own.
 #[test]
 fn images_from_one_file_keep_their_own_alts() {
-    let body = html(
-        "<img src=\"https://cdn.example/card.png\" width=\"200\" alt=\"First card\"><br>\
-         <img src=\"https://cdn.example/card.png\" width=\"200\" alt=\"Second card\">",
-    );
+    let body = page("images-from-one-file-keep-their-own-alts");
     let screen = preview(body, &DEFAULT, "Second card");
     assert!(screen.contains("First card"), "{}", screen.text());
 }
@@ -75,16 +72,7 @@ fn images_from_one_file_keep_their_own_alts() {
 // CI report's table: `macOS macOS`, a cut `an` beside each count.
 #[test]
 fn an_icon_or_an_alt_beside_the_same_text_is_dropped() {
-    let body = html(
-        "<table><tr>\
-         <td><img src=\"https://cdn.example/ok.png\" width=\"24\" height=\"24\" alt=\"macOS\"></td>\
-         <td style=\"padding:16px\">CI / macOS</td>\
-         <td><a href=\"https://ci.example/notes\"><img src=\"https://cdn.example/note.png\" \
-         width=\"16\" height=\"16\" alt=\"annotations for CI / macOS\"> 3</a></td>\
-         </tr></table>\
-         <div><img src=\"https://cdn.example/jane.png\" width=\"84\" height=\"84\" alt=\"Jane Doe\">\
-         <div>Jane Doe, product manager</div></div>",
-    );
+    let body = page("an-icon-or-an-alt-beside-the-same-text-is-dropped");
     let screen = preview(body, &DEFAULT, "product manager");
     let rows = pane(&screen);
     let row = rows.iter().find(|r| r.contains("CI / macOS")).unwrap();
@@ -169,11 +157,7 @@ fn a_picture_link_whose_page_the_words_open_shows_no_label() {
 // photo was a label one row high.
 #[test]
 fn a_box_sized_for_a_picture_shrinks_to_its_label() {
-    let body = html(
-        "<p>Above</p><table><tr><td style=\"height:200px;min-height:200px\">\
-         <img src=\"https://cdn.example/p.png\" width=\"240\" alt=\"Kettle photo\">\
-         </td></tr></table><p>Below</p>",
-    );
+    let body = page("a-box-sized-for-a-picture-shrinks-to-its-label");
     let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen);
     let row = |text: &str| rows.iter().position(|r| r.contains(text)).unwrap();
@@ -185,11 +169,7 @@ fn a_box_sized_for_a_picture_shrinks_to_its_label() {
 // further on: both read `Dungeon Crawler Carl` twice.
 #[test]
 fn an_alt_the_mail_shows_as_a_title_is_dropped() {
-    let body = html(
-        "<table><tr><td><img src=\"https://cdn.example/b.png\" width=\"160\" \
-         alt=\"Dungeon Crawler Carl\"></td></tr></table>\
-         <table><tr><td>Fallout x Dungeon Crawler Carl</td></tr></table>",
-    );
+    let body = page("an-alt-the-mail-shows-as-a-title-is-dropped");
     let screen = preview(body, &DEFAULT, "Fallout");
     let titles = pane(&screen)
         .iter()
@@ -202,12 +182,7 @@ fn an_alt_the_mail_shows_as_a_title_is_dropped() {
 // the picture went: its padding framed nothing.
 #[test]
 fn a_section_a_gone_picture_leaves_empty_goes() {
-    let body = html(
-        "<p><a href=\"https://shop.example/a\">Shop now</a></p>\
-         <table bgcolor=\"#6d28d2\" width=\"100%\"><tr><td style=\"padding:40px\">\
-         <a href=\"https://shop.example/a\"><img src=\"https://cdn.example/p.png\" width=\"400\">\
-         </a></td></tr></table><p>End</p>",
-    );
+    let body = page("a-section-a-gone-picture-leaves-empty-goes");
     let screen = preview(body, &DEFAULT, "End");
     assert_eq!(frames(&screen), 0, "{}", screen.text());
     let rows = pane(&screen);
@@ -267,13 +242,7 @@ fn a_bare_picture_link_is_named_by_its_address() {
 // the noun goes, and an alt that names nothing else goes whole.
 #[test]
 fn an_alt_loses_the_noun_that_calls_it_a_picture() {
-    let body = html(
-        "<p>Above</p><a href=\"https://social.example/inbox\"><img src=\"https://cdn.example/m.png\" \
-         width=\"24\" height=\"24\" alt=\"Messaging icon\"></a>\
-         <p><img src=\"https://cdn.example/hero.png\" width=\"400\" alt=\"Some Image\"></p>\
-         <p><img src=\"https://cdn.example/brand.png\" width=\"400\" alt=\"Acme Hotels Logo\"></p>\
-         <p>Below</p>",
-    );
+    let body = page("an-alt-loses-the-noun-that-calls-it-a-picture");
     let screen = preview(body, &DEFAULT, "Below");
     let rows = pane(&screen).join("\n");
     assert!(
@@ -289,10 +258,7 @@ fn an_alt_loses_the_noun_that_calls_it_a_picture() {
 // named no store.
 #[test]
 fn a_badge_shows_its_whole_alt_where_it_fits() {
-    let body = html(
-        "<a href=\"https://store.example/app\"><img src=\"https://cdn.example/badge.png\" \
-         width=\"120\" height=\"40\" alt=\"Download on the App Store\"></a>",
-    );
+    let body = page("a-badge-shows-its-whole-alt-where-it-fits");
     let screen = preview(body, &DEFAULT, "Download");
     let rows = pane(&screen).join("\n");
     assert!(rows.contains("Download on the App Store"), "{rows}");
@@ -302,11 +268,7 @@ fn a_badge_shows_its_whole_alt_where_it_fits() {
 // row of the table, where the text of its own row could not show it.
 #[test]
 fn an_alt_that_is_the_caption_beside_it_is_dropped() {
-    let body = html(
-        "<table><tr><td><a href=\"https://shop.example/dev\">\
-         <img src=\"https://cdn.example/dev.png\" width=\"200\" alt=\"Development\"></a></td></tr>\
-         <tr><td>Development</td></tr></table><p>End</p>",
-    );
+    let body = page("an-alt-that-is-the-caption-beside-it-is-dropped");
     let screen = preview(body, &DEFAULT, "End");
     let rows = pane(&screen).join("\n");
     assert_eq!(rows.matches("Development").count(), 1, "{rows}");
@@ -351,14 +313,7 @@ fn a_row_of_icons_drops_the_words_their_names_share() {
 // size: `Тел…` in 32 px, `[revolut.co…` in 100 px.
 #[test]
 fn a_box_sized_for_a_picture_widens_to_its_name() {
-    let body = html(
-        "<p>Follow us</p>\
-         <a href=\"https://t.example\" style=\"display:inline-block;width:32px;height:32px\">\
-         <img src=\"https://cdn.example/t.png\" width=\"32\" height=\"32\" alt=\"Telegram\"></a>\
-         <table><tr><td style=\"width:80px\"><a href=\"https://www.bank.example/home\">\
-         <img src=\"https://cdn.example/logo.png\" style=\"width:100%\"></a></td></tr></table>\
-         <p>End</p>",
-    );
+    let body = page("a-box-sized-for-a-picture-widens-to-its-name");
     let screen = preview(body, &DEFAULT, "End");
     assert!(screen.contains("Telegram"), "{}", screen.text());
     assert!(screen.contains("[bank.example]"), "{}", screen.text());
@@ -368,12 +323,7 @@ fn a_box_sized_for_a_picture_widens_to_its_name() {
 // file name, and beside the text it decorates it read as a stray word.
 #[test]
 fn an_alt_that_is_a_file_name_is_dropped() {
-    let body = html(
-        "<table><tr><td><img src=\"https://cdn.example/dots.png\" alt=\"dots\"></td>\
-         <td>From the station</td></tr></table>\
-         <a href=\"https://social.example\"><img src=\"https://cdn.example/f.png\" \
-         width=\"32\" height=\"32\" alt=\"facebook\"></a><p>End</p>",
-    );
+    let body = page("an-alt-that-is-a-file-name-is-dropped");
     let screen = preview(body, &DEFAULT, "End");
     assert!(!screen.contains("dots"), "{}", screen.text());
     // All its link shows, the word still names the link.
@@ -384,10 +334,7 @@ fn an_alt_that_is_a_file_name_is_dropped() {
 // sentence about a photo the reader cannot see.
 #[test]
 fn an_alt_that_describes_its_picture_is_dropped() {
-    let body = html(
-        "<p>Above</p><img src=\"https://cdn.example/hero.png\" width=\"400\" \
-         alt=\"An audience sits in a dark auditorium watching the stage\"><p>Below</p>",
-    );
+    let body = page("an-alt-that-describes-its-picture-is-dropped");
     let screen = preview(body, &DEFAULT, "Below");
     assert!(!screen.contains("audience"), "{}", screen.text());
 }
@@ -396,12 +343,7 @@ fn an_alt_that_describes_its_picture_is_dropped() {
 // sent the mail, which the header says already.
 #[test]
 fn the_logo_at_either_end_of_the_mail_is_dropped() {
-    let body = html(
-        "<a href=\"https://acme.example\"><img src=\"https://cdn.example/logo.png\" \
-         width=\"120\" height=\"40\" alt=\"Acme\"></a><p>Hello</p>\
-         <img src=\"https://cdn.example/x.png\" width=\"120\" height=\"40\" alt=\"Spring sale\">\
-         <p>Bye</p><img src=\"https://cdn.example/logo.png\" width=\"120\" alt=\"Acme Corp\">",
-    );
+    let body = page("the-logo-at-either-end-of-the-mail-is-dropped");
     let screen = preview(body, &DEFAULT, "Bye");
     assert!(!screen.contains("Acme"), "{}", screen.text());
     assert!(screen.contains("Spring sale"), "{}", screen.text());
@@ -411,15 +353,7 @@ fn the_logo_at_either_end_of_the_mail_is_dropped() {
 // differences still count as repeats, and tracker domains read as `[link]`.
 #[test]
 fn title_fallback_leading_nouns_case_duplicates_and_trackers() {
-    let body = html(
-        "<p>Above</p>\
-         <a href=\"https://u1.ct.sendgrid.net/ss/c/abc\"><img src=\"https://cdn.example/ig.png\" \
-         width=\"24\" height=\"24\" alt=\"\" title=\"Instagram\"></a>\
-         <p><img src=\"https://cdn.example/star.png\" width=\"100\" alt=\"icon star rating\"></p>\
-         <div><img src=\"https://cdn.example/a.png\" width=\"80\" alt=\"ACME\"><div>Acme news</div></div>\
-         <p><a href=\"https://u1.ct.sendgrid.net/ss/c/xyz\"><img src=\"https://cdn.example/b.png\" \
-         width=\"200\" alt=\"\"></a></p><p>End</p>",
-    );
+    let body = page("title-fallback-leading-nouns-case-duplicates-and-trackers");
     let screen = preview(body, &DEFAULT, "End");
     let rows = pane(&screen).join("\n");
     assert!(rows.contains("Instagram"), "{rows}");

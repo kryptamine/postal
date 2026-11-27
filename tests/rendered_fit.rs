@@ -10,17 +10,14 @@
 
 mod support;
 
-use support::rendered::{DEFAULT, at, bg, html, pane, preview, quit, started};
+use support::rendered::{DEFAULT, at, bg, html, page, pane, preview, quit, started};
 use termlens::{Color, Screen};
 
 // A layout that loses text past the pane however it is loosened shows
 // in the text View instead.
 #[test]
 fn a_mail_too_wide_for_the_pane_falls_back_to_text() {
-    let body = html(
-        "<div style=\"padding-left:1200px\"><a href=\"https://ci.example\" \
-         style=\"background:#1f883d;color:#fff\">View run</a></div>",
-    );
+    let body = page("a-mail-too-wide-for-the-pane-falls-back-to-text");
     let (mut t, _server) = started(body, &DEFAULT);
     let shown = |s: &Screen| pane(s).iter().any(|r| r.contains("View run"));
     let screen = t.snapshot_after(shown).unwrap();
@@ -33,12 +30,7 @@ fn a_mail_too_wide_for_the_pane_falls_back_to_text() {
 // its right edge in a narrow pane. Laid out again without them it fits.
 #[test]
 fn a_mail_wider_than_the_pane_lets_go_of_its_fixed_widths() {
-    let body = html(
-        "<table width=\"900\"><tr>\
-         <td width=\"450\" style=\"min-width:450px;white-space:nowrap\">Left column</td>\
-         <td width=\"450\" style=\"background:#1f883d;color:#fff\">Right column</td>\
-         </tr></table>",
-    );
+    let body = page("a-mail-wider-than-the-pane-lets-go-of-its-fixed-widths");
     let screen = preview(body, &DEFAULT, "Right column");
     let (row, col) = at(&screen, "Right column");
     assert!(
@@ -53,11 +45,7 @@ fn a_mail_wider_than_the_pane_lets_go_of_its_fixed_widths() {
 // breakpoint showed the mail in a column half its width.
 #[test]
 fn a_mail_set_for_a_phone_takes_its_desktop_layout() {
-    let body = html(
-        "<style>@media (max-width:600px){.main{width:240px !important}}</style>\
-         <table class=\"main\" width=\"600\"><tr><td>A line of words long enough to wrap \
-         in a column made for a phone.</td></tr></table>",
-    );
+    let body = page("a-mail-set-for-a-phone-takes-its-desktop-layout");
     let screen = preview(body, &DEFAULT, "phone");
     let (first, last) = (at(&screen, "A line").0, at(&screen, "phone").0);
     assert_eq!(first, last, "{}", screen.text());
