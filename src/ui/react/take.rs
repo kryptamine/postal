@@ -14,7 +14,7 @@ use crate::{
     ui::popup::settings::Settings,
     ui::popup::signature_edit,
     ui::preview::attachment_hints::AttachmentHints,
-    ui::preview::link_labels::{browse, label_links},
+    ui::preview::link_labels::{browse, shown_links},
     ui::react::steer::steer,
     ui::run::Model,
     ui::state::toast::Toast,
@@ -25,15 +25,18 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
     let (ui, world) = (&mut model.ui, model.world);
     match step {
         Step::Stay => {}
-        Step::Links => label_links(ui, model.previews, text),
+        Step::Links => {
+            let reading = ui.screen.showing.reading();
+            let hints = shown_links(&ui.view, reading, model.previews, text);
+            ui.screen
+                .open_or_toast(hints.ok_or_else(|| Toast::new("no links")));
+        }
         Step::Steer(to) => steer(to, ui, world)?,
         Step::Browse(url) => ui.screen.toast = browse(&url),
         Step::Attachments(purpose) => {
-            let message = ui.view.at_cursor(ui.screen.showing.cursor());
-            match message.map(|message| AttachmentHints::on(message, purpose)) {
-                Some(Ok(hints)) => ui.screen.over.open(hints),
-                Some(Err(toast)) => ui.screen.toast = Some(toast),
-                None => {}
+            if let Some(message) = ui.view.at_cursor(ui.screen.showing.cursor()) {
+                ui.screen
+                    .open_or_toast(AttachmentHints::on(message, purpose));
             }
         }
         Step::Attachment(wanted) => {
@@ -55,10 +58,11 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         Step::Reply(to) => drafting::reply(to, &mut model.tty, ui, world, &model.fetch)?,
         Step::Forward => forwarding::forward(&mut model.tty, ui, world, &model.fetch)?,
         Step::LocalDrafts => open_local(&mut ui.screen, world.outbox),
-        Step::Settings => match Settings::open(world.config_dir) {
-            Ok(settings) => ui.screen.over.open(settings),
-            Err(error) => ui.screen.toast = Some(Toast::error(error.to_string())),
-        },
+        Step::Settings => {
+            let settings = Settings::open(world.config_dir);
+            let settings = settings.map_err(|error| Toast::error(error.to_string()));
+            ui.screen.open_or_toast(settings);
+        }
         Step::Signature(email) => {
             signature_edit::open(&mut model.tty, &mut ui.screen, world.config_dir, &email)?;
         }

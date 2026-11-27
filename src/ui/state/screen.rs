@@ -73,6 +73,14 @@ impl Screen {
         self.showing = Showing::List;
     }
 
+    /// Opens `layer`, else shows the Toast saying why it cannot open.
+    pub fn open_or_toast(&mut self, layer: Result<impl Into<Layer>, Toast>) {
+        match layer {
+            Ok(layer) => self.over.open(layer),
+            Err(toast) => self.toast = Some(toast),
+        }
+    }
+
     /// Back to the list once the selection left `thread`, the Thread Reading
     /// was opened on; true when it did.
     pub fn follow(&mut self, view: &InboxView, thread: Option<Key>) -> bool {

@@ -11,28 +11,25 @@ use crate::{
     ui::preview::reading::Reading,
     ui::preview::stack::{self, Shape},
     ui::state::toast::Toast,
-    ui::state::ui::Ui,
 };
 
-/// Enters hint mode on the links the Preview window shows, or says there
-/// are none. `text` is where the Preview's text goes, if it is shown.
-pub fn label_links(ui: &mut Ui, previews: &Previews, text: Option<Rect>) {
-    let Ui { view, screen } = ui;
-    let hints = text.and_then(|text| {
-        if let Some(reading) = screen.showing.reading() {
-            return stack_links(view, previews, reading, text);
-        }
-
-        let preview = previews.get(view, text.width)?;
-        let header = message_header::rows(view.selected_message());
-        let lines = preview_pane::body_lines(view.preview_scroll, text, header);
-        LinkHints::find([(0, &preview.body[..], lines)])
-    });
-
-    match hints {
-        Some(hints) => screen.over.open(hints),
-        None => screen.toast = Some(Toast::new("no links")),
+/// The links the Preview window shows, `None` when there are none. `text`
+/// is where the Preview's text goes, if it is shown.
+pub fn shown_links(
+    view: &InboxView,
+    reading: Option<&Reading>,
+    previews: &Previews,
+    text: Option<Rect>,
+) -> Option<LinkHints> {
+    let text = text?;
+    if let Some(reading) = reading {
+        return stack_links(view, previews, reading, text);
     }
+
+    let preview = previews.get(view, text.width)?;
+    let header = message_header::rows(view.selected_message());
+    let lines = preview_pane::body_lines(view.preview_scroll, text, header);
+    LinkHints::find([(0, &preview.body[..], lines)])
 }
 
 /// The links of every unfolded body of the stack that `text` shows.
