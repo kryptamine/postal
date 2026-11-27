@@ -60,7 +60,7 @@ impl ForwardFetch {
     ) -> Option<Result<(), String>> {
         if let Update::BodyLink(link) = update {
             self.live[account] = *link == BodyLink::Up;
-            if let Some(awaited) = awaited {
+            if let Some(awaited) = awaited.filter(|a| a.message.account == account) {
                 self.ask(awaited);
             }
 
