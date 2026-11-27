@@ -224,6 +224,54 @@ fn the_compose_format_is_chosen() {
     quit(t);
 }
 
+// A choice is written as the next run reads it: the key and the value
+// spelled as `config.toml` takes them, or the next start refuses the file.
+#[test]
+fn every_choice_is_read_back_next_run() {
+    let server = inbox();
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, false);
+    settings(&mut t);
+    // Icons, Notify, then Send past Name.
+    for (tabs, chosen) in [(1, "nerd ✓"), (1, "always ✓"), (2, "markdown ✓")] {
+        for _ in 0..tabs {
+            t.send(Key::Tab).unwrap();
+        }
+
+        t.send(Key::Down).unwrap();
+        t.send(Key::Enter).unwrap();
+        t.wait_until(|s| s.contains(chosen)).unwrap();
+    }
+
+    if cfg!(target_os = "macos") {
+        t.send(Key::Tab).unwrap();
+        t.wait_until(|s| s.contains("Postal opens mailto: links"))
+            .unwrap();
+        t.send(Key::Down).unwrap();
+        t.send(Key::Enter).unwrap();
+        t.wait_until(|s| s.contains("ghostty ✓")).unwrap();
+    }
+
+    quit(t);
+
+    let mut t = postal(&home, false);
+    settings(&mut t);
+    let mut chosen = vec!["nerd ✓", "always ✓", "markdown ✓"];
+    if cfg!(target_os = "macos") {
+        chosen.push("ghostty ✓");
+    }
+
+    for (tabs, chosen) in [1, 1, 2, 1].into_iter().zip(chosen) {
+        for _ in 0..tabs {
+            t.send(Key::Tab).unwrap();
+        }
+
+        t.wait_until(|s| s.contains(chosen)).unwrap();
+    }
+
+    quit(t);
+}
+
 // A change edits its own key: the user's comments stay where they were.
 #[test]
 fn a_change_keeps_the_comments() {
