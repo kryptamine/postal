@@ -8,6 +8,7 @@ mod preview_lines;
 pub mod preview_pane;
 pub mod previews;
 pub mod reading;
+mod render_queue;
 mod stack;
 mod stack_line;
 pub mod thread_pane;

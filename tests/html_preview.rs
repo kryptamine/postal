@@ -159,3 +159,56 @@ fn a_large_message_renders_without_blocking_frames() {
         .unwrap();
     quit(t);
 }
+
+/// A newsletter of about 100 KB whose first line names it.
+fn newsletter(number: usize) -> String {
+    let article = "<table role=\"presentation\" width=\"100%\"><tr><td><div>\
+        <h2>Story</h2><p>Lorem ipsum dolor sit amet, <b>consectetur</b> adipiscing \
+        elit. <a href=\"https://news.example/story\">Read more</a></p></div></td></tr></table>\n";
+    let mut html = format!("<html><body><p>Issue {number} begins</p>\n");
+    while html.len() < 100 * 1024 {
+        html.push_str(article);
+    }
+
+    html.push_str("</body></html>");
+    html
+}
+
+// Scrolled past, each newsletter is still laid out, but after the one the
+// selection stops on: in arrival order it came seconds later.
+#[test]
+fn the_preview_stopped_on_is_rendered_before_those_scrolled_past() {
+    const ISSUES: usize = 40;
+    let messages = (1..=ISSUES)
+        .map(|number| {
+            let date = format!("2024-10-01T09:{number:02}:00Z");
+            FakeMessage::new("Sender", &format!("Issue {number}"), &date).body(FakeBody::text(
+                "html",
+                "7bit",
+                newsletter(number),
+            ))
+        })
+        .collect();
+    let server = FakeImap::start(messages);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, (120, 40), false);
+    t.wait_until(|s| {
+        s.contains(&format!(" 1/{ISSUES} ")) && in_preview(s, &format!("Issue {ISSUES} begins"))
+    })
+    .unwrap();
+
+    for _ in 1..ISSUES {
+        t.send(Key::Char('j')).unwrap();
+        std::thread::sleep(Duration::from_millis(30));
+    }
+
+    let stopped = Instant::now();
+    let screen = t
+        .snapshot_after(|s| {
+            s.contains(&format!(" {ISSUES}/{ISSUES} ")) && in_preview(s, "Issue 1 begins")
+        })
+        .unwrap();
+    let waited = stopped.elapsed();
+    assert!(waited < Duration::from_secs(3), "{waited:?}\n{screen}");
+    quit(t);
+}
