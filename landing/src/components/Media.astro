@@ -7,6 +7,8 @@ import type { Still, Video } from '@app/media';
 
 type Props = (Still | Video) & {
   shows: string;
+  // A visible label above the frame, for media read side by side.
+  caption?: string;
   // Loads at once, for the image the first screen is measured by (LCP).
   priority?: boolean;
 };
@@ -17,6 +19,7 @@ const id = `zoom-${name.split('.', 1)[0]}`;
 ---
 
 <figure class="media">
+  {props.caption && <figcaption class="eyebrow label">{props.caption}</figcaption>}
   <button class="open" type="button" popovertarget={id} aria-label={`Enlarge: ${props.shows}`}>
     <span class="stamp">
       {'still' in props ? (
@@ -102,6 +105,8 @@ const id = `zoom-${name.split('.', 1)[0]}`;
 
 <style>
   .media {
+    display: grid;
+    gap: var(--space-1);
     min-width: 0;
   }
 
