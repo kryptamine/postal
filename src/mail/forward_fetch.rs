@@ -1,9 +1,7 @@
 use crate::{
     compose::awaited_forward::AwaitedForward,
-    domain::per_account::AccountId,
     mail::attachment_fetch::AttachmentRequest,
     mail::body_fetch::{Fetched, Request},
-    mail::status::Status,
     mail::update::Update,
 };
 
@@ -27,20 +25,11 @@ pub fn requests(awaited: &AwaitedForward) -> impl Iterator<Item = Request> + '_ 
     body.into_iter().chain(attachments)
 }
 
-/// Says when `update` of `account` brings the last part `awaited` waits
+/// Says when `update` of its Account brings the last part `awaited` waits
 /// on, or why one will not come.
-pub fn notice(
-    account: AccountId,
-    update: &Update,
-    awaited: &mut AwaitedForward,
-) -> Option<Result<(), String>> {
-    if awaited.message.account != account {
-        return None;
-    }
-
+pub fn notice(update: &Update, awaited: &mut AwaitedForward) -> Option<Result<(), String>> {
     let ours = &awaited.on_server;
     match update {
-        Update::Status(Status::SignedOut) => return Some(Err("signed out".to_owned())),
         Update::Bodies(folder, fetched) if *folder == ours.folder => match fetched {
             Fetched::Stored(uids) if uids.contains(&ours.uid) => awaited.body_missing = false,
             Fetched::Refused { uids, reason } if uids.contains(&ours.uid) => {
