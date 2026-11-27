@@ -9,6 +9,7 @@ use crate::{
     mail::body_fetch::Request,
     mail::idle,
     mail::imap::{ImapSession, Mode},
+    mail::oneshot_attempt::OneshotAttempt,
     mail::outbox_flush::Sender,
     mail::pending::Pending,
     mail::reconnect,
@@ -32,9 +33,11 @@ pub async fn serve(
     let config = sender.outgoing.config;
     let report = |status| send(Update::Status(status));
     let synced = sync(cache, Steering::new(asked), sender, &send, report);
-    let fetched = bodies(config, sender.sign_in, cache, requested, &send);
+    let mut pending = Pending::new(requested);
+    let fetched = bodies(config, sender.sign_in, cache, &mut pending, &send);
     match futures::future::try_join(synced, fetched).await {
         Err(error) if error.signed_out() => {
+            pending.fail_oneshots(&send);
             send(Update::FetchLink(FetchLink::Down));
             tracing::warn!("{}: {error}", config.email);
             Ok(())
@@ -49,18 +52,23 @@ async fn bodies(
     config: &Config,
     sign_in: &SignIn,
     cache: &Cache,
-    requests: UnboundedReceiver<Request>,
-    send: impl Fn(Update),
+    pending: &mut Pending,
+    send: &impl Fn(Update),
 ) -> Result<(), Error> {
-    let (mut pending, mut spare) = (Pending::new(requests), SpareWork::new());
+    let mut spare = SpareWork::new();
     let attempt = async |report: &dyn Fn(Status)| {
+        let mut pending = OneshotAttempt {
+            pending: &mut *pending,
+            send,
+        };
+
         let mut session = ImapSession::open(config, sign_in).await?;
         // Every run starts in the Inbox: its first Preview waits on no EXAMINE.
         sync::open(&mut session, FolderName::inbox(), Mode::Examine).await?;
         // Sent while the screen saw the last connection live, which then dropped.
-        pending.forget_oneshots();
+        pending.fail_oneshots(send);
         report(Status::Live);
-        pending.serve(&mut session, cache, &mut spare, &send).await
+        pending.serve(&mut session, cache, &mut spare, send).await
     };
 
     // The status slot follows the sync connection alone, but for a refused Account.

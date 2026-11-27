@@ -1,6 +1,6 @@
 use crate::{
     domain::message_ref::MessageRef, mail::body_fetch, mail::imap::MailServer, mail::sync::Error,
-    mail::update::Update,
+    mail::unfetched::Unfetched, mail::update::Update,
 };
 
 /// An attachment wanted, by its place among its Message's.
@@ -15,7 +15,7 @@ pub struct AttachmentRequest {
 pub struct AttachmentFetched {
     pub message: MessageRef,
     pub index: usize,
-    pub bytes: Result<Vec<u8>, String>,
+    pub bytes: Result<Vec<u8>, Unfetched>,
 }
 
 /// Fetches the part `request` names and tells `send`; it is never cached
@@ -31,14 +31,14 @@ pub async fn fetch(
     let bytes = if body_fetch::open(server, &message.folder).await? {
         match server.attachment(message.uid, index).await {
             Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err("the server no longer has it".to_owned()),
+            Ok(None) => Err(Unfetched::Failed("the server no longer has it".to_owned())),
             Err(error) => match error.refusal() {
-                Some(reason) => Err(reason.to_owned()),
+                Some(reason) => Err(Unfetched::Failed(reason.to_owned())),
                 None => return Err(error.into()),
             },
         }
     } else {
-        Err("its Folder is gone".to_owned())
+        Err(Unfetched::Failed("its Folder is gone".to_owned()))
     };
 
     send(Update::Attachment(AttachmentFetched {
