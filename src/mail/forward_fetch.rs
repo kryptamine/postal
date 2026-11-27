@@ -1,93 +1,62 @@
 use crate::{
     compose::awaited_forward::AwaitedForward,
-    domain::per_account::{AccountId, PerAccount},
+    domain::per_account::AccountId,
     mail::attachment_fetch::AttachmentRequest,
     mail::body_fetch::{Fetched, Request},
-    mail::routes::Routes,
     mail::status::Status,
-    mail::update::{BodyLink, Update},
+    mail::update::Update,
 };
 
-/// Asks the fetch connection for what an `AwaitedForward` waits on, and
-/// tells when all of it is in.
-pub struct ForwardFetch {
-    requests: Routes<Request>,
-    /// Whether each Account's fetch connection is up.
-    live: PerAccount<bool>,
+/// What the fetch connection is asked for while `awaited` waits: the body
+/// if the Cache lacks it, and each attachment not in yet.
+pub fn requests(awaited: &AwaitedForward) -> impl Iterator<Item = Request> + '_ {
+    let ours = &awaited.on_server;
+    let body = awaited
+        .body_missing
+        .then(|| Request::Awaited(vec![ours.clone()]));
+    let attachments = (0..)
+        .zip(&awaited.attachments)
+        .filter(|(_, bytes)| bytes.is_none())
+        .map(|(index, _)| {
+            Request::Attachment(AttachmentRequest {
+                message: ours.clone(),
+                index,
+            })
+        });
+
+    body.into_iter().chain(attachments)
 }
 
-impl ForwardFetch {
-    pub const fn new(requests: Routes<Request>, live: PerAccount<bool>) -> Self {
-        Self { requests, live }
+/// Says when `update` of `account` brings the last part `awaited` waits
+/// on, or why one will not come.
+pub fn notice(
+    account: AccountId,
+    update: &Update,
+    awaited: &mut AwaitedForward,
+) -> Option<Result<(), String>> {
+    if awaited.message.account != account {
+        return None;
     }
 
-    /// Asks now for what is still missing while the fetch connection is
-    /// up, else once it is.
-    pub fn ask(&self, awaited: &AwaitedForward) {
-        let account = awaited.message.account;
-        if !self.live[account] {
-            return;
-        }
-
-        if awaited.body_missing {
-            let body = Request::Reply(vec![awaited.on_server.clone()]);
-            self.requests.send(account, body);
-        }
-
-        for (index, _) in awaited
-            .attachments
-            .iter()
-            .enumerate()
-            .filter(|(_, a)| a.is_none())
-        {
-            let request = AttachmentRequest {
-                message: awaited.on_server.clone(),
-                index,
-            };
-
-            self.requests.send(account, Request::Attachment(request));
-        }
-    }
-
-    /// Follows the fetch connection, asking again once it is back: what was
-    /// in flight went down with it. Says when `update` brings the last part
-    /// `awaited` waits on, or why one will not come.
-    pub fn notice(
-        &mut self,
-        account: AccountId,
-        update: &Update,
-        awaited: Option<&mut AwaitedForward>,
-    ) -> Option<Result<(), String>> {
-        if let Update::BodyLink(link) = update {
-            self.live[account] = *link == BodyLink::Up;
-            if let Some(awaited) = awaited.filter(|a| a.message.account == account) {
-                self.ask(awaited);
-            }
-
-            return None;
-        }
-
-        let awaited = awaited.filter(|a| a.message.account == account)?;
-        let ours = &awaited.on_server;
-        match update {
-            Update::Status(Status::SignedOut) => return Some(Err("signed out".to_owned())),
-            Update::Bodies(folder, fetched) if *folder == ours.folder => match fetched {
-                Fetched::Stored(uids) if uids.contains(&ours.uid) => awaited.body_missing = false,
-                Fetched::Refused { uids, reason } if uids.contains(&ours.uid) => {
-                    return Some(Err(reason.clone()));
-                }
-                _ => return None,
-            },
-            Update::Attachment(fetched) if fetched.message == *ours => {
-                let slot = awaited.attachments.get_mut(fetched.index)?;
-                match &fetched.bytes {
-                    Ok(bytes) => *slot = Some(bytes.clone()),
-                    Err(reason) => return Some(Err(reason.clone())),
-                }
+    let ours = &awaited.on_server;
+    match update {
+        Update::Status(Status::SignedOut) => return Some(Err("signed out".to_owned())),
+        Update::Bodies(folder, fetched) if *folder == ours.folder => match fetched {
+            Fetched::Stored(uids) if uids.contains(&ours.uid) => awaited.body_missing = false,
+            Fetched::Refused { uids, reason } if uids.contains(&ours.uid) => {
+                return Some(Err(reason.clone()));
             }
             _ => return None,
+        },
+        Update::Attachment(fetched) if fetched.message == *ours => {
+            let slot = awaited.attachments.get_mut(fetched.index)?;
+            match &fetched.bytes {
+                Ok(bytes) => *slot = Some(bytes.clone()),
+                Err(reason) => return Some(Err(reason.clone())),
+            }
         }
-
-        awaited.complete().then_some(Ok(()))
+        _ => return None,
     }
+
+    awaited.complete().then_some(Ok(()))
 }

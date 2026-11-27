@@ -16,7 +16,7 @@ use crate::{
     domain::per_account::{AccountId, PerAccount},
     domain::uid::Uid,
     mail::body_fetch::{BodyRequest, Fetched, Request},
-    mail::routes::Routes,
+    mail::fetch_requests::{FetchLink, FetchRequests},
     mail::update::{BodyLink, Update},
     render::body::Body,
     render::html_job::HtmlJob,
@@ -26,6 +26,7 @@ use crate::{
     render::rendered_previews::{PreviewKey, RenderedPreviews},
     ui::list::inbox_view::InboxView,
     ui::preview::reading::Reading,
+    ui::state::ui::Ui,
 };
 
 /// Rows on each side of the selection whose Preview is made ready too.
@@ -33,20 +34,17 @@ const NEIGHBOURS: usize = 2;
 
 const OFFLINE: &str = "Not downloaded yet · offline";
 
-/// The connection bodies are fetched on.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Link {
-    /// Not yet up since Postal started: bodies are asked for once it is.
-    Starting,
-    Live,
-    Down,
-}
-
 /// What the render thread does: a Message's Preview, or HTML of Postal's
 /// own laid out, sent back as an Update of `account`.
 enum Work {
     Preview(Job),
     Html(AccountId, HtmlJob),
+}
+
+#[derive(Clone, Copy)]
+struct Sources<'a> {
+    caches: &'a PerAccount<Cache>,
+    fetch: &'a FetchRequests,
 }
 
 /// Gets Previews ready: fetches bodies the Cache lacks, renders on a thread
@@ -66,18 +64,15 @@ pub struct Previews {
     offline: HashSet<Uid>,
     /// The placeholder of each body the server refused, until a reconnect.
     refused: HashMap<Uid, String>,
-    links: PerAccount<Link>,
     /// Each Account's address, for the invitations its Previews show.
     emails: PerAccount<Arc<str>>,
     look: MailLook,
-    requests: Routes<Request>,
     jobs: mpsc::Sender<Work>,
 }
 
 impl Previews {
     /// Starts the render thread, which sends each Preview back to `updates`.
     pub fn start(
-        requests: Routes<Request>,
         accounts: &PerAccount<Config>,
         updates: UnboundedSender<(AccountId, Update)>,
         look: MailLook,
@@ -100,10 +95,8 @@ impl Previews {
             asked: None,
             offline: HashSet::new(),
             refused: HashMap::new(),
-            links: accounts.map(|_| Link::Starting),
             emails: accounts.map(|config| Arc::from(config.email.as_str())),
             look,
-            requests,
             jobs,
         }
     }
@@ -144,25 +137,26 @@ impl Previews {
             .map_or(Body::Loading, |message| self.body(view, message, width))
     }
 
-    /// Readies the Previews of the Messages `reading` unfolds, or else of the
-    /// selection and its neighbours, at `width`.
+    /// Readies the Previews of the Messages `ui` unfolds in Reading, or else
+    /// of the selection and its neighbours, at `width`.
     pub fn want(
         &mut self,
         caches: &PerAccount<Cache>,
-        view: &InboxView,
-        reading: Option<&Reading>,
+        ui: &Ui,
         width: u16,
+        fetch: &FetchRequests,
     ) -> Result<(), cache::Error> {
-        match reading {
-            Some(reading) => self.want_stack(caches, view, reading, width),
-            None => self.want_around(caches, view, width),
+        let sources = Sources { caches, fetch };
+        match ui.screen.showing.reading() {
+            Some(reading) => self.want_stack(sources, &ui.view, reading, width),
+            None => self.want_around(sources, &ui.view, width),
         }
     }
 
     /// When all are rendered already this does not allocate.
     fn want_around(
         &mut self,
-        caches: &PerAccount<Cache>,
+        sources: Sources<'_>,
         view: &InboxView,
         width: u16,
     ) -> Result<(), cache::Error> {
@@ -174,14 +168,14 @@ impl Previews {
             .selected_message()
             .and_then(|m| Some((m.account, m.folder.as_ref()?)));
         let key = |m: &Message| view.preview_key(m, width);
-        self.ready(caches, folder.or_else(|| shown(view)), wanted, key)?;
+        self.ready(sources, folder.or_else(|| shown(view)), wanted, key)?;
         Ok(())
     }
 
     /// The one at the cursor is asked for first.
     fn want_stack(
         &mut self,
-        caches: &PerAccount<Cache>,
+        sources: Sources<'_>,
         view: &InboxView,
         reading: &Reading,
         width: u16,
@@ -193,7 +187,7 @@ impl Previews {
             .filter(|m| m.body_key == cursor)
             .find_map(|m| Some((m.account, m.folder.as_ref()?)));
         let key = |m: &Message| view.preview_key(m, width);
-        self.ready(caches, at_cursor.or_else(|| shown(view)), wanted, key)
+        self.ready(sources, at_cursor.or_else(|| shown(view)), wanted, key)
     }
 
     /// Renders each `(message, selected)` whose body is cached under its `key`
@@ -201,7 +195,7 @@ impl Previews {
     /// When all are rendered already this does not allocate.
     fn ready<'m>(
         &mut self,
-        caches: &PerAccount<Cache>,
+        sources: Sources<'_>,
         folder: Option<(AccountId, &FolderName)>,
         wanted: impl Iterator<Item = (&'m Message, bool)>,
         key: impl Fn(&Message) -> PreviewKey,
@@ -212,7 +206,7 @@ impl Previews {
             self.switch(account, folder);
         }
 
-        let live = self.account.map(|account| self.links[account]);
+        let live = self.account.map(|account| sources.fetch.link(account));
 
         let mut request = BodyRequest {
             folder: self.folder.clone(),
@@ -234,28 +228,28 @@ impl Previews {
             let body = if here && self.fetching.contains(&message.uid) {
                 None
             } else {
-                caches[message.account].body(message.body_key)?
+                sources.caches[message.account].body(message.body_key)?
             };
 
             match body {
                 Some(body) => self.render(key, body),
                 // It came with the Thread, or comes once its Folder is asked.
                 None if !here => {}
-                None if live == Some(Link::Live) => {
+                None if live == Some(FetchLink::Live) => {
                     if selected {
                         request.selected = Some(message.uid);
                     } else {
                         request.neighbours.push(message.uid);
                     }
                 }
-                None if live == Some(Link::Down) => {
+                None if live == Some(FetchLink::Down) => {
                     self.offline.insert(message.uid);
                 }
                 None => {}
             }
         }
 
-        self.ask(request);
+        self.ask(request, sources.fetch);
         Ok(())
     }
 
@@ -281,7 +275,7 @@ impl Previews {
     }
 
     /// Sends `request` unless the latest one covers it, selection included.
-    fn ask(&mut self, mut request: BodyRequest) {
+    fn ask(&mut self, mut request: BodyRequest, fetch: &FetchRequests) {
         let covered = request.selected.is_none_or(|uid| self.asked == Some(uid))
             && request
                 .neighbours
@@ -297,7 +291,7 @@ impl Previews {
         self.fetching
             .extend(request.selected.iter().chain(&request.neighbours));
         if let Some(account) = self.account {
-            self.requests.send(account, Request::Bodies(request));
+            fetch.send(account, [Request::Bodies(request)]);
         }
     }
 
@@ -346,14 +340,11 @@ impl Previews {
     /// Down, what was asked for will not come; back up, every body that
     /// could not come is asked for again as it is wanted.
     pub fn link(&mut self, account: AccountId, link: BodyLink) {
-        let live = link == BodyLink::Up;
-        self.links[account] = if live { Link::Live } else { Link::Down };
-
         if Some(account) != self.account {
             return;
         }
 
-        if live {
+        if link == BodyLink::Up {
             self.offline.clear();
             self.refused.clear();
         } else {

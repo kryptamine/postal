@@ -18,7 +18,8 @@ use crate::{
     compose::reply_draft,
     domain::message::Message,
     domain::per_account::AccountId,
-    mail::reply_fetch::ReplyFetch,
+    mail::fetch_requests::FetchRequests,
+    mail::reply_fetch,
     mail::status::Status,
     mail::steering::Ask,
     ui::drafts::draft_preview::DraftPreview,
@@ -110,7 +111,7 @@ pub fn reply(
     tty: &mut Tty,
     ui: &mut Ui,
     world: World,
-    fetch: &ReplyFetch,
+    fetch: &FetchRequests,
     mut awaited: AwaitedReply,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
@@ -158,7 +159,7 @@ pub fn reply(
             Ok(())
         }
         _ => {
-            fetch.ask(&awaited);
+            fetch.send(message.account, reply_fetch::requests(&awaited));
             screen.replying = Some(awaited);
             Ok(())
         }

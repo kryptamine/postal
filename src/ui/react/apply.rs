@@ -8,7 +8,7 @@ use crate::{
     domain::uid::Uid,
     mail::backfill::Backfill,
     mail::status::Status,
-    mail::update::{BodyLink, Update},
+    mail::update::Update,
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
     ui::list::folder_show::{relist, show, switch},
@@ -34,6 +34,10 @@ pub fn apply(
     previews: &mut Previews,
 ) -> Result<(), Error> {
     let (caches, outbox) = (world.caches, world.outbox);
+    if let Some(link) = update.fetch_link() {
+        previews.link(account, link);
+    }
+
     match update {
         Update::Inbox => reshow_inbox(ui, caches)?,
         Update::Folders => relist(ui, caches)?,
@@ -51,17 +55,14 @@ pub fn apply(
         // Taken before the screen: an Attachment and inline images by the
         // parts asked for, arrivals by the Notifier.
         Update::Attachment(_) | Update::Inline(_) | Update::Arrived(_) => {}
-        Update::BodyLink(link) => {
-            previews.link(account, link);
-            ui.screen.backfill = None;
-        }
+        Update::BodyLink(_) => ui.screen.backfill = None,
         Update::Rendered(key, preview) => previews.rendered(key, preview),
         Update::LaidOut(laid) => {
             if let Some(preview) = ui.screen.over.get_mut::<DraftPreview>() {
                 preview.laid(laid);
             }
         }
-        Update::Status(status) => report(&mut ui.screen, previews, account, status),
+        Update::Status(status) => ui.screen.statuses[account] = status,
         Update::Backfill(Backfill::Fetching { done, total }) => {
             ui.screen.backfill = Some(Status::Syncing { done, total });
         }
@@ -146,13 +147,4 @@ fn paged(
 
     // In All Inboxes, an Account with nothing older sets no edge (ADR 0014).
     show(view, caches, None)
-}
-
-/// The sync connection of `account` is in `status` now.
-fn report(screen: &mut Screen, previews: &mut Previews, account: AccountId, status: Status) {
-    if status == Status::SignedOut {
-        previews.link(account, BodyLink::Down);
-    }
-
-    screen.statuses[account] = status;
 }

@@ -12,13 +12,14 @@ use crate::{
     compose::mailto::Mailto,
     compose::outbox::Outbox,
     domain::per_account::{AccountId, PerAccount},
-    mail::forward_fetch::ForwardFetch,
-    mail::reply_fetch::ReplyFetch,
+    mail::fetch_requests::FetchRequests,
+    mail::forward_fetch,
+    mail::reply_fetch,
     mail::routes::Routes,
     mail::status::Status,
     mail::steering::Ask,
     mail::sync,
-    mail::update::Update,
+    mail::update::{BodyLink, Update},
     ui::alloc_count,
     ui::drafts::composing,
     ui::drafts::draft_layer,
@@ -60,16 +61,12 @@ pub enum Error {
 }
 
 /// The network work behind the screen and what it reports; what is asked of
-/// it (older pages, what a Reply or Forward waits on, the parts the cached
-/// body leaves out) and of the sync connection; and where a Send leaves from.
+/// the fetch and sync connections; and where a Send leaves from.
 pub struct Background<'a, W, U> {
     pub work: W,
     /// Each tells the Account it is of.
     pub updates: U,
-    pub older: OlderPages,
-    pub replies: ReplyFetch,
-    pub forwards: ForwardFetch,
-    pub parts: WantedParts,
+    pub fetch: FetchRequests,
     pub asks: Routes<Ask>,
     pub accounts: Accounts<'a>,
     pub outbox: &'a Outbox,
@@ -103,9 +100,8 @@ pub struct Model<'a> {
     pub previews: &'a mut Previews,
     pub ui: Ui,
     pub world: World<'a>,
+    pub fetch: FetchRequests,
     older: OlderPages,
-    pub replies: ReplyFetch,
-    pub forwards: ForwardFetch,
     pub parts: WantedParts,
     pub notifier: Notifier,
 }
@@ -135,17 +131,16 @@ pub async fn run(
     };
 
     let (statuses, failure) = (background.statuses, background.failure);
-    let ui = opening(world, &tty, statuses, failure, previews)?;
+    let ui = opening(world, &tty, statuses, failure)?;
     let mut model = Model {
         tty,
         theme,
         previews,
         ui,
         world,
-        older: background.older,
-        replies: background.replies,
-        forwards: background.forwards,
-        parts: background.parts,
+        fetch: background.fetch,
+        older: OlderPages::default(),
+        parts: WantedParts::default(),
         notifier: Notifier::new(background.notify),
     };
 
@@ -216,9 +211,8 @@ impl Model<'_> {
 
         let text = panes.preview.map(preview_pane::text_area);
         if let Some(text) = text {
-            let (view, reading) = (&self.ui.view, self.ui.screen.showing.reading());
-            let caches = self.world.caches;
-            self.previews.want(caches, view, reading, text.width)?;
+            self.previews
+                .want(self.world.caches, &self.ui, text.width, &self.fetch)?;
         }
 
         if let Some(preview) = self.ui.screen.over.get_mut::<DraftPreview>() {
@@ -226,7 +220,7 @@ impl Model<'_> {
             draft_layer::lay_out(preview, accounts, panes.body, self.previews, look);
         }
 
-        self.older.want(&self.ui.view);
+        self.older.want(&self.ui.view, &self.fetch);
         self.draw()?;
         Ok(text)
     }
@@ -245,21 +239,26 @@ impl Model<'_> {
     }
 
     fn arrive(&mut self, account: AccountId, update: Update) -> Result<(), Error> {
-        let replying = self.ui.screen.replying.as_mut();
-        let arrived = self.replies.notice(account, &update, replying);
-        let forwarding = self.ui.screen.forwarding.as_mut();
-        let forwarded = self.forwards.notice(account, &update, forwarding);
-        if let Some(toast) = self.parts.notice(account, &update) {
-            self.ui.screen.toast = Some(toast);
+        if self.fetch.notice(account, &update) == Some(BodyLink::Up) {
+            self.ask_awaited(account);
         }
 
+        let screen = &mut self.ui.screen;
+        let replied = (screen.replying.as_mut())
+            .and_then(|awaited| reply_fetch::notice(account, &update, awaited));
+        let forwarded = (screen.forwarding.as_mut())
+            .and_then(|awaited| forward_fetch::notice(account, &update, awaited));
+        if let Some(toast) = self.parts.notice(account, &update) {
+            screen.toast = Some(toast);
+        }
+
+        self.older.notice(&update);
         if let Update::Arrived(arrivals) = &update {
             self.notifier.arrived(arrivals);
         }
 
-        let (account, update) = self.older.notice((account, update));
         apply::apply(account, update, &mut self.ui, self.world, self.previews)?;
-        if let Some(result) = arrived {
+        if let Some(result) = replied {
             composing::fetched(result, &mut self.tty, &mut self.ui.screen, self.world)?;
         }
 
@@ -268,6 +267,27 @@ impl Model<'_> {
         }
 
         Ok(())
+    }
+
+    /// What a Reply or Forward of `account` asked for went down with the
+    /// fetch connection: back up, it asks again.
+    fn ask_awaited(&self, account: AccountId) {
+        let screen = &self.ui.screen;
+        if let Some(awaited) = screen
+            .replying
+            .as_ref()
+            .filter(|a| a.message.account == account)
+        {
+            self.fetch.send(account, reply_fetch::requests(awaited));
+        }
+
+        if let Some(awaited) = screen
+            .forwarding
+            .as_ref()
+            .filter(|a| a.message.account == account)
+        {
+            self.fetch.send(account, forward_fetch::requests(awaited));
+        }
     }
 
     /// Takes one input event; the `Exit` when it ends the TUI.

@@ -2,12 +2,11 @@ use crate::{
     domain::inline_image::InlineImage,
     domain::message::Message,
     domain::message_ref::MessageRef,
-    domain::per_account::{AccountId, PerAccount},
+    domain::per_account::AccountId,
     mail::attachment_fetch::{AttachmentFetched, AttachmentRequest},
     mail::body_fetch::Request,
+    mail::fetch_requests::FetchRequests,
     mail::inline_fetch::{InlineFetched, InlineRequest},
-    mail::routes::Routes,
-    mail::status::Status,
     mail::update::{BodyLink, Update},
     render::file_size,
     render::original_page::Original,
@@ -63,35 +62,23 @@ impl Waiting {
 /// Asks the fetch connection for the parts the cached body leaves out (the
 /// attachments picked, the inline images of a Message opened in the
 /// browser) and opens or saves what each was asked for as it comes.
+#[derive(Default)]
 pub struct WantedParts {
-    requests: Routes<Request>,
-    /// Whether each Account's fetch connection is up.
-    live: PerAccount<bool>,
     waiting: Vec<Waiting>,
 }
 
 impl WantedParts {
-    pub const fn new(requests: Routes<Request>, live: PerAccount<bool>) -> Self {
-        Self {
-            requests,
-            live,
-            waiting: Vec::new(),
-        }
-    }
-
     /// Asks for `wanted`; returns the Toast saying so, or that it cannot.
-    pub fn ask(&mut self, wanted: Wanted) -> Toast {
-        if !self.live[wanted.account] {
-            return Toast::error(OFFLINE);
-        }
-
+    pub fn ask(&mut self, wanted: Wanted, fetch: &FetchRequests) -> Toast {
         let request = AttachmentRequest {
             message: wanted.message.clone(),
             index: wanted.index,
         };
 
-        self.requests
-            .send(wanted.account, Request::Attachment(request));
+        if !fetch.send(wanted.account, [Request::Attachment(request)]) {
+            return Toast::error(OFFLINE);
+        }
+
         let size = file_size::shown(wanted.size);
         let toast = Toast::lasting(format!("downloading {} · {}…", wanted.name, size.as_str()));
         self.waiting.push(Waiting::Attachment(wanted));
@@ -100,15 +87,12 @@ impl WantedParts {
 
     /// Opens `message`, whose cached body is `raw`, in the browser, or asks
     /// for its inline images first; offline, it opens without them.
-    pub fn original(&mut self, message: &Message, raw: &[u8]) -> Toast {
+    pub fn original(&mut self, message: &Message, raw: &[u8], fetch: &FetchRequests) -> Toast {
         let original = Original::parse(raw);
         let name = format!("{}.html", message.body_key);
         let ids = original.inline_ids();
         let account = message.account;
-        let on_server = message
-            .on_server()
-            .filter(|_| !ids.is_empty() && self.live[account]);
-        let Some(on_server) = on_server else {
+        let Some(on_server) = message.on_server().filter(|_| !ids.is_empty()) else {
             return opened(&name, &original, &[], None);
         };
 
@@ -117,7 +101,10 @@ impl WantedParts {
             ids,
         };
 
-        self.requests.send(account, Request::Inline(request));
+        if !fetch.send(account, [Request::Inline(request)]) {
+            return opened(&name, &original, &[], None);
+        }
+
         self.waiting.push(Waiting::Original(WantedOriginal {
             account,
             message: on_server,
@@ -127,23 +114,19 @@ impl WantedParts {
         Toast::lasting("downloading its images…")
     }
 
-    /// Follows the fetch connection of `account`; the Toast to show when
-    /// `update` brings a part asked for, or loses those in flight.
+    /// The Toast to show when `update` of `account` brings a part asked for,
+    /// or loses those in flight.
     pub fn notice(&mut self, account: AccountId, update: &Update) -> Option<Toast> {
-        let up = match update {
-            Update::BodyLink(link) => *link == BodyLink::Up,
-            Update::Status(Status::SignedOut) => false,
-            Update::Attachment(fetched) => return self.attachment(account, fetched),
-            Update::Inline(fetched) => return self.images(account, fetched),
-            _ => return None,
-        };
-
-        self.live[account] = up;
-        if up {
-            return None;
+        match update {
+            Update::Attachment(fetched) => self.attachment(account, fetched),
+            Update::Inline(fetched) => self.images(account, fetched),
+            _ if update.fetch_link() == Some(BodyLink::Down) => self.lost(account),
+            _ => None,
         }
+    }
 
-        // What was in flight went down with the connection.
+    /// What was in flight went down with the connection.
+    fn lost(&mut self, account: AccountId) -> Option<Toast> {
         let mut toast = None;
         for lost in self.waiting.extract_if(.., |w| w.account() == account) {
             toast = Some(match lost {

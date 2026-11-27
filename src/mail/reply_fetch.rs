@@ -1,78 +1,44 @@
 use crate::{
     compose::awaited_reply::AwaitedReply,
-    domain::per_account::{AccountId, PerAccount},
+    domain::per_account::AccountId,
     mail::body_fetch::{Fetched, Request},
-    mail::routes::Routes,
     mail::status::Status,
-    mail::update::{BodyLink, Update},
+    mail::update::Update,
 };
 
-/// Asks the fetch connection for the bodies an `AwaitedReply` waits on,
-/// and tells when they are in the Cache.
-pub struct ReplyFetch {
-    requests: Routes<Request>,
-    /// Whether each Account's fetch connection is up.
-    live: PerAccount<bool>,
+/// What the fetch connection is asked for while `awaited` waits.
+pub fn requests(awaited: &AwaitedReply) -> [Request; 1] {
+    [Request::Awaited(awaited.missing.clone())]
 }
 
-impl ReplyFetch {
-    pub const fn new(requests: Routes<Request>, live: PerAccount<bool>) -> Self {
-        Self { requests, live }
+/// Says when `update` of `account` brings the last body `awaited` waits
+/// on, or why the answered one will not come.
+pub fn notice(
+    account: AccountId,
+    update: &Update,
+    awaited: &mut AwaitedReply,
+) -> Option<Result<(), String>> {
+    let message = &awaited.message;
+    if message.account != account {
+        return None;
     }
 
-    /// Asks now while the fetch connection is up, else once it is.
-    pub fn ask(&self, awaited: &AwaitedReply) {
-        let account = awaited.message.account;
-        if self.live[account] {
-            let request = Request::Reply(awaited.missing.clone());
-            self.requests.send(account, request);
-        }
-    }
-
-    /// Follows the fetch connection, asking again once it is back: what was
-    /// in flight went down with it. Says when `update` brings the last body
-    /// `awaited` waits on, or why the answered one will not come.
-    pub fn notice(
-        &mut self,
-        account: AccountId,
-        update: &Update,
-        awaited: Option<&mut AwaitedReply>,
-    ) -> Option<Result<(), String>> {
-        let awaited = match update {
-            Update::BodyLink(link) => {
-                self.live[account] = *link == BodyLink::Up;
-
-                if let Some(awaited) = awaited.filter(|a| a.message.account == account) {
-                    self.ask(awaited);
-                }
-
-                return None;
+    let (folder, uids) = match update {
+        Update::Status(Status::SignedOut) => return Some(Err("signed out".to_owned())),
+        Update::Bodies(folder, Fetched::Stored(uids)) => (folder, uids),
+        Update::Bodies(folder, Fetched::Refused { uids, reason }) => {
+            if message.folder.as_ref() == Some(folder) && uids.contains(&message.uid) {
+                return Some(Err(reason.clone()));
             }
-            _ => awaited?,
-        };
 
-        let message = &awaited.message;
-        if message.account != account {
-            return None;
+            (folder, uids)
         }
+        _ => return None,
+    };
 
-        let (folder, uids) = match update {
-            Update::Status(Status::SignedOut) => return Some(Err("signed out".to_owned())),
-            Update::Bodies(folder, Fetched::Stored(uids)) => (folder, uids),
-            Update::Bodies(folder, Fetched::Refused { uids, reason }) => {
-                if message.folder.as_ref() == Some(folder) && uids.contains(&message.uid) {
-                    return Some(Err(reason.clone()));
-                }
-
-                (folder, uids)
-            }
-            _ => return None,
-        };
-
-        let before = awaited.missing.len();
-        awaited
-            .missing
-            .retain(|m| m.folder != *folder || !uids.contains(&m.uid));
-        (awaited.missing.is_empty() && before > 0).then_some(Ok(()))
-    }
+    let before = awaited.missing.len();
+    awaited
+        .missing
+        .retain(|m| m.folder != *folder || !uids.contains(&m.uid));
+    (awaited.missing.is_empty() && before > 0).then_some(Ok(()))
 }

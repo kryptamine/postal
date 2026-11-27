@@ -7,6 +7,7 @@ pub mod body_fetch;
 mod body_index;
 pub mod discover;
 mod envelope_pass;
+pub mod fetch_requests;
 mod flag_changes;
 mod folder_list;
 mod folder_pass;
