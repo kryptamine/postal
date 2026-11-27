@@ -34,4 +34,5 @@ mod secret_store;
 pub mod sign_in;
 pub mod signature;
 pub mod unlink;
+mod written;
 pub mod xdg;

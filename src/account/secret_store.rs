@@ -1,16 +1,17 @@
 use std::{error::Error, path::Path};
 
-use serde::Deserialize;
+use crate::{
+    account::credential::Credential, account::keychain, account::secret, account::written::written,
+};
 
-use crate::{account::credential::Credential, account::keychain, account::secret};
-
-/// Where every Account's secret is kept; `dir` is the config directory.
-#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum SecretStore {
-    #[default]
-    Keychain,
-    File,
+written! {
+    /// Where every Account's secret is kept; `dir` is the config directory.
+    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    pub enum SecretStore {
+        #[default]
+        Keychain = "keychain",
+        File = "file",
+    }
 }
 
 impl SecretStore {
@@ -39,12 +40,5 @@ impl SecretStore {
         }
 
         Ok(())
-    }
-
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Keychain => "keychain",
-            Self::File => "file",
-        }
     }
 }

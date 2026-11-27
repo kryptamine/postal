@@ -1,15 +1,15 @@
-use serde::Deserialize;
+use crate::account::written::written;
 
-/// Where an Account's mail lives, and so how it signs in.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Provider {
-    #[default]
-    Google,
-    #[serde(rename = "icloud")]
-    ICloud,
-    /// Any IMAP/SMTP server, its hosts written in the Account's tables.
-    Other,
+written! {
+    /// Where an Account's mail lives, and so how it signs in.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+    pub enum Provider {
+        #[default]
+        Google = "google",
+        ICloud = "icloud",
+        /// Any IMAP/SMTP server, its hosts written in the Account's tables.
+        Other = "other",
+    }
 }
 
 impl Provider {
@@ -29,15 +29,6 @@ impl Provider {
             Self::Google => "Google",
             Self::ICloud => "iCloud",
             Self::Other => "IMAP",
-        }
-    }
-
-    /// The value of `provider` in `config.toml`.
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Google => "google",
-            Self::ICloud => "icloud",
-            Self::Other => "other",
         }
     }
 }

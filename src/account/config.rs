@@ -1,15 +1,18 @@
 use std::{
-    io,
+    fmt, io,
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use serde::Deserialize;
+use serde::{
+    Deserialize, Deserializer,
+    de::{self, IntoDeserializer, MapAccess, Visitor, value::MapAccessDeserializer},
+};
 
 pub use crate::account::secret_store::SecretStore;
 use crate::{
     account::oauth::Endpoints, account::partial_config::PartialConfig, account::provider::Provider,
-    account::signature::Signature,
+    account::signature::Signature, account::written::written,
 };
 
 /// One Account's settings from `config.toml`, with those every Account shares.
@@ -93,92 +96,53 @@ pub fn domain(email: &str) -> String {
     domain.trim().to_lowercase()
 }
 
-/// How a Draft's body is sent: `markdown` sends its HTML beside the text.
-#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum ComposeFormat {
-    #[default]
-    Plain,
-    Markdown,
-}
-
-impl ComposeFormat {
-    /// The value of `compose-format` in `config.toml`.
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Plain => "plain",
-            Self::Markdown => "markdown",
-        }
+written! {
+    /// How a Draft's body is sent: `markdown` sends its HTML beside the text.
+    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    pub enum ComposeFormat {
+        #[default]
+        Plain = "plain",
+        Markdown = "markdown",
     }
 }
 
-/// Whether to draw Nerd Font icons: `auto` guesses from the terminal.
-#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum IconChoice {
-    #[default]
-    Auto,
-    Nerd,
-    None,
-}
-
-impl IconChoice {
-    /// The value of `icons` in `config.toml`.
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::Nerd => "nerd",
-            Self::None => "none",
-        }
+written! {
+    /// Whether to draw Nerd Font icons: `auto` guesses from the terminal.
+    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    pub enum IconChoice {
+        #[default]
+        Auto = "auto",
+        Nerd = "nerd",
+        None = "none",
     }
 }
 
-/// When new mail in an Inbox raises a desktop notification.
-#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum NotifyChoice {
-    /// Only while the terminal does not have focus.
-    #[default]
-    Unfocused,
-    Always,
-    Never,
-}
-
-impl NotifyChoice {
-    /// The value of `notify` in `config.toml`.
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Unfocused => "unfocused",
-            Self::Always => "always",
-            Self::Never => "never",
-        }
+written! {
+    /// When new mail in an Inbox raises a desktop notification.
+    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    pub enum NotifyChoice {
+        /// Only while the terminal does not have focus.
+        #[default]
+        Unfocused = "unfocused",
+        Always = "always",
+        Never = "never",
     }
 }
 
-/// Where Correspondents come from besides mail: `macos` adds the people
-/// in the system's Contacts, read anew each time (ADR 0035).
-#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum ContactsChoice {
-    #[default]
-    None,
-    Macos,
-}
-
-impl ContactsChoice {
-    /// The value of `contacts` in `config.toml`.
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Macos => "macos",
-        }
+written! {
+    /// Where Correspondents come from besides mail: `macos` adds the people
+    /// in the system's Contacts, read anew each time (ADR 0035).
+    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    pub enum ContactsChoice {
+        #[default]
+        None = "none",
+        Macos = "macos",
     }
 }
 
 /// What a mailto: link opens Postal in on macOS: `terminal = "ghostty"`,
 /// or `terminal = { command = "..." }` for a program of the user's own.
-#[derive(Deserialize, Clone, PartialEq, Eq)]
-#[serde(from = "WrittenTerminal")]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Terminal {
     App(TerminalApp),
     /// Run with Postal's path and the link.
@@ -191,16 +155,49 @@ impl Default for Terminal {
     }
 }
 
-#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum TerminalApp {
-    /// Terminal.app.
-    #[default]
-    Terminal,
-    Ghostty,
-    Kitty,
-    Wezterm,
-    Iterm2,
+impl<'de> Deserialize<'de> for Terminal {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(WrittenTerminal)
+    }
+}
+
+/// `terminal` as written: a name, or a table naming a command.
+struct WrittenTerminal;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OwnTerminal {
+    command: String,
+}
+
+impl<'de> Visitor<'de> for WrittenTerminal {
+    type Value = Terminal;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a terminal's name, or a table with its `command`")
+    }
+
+    fn visit_str<E: de::Error>(self, name: &str) -> Result<Terminal, E> {
+        TerminalApp::deserialize(name.into_deserializer()).map(Terminal::App)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Terminal, A::Error> {
+        let own = OwnTerminal::deserialize(MapAccessDeserializer::new(map))?;
+        Ok(Terminal::Command(own.command))
+    }
+}
+
+written! {
+    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    pub enum TerminalApp {
+        /// Terminal.app.
+        #[default]
+        Terminal = "terminal",
+        Ghostty = "ghostty",
+        Kitty = "kitty",
+        Wezterm = "wezterm",
+        Iterm2 = "iterm2",
+    }
 }
 
 impl TerminalApp {
@@ -211,44 +208,6 @@ impl TerminalApp {
         Self::Wezterm,
         Self::Iterm2,
     ];
-
-    /// The value of `terminal` in `config.toml`.
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Terminal => "terminal",
-            Self::Ghostty => "ghostty",
-            Self::Kitty => "kitty",
-            Self::Wezterm => "wezterm",
-            Self::Iterm2 => "iterm2",
-        }
-    }
-}
-
-/// `terminal` as written: a name, or a table naming a command.
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum WrittenTerminal {
-    Terminal,
-    Ghostty,
-    Kitty,
-    Wezterm,
-    Iterm2,
-    Command(String),
-}
-
-impl From<WrittenTerminal> for Terminal {
-    fn from(written: WrittenTerminal) -> Self {
-        let app = match written {
-            WrittenTerminal::Command(command) => return Self::Command(command),
-            WrittenTerminal::Terminal => TerminalApp::Terminal,
-            WrittenTerminal::Ghostty => TerminalApp::Ghostty,
-            WrittenTerminal::Kitty => TerminalApp::Kitty,
-            WrittenTerminal::Wezterm => TerminalApp::Wezterm,
-            WrittenTerminal::Iterm2 => TerminalApp::Iterm2,
-        };
-
-        Self::App(app)
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
