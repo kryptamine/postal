@@ -2,9 +2,9 @@
 -- Message opened to read: its pane, its session, and the one write the agent
 -- is allowed, reviewed hunk by hunk (ADR 0018, 0019, 0020).
 local acp = require("postal.acp")
-local body = require("postal.body")
 local config = require("postal.config")
 local kinds = require("postal.kinds")
+local mail = require("postal.mail")
 local pane = require("postal.pane")
 local quote = require("postal.quote")
 local requirements = require("postal.requirements")
@@ -173,7 +173,7 @@ end
 --- The body the agent sees: its last write this turn, whatever the review
 --- made of it, else the Draft's own.
 function Chat:body()
-	return self.proposed or body.get(self.mail)
+	return self.proposed or mail.parse(self.mail):body()
 end
 
 --- Opens a review of the agent's body `text`, with the Quote of the one its

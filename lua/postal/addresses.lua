@@ -1,6 +1,7 @@
 -- Diagnostics over a Draft's `To:` and `Cc:`: a recipient Postal would
 -- refuse to send to, and an address no mail of the accounts holds.
-local header = require("postal.header")
+local address = require("postal.address")
+local mail = require("postal.mail")
 local recipients = require("postal.recipients")
 
 local M = {}
@@ -33,11 +34,11 @@ end
 
 --- The diagnostics of Draft buffer `buf`'s headers as they stand.
 function M.diagnose(buf)
-	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+	local doc = mail.parse(buf)
 	local diagnostics = {}
-	for _, field in ipairs(header.fields(buf)) do
+	for _, field in ipairs(doc.fields) do
 		if field.name == "to" or field.name == "cc" then
-			for _, recipient in ipairs(header.recipients(lines, field.row - 1)) do
+			for _, recipient in ipairs(address.recipients(doc.lines, field)) do
 				local message, severity = problem(buf, recipient.text)
 				if message then
 					table.insert(diagnostics, {

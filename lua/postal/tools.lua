@@ -1,7 +1,7 @@
 -- The tools Postal's MCP server offers an agent over one mail (ADR 0020),
 -- a set for each kind of mail: what MCP lists, which permission requests
 -- they answer to, and their runs.
-local body = require("postal.body")
+local mail = require("postal.mail")
 
 local M = {}
 
@@ -62,7 +62,7 @@ M.message = {
 		description = "The email Message the user reads: its headers, then its body as text.",
 		inputSchema = { type = "object" },
 		run = function(chat)
-			return body.whole(chat.mail)
+			return mail.parse(chat.mail):whole()
 		end,
 	},
 }

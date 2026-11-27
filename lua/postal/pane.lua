@@ -2,11 +2,11 @@
 -- each message under `## Me` or `## <agent>`, and the user's next one typed
 -- under the `## Me` at its bottom.
 local bar = require("postal.bar")
-local body = require("postal.body")
 local help = require("postal.help")
 local history = require("postal.history")
 local icons = require("postal.icons")
 local keys = require("postal.keys")
+local mail = require("postal.mail")
 
 local M = {}
 
@@ -177,7 +177,8 @@ function M.statusline(buf)
 		return ""
 	end
 
-	local subject = body.headless(self.mail) and self.kind.noun or body.header(self.mail, "Subject")
+	local doc = mail.parse(self.mail)
+	local subject = doc.headless and self.kind.noun or doc:header("subject")
 	return bar.statusline(self.agent, subject)
 end
 

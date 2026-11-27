@@ -1,12 +1,34 @@
--- The Quote a Draft's body ends in: its `>` lines and the line above them
--- saying whom they quote, as `src/render/quoted_text.rs` cuts it.
+-- The Quote a mail's body ends in: its `>` lines and the attribution above
+-- them, matching `src/render/quoted_text.rs` (ADR 0015).
 local M = {}
 
--- As `src/render/attribution.rs` tells it: a colon at the end, and a date
--- or an address.
+local LONGEST = 200
+
+-- Matches `src/render/attribution.rs`: a colon at the end, and a date or an
+-- address.
 local function names(line)
 	line = vim.trim(line)
-	return vim.endswith(line, ":") and vim.fn.strchars(line) <= 200 and line:find("[%d@]") ~= nil
+	return vim.endswith(line, ":") and vim.fn.strchars(line) <= LONGEST and line:find("[%d@]") ~= nil
+end
+
+--- The 0-based row in `lines` (at or after 0-based `first`) where the
+--- trailing Quote starts; nil when `lines` ends in none.
+function M.start(lines, first)
+	local n, quoted = #lines, false
+	while n > first and (vim.startswith(lines[n], ">") or vim.trim(lines[n]) == "") do
+		quoted = quoted or vim.startswith(lines[n], ">")
+		n = n - 1
+	end
+
+	if not quoted then
+		return nil
+	end
+
+	if n > first and names(lines[n]) then
+		n = n - 1
+	end
+
+	return n
 end
 
 --- `text` cut into the words before its Quote and the Quote; the Quote is
@@ -17,21 +39,12 @@ function M.cut(text)
 		table.remove(lines)
 	end
 
-	local n, quoted = #lines, false
-	while n > 0 and (vim.startswith(lines[n], ">") or vim.trim(lines[n]) == "") do
-		quoted = quoted or vim.startswith(lines[n], ">")
-		n = n - 1
-	end
-
-	if not quoted then
+	local at = M.start(lines, 0)
+	if not at then
 		return text, ""
 	end
 
-	if n > 0 and names(lines[n]) then
-		n = n - 1
-	end
-
-	local own = n > 0 and table.concat(lines, "\n", 1, n) .. "\n" or ""
+	local own = at > 0 and table.concat(lines, "\n", 1, at) .. "\n" or ""
 	return own, text:sub(#own + 1)
 end
 

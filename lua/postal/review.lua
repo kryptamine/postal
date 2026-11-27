@@ -1,8 +1,8 @@
 -- The review of an agent's edit to a Draft's body, hunk by hunk: each is
 -- marked over the buffer until the user accepts or rejects it (ADR 0019).
-local body = require("postal.body")
 local hunks = require("postal.hunks")
 local keys = require("postal.keys")
+local mail = require("postal.mail")
 
 local M = {}
 
@@ -37,7 +37,7 @@ Review.__index = Review
 --- review. `changed(summary, undone)` runs on each decision, `summary` nil
 --- at the end, `undone` when an undo took the agent's edit back.
 function M.new(draft, sent, proposed, changed)
-	local found = hunks.between(sent, body.get(draft), proposed)
+	local found = hunks.between(sent, mail.parse(draft):body(), proposed)
 	if #found == 0 then
 		return nil
 	end
@@ -57,7 +57,7 @@ function Review:place()
 		-- A fresh undo step, so that an undo of the agent's edit leaves the
 		-- user's own typing before it.
 		vim.o.undolevels = vim.o.undolevels
-		local row, added = body.row(buf)
+		local row, added = mail.ensure_body(buf)
 		first = row
 		local joined = added
 		for n = #self.hunks, 1, -1 do
@@ -254,8 +254,9 @@ end
 --- The body with every hunk left rejected: a conflict already shows the
 --- user's lines, every other hunk gives back the ones it replaced.
 function Review:base()
-	local first = body.start(self.draft)
-	local lines = vim.api.nvim_buf_get_lines(self.draft, first, -1, false)
+	local doc = mail.parse(self.draft)
+	local first = doc.body_start
+	local lines = vim.list_slice(doc.lines, first + 1)
 	for n = #self.hunks, 1, -1 do
 		local hunk = self.hunks[n]
 		if not hunk.conflict then
@@ -265,7 +266,7 @@ function Review:base()
 		end
 	end
 
-	return body.join(lines)
+	return mail.join(lines)
 end
 
 --- How many hunks are left, and how to decide them.

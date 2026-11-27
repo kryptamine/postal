@@ -1,8 +1,8 @@
 -- The file of an `Attach:` line in a Postal Draft: where it starts under
 -- the cursor, the paths it may complete to and the file it names, as Postal
 -- reads them, and each file's size beside its line.
-local header = require("postal.header")
 local keys = require("postal.keys")
+local mail = require("postal.mail")
 
 local M = {}
 
@@ -14,13 +14,13 @@ local LIMIT = 25 * 1024 * 1024
 --- The 0-based byte column where the path of the `Attach:` line under the
 --- cursor starts; nil anywhere else. `row` is 1-based.
 function M.start(buf, row, col)
-	local name, at = header.at(buf, row)
-	if name ~= "attach" or at ~= row then
+	local doc = mail.parse(buf)
+	local field = doc:field_at(row - 1)
+	if not field or field.name ~= "attach" or field.row ~= row - 1 then
 		return nil
 	end
 
-	local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1]
-	local start = #line:match("^[^:]*:%s*")
+	local start = #doc.lines[row]:match("^[^:]*:%s*")
 	return start <= col and start or nil
 end
 
@@ -55,11 +55,11 @@ function M.resolve(written)
 	return vim.fs.joinpath(home, under)
 end
 
--- The `Attach:` headers of `buf` naming a file.
-local function attached(buf)
+-- The `Attach:` headers of `doc` naming a file.
+local function attached(doc)
 	return vim.tbl_filter(function(field)
 		return field.name == "attach" and field.value ~= ""
-	end, header.fields(buf))
+	end, doc.fields)
 end
 
 local function size(bytes)
@@ -88,9 +88,9 @@ end
 function M.mark(buf)
 	vim.api.nvim_buf_clear_namespace(buf, NS, 0, -1)
 	local total, last = 0, nil
-	for _, field in ipairs(attached(buf)) do
+	for _, field in ipairs(attached(mail.parse(buf))) do
 		local text, group, bytes = state(field.value)
-		total, last = total + bytes, field.row - 1
+		total, last = total + bytes, field.row
 		vim.api.nvim_buf_set_extmark(buf, NS, last, 0, { virt_text = { { text, group } } })
 	end
 
@@ -103,12 +103,8 @@ end
 --- Edits the file of the `Attach:` line under the cursor; elsewhere, the
 --- key does what it does unmapped.
 local function open()
-	local _, at = header.at(0, vim.api.nvim_win_get_cursor(0)[1])
-	local field = vim.iter(attached(0)):find(function(f)
-		return f.row == at
-	end)
-
-	if not field then
+	local field = mail.parse(0):field_at(vim.api.nvim_win_get_cursor(0)[1] - 1)
+	if not field or field.name ~= "attach" or field.value == "" then
 		vim.api.nvim_feedkeys(vim.keycode(keys.lhs.attach), "n", false)
 		return
 	end

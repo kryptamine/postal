@@ -11,6 +11,7 @@ local contacts = require("postal.contacts")
 local keys = require("postal.keys")
 local layout = require("postal.layout")
 local links = require("postal.links")
+local mail = require("postal.mail")
 local markdown = require("postal.markdown")
 local prompts = require("postal.prompts")
 local recipients = require("postal.recipients")
@@ -166,6 +167,7 @@ function M.setup(opts)
 			pattern = kind.pattern,
 			callback = function(event)
 				agent.close(event.buf)
+				mail.forget(event.buf)
 				if kind.unload then
 					kind.unload(event.buf)
 				end
