@@ -1,22 +1,11 @@
 use std::{io, path::PathBuf};
 
 use crate::{
-    compose::draft_file,
-    compose::draft_notes::DraftNotes,
-    compose::forward_draft,
-    compose::forwarded,
-    domain::message::Message,
-    mail::awaited_parts::AwaitedParts,
-    mail::fetch_requests::FetchRequests,
-    mail::status::Status,
-    ui::drafts::awaiting::{self, Waiting},
-    ui::drafts::composing,
-    ui::error::Error,
-    ui::state::screen::Screen,
-    ui::state::toast::Toast,
-    ui::state::ui::Ui,
-    ui::terminal::tty::Tty,
-    ui::world::World,
+    compose::draft_file, compose::draft_notes::DraftNotes, compose::forward_draft,
+    compose::forwarded, domain::message::Message, mail::awaited_parts::AwaitedParts,
+    mail::fetch_requests::FetchRequests, mail::status::Status, ui::drafts::awaiting::Waiting,
+    ui::drafts::composing, ui::error::Error, ui::state::screen::Screen, ui::state::toast::Toast,
+    ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
 };
 
 /// Forward of the selected Message, in Reading of the one at the cursor,
@@ -29,19 +18,19 @@ pub fn forward(
     fetch: &FetchRequests,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
-    let message = view.at_cursor(screen.showing().cursor());
+    let message = view.at_cursor(screen.showing.cursor());
 
     let Some(message) = message.cloned() else {
         return Ok(());
     };
 
     // A Reply or Forward still waiting would open its own Draft over this one.
-    awaiting::cancel(screen, fetch);
+    screen.awaited.cancel(fetch);
     let body_missing = !world.caches[message.account].has_body(message.body_key)?;
     let attachments = message.attachments.iter().count();
     let Some(on_server) = message.on_server() else {
         if body_missing || attachments > 0 {
-            screen.set_toast(Toast::new("open the Message from its Folder"));
+            screen.toast = Some(Toast::new("open the Message from its Folder"));
             return Ok(());
         }
 
@@ -62,11 +51,13 @@ pub fn forward(
     }
 
     if screen.statuses[message.account] == Status::SignedOut {
-        screen.set_toast(Toast::new("not downloaded · signed out"));
+        screen.toast = Some(Toast::new("not downloaded · signed out"));
         return Ok(());
     }
 
-    awaiting::start(screen, fetch, Waiting::forward(message, parts));
+    screen
+        .awaited
+        .start(fetch, Waiting::forward(message, parts));
     Ok(())
 }
 
@@ -82,7 +73,7 @@ pub fn forwarded(
         Ok(attachments) => attachments,
         Err(reason) => {
             tracing::warn!("fetching the Message to forward failed: {reason}");
-            screen.set_toast(Toast::error(format!("couldn't forward: {reason}")));
+            screen.toast = Some(Toast::error(format!("couldn't forward: {reason}")));
             return Ok(());
         }
     };
@@ -101,7 +92,7 @@ fn open(
 ) -> Result<(), Error> {
     let account = message.account;
     let Some(raw) = world.caches[account].body(message.body_key)? else {
-        screen.set_toast(Toast::error("could not fetch the Message"));
+        screen.toast = Some(Toast::error("could not fetch the Message"));
         return Ok(());
     };
 
@@ -123,7 +114,7 @@ fn open(
         Ok(path) => path,
         Err(error) => {
             tracing::error!("creating a Forward's Draft failed: {error}");
-            screen.set_toast(Toast::error("could not create the Draft"));
+            screen.toast = Some(Toast::error("could not create the Draft"));
             return Ok(());
         }
     };

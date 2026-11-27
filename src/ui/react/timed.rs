@@ -37,11 +37,11 @@ fn relist_at(ui: &Ui) -> Option<Instant> {
 /// it: listed, Unread, and its body shown in the Preview `text`.
 fn dwelling(ui: &Ui, previews: &Previews, text: Option<Rect>) -> Option<(Key, BodyKey)> {
     let Ui { view, screen } = ui;
-    let listed = (screen.showing().mode() == Mode::List || screen.showing().mode().typing())
+    let listed = (screen.showing.mode() == Mode::List || screen.showing.mode().typing())
         && !screen.over.is_open::<FolderPicker>()
         && !screen.over.is_open::<LocalDrafts>()
         && !screen.over.is_open::<DraftPreview>();
-    let text = text.filter(|_| listed && !screen.helping() && view.selected_unread())?;
+    let text = text.filter(|_| listed && screen.help.is_none() && view.selected_unread())?;
     previews.get(view, text.width)?;
     Some((view.selected_key()?, view.selected_body()?))
 }

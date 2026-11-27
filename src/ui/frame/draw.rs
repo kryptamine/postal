@@ -35,19 +35,18 @@ pub fn draw(
     let Ui { view, screen } = ui;
     terminal
         .draw(|frame| {
-            let panes = layout::split(frame.area(), screen.showing().mode());
+            let panes = layout::split(frame.area(), screen.showing.mode());
             if let Some(list) = panes.list {
                 frame.render_stateful_widget(MessageList { theme }, list, view);
             }
 
-            let (reading, over) = screen.reading_under();
-            if let (Some(pane), Some(reading)) = (panes.preview, reading) {
+            if let (Some(pane), Some(reading)) = (panes.preview, screen.showing.reading_mut()) {
                 let widget = ThreadPane {
                     theme,
                     view,
                     previews,
-                    hints: over.get::<LinkHints>(),
-                    attachment_hints: over.get::<AttachmentHints>(),
+                    hints: screen.over.get::<LinkHints>(),
+                    attachment_hints: screen.over.get::<AttachmentHints>(),
                 };
 
                 frame.render_stateful_widget(widget, pane, reading);
@@ -91,7 +90,7 @@ fn hint_line<'a>(
     let (status, account) = screen.status();
     HintLine {
         theme,
-        toast: screen.toast(),
+        toast: screen.toast.as_ref(),
         status,
         account: account.map(|account| accounts.email(account)),
         outbox: screen.outbox(),
@@ -116,7 +115,7 @@ fn hint_line<'a>(
 /// The hint line's keys: none under `?`, whose popup names its own, else
 /// those of the layer on top or of the mode.
 fn hints(screen: &Screen, keys: Mode) -> Hints {
-    if screen.helping() {
+    if screen.help.is_some() {
         return Hints::Fixed(&[]);
     }
 
@@ -150,7 +149,7 @@ fn popups(frame: &mut Frame, theme: &Theme, accounts: Accounts, body: Rect, scre
     }
 
     let (mode, signed_out) = (screen.keys(), screen.signed_out().is_some());
-    if let Some(help) = screen.help_mut() {
+    if let Some(help) = &mut screen.help {
         let popup = HelpPopup {
             theme,
             mode,

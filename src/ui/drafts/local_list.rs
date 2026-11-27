@@ -8,7 +8,7 @@ pub fn open_local(screen: &mut Screen, outbox: &Outbox) {
         Ok(local) => screen.over.open(local),
         Err(error) => {
             tracing::error!("listing Local Drafts failed: {error}");
-            screen.set_toast(Toast::error("could not list Local Drafts"));
+            screen.toast = Some(Toast::error("could not list Local Drafts"));
         }
     }
 }

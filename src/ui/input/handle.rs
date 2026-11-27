@@ -4,7 +4,8 @@ use crossterm::event::{Event, KeyEvent};
 
 use crate::{
     ui::error::Error, ui::exit::Exit, ui::input::keymap, ui::input::pane_keys,
-    ui::input::step::Step, ui::popup::layer_act::Act, ui::state::screen::Screen, ui::state::ui::Ui,
+    ui::input::step::Step, ui::popup::help::Help, ui::popup::layer_act::Act,
+    ui::state::screen::Screen, ui::state::ui::Ui,
 };
 
 /// Acts on one input event, where the view alone can take it.
@@ -17,10 +18,10 @@ pub fn handle(
     match event {
         None => Ok(Step::Exit(Exit::Quit)),
         Some(Err(source)) => Err(Error::Terminal(source)),
-        Some(Ok(Event::Key(key))) if screen.helping() => {
-            let open = !keymap::pressed(key) || screen.help_mut().is_some_and(|h| h.key(key));
+        Some(Ok(Event::Key(key))) if screen.help.is_some() => {
+            let open = !keymap::pressed(key) || screen.help.as_mut().is_some_and(|h| h.key(key));
             if !open {
-                screen.close_help();
+                screen.help = None;
             }
 
             Ok(Step::Stay)
@@ -28,7 +29,7 @@ pub fn handle(
         Some(Ok(Event::Key(key))) if !keymap::pressed(key) => Ok(Step::Stay),
         Some(Ok(Event::Key(key))) if screen.over.top().is_some() => Ok(on_top(key, screen)),
         Some(Ok(Event::Key(key))) => Ok(pane_keys::act(
-            keymap::action(key, screen.showing().mode()),
+            keymap::action(key, screen.showing.mode()),
             view,
             screen,
             half_page,
@@ -50,7 +51,7 @@ fn on_top(key: KeyEvent, screen: &mut Screen) -> Step {
     match layer.key(key) {
         Act::Stay => Step::Stay,
         Act::Help => {
-            screen.open_help();
+            screen.help = Some(Help::default());
             Step::Stay
         }
         Act::Close(step) => {
@@ -63,7 +64,7 @@ fn on_top(key: KeyEvent, screen: &mut Screen) -> Step {
             Step::Stay
         }
         Act::Toast(toast) => {
-            screen.set_toast(toast);
+            screen.toast = Some(toast);
             Step::Stay
         }
     }

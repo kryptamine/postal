@@ -42,26 +42,37 @@ impl Waiting {
 /// What was awaited, taken off the screen, and how its fetch ended.
 pub struct Done(Waiting, Result<(), String>);
 
-/// Asks for what `waiting` lacks and holds it; a prior wait is cancelled
-/// before, as each would open its own Draft over the other.
-pub fn start(screen: &mut Screen, fetch: &FetchRequests, waiting: Waiting) {
-    fetch.send(waiting.parts.account(), waiting.parts.request());
-    screen.await_parts(waiting);
-}
+/// The Reply or Forward whose Draft waits on the fetch connection: one at a
+/// time, as each would open its own Draft over the other.
+#[derive(Default)]
+pub struct Awaited(Option<Waiting>);
 
-/// Drops any wait under way, and the standing request it made.
-pub fn cancel(screen: &mut Screen, fetch: &FetchRequests) {
-    if let Some(previous) = screen.take_awaited() {
-        let account = previous.parts.account();
-        fetch.send(account, AwaitedParts::new(account).request());
+impl Awaited {
+    /// Asks for what `waiting` lacks and holds it, in place of any prior wait.
+    pub fn start(&mut self, fetch: &FetchRequests, waiting: Waiting) {
+        self.cancel(fetch);
+        fetch.send(waiting.parts.account(), waiting.parts.request());
+        self.0 = Some(waiting);
     }
-}
 
-/// Follows `update` of `account` for the awaited Reply or Forward.
-pub fn notice(screen: &mut Screen, account: AccountId, update: &Update) -> Option<Done> {
-    let waiting = screen.awaited_mut()?;
-    let result = waiting.parts.notice(account, update)?;
-    Some(Done(screen.take_awaited()?, result))
+    /// Drops any wait under way, and the standing request it made.
+    pub fn cancel(&mut self, fetch: &FetchRequests) {
+        if let Some(previous) = self.0.take() {
+            let account = previous.parts.account();
+            fetch.send(account, AwaitedParts::new(account).request());
+        }
+    }
+
+    /// Follows `update` of `account` for the awaited Reply or Forward.
+    pub fn notice(&mut self, account: AccountId, update: &Update) -> Option<Done> {
+        let waiting = self.0.as_mut()?;
+        let result = waiting.parts.notice(account, update)?;
+        Some(Done(self.0.take()?, result))
+    }
+
+    pub const fn fetching(&self) -> bool {
+        self.0.is_some()
+    }
 }
 
 /// The editor on what was awaited, or a Toast saying why not.

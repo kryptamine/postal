@@ -5,6 +5,7 @@ use crate::{
     ui::input::keymap::Action,
     ui::input::step::{Drafting, Steer, Step},
     ui::list::inbox_view::InboxView,
+    ui::popup::help::Help,
     ui::preview::link_hints::LinkHints,
     ui::preview::reading::Reading,
     ui::state::screen::Screen,
@@ -51,7 +52,7 @@ pub fn act(
             Step::Stay
         }
         Some(Action::Help) => {
-            screen.open_help();
+            screen.help = Some(Help::default());
             Step::Stay
         }
         Some(Action::Search) => Step::Steer(Steer::Search),
@@ -68,7 +69,7 @@ pub fn act(
             Step::Stay
         }
         Some(Action::Scroll(scroll)) => {
-            match screen.reading_mut() {
+            match screen.showing.reading_mut() {
                 Some(reading) => reading.scroll(scroll, half_page),
                 None => view.scroll(scroll, half_page),
             }
@@ -93,14 +94,14 @@ fn walk(action: Action, view: &mut InboxView) {
 
 /// Closes the menu while the Query is typed, else ends the Search.
 fn end_search(view: &mut InboxView, screen: &mut Screen) {
-    let typing = screen.showing().mode().typing();
+    let typing = screen.showing.mode().typing();
     if !typing && !view.picks.is_empty() {
         view.picks.clear();
         return;
     }
 
     if typing && view.close_menu() {
-        screen.show(Showing::Query);
+        screen.showing = Showing::Query;
         return;
     }
 
@@ -114,11 +115,11 @@ fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
     if matches!(action, Action::SwitchView) {
         view.html = view.html.other();
         view.preview_scroll = 0;
-        if let Some(reading) = screen.reading_mut() {
+        if let Some(reading) = screen.showing.reading_mut() {
             reading.reveal = true;
         }
     } else {
-        let message = view.at_cursor(screen.showing().cursor());
+        let message = view.at_cursor(screen.showing.cursor());
 
         if let Some((account, body)) = message.map(|m| (m.account, m.body_key)) {
             view.switch_quoted(account, body);
@@ -131,13 +132,13 @@ fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
 
 /// Opens the selected Thread in Reading, or moves through it there.
 fn read(action: Action, view: &mut InboxView, screen: &mut Screen) -> Step {
-    match (action, screen.reading_mut()) {
+    match (action, screen.showing.reading_mut()) {
         (Action::Read, _) => {
             let Some(reading) = Reading::open(view.stack()) else {
                 return Step::Stay;
             };
 
-            screen.show(Showing::Reading(reading));
+            screen.showing = Showing::Reading(reading);
             view.picks.clear();
             // Gmail keeps Trash and Spam out of All Mail, and their Threads
             // apart; a Search never shows theirs.

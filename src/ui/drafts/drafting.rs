@@ -6,7 +6,6 @@ use crate::{
     domain::per_account::AccountId,
     domain::shown::Shown,
     mail::fetch_requests::FetchRequests,
-    ui::drafts::awaiting,
     ui::drafts::composing::{self, Reply},
     ui::drafts::draft_preview::DraftPreview,
     ui::error::Error,
@@ -29,7 +28,7 @@ pub fn draft(
     match drafting {
         Drafting::Compose => {
             // A Reply or Forward still waiting would open over this Draft.
-            awaiting::cancel(screen, fetch);
+            screen.awaited.cancel(fetch);
             let from = composing_from(&ui.view);
             composing::compose(tty, screen, world, from, None)?;
         }
@@ -77,7 +76,7 @@ pub fn reply(
 /// the Account, else its newest; in Reading, the one at the cursor.
 fn answered(ui: &Ui) -> Option<Message> {
     let view = &ui.view;
-    let message = ui.screen.showing().reading().map_or_else(
+    let message = ui.screen.showing.reading().map_or_else(
         || {
             view.stack()
                 .filter(|m| !m.from_me)

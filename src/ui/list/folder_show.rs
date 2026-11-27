@@ -86,7 +86,7 @@ pub fn start_search(
     contacts: ContactsChoice,
 ) -> Result<(), Error> {
     if ui.view.start_search(caches, contacts)? {
-        ui.screen.show(Showing::Query);
+        ui.screen.showing = Showing::Query;
     }
 
     Ok(())
@@ -101,7 +101,7 @@ pub fn type_query(
     edit: impl FnOnce(&mut Search) -> bool,
 ) -> Result<(), Error> {
     ui.view.close_menu();
-    ui.screen.show(Showing::Query);
+    ui.screen.showing = Showing::Query;
     ui.view.edit_query(caches, edit)?;
     accept(ui, caches)
 }
@@ -109,7 +109,7 @@ pub fn type_query(
 /// Leaves the menu on the suggestion written in, suggesting for it: after
 /// `from:`, the Correspondents.
 pub fn accept(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
-    ui.screen.show(Showing::Query);
+    ui.screen.showing = Showing::Query;
     if let Some(search) = &mut ui.view.search {
         search.suggest(caches)?;
     }
@@ -128,7 +128,7 @@ pub fn complete(ui: &mut Ui, caches: &PerAccount<Cache>, forward: bool) -> Resul
         .as_ref()
         .and_then(|s| s.completion().selected());
     if selected.is_some() {
-        ui.screen.show(Showing::Menu);
+        ui.screen.showing = Showing::Menu;
     }
 
     Ok(())

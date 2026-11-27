@@ -23,7 +23,7 @@ use crate::{
     mail::status::Status,
     mail::steering::Ask,
     mail::update::FetchLink,
-    ui::drafts::awaiting::{self, Waiting},
+    ui::drafts::awaiting::Waiting,
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
     ui::error::Error,
@@ -78,7 +78,7 @@ pub fn compose(
 
     written(screen, world, path, notes, exit);
     if link.is_some_and(|link| link.dropped_bcc) {
-        screen.set_toast(Toast::new("the link's Bcc is dropped: a Draft has none"));
+        screen.toast = Some(Toast::new("the link's Bcc is dropped: a Draft has none"));
     }
 
     toast_unread(screen, &signature);
@@ -94,7 +94,7 @@ pub fn block(signature: &io::Result<Option<String>>) -> Option<&str> {
 pub fn toast_unread(screen: &mut Screen, signature: &io::Result<Option<String>>) {
     if let Err(error) = signature {
         tracing::error!("reading the signature failed: {error}");
-        screen.set_toast(Toast::error("could not read the signature"));
+        screen.toast = Some(Toast::error("could not read the signature"));
     }
 }
 
@@ -102,11 +102,11 @@ pub fn toast_unread(screen: &mut Screen, signature: &io::Result<Option<String>>)
 fn drop_untouched(screen: &mut Screen, path: &Path) {
     if let Err(error) = notes::remove_message(path) {
         tracing::error!("dropping an empty Draft failed: {error}");
-        screen.set_toast(Toast::error("could not drop the empty Draft"));
+        screen.toast = Some(Toast::error("could not drop the empty Draft"));
         return;
     }
 
-    screen.set_toast(Toast::new("Empty Draft dropped"));
+    screen.toast = Some(Toast::new("Empty Draft dropped"));
 }
 
 /// Reply, or Reply All, once every body of the selected Thread is in
@@ -120,7 +120,7 @@ pub fn reply(
     reply: Reply,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
-    awaiting::cancel(screen, fetch);
+    screen.awaited.cancel(fetch);
     let message = &reply.message;
     if let Some(path) = answered_by(message, world.accounts) {
         // It was found among the Drafts of the Account the Message reached.
@@ -156,15 +156,15 @@ pub fn reply(
     match raw {
         Some(raw) if parts.complete() || !live => answer(tty, screen, &raw, &reply, world),
         None if message.folder.is_none() => {
-            screen.set_toast(Toast::new("not downloaded"));
+            screen.toast = Some(Toast::new("not downloaded"));
             Ok(())
         }
         None if signed_out => {
-            screen.set_toast(Toast::new("not downloaded · signed out"));
+            screen.toast = Some(Toast::new("not downloaded · signed out"));
             Ok(())
         }
         _ => {
-            awaiting::start(screen, fetch, Waiting::reply(reply, parts));
+            screen.awaited.start(fetch, Waiting::reply(reply, parts));
             Ok(())
         }
     }
@@ -199,7 +199,7 @@ pub fn fetched(
     let body = world.caches[message.account].body(message.body_key)?;
 
     let Some(raw) = body else {
-        screen.set_toast(Toast::error("could not fetch the Message"));
+        screen.toast = Some(Toast::error("could not fetch the Message"));
         return Ok(());
     };
 
@@ -249,7 +249,7 @@ fn create(screen: &mut Screen, text: &str) -> Option<PathBuf> {
         Ok(path) => Some(path),
         Err(error) => {
             tracing::error!("creating a Draft failed: {error}");
-            screen.set_toast(Toast::error("could not create the Draft"));
+            screen.toast = Some(Toast::error("could not create the Draft"));
             None
         }
     }
@@ -299,7 +299,7 @@ pub fn written(
             preview(screen, path, notes);
             send(screen, world);
         }
-        EditorExit::Saved => screen.set_toast(Toast::new("Saved to Drafts")),
+        EditorExit::Saved => screen.toast = Some(Toast::new("Saved to Drafts")),
     }
 }
 
@@ -314,7 +314,7 @@ pub fn preview(screen: &mut Screen, path: PathBuf, notes: DraftNotes) {
         Err(error) => {
             screen.over.close::<DraftPreview>();
             tracing::error!("reading the Draft failed: {error}");
-            screen.set_toast(Toast::error("could not read the Draft"));
+            screen.toast = Some(Toast::error("could not read the Draft"));
         }
     }
 }
@@ -328,7 +328,7 @@ pub fn send(screen: &mut Screen, world: World) {
     };
 
     let Ok(draft) = &preview.draft else {
-        screen.set_toast(Toast::error("the Draft does not parse"));
+        screen.toast = Some(Toast::error("the Draft does not parse"));
         screen.over.open(preview);
         return;
     };
@@ -373,10 +373,10 @@ pub fn send(screen: &mut Screen, world: World) {
     screen.recount(outbox);
     let delay = outbox.delay();
     if delay.is_zero() {
-        screen.set_toast(Toast::new("Sending"));
+        screen.toast = Some(Toast::new("Sending"));
     } else {
-        screen.push_undo(Undo::Send(path));
-        screen.set_toast(Toast::held(Instant::now() + delay));
+        screen.undo.push(Undo::Send(path));
+        screen.toast = Some(Toast::held(Instant::now() + delay));
     }
 
     // Signed out, the Outbox waits for a sync. Held, the ask has it wait out the hold.
@@ -389,15 +389,15 @@ pub fn take_back(screen: &mut Screen, outbox: &Outbox, path: &Path) {
         Ok(Some(taken)) => {
             screen.recount(outbox);
             relist_local(screen, outbox);
-            screen.set_toast(Toast::new("back in Drafts"));
+            screen.toast = Some(Toast::new("back in Drafts"));
             screen
                 .over
                 .open(DraftPreview::new(taken.path, taken.text, taken.notes));
         }
-        Ok(None) => screen.set_toast(Toast::new("already sent")),
+        Ok(None) => screen.toast = Some(Toast::new("already sent")),
         Err(error) => {
             tracing::error!("taking the Send back failed: {error}");
-            screen.set_toast(Toast::error("could not take the Send back"));
+            screen.toast = Some(Toast::error("could not take the Send back"));
         }
     }
 }
@@ -405,7 +405,7 @@ pub fn take_back(screen: &mut Screen, outbox: &Outbox, path: &Path) {
 /// Closes the shown Draft's preview, its file kept for Local Drafts.
 pub fn keep(screen: &mut Screen) {
     if screen.over.take::<DraftPreview>().is_some() {
-        screen.set_toast(Toast::new("Saved to Drafts"));
+        screen.toast = Some(Toast::new("Saved to Drafts"));
     }
 }
 
@@ -418,7 +418,7 @@ pub fn discard_file(screen: &mut Screen, path: PathBuf) {
         }
         Err(error) => {
             tracing::error!("reading the Draft failed: {error}");
-            screen.set_toast(Toast::error("could not read the Draft"));
+            screen.toast = Some(Toast::error("could not read the Draft"));
         }
     }
 }
@@ -431,7 +431,7 @@ pub fn discard(screen: &mut Screen) {
 
     if let Err(error) = notes::remove_message(&preview.path) {
         tracing::error!("discarding the Draft failed: {error}");
-        screen.set_toast(Toast::error("could not discard the Draft"));
+        screen.toast = Some(Toast::error("could not discard the Draft"));
         screen.over.open(preview);
         return;
     }
@@ -441,16 +441,18 @@ pub fn discard(screen: &mut Screen) {
         answering: preview.answering,
     };
 
-    screen.push_undo(Undo::Discard(preview.path, preview.text, notes));
-    screen.set_toast(Toast::new("Discarded · u undo"));
+    screen
+        .undo
+        .push(Undo::Discard(preview.path, preview.text, notes));
+    screen.toast = Some(Toast::new("Discarded · u undo"));
 }
 
 /// Undo of a discard: the file as it was, and its preview again.
 pub fn restore(screen: &mut Screen, path: PathBuf, text: String, notes: DraftNotes) {
     if let Err(error) = draft_file::restore(&path, &text, &notes) {
         tracing::error!("restoring the Draft failed: {error}");
-        screen.set_toast(Toast::error("could not restore the Draft"));
-        screen.push_undo(Undo::Discard(path, text, notes));
+        screen.toast = Some(Toast::error("could not restore the Draft"));
+        screen.undo.push(Undo::Discard(path, text, notes));
         return;
     }
 

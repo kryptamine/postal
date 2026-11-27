@@ -26,31 +26,31 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
     match step {
         Step::Stay => {}
         Step::Links => {
-            let reading = ui.screen.showing().reading();
+            let reading = ui.screen.showing.reading();
             let hints = shown_links(&ui.view, reading, model.previews, text);
             ui.screen
                 .open_or_toast(hints.ok_or_else(|| Toast::new("no links")));
         }
         Step::Steer(to) => steer(to, ui, world)?,
-        Step::Browse(url) => ui.screen.set_toast(browse(&url)),
+        Step::Browse(url) => ui.screen.toast = browse(&url),
         Step::Attachments(purpose) => {
-            if let Some(message) = ui.view.at_cursor(ui.screen.showing().cursor()) {
+            if let Some(message) = ui.view.at_cursor(ui.screen.showing.cursor()) {
                 ui.screen
                     .open_or_toast(AttachmentHints::on(message, purpose));
             }
         }
         Step::Attachment(wanted) => {
-            ui.screen.set_toast(model.parts.ask(wanted, &model.fetch));
+            ui.screen.toast = Some(model.parts.ask(wanted, &model.fetch));
         }
         Step::Open(to) => {
-            let toast = open_outside::open(to, &mut model.tty, model.theme, world, ui)?;
-            ui.screen.set_toast(toast);
+            let tty = &mut model.tty;
+            ui.screen.toast = open_outside::open(to, tty, model.theme, world, ui)?;
         }
         Step::Original => {
-            ui.screen.set_toast(match open_outside::shown(world, ui)? {
+            ui.screen.toast = match open_outside::shown(world, ui)? {
                 Ok((message, body)) => Some(model.parts.original(message, &body, &model.fetch)),
                 Err(toast) => toast,
-            });
+            };
         }
         Step::Draft(drafting) => {
             drafting::draft(drafting, &mut model.tty, ui, world, &model.fetch)?;

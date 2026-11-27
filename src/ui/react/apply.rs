@@ -40,7 +40,7 @@ pub fn apply(
                 let gone = format!("Folder {} no longer exists", ui.view.folder.label());
                 // The sync connection is back on the Inbox already.
                 switch(ui, caches, Shown::Folder(Folder::inbox(account)))?;
-                ui.screen.set_toast(Toast::new(gone));
+                ui.screen.toast = Some(Toast::new(gone));
             }
 
             relist(ui, caches)?;
@@ -52,7 +52,7 @@ pub fn apply(
         Update::FetchLink(link) => {
             previews.link(account, link);
             if link == FetchLink::Down {
-                ui.screen.set_backfill(None);
+                ui.screen.backfill = None;
             }
         }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
@@ -63,34 +63,31 @@ pub fn apply(
         }
         Update::Status(status) => ui.screen.statuses[account] = status,
         Update::Backfill(Backfill::Fetching { done, total }) => {
-            ui.screen
-                .set_backfill(Some(Status::Syncing { done, total }));
+            ui.screen.backfill = Some(Status::Syncing { done, total });
         }
         Update::Backfill(Backfill::Paged {
             folder,
             nothing_below,
         }) => {
-            ui.screen.set_backfill(None);
+            ui.screen.backfill = None;
             paged(&mut ui.view, caches, account, folder, nothing_below)?;
         }
         Update::Indexing(indexing) => ui.screen.indexing[account] = indexing,
         Update::NoFolder(role) => {
-            ui.screen
-                .set_toast(Toast::error(format!("no {} Folder", role.label())));
+            ui.screen.toast = Some(Toast::error(format!("no {} Folder", role.label())));
         }
-        Update::Unrestored => ui.screen.set_toast(Toast::error("nothing to undo")),
+        Update::Unrestored => ui.screen.toast = Some(Toast::error("nothing to undo")),
         Update::Sent => {
-            ui.screen.forget_sent();
+            ui.screen.undo.forget_sent();
             relist_local(&mut ui.screen, outbox);
             ui.screen.recount(outbox);
-            ui.screen.set_toast(Toast::new("Sent"));
+            ui.screen.toast = Some(Toast::new("Sent"));
         }
         Update::Refused => {
-            ui.screen.forget_sent();
+            ui.screen.undo.forget_sent();
             relist_local(&mut ui.screen, outbox);
             ui.screen.recount(outbox);
-            ui.screen
-                .set_toast(Toast::error("refused · back in Drafts"));
+            ui.screen.toast = Some(Toast::error("refused · back in Drafts"));
         }
     }
 
@@ -101,7 +98,7 @@ pub fn apply(
 fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     let view = &ui.view;
     let (thread, selected) = (view.selected_key(), view.selected_body());
-    let stack: Vec<BodyKey> = match ui.screen.showing() {
+    let stack: Vec<BodyKey> = match ui.screen.showing {
         Showing::Reading(_) => view.stack().map(|m| m.body_key).collect(),
         Showing::List | Showing::Query | Showing::Menu => Vec::new(),
     };
@@ -110,7 +107,7 @@ fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     let Ui { view, screen } = &mut *ui;
     // The labels belong to the Messages they were laid out on, and
     // Reading to the Thread it was opened on; a Query being typed stays.
-    if screen.showing().reading().is_none() {
+    if screen.showing.reading().is_none() {
         if view.selected_body() != selected {
             screen.over.close::<LinkHints>();
             screen.over.close::<AttachmentHints>();
@@ -120,7 +117,7 @@ fn reshow_inbox(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     {
         screen.over.close::<LinkHints>();
         screen.over.close::<AttachmentHints>();
-        if let Some(reading) = screen.reading_mut() {
+        if let Some(reading) = screen.showing.reading_mut() {
             reading.joined(view.stack().filter(|m| !stack.contains(&m.body_key)));
         }
     }

@@ -52,22 +52,21 @@ pub fn mark_unread(ui: &mut Ui, world: World) -> Result<(), Error> {
 
         let done = if unread { "Unread" } else { "Read" };
         if changed {
-            ui.screen
-                .set_toast(Toast::new(format!("{} marked {done}", threads.len())));
+            ui.screen.toast = Some(Toast::new(format!("{} marked {done}", threads.len())));
         }
 
         return Ok(());
     }
 
     let Ui { view, screen } = &mut *ui;
-    let message = view.at_cursor(screen.showing().cursor());
+    let message = view.at_cursor(screen.showing.cursor());
 
     let Some(message) = message else {
         return Ok(());
     };
 
     let Some(marked) = message.on_server() else {
-        screen.set_toast(Toast::new("only in another Folder"));
+        screen.toast = Some(Toast::new("only in another Folder"));
         return Ok(());
     };
 
@@ -77,7 +76,7 @@ pub fn mark_unread(ui: &mut Ui, world: World) -> Result<(), Error> {
     }
 
     if mark(ui, world, account, &marked, true)? {
-        ui.screen.set_toast(Toast::new("marked Unread"));
+        ui.screen.toast = Some(Toast::new("marked Unread"));
     }
 
     Ok(())
