@@ -1,8 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    panic,
-    sync::{Arc, mpsc},
-    thread,
+    sync::Arc,
 };
 
 use futures::channel::mpsc::UnboundedSender;
@@ -22,10 +20,11 @@ use crate::{
     render::html_job::HtmlJob,
     render::mail_look::MailLook,
     render::preview::Preview,
-    render::preview_render::{self, Job},
+    render::preview_render::Job,
     render::rendered_previews::{PreviewKey, RenderedPreviews},
     ui::list::inbox_view::InboxView,
     ui::preview::reading::Reading,
+    ui::preview::render_queue::RenderQueue,
     ui::state::ui::Ui,
 };
 
@@ -33,13 +32,6 @@ use crate::{
 const NEIGHBOURS: usize = 2;
 
 const OFFLINE: &str = "Not downloaded yet · offline";
-
-/// What the render thread does: a Message's Preview, or HTML of Postal's
-/// own laid out, sent back as an Update of `account`.
-enum Work {
-    Preview(Job),
-    Html(AccountId, HtmlJob),
-}
 
 #[derive(Clone, Copy)]
 struct Sources<'a> {
@@ -67,7 +59,7 @@ pub struct Previews {
     /// Each Account's address, for the invitations its Previews show.
     emails: PerAccount<Arc<str>>,
     look: MailLook,
-    jobs: mpsc::Sender<Work>,
+    queue: RenderQueue,
 }
 
 impl Previews {
@@ -77,15 +69,6 @@ impl Previews {
         updates: UnboundedSender<(AccountId, Update)>,
         look: MailLook,
     ) -> Self {
-        let (jobs, queue) = mpsc::channel::<Work>();
-        thread::spawn(move || {
-            for work in queue {
-                if updates.unbounded_send(done(work)).is_err() {
-                    return;
-                }
-            }
-        });
-
         Self {
             account: None,
             folder: folder::INBOX.into(),
@@ -97,7 +80,7 @@ impl Previews {
             refused: HashMap::new(),
             emails: accounts.map(|config| Arc::from(config.email.as_str())),
             look,
-            jobs,
+            queue: RenderQueue::start(updates),
         }
     }
 
@@ -217,10 +200,15 @@ impl Previews {
         for (message, selected) in wanted {
             let key = key(message);
             let here = folder.is_some() && self.holds(message);
-            if self.rendered.touch(key)
-                || self.rendering.contains(&key)
-                || (here && self.unavailable(message.uid))
-            {
+            if self.rendered.touch(key) {
+                continue;
+            }
+
+            if selected {
+                self.queue.want(key);
+            }
+
+            if self.rendering.contains(&key) || (here && self.unavailable(message.uid)) {
                 continue;
             }
 
@@ -304,14 +292,13 @@ impl Previews {
             own: Arc::clone(&self.emails[key.account]),
         };
 
-        // The send fails only once the render thread is gone.
-        self.jobs.send(Work::Preview(job)).ok();
+        self.queue.render(job);
     }
 
-    /// Lays `job` out on the render thread, behind the Previews asked
-    /// before it; `account` names the Update it comes back as.
+    /// Lays `job` out on the render thread; `account` names the Update it
+    /// comes back as.
     pub fn lay_out(&self, account: AccountId, job: HtmlJob) {
-        self.jobs.send(Work::Html(account, job)).ok();
+        self.queue.lay_out(account, job);
     }
 
     /// Bodies fetched in `folder`; those of a Folder no longer shown are
@@ -349,20 +336,6 @@ impl Previews {
     pub fn rendered(&mut self, key: PreviewKey, preview: Preview) {
         self.rendering.remove(&key);
         self.rendered.insert(key, preview);
-    }
-}
-
-/// `work` done as the Update it comes back as. A panic on hostile mail
-/// fails that one job and leaves the thread to render the rest.
-fn done(work: Work) -> (AccountId, Update) {
-    match work {
-        Work::Preview(job) => {
-            let key = job.key;
-            let preview = panic::catch_unwind(|| preview_render::render(&job))
-                .unwrap_or_else(|_| preview_render::failed(key));
-            (key.account, Update::Rendered(key, preview))
-        }
-        Work::Html(account, job) => (account, Update::LaidOut(job.run())),
     }
 }
 
