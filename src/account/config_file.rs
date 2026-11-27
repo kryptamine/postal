@@ -183,39 +183,34 @@ impl ConfigFile {
     }
 
     pub fn set_icons(&mut self, icons: IconChoice) {
-        let root = self.document.as_table_mut();
-        if icons == IconChoice::default() {
-            root.remove("icons");
-        } else {
-            set(root, "icons", icons.key().into());
-        }
+        self.set_choice("icons", icons, IconChoice::key);
     }
 
     pub fn set_notify(&mut self, notify: NotifyChoice) {
-        let root = self.document.as_table_mut();
-        if notify == NotifyChoice::default() {
-            root.remove("notify");
-        } else {
-            set(root, "notify", notify.key().into());
-        }
+        self.set_choice("notify", notify, NotifyChoice::key);
     }
 
     pub fn set_contacts(&mut self, contacts: ContactsChoice) {
-        let root = self.document.as_table_mut();
-        if contacts == ContactsChoice::default() {
-            root.remove("contacts");
-        } else {
-            set(root, "contacts", contacts.key().into());
-        }
+        self.set_choice("contacts", contacts, ContactsChoice::key);
     }
 
     /// The top-level format, for each Account that sets none.
     pub fn set_compose_format(&mut self, format: ComposeFormat) {
+        self.set_choice("compose-format", format, ComposeFormat::key);
+    }
+
+    /// Sets `key` to `value` as `written` spells it, or removes it at the default.
+    fn set_choice<T: Copy + PartialEq + Default>(
+        &mut self,
+        key: &str,
+        value: T,
+        written: fn(T) -> &'static str,
+    ) {
         let root = self.document.as_table_mut();
-        if format == ComposeFormat::default() {
-            root.remove("compose-format");
+        if value == T::default() {
+            root.remove(key);
         } else {
-            set(root, "compose-format", format.key().into());
+            set(root, key, written(value).into());
         }
     }
 

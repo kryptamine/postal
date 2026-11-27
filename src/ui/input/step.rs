@@ -1,7 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    account::config::{ContactsChoice, IconChoice, NotifyChoice},
     compose::recipients::Recipients,
     domain::folder::Folder,
     domain::per_account::AccountId,
@@ -11,6 +10,7 @@ use crate::{
     ui::input::keymap::Direction,
     ui::outside::open_outside::Outside,
     ui::outside::wanted_parts::{Purpose, Wanted},
+    ui::popup::settings::Live,
 };
 
 /// What the event loop does after one input event.
@@ -31,11 +31,7 @@ pub enum Step {
     Settings,
     /// The editor on the signature of the Account at this address.
     Signature(String),
-    Icons(IconChoice),
-    Notify(NotifyChoice),
-    /// Where Search finds Correspondents besides mail, read at once when
-    /// turned on so macOS asks for access then.
-    Contacts(ContactsChoice),
+    Live(Live),
     Exit(Exit),
 }
 
