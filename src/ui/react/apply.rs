@@ -8,7 +8,7 @@ use crate::{
     domain::uid::Uid,
     mail::backfill::Backfill,
     mail::status::Status,
-    mail::update::Update,
+    mail::update::{FetchLink, Update},
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
     ui::list::folder_show::{relist, show, switch},
@@ -53,7 +53,9 @@ pub fn apply(
         Update::Attachment(_) | Update::Inline(_) | Update::Arrived(_) => {}
         Update::FetchLink(link) => {
             previews.link(account, link);
-            ui.screen.backfill = None;
+            if link == FetchLink::Down {
+                ui.screen.backfill = None;
+            }
         }
         Update::Rendered(key, preview) => previews.rendered(key, preview),
         Update::LaidOut(laid) => {

@@ -1,13 +1,13 @@
 use crate::{
     domain::per_account::{AccountId, PerAccount},
-    mail::body_fetch::Request,
+    mail::body_fetch::{OneShot, Request, Standing},
     mail::routes::Routes,
     mail::status::Status,
     mail::update::{FetchLink, Update},
 };
 
-/// Routes every fetch request of the session, sending one only while its
-/// Account's fetch connection is live.
+/// Routes every fetch request of the session, and tracks each Account's
+/// fetch link.
 pub struct FetchRequests {
     requests: Routes<Request>,
     links: PerAccount<FetchLink>,
@@ -30,17 +30,19 @@ impl FetchRequests {
         self.links[account]
     }
 
-    /// Sends `requests` while the fetch connection of `account` is live, and
-    /// says whether it did; otherwise none is taken from the iterator.
-    pub fn send(&self, account: AccountId, requests: impl IntoIterator<Item = Request>) -> bool {
+    /// Sends `request` to `account`, served once its fetch connection is up.
+    pub fn send(&self, account: AccountId, request: Standing) {
+        self.requests.send(account, Request::Standing(request));
+    }
+
+    /// Sends `request` while the fetch connection of `account` is live, and
+    /// says whether it did.
+    pub fn send_if_live(&self, account: AccountId, request: OneShot) -> bool {
         if self.links[account] != FetchLink::Live {
             return false;
         }
 
-        for request in requests {
-            self.requests.send(account, request);
-        }
-
+        self.requests.send(account, Request::OneShot(request));
         true
     }
 

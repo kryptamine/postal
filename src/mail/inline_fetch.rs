@@ -20,12 +20,12 @@ pub struct InlineFetched {
 /// is never cached. Only a failure other than a refusal is returned.
 pub async fn fetch(
     server: &mut impl MailServer,
-    request: InlineRequest,
+    request: &InlineRequest,
     send: &impl Fn(Update),
 ) -> Result<(), Error> {
     let InlineRequest { message, ids } = request;
     let images = if body_fetch::open(server, &message.folder).await? {
-        match server.inline_images(message.uid, &ids).await {
+        match server.inline_images(message.uid, ids).await {
             Ok(images) => Ok(images),
             Err(error) => match error.refusal() {
                 Some(reason) => Err(reason.to_owned()),
@@ -36,6 +36,9 @@ pub async fn fetch(
         Err("its Folder is gone".to_owned())
     };
 
-    send(Update::Inline(InlineFetched { message, images }));
+    send(Update::Inline(InlineFetched {
+        message: message.clone(),
+        images,
+    }));
     Ok(())
 }

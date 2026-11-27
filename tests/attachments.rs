@@ -21,7 +21,7 @@ use std::{
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FakeImap, FakeMessage, Outage},
+    fake_imap::{FakeImap, FakeMessage, Outage, Stall},
     home::Home,
 };
 use termlens::{Key, Screen, Terminal};
@@ -417,4 +417,27 @@ fn a_saved_name_never_leaves_the_download_directory() {
         .collect();
     assert_eq!(saved, ["_.._evil.pdf"]);
     assert!(!root.path().join("evil.pdf").exists());
+}
+
+// An attachment download in flight when the fetch connection drops fails
+// cleanly instead of hanging until reconnect.
+#[test]
+fn an_attachment_in_flight_when_the_connection_drops_reports_it() {
+    let server = FakeImap::start(vec![message("Ada", "Contract", 18, contract())]);
+    let home = Home::for_server(&server);
+    let mut t = postal(&home, 120);
+    t.wait_until(|s| shown(s, "report.pdf")).unwrap();
+
+    server.stall(Stall::Part);
+    t.send(Key::Char('s')).unwrap();
+    t.wait_until(|s| s.contains("a report.pdf")).unwrap();
+    t.send(Key::Char('a')).unwrap();
+    t.wait_until(|s| s.contains("downloading report.pdf"))
+        .unwrap();
+
+    server.fail(Outage::Offline);
+    server.release();
+    t.wait_until(|s| s.contains("offline · not downloaded"))
+        .unwrap();
+    quit(t);
 }

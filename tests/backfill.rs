@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use support::{
     fake_body::FakeBody,
-    fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
+    fake_imap::{FIRST_UID, FakeImap, FakeMessage, Outage, Stall},
     home::Home,
 };
 use termlens::{Key, Screen, Terminal};
@@ -280,4 +280,29 @@ fn a_wholly_cached_inbox_asks_for_no_older_page() {
         "{:#?}",
         server.commands()
     );
+}
+
+// A backfill in flight when the fetch connection drops resumes by itself
+// once the connection is back.
+#[test]
+fn a_backfill_interrupted_by_an_outage_resumes_after_reconnect() {
+    let server = FakeImap::start(messages(700));
+    let home = Home::for_server(&server);
+    let mut t = postal(&home);
+    place(&mut t, "1/500");
+    wait_for(|| server.commands().iter().any(|c| c == "IDLE"));
+
+    server.stall(Stall::Sequence);
+    t.send(Key::Char('G')).unwrap();
+    t.wait_until(|s| hint_line(s).contains("syncing 0/200"))
+        .unwrap();
+
+    server.fail(Outage::Offline);
+    server.release();
+    t.wait_until(|s| hint_line(s).contains("offline")).unwrap();
+
+    server.recover();
+    place(&mut t, "500/700");
+    quit(t);
+    assert_eq!(cached(&home, "SELECT count(*) FROM message"), 700);
 }

@@ -238,7 +238,7 @@ impl Model<'_> {
     fn arrive(&mut self, account: AccountId, update: Update) -> Result<(), Error> {
         self.fetch.notice(account, &update);
         let screen = &mut self.ui.screen;
-        let awaited = awaiting::notice(screen, &self.fetch, account, &update);
+        let awaited = awaiting::notice(screen, account, &update);
         if let Some(toast) = self.parts.notice(account, &update) {
             screen.toast = Some(toast);
         }
