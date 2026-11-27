@@ -2,11 +2,12 @@ use tokio::time::Instant;
 
 use crate::{
     cache::Cache,
+    compose::outbox::Outbox,
     domain::indexing::Indexing,
     domain::per_account::{AccountId, PerAccount},
     domain::thread::Key,
     mail::status::Status,
-    ui::drafts::awaiting::Waiting,
+    ui::drafts::awaiting::Awaited,
     ui::list::inbox_view::InboxView,
     ui::outside::contacts_check::ContactsCheck,
     ui::popup::help::Help,
@@ -17,7 +18,7 @@ use crate::{
     ui::state::mode::Mode,
     ui::state::showing::Showing,
     ui::state::toast::Toast,
-    ui::state::undo::Undo,
+    ui::state::undo_stack::UndoStack,
 };
 
 /// What the main screen shows over and beside the panes.
@@ -36,12 +37,10 @@ pub struct Screen {
     pub showing: Showing,
     pub over: Over,
     pub dwell: Dwell,
-    /// What an Undo may take back, the latest last.
-    pub undo: Vec<Undo>,
-    /// What a Reply's or a Forward's Draft waits on before it opens.
-    pub awaited: Option<Waiting>,
+    pub undo: UndoStack,
+    pub awaited: Awaited,
     /// The Messages in the Outbox not yet accepted.
-    pub outbox: usize,
+    outbox: usize,
     /// The read of Contacts started by turning them on, while under way.
     pub contacts_check: ContactsCheck,
 }
@@ -71,6 +70,15 @@ impl Screen {
 
     pub fn list(&mut self) {
         self.showing = Showing::List;
+    }
+
+    /// The Messages waiting in `outbox`, counted again after it changed.
+    pub fn recount(&mut self, outbox: &Outbox) {
+        self.outbox = outbox.count();
+    }
+
+    pub const fn outbox(&self) -> usize {
+        self.outbox
     }
 
     /// Opens `layer`, else shows the Toast saying why it cannot open.
@@ -113,15 +121,11 @@ impl Screen {
             .max_by_key(|&i| self.statuses[i].rank());
         let named = worst.filter(|_| self.statuses.len() > 1);
         match (worst.map(|i| self.statuses[i]), self.backfill) {
-            (Some(Status::Live) | None, _) if self.fetching() => (Status::Fetching, None),
+            (Some(Status::Live) | None, _) if self.awaited.fetching() => (Status::Fetching, None),
             (Some(Status::Live) | None, Some(backfill)) => (backfill, None),
             (Some(status), _) => (status, named.filter(|_| status != Status::Live)),
             (None, None) => (Status::Live, None),
         }
-    }
-
-    const fn fetching(&self) -> bool {
-        self.awaited.is_some()
     }
 
     /// The first Account the server no longer accepts.

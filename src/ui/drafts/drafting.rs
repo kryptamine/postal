@@ -6,7 +6,6 @@ use crate::{
     domain::per_account::AccountId,
     domain::shown::Shown,
     mail::fetch_requests::FetchRequests,
-    ui::drafts::awaiting,
     ui::drafts::composing::{self, Reply},
     ui::drafts::draft_preview::DraftPreview,
     ui::error::Error,
@@ -29,7 +28,7 @@ pub fn draft(
     match drafting {
         Drafting::Compose => {
             // A Reply or Forward still waiting would open over this Draft.
-            awaiting::cancel(screen, fetch);
+            screen.awaited.cancel(fetch);
             let from = composing_from(&ui.view);
             composing::compose(tty, screen, world, from, None)?;
         }

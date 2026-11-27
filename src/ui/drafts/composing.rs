@@ -23,7 +23,7 @@ use crate::{
     mail::status::Status,
     mail::steering::Ask,
     mail::update::FetchLink,
-    ui::drafts::awaiting::{self, Waiting},
+    ui::drafts::awaiting::Waiting,
     ui::drafts::draft_preview::DraftPreview,
     ui::drafts::local_list::relist_local,
     ui::error::Error,
@@ -120,7 +120,7 @@ pub fn reply(
     reply: Reply,
 ) -> Result<(), Error> {
     let Ui { view, screen } = ui;
-    awaiting::cancel(screen, fetch);
+    screen.awaited.cancel(fetch);
     let message = &reply.message;
     if let Some(path) = answered_by(message, world.accounts) {
         // It was found among the Drafts of the Account the Message reached.
@@ -164,7 +164,7 @@ pub fn reply(
             Ok(())
         }
         _ => {
-            awaiting::start(screen, fetch, Waiting::reply(reply, parts));
+            screen.awaited.start(fetch, Waiting::reply(reply, parts));
             Ok(())
         }
     }
@@ -370,7 +370,7 @@ pub fn send(screen: &mut Screen, world: World) {
         }
     };
 
-    screen.outbox = outbox.count();
+    screen.recount(outbox);
     let delay = outbox.delay();
     if delay.is_zero() {
         screen.toast = Some(Toast::new("Sending"));
@@ -387,7 +387,7 @@ pub fn send(screen: &mut Screen, world: World) {
 pub fn take_back(screen: &mut Screen, outbox: &Outbox, path: &Path) {
     match outbox.take_back(path) {
         Ok(Some(taken)) => {
-            screen.outbox = outbox.count();
+            screen.recount(outbox);
             relist_local(screen, outbox);
             screen.toast = Some(Toast::new("back in Drafts"));
             screen

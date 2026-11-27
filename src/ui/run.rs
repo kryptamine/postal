@@ -234,7 +234,7 @@ impl Model<'_> {
     fn arrive(&mut self, account: AccountId, update: Update) -> Result<(), Error> {
         self.fetch.notice(account, &update);
         let screen = &mut self.ui.screen;
-        let awaited = awaiting::notice(screen, account, &update);
+        let awaited = screen.awaited.notice(account, &update);
         if let Some(toast) = self.parts.notice(account, &update) {
             screen.toast = Some(toast);
         }
@@ -255,7 +255,7 @@ impl Model<'_> {
         text: Option<Rect>,
     ) -> Result<Option<Exit>, Error> {
         // A Draft opened, closed, discarded or brought back changes the list.
-        let drafts = |screen: &Screen| (screen.over.is_open::<DraftPreview>(), screen.undo.len());
+        let drafts = |screen: &Screen| (screen.over.is_open::<DraftPreview>(), screen.undo.count());
         let before = drafts(&self.ui.screen);
         match event {
             Some(Ok(Event::FocusGained)) => self.notifier.focus(true),

@@ -1,22 +1,11 @@
 use std::{io, path::PathBuf};
 
 use crate::{
-    compose::draft_file,
-    compose::draft_notes::DraftNotes,
-    compose::forward_draft,
-    compose::forwarded,
-    domain::message::Message,
-    mail::awaited_parts::AwaitedParts,
-    mail::fetch_requests::FetchRequests,
-    mail::status::Status,
-    ui::drafts::awaiting::{self, Waiting},
-    ui::drafts::composing,
-    ui::error::Error,
-    ui::state::screen::Screen,
-    ui::state::toast::Toast,
-    ui::state::ui::Ui,
-    ui::terminal::tty::Tty,
-    ui::world::World,
+    compose::draft_file, compose::draft_notes::DraftNotes, compose::forward_draft,
+    compose::forwarded, domain::message::Message, mail::awaited_parts::AwaitedParts,
+    mail::fetch_requests::FetchRequests, mail::status::Status, ui::drafts::awaiting::Waiting,
+    ui::drafts::composing, ui::error::Error, ui::state::screen::Screen, ui::state::toast::Toast,
+    ui::state::ui::Ui, ui::terminal::tty::Tty, ui::world::World,
 };
 
 /// Forward of the selected Message, in Reading of the one at the cursor,
@@ -36,7 +25,7 @@ pub fn forward(
     };
 
     // A Reply or Forward still waiting would open its own Draft over this one.
-    awaiting::cancel(screen, fetch);
+    screen.awaited.cancel(fetch);
     let body_missing = !world.caches[message.account].has_body(message.body_key)?;
     let attachments = message.attachments.iter().count();
     let Some(on_server) = message.on_server() else {
@@ -66,7 +55,9 @@ pub fn forward(
         return Ok(());
     }
 
-    awaiting::start(screen, fetch, Waiting::forward(message, parts));
+    screen
+        .awaited
+        .start(fetch, Waiting::forward(message, parts));
     Ok(())
 }
 

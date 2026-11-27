@@ -93,7 +93,7 @@ fn hint_line<'a>(
         toast: screen.toast.as_ref(),
         status,
         account: account.map(|account| accounts.email(account)),
-        outbox: screen.outbox,
+        outbox: screen.outbox(),
         hints: hints(screen, keys),
         query: view
             .search
