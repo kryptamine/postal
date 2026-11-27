@@ -104,7 +104,7 @@ fn a_flag_change_sent_with_a_stores_answer_is_taken_in() {
 #[test]
 fn scrolling_past_an_unread_thread_leaves_it_unread() {
     let server = FakeImap::start(vec![
-        message("Alice", "Oldest", "2024-03-01T09:00:00Z"),
+        message("Alice", "Oldest", "2024-03-01T09:00:00Z").unread(),
         message("Bob", "Passed", "2024-03-02T09:00:00Z").unread(),
         message("Carol", "Newest", "2024-03-03T09:00:00Z"),
     ]);
@@ -114,11 +114,16 @@ fn scrolling_past_an_unread_thread_leaves_it_unread() {
     t.send(Key::Char('j')).unwrap();
     t.wait_until(|s| s.contains("Body of Oldest")).unwrap();
 
-    std::thread::sleep(Duration::from_millis(1500));
+    // A Dwell begun on the row passed would have ended first.
+    wait_for(|| server.seen(INBOX, FIRST_UID));
     let screen = t.snapshot_after(|_| true).unwrap();
     quit(t);
     assert_eq!(card(&screen, "Bob"), Some(true), "{screen}");
-    assert!(stores(&server).is_empty(), "{:#?}", server.commands());
+    assert_eq!(
+        stores(&server),
+        [format!("UID STORE {FIRST_UID} {READ}")],
+        "{screen}"
+    );
     assert!(!server.seen(INBOX, FIRST_UID + 1));
 }
 
@@ -246,8 +251,7 @@ fn an_expunge_in_another_folder_leaves_the_shown_one_alone() {
     t.wait_until(|s| card(s, "Carol") == Some(false)).unwrap();
     t.send(Key::Char('/')).unwrap();
     t.send_str("budget").unwrap();
-    t.wait_until(|s| s.contains("Body of Budget")).unwrap();
-    std::thread::sleep(Duration::from_millis(1500));
+    t.wait_until(|s| card(s, "Dana") == Some(false)).unwrap();
     t.send(Key::Esc).unwrap();
     t.wait_until(|s| s.contains("Body of Unread")).unwrap();
 
@@ -257,7 +261,12 @@ fn an_expunge_in_another_folder_leaves_the_shown_one_alone() {
     server.empty("Archive");
     server.release();
     wait_for(|| server.seen(INBOX, FIRST_UID + 2));
-    std::thread::sleep(Duration::from_millis(300));
+    // Idling again once the shown Folder is read anew after the pass.
+    wait_for(|| {
+        let commands = server.commands();
+        let last = |f: fn(&String) -> bool| commands.iter().rposition(f);
+        last(|c| c == "IDLE") > last(|c| c.starts_with("UID STORE"))
+    });
     let screen = t.snapshot_after(|_| true).unwrap();
     quit(t);
     assert!(

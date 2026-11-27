@@ -16,7 +16,6 @@ mod support;
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 use mail_parser::MessageParser;
@@ -251,8 +250,6 @@ fn u_inside_the_window_gives_the_draft_back_and_nothing_is_sent() {
     t.wait_until(|s| s.contains(" Draft ") && s.contains("y send"))
         .unwrap();
 
-    // Past the window, which a Message left in the Outbox would have left on.
-    std::thread::sleep(Duration::from_millis(2500));
     assert!(smtp.received().is_empty());
     assert_eq!(files(&home.outbox_dir()), Vec::<PathBuf>::new());
     // One Account and no Reply: the Draft has no notes to give back.
@@ -261,6 +258,7 @@ fn u_inside_the_window_gives_the_draft_back_and_nothing_is_sent() {
     assert_eq!(fs::read_to_string(&drafts[0]).unwrap(), WRITTEN);
 
     // Taken back, it is a Draft like any other: sent again, it leaves once.
+    // This window ends after the first, which a Message left would leave on.
     t.send(Key::Char('y')).unwrap();
     t.wait_until(|s| s.contains("Sent") && !held(s)).unwrap();
     quit(t);

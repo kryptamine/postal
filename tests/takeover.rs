@@ -166,14 +166,16 @@ fn a_send_under_way_finishes_before_the_move_and_goes_out_once() {
     first.wait_until(listed).unwrap();
     first.send(Key::Char('c')).unwrap();
     wait_for(|| smtp.received().len() == 1);
+    let idles = || imap.commands().iter().filter(|c| *c == "IDLE").count();
+    let before = idles();
 
     let mut second = postal(&home, &editor.command());
     moved_here(&mut second);
     let text = left(&mut first);
     assert!(text.contains("postal moved to"), "{text}");
     second.wait_until(listed).unwrap();
-    // Long enough for the second's sync to send a Message left unsent.
-    std::thread::sleep(Duration::from_secs(1));
+    // A sync sends what the Outbox holds before its first IDLE.
+    wait_for(|| idles() > before);
     assert_eq!(smtp.received().len(), 1);
     quit(second);
 }
