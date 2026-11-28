@@ -28,7 +28,7 @@ pub fn shown_links(
 
     let preview = previews.get(view, text.width)?;
     let header = message_header::rows(view.selected_message());
-    let lines = preview_pane::body_lines(view.preview_scroll, text, header);
+    let lines = preview_pane::body_lines(view.preview_scroll(), text, header);
     LinkHints::find([(0, &preview.body[..], lines)])
 }
 

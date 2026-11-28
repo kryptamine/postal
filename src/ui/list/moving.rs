@@ -22,7 +22,7 @@ use crate::{
 /// Reading on the one at the cursor.
 pub fn delete(ui: &mut Ui, world: World) -> Result<(), Error> {
     // A Search never shows Trash.
-    if ui.view.search.is_none() && ui.view.folder.role() == Some(Role::Trash) {
+    if ui.view.shown_role() == Some(Role::Trash) {
         ui.screen.toast = Some(Toast::new("already in Trash"));
         return Ok(());
     }
@@ -32,8 +32,7 @@ pub fn delete(ui: &mut Ui, world: World) -> Result<(), Error> {
 
 /// Archive, as `delete` takes Messages to Trash; on Gmail into All Mail.
 pub fn archive(ui: &mut Ui, world: World) -> Result<(), Error> {
-    let shown = ui.view.folder.role();
-    if ui.view.search.is_none() && matches!(shown, Some(Role::Archive | Role::All)) {
+    if matches!(ui.view.shown_role(), Some(Role::Archive | Role::All)) {
         ui.screen.toast = Some(Toast::new("already archived"));
         return Ok(());
     }
@@ -45,7 +44,7 @@ pub fn archive(ui: &mut Ui, world: World) -> Result<(), Error> {
 /// or of the Picks', to move their Messages to the Folder picked.
 pub fn pick(ui: &mut Ui, world: World) -> Result<(), Error> {
     let Ui { view, screen } = ui;
-    if view.search.is_none() && view.folder.role() == Some(Role::All) {
+    if view.shown_role() == Some(Role::All) {
         screen.toast = Some(Toast::new("All Mail keeps every Message"));
         return Ok(());
     }
@@ -61,7 +60,7 @@ pub fn pick(ui: &mut Ui, world: World) -> Result<(), Error> {
         return Ok(());
     };
 
-    let picker = FolderPicker::moving(folders(world.caches)?, &view.folder, account);
+    let picker = FolderPicker::moving(folders(world.caches)?, view.folder(), account);
     screen.over.open(picker);
     world.asks.send(account, Ask::ListFolders);
     Ok(())
@@ -109,7 +108,7 @@ fn take(ui: &mut Ui, world: World, goal: &Goal, done: &str) -> Result<(), Error>
     }
 
     let thread = view.selected_key();
-    view.picks.clear();
+    view.unpick();
     let accounts: Vec<_> = batches.iter().map(|&(account, _)| account).collect();
     screen.undo.push(Undo::Move(batches, thread));
     show(view, caches, None)?;
@@ -181,11 +180,11 @@ pub fn undo(
 
     let Ui { view, screen } = ui;
     let shown = restored.iter().any(|(account, folders)| {
-        let shown = view.folder.of(*account);
+        let shown = view.folder().of(*account);
         shown.is_some_and(|shown| folders.iter().any(|f| f == shown))
     });
 
-    let here = view.search.is_some() || shown;
+    let here = view.searching() || shown;
     screen.toast = Some(if here {
         Toast::new("restored")
     } else {

@@ -24,7 +24,7 @@ pub fn steer(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
         Steer::Folders => {
             let folders = folders(caches)?;
             let view = &ui.view;
-            let picker = FolderPicker::new(folders, &view.folder, &view.accounts);
+            let picker = FolderPicker::new(folders, view.folder(), view.accounts());
             ui.screen.over.open(picker);
             for account in caches.ids() {
                 asks.send(account, Ask::ListFolders);
@@ -33,7 +33,7 @@ pub fn steer(steer: Steer, ui: &mut Ui, world: World) -> Result<(), Error> {
         Steer::Show(folder) => {
             if switch(ui, caches, folder)? {
                 for account in caches.ids() {
-                    if let Some(shown) = ui.view.folder.of(account) {
+                    if let Some(shown) = ui.view.folder().of(account) {
                         asks.send(account, Ask::Show(shown.clone()));
                     }
                 }

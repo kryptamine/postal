@@ -20,14 +20,11 @@ impl OlderPages {
     /// Does not allocate unless it asks. A Search never asks: it matches
     /// only the Cache.
     pub fn want(&mut self, view: &InboxView, fetch: &FetchRequests) {
-        let searching = view.search.is_some();
-        if view.list.is_none() || self.asked || searching || view.selected + NEAR_END < view.rows()
-        {
+        if self.asked {
             return;
         }
 
-        // With no edge, every Account has shown all it holds (ADR 0014).
-        let Some((account, folder)) = view.edge.and_then(|a| Some((a, view.folder.of(a)?))) else {
+        let Some((account, folder)) = view.older_page(NEAR_END) else {
             return;
         };
 

@@ -63,33 +63,28 @@ impl StatefulWidget for MessageList<'_> {
         let block = Block::bordered().border_style(self.theme.border);
         let inner = block.inner(area);
         block.render(area, buf);
-        let label = view.folder.label();
+        let label = view.folder().label();
         let mut text = StackStr::<160>::new();
-        let Some(list) = &view.list else {
+        if !view.loaded() {
             let loading = write!(text, "Loading {label}…").map_or("Loading…", |()| text.as_str());
             return centred(loading, inner, buf);
-        };
+        }
 
-        if list.rows() == 0 && view.search.is_none() {
+        let rows = view.rows();
+        if rows == 0 && !view.searching() {
             let empty = write!(text, "{label} is empty").map_or("empty", |()| text.as_str());
             return centred(empty, inner, buf);
         }
 
-        let rows = view.rows();
         if rows == 0 {
             return centred("no matches", inner, buf);
         }
 
         let now = view.now();
-        let dated = view.search.is_none().then_some(&now);
-        if view.selected < view.offset {
-            view.offset = view.selected;
-        } else {
-            view.offset = view.offset.max(first_fitting(view, dated, inner.height));
-        }
-
+        let dated = (!view.searching()).then_some(&now);
+        view.scroll_list(|view| first_fitting(view, dated, inner.height));
         // The top group is named on the border itself, as a title.
-        if let Some(group) = group(view, dated, view.offset) {
+        if let Some(group) = group(view, dated, view.list_top()) {
             name_group(self.theme, buf, area, area.y, group);
         }
 
@@ -102,7 +97,7 @@ impl StatefulWidget for MessageList<'_> {
     }
 }
 
-/// The cards from `view.offset` down inside the bordered `area`, each
+/// The cards from the list's top row down inside the bordered `area`, each
 /// group's first under a rule naming it.
 fn draw_rows(
     view: &mut InboxView,
@@ -112,9 +107,9 @@ fn draw_rows(
     buf: &mut Buffer,
 ) {
     let inner = area.inner(Margin::new(1, 1));
-    let mut y = inner.y;
-    for row in view.offset..view.rows() {
-        let starts = (row > view.offset)
+    let (mut y, top) = (inner.y, view.list_top());
+    for row in top..view.rows() {
+        let starts = (row > top)
             .then(|| starts_group(view, dated, row))
             .flatten();
         let gap = if starts.is_some() { GROUP_GAP } else { 0 };
@@ -129,7 +124,7 @@ fn draw_rows(
             name_group(cards.theme, buf, area, y - 1, group);
         }
 
-        let selected = row == view.selected;
+        let selected = row == view.selected();
         let picked = view.picked(row);
         let Some((messages, thread, matched)) = view.card(row) else {
             continue;
@@ -179,7 +174,7 @@ fn starts_group(
 /// `height` rows tall, a gap above each group but the top one.
 fn first_fitting(view: &InboxView, dated: Option<&DateTime<FixedOffset>>, height: u16) -> usize {
     let mut used = CARD_HEIGHT;
-    let mut first = view.selected;
+    let mut first = view.selected();
     while first > 0 {
         let gap = starts_group(view, dated, first).map_or(0, |_| GROUP_GAP);
         if used + CARD_HEIGHT + gap > height {

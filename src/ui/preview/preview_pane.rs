@@ -62,7 +62,7 @@ impl StatefulWidget for PreviewPane<'_> {
         let rows = view.rows();
         let mut position = StackStr::<32>::new();
         (if rows > 0 {
-            write!(position, " · {}/{rows} ", view.selected + 1)
+            write!(position, " · {}/{rows} ", view.selected() + 1)
         } else {
             position.write_str(" ")
         })
@@ -72,7 +72,7 @@ impl StatefulWidget for PreviewPane<'_> {
         border::title(
             buf,
             title,
-            view.folder.label(),
+            view.folder().label(),
             position.as_str(),
             self.theme.title,
         );
@@ -106,7 +106,7 @@ impl StatefulWidget for PreviewPane<'_> {
         };
 
         let last_top = preview.body.len().saturating_sub(usize::from(body.height));
-        view.preview_scroll = view.preview_scroll.min(last_top);
+        let top = view.clamp_preview_scroll(last_top);
         let lines = PreviewLines {
             theme: self.theme,
             preview,
@@ -114,7 +114,7 @@ impl StatefulWidget for PreviewPane<'_> {
             part: 0,
         };
 
-        let shown = view.preview_scroll..preview.body.len();
+        let shown = top..preview.body.len();
         for (y, index) in (body.y..body.bottom()).zip(shown) {
             lines.draw(buf, Rect::new(text.x, y, text.width, 1), index);
         }

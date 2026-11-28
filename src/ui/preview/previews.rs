@@ -142,7 +142,7 @@ impl Previews {
         view: &InboxView,
         width: u16,
     ) -> Result<(), cache::Error> {
-        let selected = view.selected;
+        let selected = view.selected();
         let around = selected.saturating_sub(NEIGHBOURS)..=selected + NEIGHBOURS;
         // The selection first, so the queue hears it is preferred before the
         // jobs of its neighbours.
@@ -344,5 +344,5 @@ impl Previews {
 
 /// The Folder the list shows, none in All Inboxes.
 fn shown(view: &InboxView) -> Option<(AccountId, &FolderName)> {
-    view.folder.folder().map(|f| (f.account, &f.name))
+    view.folder().folder().map(|f| (f.account, &f.name))
 }
