@@ -1,12 +1,18 @@
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::{
-    domain::message::Message, render::icons::Icons, render::mail_colours::MailColours,
-    render::mail_look::MailLook, render::marks::Marks, render::paint::Paint, render::rgb::Rgb,
+    account::config::AvatarChoice, domain::message::Message, render::icons::Icons,
+    render::mail_colours::MailColours, render::mail_look::MailLook, render::marks::Marks,
+    render::paint::Paint, render::rgb::Rgb,
 };
 
+/// How much of its hue an avatar's tile takes over the terminal's background:
+/// enough to tell senders apart, little enough to sit behind the text.
+const AVATAR_TINT: f32 = 0.28;
+
 /// The terminal's own palette: named ANSI colours and modifiers, no explicit
-/// background. Muted text is `DIM`, since bright black vanishes in Solarized.
+/// background, and the glyphs and avatars drawn with it. Muted text is
+/// `DIM`, since bright black vanishes in Solarized.
 pub struct Theme {
     pub unread: Style,
     /// The Unread marker on a card.
@@ -41,14 +47,13 @@ pub struct Theme {
     /// Mail colours moved onto this terminal's background.
     pub mail: MailColours,
     pub icons: Icons,
-    /// Whether a card in the Message List starts with an avatar.
-    pub avatars: bool,
+    pub avatars: AvatarChoice,
 }
 
 impl Theme {
     /// A non-empty `NO_COLOR` drops every colour and keeps the modifiers,
     /// so the selection and Unread rows stay visible.
-    pub fn from_env(background: Rgb, icons: Icons) -> Self {
+    pub fn from_env(background: Rgb, icons: Icons, avatars: AvatarChoice) -> Self {
         let coloured = std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty());
         let fg = |color| {
             if coloured {
@@ -90,7 +95,7 @@ impl Theme {
             coloured,
             mail: MailColours::new(background),
             icons,
-            avatars: true,
+            avatars,
         }
     }
 
@@ -101,9 +106,31 @@ impl Theme {
         }
     }
 
-    /// What avatars tint onto; `None` under `NO_COLOR`.
-    pub const fn avatar_colours(&self) -> Option<MailColours> {
-        if self.coloured { Some(self.mail) } else { None }
+    /// An avatar's half blocks and initials in `hue`, on a card `selected`
+    /// or not. Under `NO_COLOR` the tile is the card's text colour: the
+    /// initials reverse the card, the half blocks keep it.
+    pub fn avatar(&self, hue: Rgb, selected: bool) -> (Style, Style) {
+        let face = Style::new().add_modifier(Modifier::BOLD);
+        if !self.coloured {
+            let face = if selected {
+                face.remove_modifier(Modifier::REVERSED)
+            } else {
+                face.add_modifier(Modifier::REVERSED)
+            };
+
+            return (Style::new(), face);
+        }
+
+        let rgb = |Rgb { r, g, b }| Color::Rgb(r, g, b);
+        let (tile, ink) = self.mail.tile(hue, AVATAR_TINT);
+        // The selection is a reversed named colour; the edges' blank half sits on it.
+        let ground = if selected { self.selected.fg } else { None };
+        let edge = Style::new()
+            .fg(rgb(tile))
+            .bg(ground.unwrap_or(Color::Reset));
+        let face = face.fg(rgb(ink)).bg(rgb(tile));
+        let own = |style: Style| style.remove_modifier(Modifier::REVERSED);
+        (own(edge), own(face))
     }
 
     /// The style of the sender of `message`: muted for the Account's own.

@@ -1,5 +1,6 @@
 mod all_inboxes;
 mod avatar;
+mod card_layout;
 mod completion;
 pub mod completion_menu;
 mod date_group;

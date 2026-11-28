@@ -127,6 +127,15 @@ written! {
     }
 }
 
+impl AvatarChoice {
+    pub const fn toggled(self) -> Self {
+        match self {
+            Self::Show => Self::Hide,
+            Self::Hide => Self::Show,
+        }
+    }
+}
+
 written! {
     /// When new mail in an Inbox raises a desktop notification.
     #[derive(Default, Clone, Copy, PartialEq, Eq)]

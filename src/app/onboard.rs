@@ -14,8 +14,12 @@ use crate::{
 
 /// The Theme before there is an Account: the config may set the icons.
 pub fn onboarding_theme(dir: &Path, background: Rgb) -> Result<Theme, Box<dyn Error>> {
-    let icons = PartialConfig::load(&dir.join("config.toml"))?.icons;
-    Ok(Theme::from_env(background, Icons::choose(icons)))
+    let config = PartialConfig::load(&dir.join("config.toml"))?;
+    Ok(Theme::from_env(
+        background,
+        Icons::choose(config.icons),
+        config.avatars,
+    ))
 }
 
 /// The Onboarding from `start`; leaving it is an error, the last failure

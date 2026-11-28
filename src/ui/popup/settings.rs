@@ -384,11 +384,7 @@ impl Settings {
     }
 
     fn switch_avatars(&mut self) -> Result<Effect, Box<dyn Error>> {
-        let avatars = match self.avatars {
-            AvatarChoice::Show => AvatarChoice::Hide,
-            AvatarChoice::Hide => AvatarChoice::Show,
-        };
-
+        let avatars = self.avatars.toggled();
         self.write(|config| config.set_avatars(avatars))?;
         self.avatars = avatars;
         Ok(Effect::Live(Live::Avatars(avatars)))
