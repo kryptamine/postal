@@ -1,9 +1,6 @@
 use std::fmt::Write;
 
-use ratatui::{
-    buffer::Buffer,
-    style::{Color, Modifier, Style},
-};
+use ratatui::{buffer::Buffer, layout::Rect};
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
@@ -12,9 +9,6 @@ use crate::{
 };
 
 pub const WIDTH: u16 = 4;
-/// How much of the hue the tile takes over the terminal's background:
-/// enough to tell senders apart, little enough to sit behind the text.
-const TINT: f32 = 0.28;
 
 /// Spread round the wheel at one brightness, so no sender stands out.
 const HUES: [Rgb; 9] = [
@@ -33,69 +27,20 @@ const fn rgb(r: u8, g: u8, b: u8) -> Rgb {
     Rgb { r, g, b }
 }
 
-/// The tile of `message`'s sender at `(x, y)`, down `rows` rows of at most
-/// three: half blocks above and below the initials make it two rows tall
-/// to the eye, the initials centred. `selected` is the card's selection.
-pub fn draw(
-    buf: &mut Buffer,
-    (x, y, rows): (u16, u16, u16),
-    message: &Message,
-    selected: bool,
-    theme: &Theme,
-) {
-    let (edge, face) = styles(address(&message.from), selected, theme);
+/// The tile of `message`'s sender in `tile`, at most three rows: half blocks
+/// above and below the initials make it two rows tall to the eye, the
+/// initials centred. `selected` is the card's selection.
+pub fn draw(buf: &mut Buffer, tile: Rect, message: &Message, selected: bool, theme: &Theme) {
+    let (edge, face) = theme.avatar(hue(address(&message.from)), selected);
     let initials = initials(message);
-    let mut face_text = StackStr::<32>::new();
     let room = usize::from(WIDTH).saturating_sub(initials.as_str().width());
-    let left = room / 2;
-    write!(
-        face_text,
-        "{:left$}{}{:right$}",
-        "",
-        initials.as_str(),
-        "",
-        right = room - left
-    )
-    .ok();
-    let tile = [("▄▄▄▄", edge), (face_text.as_str(), face), ("▀▀▀▀", edge)];
-    for (dy, (text, style)) in (0..rows.min(3)).zip(tile) {
-        buf.set_stringn(x, y + dy, text, usize::from(WIDTH), style);
+    let (left, right) = (room / 2, room - room / 2);
+    let mut centred = StackStr::<32>::new();
+    write!(centred, "{:left$}{}{:right$}", "", initials.as_str(), "").ok();
+    let rows = [("▄▄▄▄", edge), (centred.as_str(), face), ("▀▀▀▀", edge)];
+    for (y, (text, style)) in (tile.y..tile.bottom()).zip(rows) {
+        buf.set_stringn(tile.x, y, text, usize::from(tile.width), style);
     }
-}
-
-/// The half blocks' style and the initials'. Under `NO_COLOR` the tile is
-/// the card's text colour: the face reverses the card, the edges keep it.
-fn styles(address: &str, selected: bool, theme: &Theme) -> (Style, Style) {
-    let Some(colours) = theme.avatar_colours() else {
-        let face = Style::new().add_modifier(Modifier::BOLD);
-        let face = if selected {
-            face.remove_modifier(Modifier::REVERSED)
-        } else {
-            face.add_modifier(Modifier::REVERSED)
-        };
-
-        return (Style::new(), face);
-    };
-
-    let hue = hue(address);
-    let tile = colours.terminal().mix(hue, TINT);
-    let ink = colours.text(hue, Some(tile));
-    // The selection is a reversed named colour; the edges' blank half sits on it.
-    let ground = if selected { theme.selected.fg } else { None };
-    let edge = Style::new()
-        .fg(colour(tile))
-        .bg(ground.unwrap_or(Color::Reset))
-        .remove_modifier(Modifier::REVERSED);
-    let face = Style::new()
-        .fg(colour(ink))
-        .bg(colour(tile))
-        .add_modifier(Modifier::BOLD)
-        .remove_modifier(Modifier::REVERSED);
-    (edge, face)
-}
-
-const fn colour(Rgb { r, g, b }: Rgb) -> Color {
-    Color::Rgb(r, g, b)
 }
 
 /// The address of a `From` as `Name <address>` shows it, or the whole of it.

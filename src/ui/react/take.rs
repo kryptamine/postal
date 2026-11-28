@@ -1,7 +1,7 @@
 use ratatui::layout::Rect;
 
 use crate::{
-    account::config::{AvatarChoice, ContactsChoice},
+    account::config::ContactsChoice,
     render::icons::Icons,
     ui::drafts::drafting,
     ui::drafts::forwarding,
@@ -80,7 +80,7 @@ fn apply(model: &mut Model, live: Live) {
             model.theme.icons = Icons::choose(choice);
             model.previews.set_look(model.theme.mail_look());
         }
-        Live::Avatars(choice) => model.theme.avatars = choice == AvatarChoice::Show,
+        Live::Avatars(choice) => model.theme.avatars = choice,
         Live::Notify(choice) => model.notifier.notify = choice,
         Live::Contacts(choice) => {
             model.world.contacts = choice;

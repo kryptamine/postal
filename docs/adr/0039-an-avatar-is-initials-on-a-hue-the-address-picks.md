@@ -32,10 +32,10 @@ initials make it two rows tall to the eye, the letters centred. Under
 **Room.** The Avatar costs seven columns of a card: the marks, the tile
 and a gap. A card narrower than 34 columns, the list beside the Preview in
 a terminal of 100, keeps the text-only card. Beside an Avatar the Unread
-dot moves to the tile's middle row, level with the letters, and the
-attachment mark to the end of the subject's row. The Unread mark is a
-dot in either look: a Nerd Font envelope stood above the tile and looked
-out of place.
+mark moves to the tile's middle row, level with the letters, and the
+attachment mark to the end of the subject's row. `CardLayout` is the one
+place that tells the two cards apart. The Unread mark is a dot in either
+look: a Nerd Font envelope stood above the tile and looked out of place.
 
 A frame draws the Avatars without allocating (ADR 0001): the initials are
 formatted on the stack.

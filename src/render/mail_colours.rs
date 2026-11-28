@@ -23,8 +23,11 @@ impl MailColours {
         Self { terminal }
     }
 
-    pub const fn terminal(self) -> Rgb {
-        self.terminal
+    /// A tile of `amount` of `hue` over the terminal, and `hue` moved until
+    /// it reads as text on that tile.
+    pub fn tile(self, hue: Rgb, amount: f32) -> (Rgb, Rgb) {
+        let tile = self.terminal.mix(hue, amount);
+        (tile, self.text(hue, Some(tile)))
     }
 
     /// `None` where the terminal's own background shows: on the page, and on

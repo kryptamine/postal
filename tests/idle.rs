@@ -201,7 +201,7 @@ fn an_expunge_older_than_the_cache_renumbers_the_cached_rows() {
     quit(t);
 
     let marked = |subject: &str| {
-        let row = (1..screen.rows()).find(|&row| support::card::text(&screen, row) == subject);
+        let row = (1..screen.rows()).find(|&row| support::card::subject(&screen, row) == subject);
         row.map(|row| support::card::unread(&screen, row - 1))
     };
 
