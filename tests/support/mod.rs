@@ -5,6 +5,7 @@
 )]
 
 pub mod browser;
+pub mod card;
 pub mod client_config;
 pub mod editor;
 pub mod fake_autoconfig;

@@ -41,6 +41,8 @@ pub struct Theme {
     /// Mail colours moved onto this terminal's background.
     pub mail: MailColours,
     pub icons: Icons,
+    /// Whether a card in the Message List starts with an avatar.
+    pub avatars: bool,
 }
 
 impl Theme {
@@ -88,6 +90,7 @@ impl Theme {
             coloured,
             mail: MailColours::new(background),
             icons,
+            avatars: true,
         }
     }
 
@@ -96,6 +99,11 @@ impl Theme {
             colours: self.mail,
             icons: self.icons,
         }
+    }
+
+    /// What avatars tint onto; `None` under `NO_COLOR`.
+    pub const fn avatar_colours(&self) -> Option<MailColours> {
+        if self.coloured { Some(self.mail) } else { None }
     }
 
     /// The style of the sender of `message`: muted for the Account's own.

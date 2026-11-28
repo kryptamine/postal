@@ -23,6 +23,10 @@ impl MailColours {
         Self { terminal }
     }
 
+    pub const fn terminal(self) -> Rgb {
+        self.terminal
+    }
+
     /// `None` where the terminal's own background shows: on the page, and on
     /// a grey `panel` too close to the terminal to stand out, which moved
     /// apart is only a slab. A control, or a colour, moves apart to show.

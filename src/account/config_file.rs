@@ -11,8 +11,8 @@ use toml_edit::{
 use crate::{
     account::atomic_file,
     account::config::{
-        ComposeFormat, ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY,
-        SecretStore, Smtp, Terminal,
+        AvatarChoice, ComposeFormat, ContactsChoice, Error, IconChoice, Imap, NotifyChoice,
+        SEND_DELAY, SecretStore, Smtp, Terminal,
     },
     account::provider::Provider,
 };
@@ -184,6 +184,10 @@ impl ConfigFile {
 
     pub fn set_icons(&mut self, icons: IconChoice) {
         self.set_choice("icons", icons, IconChoice::key);
+    }
+
+    pub fn set_avatars(&mut self, avatars: AvatarChoice) {
+        self.set_choice("avatars", avatars, AvatarChoice::key);
     }
 
     pub fn set_notify(&mut self, notify: NotifyChoice) {

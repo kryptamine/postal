@@ -14,6 +14,7 @@ mod accounts;
 mod architecture;
 mod attach;
 mod attachments;
+mod avatars;
 mod backfill;
 mod body_index;
 mod browser_view;

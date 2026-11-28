@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    account::config::{ContactsChoice, IconChoice, NotifyChoice},
+    account::config::{AvatarChoice, ContactsChoice, IconChoice, NotifyChoice},
     compose::recipients::Recipients,
     domain::folder::Folder,
     domain::per_account::AccountId,
@@ -81,6 +81,7 @@ pub enum Drafting {
 #[derive(Clone, Copy)]
 pub enum Live {
     Icons(IconChoice),
+    Avatars(AvatarChoice),
     Notify(NotifyChoice),
     /// Where Search finds Correspondents besides mail, read at once when
     /// turned on so macOS asks for access then.

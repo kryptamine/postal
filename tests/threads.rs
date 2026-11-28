@@ -7,6 +7,7 @@ use crate::support;
 use std::time::{Duration, Instant};
 
 use support::{
+    card,
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
@@ -65,31 +66,31 @@ fn ready(server: &FakeImap, home: &Home, shown: &str) -> Terminal {
     t
 }
 
-/// The Message List's rows, top to bottom, trimmed.
+/// The Message List's rows right of the avatars, top to bottom, trimmed.
 fn list(screen: &Screen) -> Vec<String> {
     (0..screen.rows())
         .map(|row| {
-            let text: String = screen.row_text(row).chars().take(LIST).collect();
+            let row = screen.row_text(row);
+            let skip = card::text_column(screen);
+            let text: String = row.chars().take(LIST).skip(skip).collect();
             text.trim_matches(|c: char| c == '│' || c.is_whitespace())
                 .to_owned()
         })
         .collect()
 }
 
-/// The three lines of the card whose first line starts with `senders`,
-/// after any Unread marker.
+/// The three lines of the card whose first line starts with `senders`.
 fn card(screen: &Screen, senders: &str) -> Option<[String; 3]> {
     let rows = list(screen);
-    let at = rows.iter().position(|row| {
-        row.trim_start_matches('●')
-            .trim_start()
-            .starts_with(senders)
-    })?;
+    let at = rows.iter().position(|row| row.starts_with(senders))?;
     Some([0, 1, 2].map(|n| rows[at + n].clone()))
 }
 
 fn unread(screen: &Screen, senders: &str) -> bool {
-    card(screen, senders).is_some_and(|[first, ..]| first.starts_with('●'))
+    let rows = list(screen);
+    let at = rows.iter().position(|row| row.starts_with(senders));
+    at.and_then(|row| u16::try_from(row).ok())
+        .is_some_and(|row| card::unread(screen, row))
 }
 
 /// Whether the list shows `a` above `b`.
@@ -162,11 +163,12 @@ fn a_reply_arriving_joins_its_thread_and_moves_it_to_the_top() {
 
     let reply = message("Erin", ("Re: Trip plans", "Me too"), "2024-03-06T09:00:00Z");
     server.deliver(reply.in_thread(0));
+    // Beside an avatar the senders keep the first and the last.
     let screen = t
-        .snapshot_after(|s| card(s, "Alice, me, Bob, Erin (4)").is_some())
+        .snapshot_after(|s| card(s, "Alice … Erin (4)").is_some())
         .unwrap();
     quit(t);
-    assert!(above(&screen, "Alice, me, Bob, Erin", "Dave"), "{screen}");
+    assert!(above(&screen, "Alice … Erin", "Dave"), "{screen}");
 }
 
 #[test]

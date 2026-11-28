@@ -4,6 +4,7 @@
 use crate::support;
 
 use support::{
+    card::selected_subject,
     fake_body::FakeBody,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
@@ -198,15 +199,6 @@ fn many_folders_scroll_in_a_capped_picker() {
         "{screen}"
     );
     quit(t);
-}
-
-/// The subject line of the card drawn in reverse video, the selection.
-fn selected_subject(screen: &Screen) -> Option<String> {
-    let first =
-        (0..screen.rows()).find(|&row| screen.cell(row, 3).is_some_and(|c| c.style().reverse))?;
-    let subject = screen.row_text(first + 1);
-    let subject = subject.split('│').nth(1)?;
-    Some(subject.trim().to_owned())
 }
 
 /// Opens the picker, types `query` and shows the best match.

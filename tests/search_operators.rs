@@ -219,7 +219,7 @@ fn the_menu_suggests_what_the_last_word_can_become() {
     let screen = t
         .snapshot_after(|s| hint_line(s).contains("/from:ada@lovelace.org"))
         .unwrap();
-    assert_eq!(selected_subject(&screen).as_deref(), Some("+ Engine notes"));
+    assert_eq!(selected_subject(&screen).as_deref(), Some("Engine notes"));
 
     // Tab and Shift-Tab go round the suggestions.
     t.send_str(" is:").unwrap();
@@ -310,7 +310,7 @@ fn a_message_read_while_the_search_is_open_stays_in_it() {
     // select the next Unread, and so read them all.
     t.send(Key::Char('/')).unwrap();
     t.send_str("is:unread").unwrap();
-    wait_selected(&mut t, "+ Engine notes");
+    wait_selected(&mut t, "Engine notes");
     let deadline = Instant::now() + Duration::from_secs(10);
     while !server.seen(INBOX, FIRST_UID) {
         assert!(Instant::now() < deadline, "timed out");

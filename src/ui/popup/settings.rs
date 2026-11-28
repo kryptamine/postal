@@ -8,7 +8,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
     account::config::{
-        self, ComposeFormat, ContactsChoice, IconChoice, NotifyChoice, SecretStore, Terminal,
+        self, AvatarChoice, ComposeFormat, ContactsChoice, IconChoice, NotifyChoice, SecretStore,
+        Terminal,
     },
     account::config_file::ConfigFile,
     account::mailto_handler::{self, CHOOSES_TERMINAL},
@@ -35,6 +36,8 @@ pub enum Row {
     SendDelay,
     /// Whether mailto: links open in Postal.
     Handler,
+    /// Whether a card starts with its sender's avatar.
+    Avatars,
     /// The program a mailto: link runs in place of a terminal.
     TerminalCommand,
 }
@@ -72,6 +75,7 @@ pub struct Settings {
     /// The first line of each Account's signature, where it reads.
     pub signatures: Vec<Option<String>>,
     pub icons: IconChoice,
+    pub avatars: AvatarChoice,
     pub notify: NotifyChoice,
     pub name: Option<String>,
     pub send_delay: Duration,
@@ -102,6 +106,7 @@ impl Settings {
                 .map(|(email, provider)| (email.to_owned(), provider))
                 .collect(),
             icons: config.icons,
+            avatars: config.avatars,
             notify: config.notify,
             name: config.name,
             send_delay: config.send_delay,
@@ -142,14 +147,11 @@ impl Settings {
         let values = Value::of(section).iter().copied().map(Row::Choice);
         let last = match section {
             Section::Accounts => Some(Row::Add),
+            Section::Icons => Some(Row::Avatars),
             Section::Name => Some(Row::Name),
             Section::Send => Some(Row::SendDelay),
             Section::Mailto if CHOOSES_TERMINAL => Some(Row::TerminalCommand),
-            Section::Icons
-            | Section::Notify
-            | Section::Secrets
-            | Section::Mailto
-            | Section::Contacts => None,
+            Section::Notify | Section::Secrets | Section::Mailto | Section::Contacts => None,
         };
         first.into_iter().chain(accounts).chain(values).chain(last)
     }
@@ -272,6 +274,7 @@ impl Settings {
                 self.mode = Mode::Typing(Field::TerminalCommand, command);
             }
             Row::Handler => return self.apply(Self::switch_handler),
+            Row::Avatars => return self.apply(Self::switch_avatars),
             Row::Choice(value) => return self.choose(value),
         }
 
@@ -378,6 +381,17 @@ impl Settings {
         self.write(|config| config.set_terminal(&terminal))?;
         self.terminal = terminal;
         Ok(Effect::Saved)
+    }
+
+    fn switch_avatars(&mut self) -> Result<Effect, Box<dyn Error>> {
+        let avatars = match self.avatars {
+            AvatarChoice::Show => AvatarChoice::Hide,
+            AvatarChoice::Hide => AvatarChoice::Show,
+        };
+
+        self.write(|config| config.set_avatars(avatars))?;
+        self.avatars = avatars;
+        Ok(Effect::Live(Live::Avatars(avatars)))
     }
 
     /// Sets Postal up as the mailto: handler, or removes it.

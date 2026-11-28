@@ -3,7 +3,7 @@ use std::{error::Error, path::Path, time::Duration};
 use futures::TryFutureExt;
 
 use crate::{
-    account::config::Config,
+    account::config::{AvatarChoice, Config},
     account::partial_config::PartialConfig,
     account::sign_in::SignIn,
     account::xdg,
@@ -81,6 +81,7 @@ pub async fn session(
     let fetch = FetchRequests::new(Routes::new(requests.into_iter().collect()), &statuses);
     let (tty, background) = slot.take()?;
     let mut theme = Theme::from_env(background, Icons::choose(shared.icons));
+    theme.avatars = shared.avatars == AvatarChoice::Show;
     let mut previews = Previews::start(configs, sender, theme.mail_look());
     let background = Background {
         work: futures::future::try_join_all(works).map_ok(drop),

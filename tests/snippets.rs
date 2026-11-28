@@ -22,12 +22,8 @@ fn postal(home: &Home, args: &[&str]) -> Terminal {
 /// The Snippet line of the card whose subject is `subject`; `None` when no
 /// card on screen has it.
 fn snippet(screen: &Screen, subject: &str) -> Option<String> {
-    let row = (0..screen.rows()).find(|&row| screen.row_text(row).contains(subject))?;
-    let line = screen.row_text(row + 1);
-    Some(
-        line.trim_matches(|c: char| c == '│' || c.is_whitespace())
-            .to_owned(),
-    )
+    let row = support::card::row_of(screen, subject)?;
+    Some(support::card::text(screen, row + 1))
 }
 
 fn base64_lines(text: &str) -> String {
@@ -141,7 +137,8 @@ fn shows_a_snippet_for_each_kind_of_text_part() {
     let row = (0..screen.rows())
         .find(|&row| screen.row_text(row).contains("Hello world"))
         .unwrap();
-    assert!(screen.cell(row, 4).unwrap().style().dim, "{screen}");
+    let column = u16::try_from(support::card::text_column(&screen)).unwrap();
+    assert!(screen.cell(row, column).unwrap().style().dim, "{screen}");
     quit(t);
 
     // Reading must leave the Message Unread; a Snippet needs only a part's start.
