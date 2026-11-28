@@ -8,7 +8,7 @@ use futures::channel::mpsc::UnboundedSender;
 use crate::{
     account::config::Config,
     cache::{self, Cache},
-    domain::folder,
+    domain::folder_name,
     domain::folder_name::FolderName,
     domain::message::Message,
     domain::per_account::{AccountId, PerAccount},
@@ -71,7 +71,7 @@ impl Previews {
     ) -> Self {
         Self {
             account: None,
-            folder: folder::INBOX.into(),
+            folder: folder_name::INBOX.into(),
             rendered: RenderedPreviews::default(),
             rendering: HashSet::new(),
             fetching: HashSet::new(),

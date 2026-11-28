@@ -4,8 +4,8 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     cache::{Cache, Changes, Reported},
-    domain::folder::INBOX,
     domain::folder_name::FolderName,
+    domain::folder_name::INBOX,
     mail::changes::queued::{send_changes, send_outbox},
     mail::fetch::thread_fetch,
     mail::imap::{ImapSession, Mode, Pushed},

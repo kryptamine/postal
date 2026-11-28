@@ -1,11 +1,8 @@
 use std::{cmp::Ordering, sync::Arc};
 
 use crate::domain::counts::Counts;
-use crate::domain::folder_name::FolderName;
+use crate::domain::folder_name::{FolderName, INBOX};
 use crate::domain::per_account::AccountId;
-
-/// The Folder every run starts in, as IMAP names it in any case.
-pub const INBOX: &str = "INBOX";
 
 /// What a special-use Folder is for (RFC 6154), in the order the Folder
 /// Picker lists them.
