@@ -28,14 +28,6 @@ impl Icons {
         }
     }
 
-    /// The Unread marker on a card.
-    pub const fn unread(self) -> &'static str {
-        match self {
-            Self::Nerd => "\u{f01ee}",
-            Self::Plain => "●",
-        }
-    }
-
     /// On a read card whose Thread has a Reply sent; `None` in the plain look.
     pub const fn answered(self) -> Option<&'static str> {
         match self {

@@ -39,7 +39,7 @@ const MIN_WIDTH_WITH_DATE: u16 = 29;
 const DATE_ROOM: u16 = 11;
 /// Down the padding left of a picked card's text, on each of its rows.
 const PICKED: &str = "▌";
-/// The Unread mark beside an avatar, the plain dot in either look.
+/// The Unread mark, a dot in either look.
 const UNREAD_DOT: &str = "●";
 /// Below this card width there is no avatar, so the text keeps 25 columns.
 const AVATAR_MIN_WIDTH: u16 = 34;
@@ -320,7 +320,7 @@ impl Cards<'_> {
         let text = text_area(card);
         if !self.avatar(card) {
             if thread.unread {
-                buf.set_string(text.x, text.y, self.theme.icons.unread(), unread);
+                buf.set_string(text.x, text.y, UNREAD_DOT, unread);
             } else if let Some(icon) = self.theme.icons.answered().filter(|_| thread.answered) {
                 buf.set_string(text.x, text.y, icon, muted);
             }

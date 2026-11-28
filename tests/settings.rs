@@ -15,7 +15,8 @@ use support::{
 use termlens::{Key, Terminal};
 
 const OTHER: &str = "me@icloud.example";
-const UNREAD: &str = "\u{f01ee}";
+/// The answered mark in the Nerd Font look; the plain look draws none.
+const ANSWERED: &str = "\u{f045a}";
 
 fn inbox() -> FakeImap {
     FakeImap::start(vec![
@@ -90,6 +91,7 @@ fn settings_shows_a_tab_per_section() {
 #[test]
 fn icons_change_and_redraw_at_once() {
     let server = inbox();
+    server.deliver(FakeMessage::new("Cy", "Old plans", "2024-11-17T09:00:00Z").answered());
     let home = Home::for_server(&server);
     let mut t = postal(&home, false);
     settings(&mut t);
@@ -106,7 +108,7 @@ fn icons_change_and_redraw_at_once() {
     );
 
     t.send(Key::Esc).unwrap();
-    t.wait_until(|s| s.contains(UNREAD) && !s.contains("Secrets"))
+    t.wait_until(|s| s.contains(ANSWERED) && !s.contains("Secrets"))
         .unwrap();
     quit(t);
 }
