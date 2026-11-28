@@ -1,8 +1,9 @@
 use crate::{
     cache::{Cache, EnvelopePass},
     domain::correspondence::Correspondence,
-    domain::folder::{INBOX, Role},
+    domain::folder::Role,
     domain::folder_name::FolderName,
+    domain::folder_name::INBOX,
     domain::uid::Uid,
     mail::imap::{ImapSession, Mode},
     mail::role_folder,

@@ -1,6 +1,9 @@
 use futures::{FutureExt, StreamExt, channel::mpsc::UnboundedReceiver, stream::Peekable};
 
-use crate::{domain::folder::INBOX, domain::folder_name::FolderName, domain::thread_id::ThreadId};
+use crate::{
+    domain::folder_name::{FolderName, INBOX},
+    domain::thread_id::ThreadId,
+};
 
 /// What the screen asks of the sync connection.
 pub enum Ask {

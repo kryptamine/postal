@@ -5,7 +5,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::folder;
+/// The Folder every run starts in, as IMAP names it in any case.
+pub const INBOX: &str = "INBOX";
 
 /// A Folder's name as the server gives it, modified UTF-7 and nested labels
 /// in full, which every command names it by; not the path people read.
@@ -16,8 +17,8 @@ pub struct FolderName(Arc<str>);
 impl FolderName {
     /// The Inbox, as IMAP names it in any case.
     pub fn inbox() -> &'static Self {
-        static INBOX: LazyLock<FolderName> = LazyLock::new(|| FolderName::from(folder::INBOX));
-        &INBOX
+        static NAME: LazyLock<FolderName> = LazyLock::new(|| FolderName::from(INBOX));
+        &NAME
     }
 
     pub fn as_str(&self) -> &str {

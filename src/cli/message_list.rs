@@ -8,7 +8,7 @@ use crate::{
     cli::args::{LIMIT, MessageList},
     cli::named_folder::named,
     cli::thread_rows::{self, ThreadRows},
-    domain::folder::INBOX,
+    domain::folder_name::INBOX,
 };
 
 /// `postal message list`: the newest Threads of a Folder, by default every
