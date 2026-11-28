@@ -16,7 +16,6 @@ use support::{
 };
 use termlens::{Key, Screen, Terminal};
 
-const UNREAD: &str = "\u{f01ee}";
 const OUTBOX: &str = "\u{f048a}";
 const OFFLINE: &str = "\u{f0319}";
 const ANSWERED: &str = "\u{f045a}";
@@ -73,7 +72,11 @@ fn auto_draws_icons_in_a_terminal_that_bundles_them() {
     let home = home("", &imap, &smtp);
     let mut t = postal(&home, Some("ghostty"));
     let screen = t.snapshot_after(|s| s.contains("Weekly notes")).unwrap();
-    assert!(screen.contains(UNREAD) && !screen.contains("●"), "{screen}");
+    // The Unread mark is a dot in either look, level with an avatar's letters.
+    assert!(
+        screen.contains(ANSWERED) && screen.contains("●"),
+        "{screen}"
+    );
 
     let (rows, screen) = picker_rows(&mut t);
     assert_eq!(
@@ -101,7 +104,6 @@ fn auto_keeps_the_plain_look_elsewhere_and_none_keeps_it_everywhere() {
         let home = home(icons, &imap, &smtp);
         let mut t = postal(&home, terminal);
         let screen = t.snapshot_after(|s| s.contains("Weekly notes")).unwrap();
-        assert!(screen.contains("●") && !screen.contains(UNREAD), "{screen}");
         assert!(!screen.contains(ANSWERED), "{screen}");
 
         let (rows, screen) = picker_rows(&mut t);
