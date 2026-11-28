@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::fetch::body_fetch::open,
+    cache::Cache, domain::folder_name::FolderName, domain::uid::Uid, mail::fetch::examine::open,
     mail::imap::ImapSession, mail::passes::body_index::BodyPass, mail::passes::envelope_pass,
     mail::passes::folder_pass::FolderPass, mail::passes::index_progress::IndexProgress,
     mail::passes::sent_pass, mail::passes::snippets, mail::sync::Error, mail::update::Update,

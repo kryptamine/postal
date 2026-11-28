@@ -2,6 +2,7 @@ pub mod attachment_fetch;
 pub mod awaited_parts;
 pub mod backfill;
 pub mod body_fetch;
+pub mod examine;
 pub mod fetch_requests;
 pub mod inline_fetch;
 pub mod one_by_one;

@@ -12,6 +12,7 @@ use crate::{
     mail::fetch::body_fetch::{
         self, AwaitedRequest, BodyRequest, Fetched, OneShot, Request, Standing,
     },
+    mail::fetch::examine,
     mail::fetch::inline_fetch::{self, InlineFetched},
     mail::fetch::part_fetch,
     mail::fetch::unfetched::Unfetched,
@@ -114,7 +115,7 @@ impl Pending {
 
             self.oneshots.pop_front();
         } else if let Some((folder, uids)) = self.bodies.front() {
-            if body_fetch::open(server, folder).await? {
+            if examine::open(server, folder).await? {
                 body_fetch::fetch_each(server, cache, folder, uids.clone(), send).await?;
                 self.bodies.pop_front();
             } else {
@@ -194,7 +195,7 @@ async fn fetch_awaited(
         AwaitedPart::Bodies(folder, uids) => (folder, uids),
     };
 
-    let (unanswered, reason) = if body_fetch::open(server, folder).await? {
+    let (unanswered, reason) = if examine::open(server, folder).await? {
         let answered = body_fetch::fetch_each(server, cache, folder, uids.clone(), send).await?;
         let unanswered = uids.iter().filter(|u| !answered.contains(u)).copied();
         (unanswered.collect::<Vec<_>>(), part_fetch::NOT_HELD)

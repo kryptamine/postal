@@ -1,5 +1,5 @@
 use crate::{
-    domain::folder_name::FolderName, mail::fetch::body_fetch, mail::fetch::unfetched::Unfetched,
+    domain::folder_name::FolderName, mail::fetch::examine, mail::fetch::unfetched::Unfetched,
     mail::imap, mail::imap::ImapSession, mail::sync::Error,
 };
 
@@ -13,7 +13,7 @@ pub async fn in_folder<T>(
     folder: &FolderName,
     fetch: impl AsyncFnOnce(&mut ImapSession) -> Result<T, imap::Error>,
 ) -> Result<Result<T, Unfetched>, Error> {
-    if !body_fetch::open(server, folder).await? {
+    if !examine::open(server, folder).await? {
         return Ok(Err(Unfetched::Failed(FOLDER_GONE.to_owned())));
     }
 
