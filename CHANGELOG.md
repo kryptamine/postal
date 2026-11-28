@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.0](https://github.com/kryptamine/postal/compare/v0.11.0...v0.12.0) (2026-11-28)
+
+
+### Features
+
+* **landing:** label the browser and postal stills side by side ([f1d25ee](https://github.com/kryptamine/postal/commit/f1d25ee7d71d06e1df03912b479c79eed1ef1f36))
+* **landing:** show the keys and commands under also included ([19746f0](https://github.com/kryptamine/postal/commit/19746f046f920552a8126832884d4ce4b7d99d3e))
+* **ui:** start each card with its sender's avatar ([a8be4f1](https://github.com/kryptamine/postal/commit/a8be4f11570fa88ef2331a495523317c40d0434e)), closes [#267](https://github.com/kryptamine/postal/issues/267)
+
+
+### Bug Fixes
+
+* **landing:** lay the html mail points out two by two ([3001e9d](https://github.com/kryptamine/postal/commit/3001e9dbc20550aea524ba559a113628cead8396))
+* **landing:** tighten the hero and the header on a phone ([3ffda0a](https://github.com/kryptamine/postal/commit/3ffda0a5b0ecf7ff325633f929d34f5fd298e5bc))
+* **ui:** draw the Unread mark as a dot in every look ([a6d3d11](https://github.com/kryptamine/postal/commit/a6d3d1132726575ec330020e7144d73dd559c544)), closes [#267](https://github.com/kryptamine/postal/issues/267)
+
 ## [0.11.0](https://github.com/kryptamine/postal/compare/v0.10.0...v0.11.0) (2026-11-27)
 
 
