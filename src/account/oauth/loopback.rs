@@ -57,7 +57,13 @@ impl Loopback {
                 continue;
             };
 
-            respond(&mut stream, "200 OK", HTML, &landing::page(&outcome)).await;
+            respond(
+                &mut stream,
+                "200 OK",
+                HTML,
+                &landing::page(matches!(outcome, Outcome::Code(_))),
+            )
+            .await;
             return Ok(outcome);
         }
     }
