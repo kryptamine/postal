@@ -92,11 +92,11 @@ fn answered(ui: &Ui) -> Option<Message> {
 /// The Account a Compose goes out from: the shown Folder's; in All
 /// Inboxes, the selected Thread's, else the first.
 fn composing_from(view: &InboxView) -> Option<AccountId> {
-    match &view.folder {
+    match view.folder() {
         Shown::Folder(folder) => Some(folder.account),
         _ => view
             .selected_message()
             .map(|m| m.account)
-            .or_else(|| view.accounts.first()),
+            .or_else(|| view.accounts().first()),
     }
 }

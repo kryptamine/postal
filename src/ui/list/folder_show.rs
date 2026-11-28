@@ -14,12 +14,12 @@ pub fn show(
     limit: Option<usize>,
 ) -> Result<(), Error> {
     let mut rows = view.take_rows();
-    let rows = match &view.folder {
+    let rows = match view.folder() {
         Shown::AllInboxes { .. } => {
             let read = all_inboxes::read(caches, view, limit, rows)?;
             read.map(|inboxes| {
-                view.edge = inboxes.edge.map(|(_, account)| account);
-                (inboxes.rows, inboxes.edge.map(|(at, _)| at))
+                let (since, edge) = inboxes.edge.unzip();
+                (inboxes.rows, (since, edge))
             })
         }
         Shown::Folder(folder) => {
@@ -28,8 +28,7 @@ pub fn show(
             match read {
                 Some(held) => {
                     let bottomed = view.bottomed(cache, account, (&folder.name, held))?;
-                    view.edge = (!bottomed).then_some(account);
-                    Some((rows, None))
+                    Some((rows, (None, (!bottomed).then_some(account))))
                 }
                 None => None,
             }
@@ -38,8 +37,8 @@ pub fn show(
         Shown::LocalDrafts => None,
     };
 
-    if let Some((rows, since)) = rows {
-        view.show(rows, since, caches)?;
+    if let Some((rows, edge)) = rows {
+        view.show(rows, edge, caches)?;
     }
 
     view.research(caches)?;
@@ -49,7 +48,7 @@ pub fn show(
 /// Shows `folder` in the Message List, from the Cache, unless it is shown
 /// already; true when it was not, for the sync connection to follow.
 pub fn switch(ui: &mut Ui, caches: &PerAccount<Cache>, folder: Shown) -> Result<bool, Error> {
-    if folder.same(&ui.view.folder) {
+    if folder.same(ui.view.folder()) {
         return Ok(false);
     }
 
@@ -73,7 +72,7 @@ pub fn folders(caches: &PerAccount<Cache>) -> Result<Vec<Folder>, Error> {
 /// Lists the Folders anew in an open Folder Picker.
 pub fn relist(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     if let Some(picker) = ui.screen.over.get_mut::<FolderPicker>() {
-        picker.reload(folders(caches)?, &ui.view.folder);
+        picker.reload(folders(caches)?, ui.view.folder());
     }
 
     Ok(())
@@ -110,10 +109,7 @@ pub fn type_query(
 /// `from:`, the Correspondents.
 pub fn accept(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
     ui.screen.showing = Showing::Query;
-    if let Some(search) = &mut ui.view.search {
-        search.suggest(caches)?;
-    }
-
+    ui.view.suggest(caches)?;
     Ok(())
 }
 
@@ -122,11 +118,7 @@ pub fn accept(ui: &mut Ui, caches: &PerAccount<Cache>) -> Result<(), Error> {
 pub fn complete(ui: &mut Ui, caches: &PerAccount<Cache>, forward: bool) -> Result<(), Error> {
     ui.view
         .edit_query(caches, |search| search.complete(forward))?;
-    let selected = ui
-        .view
-        .search
-        .as_ref()
-        .and_then(|s| s.completion().selected());
+    let selected = ui.view.search().and_then(|s| s.completion().selected());
     if selected.is_some() {
         ui.screen.showing = Showing::Menu;
     }

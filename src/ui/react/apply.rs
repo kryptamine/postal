@@ -36,8 +36,8 @@ pub fn apply(
         Update::Inbox => reshow_inbox(ui, caches)?,
         Update::Folders => relist(ui, caches)?,
         Update::FolderGone(folder) => {
-            if ui.view.folder.is(account, &folder) {
-                let gone = format!("Folder {} no longer exists", ui.view.folder.label());
+            if ui.view.folder().is(account, &folder) {
+                let gone = format!("Folder {} no longer exists", ui.view.folder().label());
                 // The sync connection is back on the Inbox already.
                 switch(ui, caches, Shown::Folder(Folder::inbox(account)))?;
                 ui.screen.toast = Some(Toast::new(gone));
@@ -134,7 +134,7 @@ fn paged(
     folder: FolderName,
     nothing_below: Option<Uid>,
 ) -> Result<(), Error> {
-    view.nothing_below[account] = nothing_below.map(|uid| (folder, uid));
+    view.paged(account, folder, nothing_below);
 
     // In All Inboxes, an Account with nothing older sets no edge (ADR 0014).
     show(view, caches, None)

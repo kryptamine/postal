@@ -84,7 +84,7 @@ pub fn act(
 fn walk(action: Action, view: &mut InboxView) {
     match action {
         Action::Move(movement) => {
-            view.picks.clear();
+            view.unpick();
             view.apply(movement);
         }
         Action::Stretch(movement) => view.stretch(movement),
@@ -95,8 +95,8 @@ fn walk(action: Action, view: &mut InboxView) {
 /// Closes the menu while the Query is typed, else ends the Search.
 fn end_search(view: &mut InboxView, screen: &mut Screen) {
     let typing = screen.showing.mode().typing();
-    if !typing && !view.picks.is_empty() {
-        view.picks.clear();
+    if !typing && view.picking() {
+        view.unpick();
         return;
     }
 
@@ -113,8 +113,7 @@ fn end_search(view: &mut InboxView, screen: &mut Screen) {
 /// the selected Message, or in Reading of the one at the cursor.
 fn reshow(action: Action, view: &mut InboxView, screen: &mut Screen) {
     if matches!(action, Action::SwitchView) {
-        view.html = view.html.other();
-        view.preview_scroll = 0;
+        view.switch_view();
         if let Some(reading) = screen.showing.reading_mut() {
             reading.reveal = true;
         }
@@ -139,11 +138,10 @@ fn read(action: Action, view: &mut InboxView, screen: &mut Screen) -> Step {
             };
 
             screen.showing = Showing::Reading(reading);
-            view.picks.clear();
+            view.unpick();
             // Gmail keeps Trash and Spam out of All Mail, and their Threads
             // apart; a Search never shows theirs.
-            let apart = view.search.is_none()
-                && matches!(view.folder.role(), Some(Role::Trash | Role::Spam));
+            let apart = matches!(view.shown_role(), Some(Role::Trash | Role::Spam));
             let gmail = match view.selected_key() {
                 Some(Key::Gmail(account, id)) if !apart => Some((account, id)),
                 _ => None,

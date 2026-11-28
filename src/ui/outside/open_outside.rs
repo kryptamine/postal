@@ -53,12 +53,9 @@ pub fn open(
             let width = tty.terminal.size().map_err(Error::Terminal)?.width;
             let job = Job {
                 key: PreviewKey {
-                    account: message.account,
-                    body: message.body_key,
-                    width,
-                    view: ui.view.html,
                     // The pager shows the Message whole.
                     quoted: true,
+                    ..ui.view.preview_key(message, width)
                 },
                 body,
                 look: theme.mail_look(),

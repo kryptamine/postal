@@ -6,7 +6,7 @@ use crate::{
     account::config::ContactsChoice,
     cache::{self, Cache},
     domain::body_key::BodyKey,
-    domain::folder::Folder,
+    domain::folder::{Folder, Role},
     domain::folder_name::FolderName,
     domain::listing::Listing,
     domain::message::Message,
@@ -28,29 +28,29 @@ use crate::{
 pub struct InboxView {
     /// The Folder shown; on every run All Inboxes, or the Inbox with one
     /// Account.
-    pub folder: Shown,
+    folder: Shown,
     /// Each Account's address.
-    pub accounts: PerAccount<Arc<str>>,
+    accounts: PerAccount<Arc<str>>,
     /// Each Account's Folder and its oldest cached UID, when the server had
     /// nothing older there.
-    pub nothing_below: PerAccount<Option<(FolderName, Uid)>>,
+    nothing_below: PerAccount<Option<(FolderName, Uid)>>,
     /// The Account whose cache edge ends the rows, a Backfill of which
     /// shows more: the shown Folder's; in All Inboxes, as ADR 0014 picks;
     /// `None` once the server has nothing older.
-    pub edge: Option<AccountId>,
+    edge: Option<AccountId>,
     /// The shown Folder's rows; `None` until the Cache or the server has some.
-    pub list: Option<FolderList>,
+    list: Option<FolderList>,
     /// Shows its own rows, from every Folder; `selected` and `offset` index those.
-    pub search: Option<Search>,
-    pub selected: usize,
+    search: Option<Search>,
+    selected: usize,
     /// Index of the first visible card; kept by the widget so the selection stays on screen.
-    pub offset: usize,
+    offset: usize,
     /// The Preview's first row shown; back to 0 whenever the selection
     /// moves to another Message, and kept in range by the Preview widget.
-    pub preview_scroll: usize,
+    preview_scroll: usize,
     /// How the Preview shows HTML mail, for every Message.
-    pub html: View,
-    pub picks: Picks,
+    html: View,
+    picks: Picks,
     /// The Messages shown with their Quote, by Account and body key.
     quoted: HashSet<(AccountId, BodyKey)>,
     /// The local offset as of the last `show`: chrono's `Local` rereads the
@@ -87,15 +87,114 @@ impl InboxView {
         }
     }
 
+    pub const fn folder(&self) -> &Shown {
+        &self.folder
+    }
+
+    pub const fn accounts(&self) -> &PerAccount<Arc<str>> {
+        &self.accounts
+    }
+
+    /// The Search under way, which shows its own rows.
+    pub const fn search(&self) -> Option<&Search> {
+        self.search.as_ref()
+    }
+
+    pub const fn searching(&self) -> bool {
+        self.search.is_some()
+    }
+
+    /// Whether the shown Folder has its rows yet, from the Cache or the server.
+    pub const fn loaded(&self) -> bool {
+        self.list.is_some()
+    }
+
+    /// The Role of the Folder whose rows are shown; `None` in a Search,
+    /// whose rows come from every Folder.
+    pub fn shown_role(&self) -> Option<Role> {
+        self.search.is_none().then(|| self.folder.role()).flatten()
+    }
+
+    /// The row selected, of the Search's rows while one is under way.
+    pub const fn selected(&self) -> usize {
+        self.selected
+    }
+
+    /// Scrolls the list so the selected card shows whole, `highest` telling
+    /// the highest first row that keeps it so.
+    pub fn scroll_list(&mut self, highest: impl FnOnce(&Self) -> usize) {
+        self.offset = if self.selected < self.offset {
+            self.selected
+        } else {
+            self.offset.max(highest(self))
+        };
+    }
+
+    /// The first row the list shows.
+    pub const fn list_top(&self) -> usize {
+        self.offset
+    }
+
+    pub const fn preview_scroll(&self) -> usize {
+        self.preview_scroll
+    }
+
+    /// The Preview's first row shown, no lower than `last_top`.
+    pub fn clamp_preview_scroll(&mut self, last_top: usize) -> usize {
+        self.preview_scroll = self.preview_scroll.min(last_top);
+        self.preview_scroll
+    }
+
+    /// Shows HTML mail in the other View, from the Preview's top.
+    pub const fn switch_view(&mut self) {
+        self.html = self.html.other();
+        self.preview_scroll = 0;
+    }
+
+    /// The Account and Folder to ask a page of older Messages of, once the
+    /// selection is within `near_end` rows of the end; `None` in a Search,
+    /// which matches only the Cache, or once the server has nothing older.
+    pub fn older_page(&self, near_end: usize) -> Option<(AccountId, &FolderName)> {
+        if self.list.is_none() || self.search.is_some() || self.selected + near_end < self.rows() {
+            return None;
+        }
+
+        // With no edge, every Account has shown all it holds (ADR 0014).
+        let account = self.edge?;
+        Some((account, self.folder.of(account)?))
+    }
+
+    /// A page of older Messages of `folder` of `account` came in; the server
+    /// had nothing below `oldest` when it is given.
+    pub fn paged(&mut self, account: AccountId, folder: FolderName, oldest: Option<Uid>) {
+        self.nothing_below[account] = oldest.map(|uid| (folder, uid));
+    }
+
+    /// Suggests for the last word of the Search's Query, if one is under way.
+    pub fn suggest(&mut self, caches: &PerAccount<Cache>) -> Result<(), cache::Error> {
+        self.search
+            .as_mut()
+            .map_or_else(|| Ok(()), |search| search.suggest(caches))
+    }
+
+    pub const fn picking(&self) -> bool {
+        !self.picks.is_empty()
+    }
+
+    pub const fn unpick(&mut self) {
+        self.picks.clear();
+    }
+
     /// Shows the Folder's Thread `rows`, newest first, and reads the cards
-    /// around the selection; `since` is All Inboxes' edge. The selection
-    /// stays on the same Thread, or on the same row when that Thread is gone.
+    /// around the selection; `since` and `edge` end the rows (ADR 0014). The
+    /// selection stays on the same Thread, or on the same row when it is gone.
     pub fn show(
         &mut self,
         rows: Vec<ThreadRow>,
-        since: Option<i64>,
+        (since, edge): (Option<i64>, Option<AccountId>),
         caches: &PerAccount<Cache>,
     ) -> Result<(), cache::Error> {
+        self.edge = edge;
         let (selected, body) = self.kept.take().unwrap_or((None, None));
         match &mut self.list {
             Some(list) => list.reset(rows, since),

@@ -45,7 +45,7 @@ pub fn mark_unread(ui: &mut Ui, world: World) -> Result<(), Error> {
             changed |= mark(ui, world, *account, messages, unread)?;
         }
 
-        ui.view.picks.clear();
+        ui.view.unpick();
         if let Some(key) = ui.view.selected_key().filter(|_| unread) {
             ui.screen.dwell.spare(key);
         }

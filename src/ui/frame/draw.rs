@@ -70,7 +70,7 @@ pub fn draw(
                 frame.set_cursor_position(cursor);
             }
 
-            if let Some(search) = view.search.as_ref().filter(|_| keys.typing()) {
+            if let Some(search) = view.search().filter(|_| keys.typing()) {
                 frame.render_widget(menu(theme, search, panes.hint), frame.area());
             }
 
@@ -96,12 +96,11 @@ fn hint_line<'a>(
         outbox: screen.outbox(),
         hints: hints(screen, keys),
         query: view
-            .search
-            .as_ref()
+            .search()
             .map(Search::query)
             .filter(|_| !matches!(keys, Mode::Draft | Mode::LocalDrafts | Mode::Queued)),
-        parsed: view.search.as_ref().map(Search::parsed),
-        capped: view.search.as_ref().is_some_and(Search::capped),
+        parsed: view.search().map(Search::parsed),
+        capped: view.search().is_some_and(Search::capped),
         indexing: screen.index_progress(),
         picks: if keys == Mode::List {
             view.count_picked()
