@@ -76,7 +76,7 @@ fn settings_shows_a_tab_per_section() {
 
     t.send(Key::Char('l')).unwrap();
     let icons = t
-        .snapshot_after(|s| s.contains("Nerd Font glyphs in the lists"))
+        .snapshot_after(|s| s.contains("Nerd Font glyphs or plain symbols"))
         .unwrap();
     // `d` unlinks only on the Accounts tab, so no other tab offers it.
     assert!(!icons.contains("unlink"), "{icons}");

@@ -86,14 +86,7 @@ pub fn above(screen: &Screen, a: &str, b: &str) -> bool {
     list.find(a).zip(list.find(b)).is_some_and(|(a, b)| a < b)
 }
 
-/// The subject line of the card drawn in reverse video, the selection.
-pub fn selected_subject(screen: &Screen) -> Option<String> {
-    let first =
-        (0..screen.rows()).find(|&row| screen.cell(row, 3).is_some_and(|c| c.style().reverse))?;
-    let subject = screen.row_text(first + 1);
-    let subject = subject.split('│').nth(1)?;
-    Some(subject.trim().to_owned())
-}
+pub use crate::support::card::selected_subject;
 
 pub fn wait_selected(t: &mut Terminal, subject: &str) -> Screen {
     t.snapshot_after(|s| selected_subject(s).as_deref() == Some(subject))

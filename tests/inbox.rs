@@ -2,6 +2,7 @@ use crate::support;
 
 use chrono::{Datelike, Utc};
 use support::{
+    card::selected_subject,
     fake_imap::{FakeImap, FakeMessage},
     home::Home,
     picker::wait_picked,
@@ -22,18 +23,6 @@ fn postal_with(home: &Home, (cols, rows): (u16, u16), env: &[(&str, &str)]) -> T
     }
 
     builder.spawn(env!("CARGO_BIN_EXE_postal")).unwrap()
-}
-
-/// The subject line of the card drawn in reverse video, the selection.
-fn selected_subject(screen: &Screen) -> Option<String> {
-    let first =
-        (0..screen.rows()).find(|&row| screen.cell(row, 3).is_some_and(|c| c.style().reverse))?;
-    let subject = screen.row_text(first + 1);
-    Some(
-        subject
-            .trim_matches(|c: char| c == '│' || c.is_whitespace())
-            .to_owned(),
-    )
 }
 
 fn wait_selected(t: &mut Terminal, subject: &str) {
@@ -298,7 +287,7 @@ fn colours_unless_no_color_is_set() {
     let coloured = t.snapshot_after(loaded).unwrap();
     t.send(Key::Char('j')).unwrap();
     let moved = t
-        .snapshot_after(|s| s.cell(1, 4).is_some_and(|c| !c.style().reverse))
+        .snapshot_after(|s| s.cell(1, 9).is_some_and(|c| !c.style().reverse))
         .unwrap();
     quit(t);
     let mut t = postal_with(&home, (80, 25), &[("NO_COLOR", "1")]);
@@ -307,12 +296,17 @@ fn colours_unless_no_color_is_set() {
 
     let style = |s: &Screen, row, col| *s.cell(row, col).unwrap().style();
     let colour = |s: &Screen, row, col| style(s, row, col).fg;
-    assert_eq!(colour(&coloured, 1, 4), termlens::Color::Indexed(4));
+    assert_eq!(colour(&coloured, 1, 9), termlens::Color::Indexed(4));
     // The selection keeps one colour; off it, the marker, sender, date and
     // title take accents. The date ends a column of padding short of the border.
-    assert_eq!(colour(&coloured, 1, 2), termlens::Color::Indexed(4));
-    assert_eq!(colour(&moved, 1, 2), termlens::Color::Indexed(3));
-    assert_eq!(colour(&coloured, 4, 4), termlens::Color::Indexed(5));
+    assert_eq!(colour(&coloured, 2, 2), termlens::Color::Indexed(4));
+    assert_eq!(colour(&moved, 2, 2), termlens::Color::Indexed(3));
+    assert_eq!(colour(&coloured, 4, 9), termlens::Color::Indexed(5));
+    // The avatar is a tint of its own, whatever the palette.
+    assert!(matches!(
+        style(&coloured, 5, 5).bg,
+        termlens::Color::Rgb(..)
+    ));
     assert_eq!(colour(&coloured, 4, 77), termlens::Color::Indexed(6));
     let title = |s: &Screen| {
         (0..s.rows())
@@ -324,10 +318,10 @@ fn colours_unless_no_color_is_set() {
         termlens::Color::Indexed(4)
     );
     for screen in [&coloured, &plain] {
-        let newest = style(screen, 1, 4);
+        let newest = style(screen, 1, 9);
         assert!(newest.reverse, "the selection survives NO_COLOR");
         assert!(newest.bold, "the Unread card stays bold");
-        assert_eq!(screen.cell(1, 2).unwrap().contents(), "●");
+        assert_eq!(screen.cell(2, 2).unwrap().contents(), "●");
         assert!(style(screen, 0, 0).dim, "the border is muted");
         assert!(style(screen, title(screen), 2).bold, "the title is bold");
     }

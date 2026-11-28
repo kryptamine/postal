@@ -40,8 +40,8 @@ fn stores(server: &FakeImap) -> Vec<String> {
 /// Whether the card naming `sender` shows the Unread marker; `None` when
 /// no card on screen names it.
 fn card(screen: &Screen, sender: &str) -> Option<bool> {
-    let row = (0..screen.rows()).find(|&row| screen.row_text(row).contains(sender))?;
-    Some(screen.cell(row, 2)?.contents() == "●")
+    let row = support::card::row_of(screen, sender)?;
+    Some(support::card::unread(screen, row))
 }
 
 /// Started on the newest Message's Preview, with the sync idling.

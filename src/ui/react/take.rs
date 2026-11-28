@@ -1,7 +1,7 @@
 use ratatui::layout::Rect;
 
 use crate::{
-    account::config::ContactsChoice,
+    account::config::{AvatarChoice, ContactsChoice},
     render::icons::Icons,
     ui::drafts::drafting,
     ui::drafts::forwarding,
@@ -66,21 +66,27 @@ pub fn take(model: &mut Model, step: Step, text: Option<Rect>) -> Result<Option<
         Step::Signature(email) => {
             signature_edit::open(&mut model.tty, &mut ui.screen, world.config_dir, &email)?;
         }
-        Step::Live(live) => match live {
-            Live::Icons(choice) => {
-                model.theme.icons = Icons::choose(choice);
-                model.previews.set_look(model.theme.mail_look());
-            }
-            Live::Notify(choice) => model.notifier.notify = choice,
-            Live::Contacts(choice) => {
-                model.world.contacts = choice;
-                if choice != ContactsChoice::None {
-                    ui.screen.contacts_check.start(choice);
-                }
-            }
-        },
+        Step::Live(live) => apply(model, live),
         Step::Exit(exit) => return Ok(Some(exit)),
     }
 
     Ok(None)
+}
+
+/// A setting changed in Settings, on the running screen at once.
+fn apply(model: &mut Model, live: Live) {
+    match live {
+        Live::Icons(choice) => {
+            model.theme.icons = Icons::choose(choice);
+            model.previews.set_look(model.theme.mail_look());
+        }
+        Live::Avatars(choice) => model.theme.avatars = choice == AvatarChoice::Show,
+        Live::Notify(choice) => model.notifier.notify = choice,
+        Live::Contacts(choice) => {
+            model.world.contacts = choice;
+            if choice != ContactsChoice::None {
+                model.ui.screen.contacts_check.start(choice);
+            }
+        }
+    }
 }

@@ -1,4 +1,5 @@
 mod all_inboxes;
+mod avatar;
 mod completion;
 pub mod completion_menu;
 mod date_group;

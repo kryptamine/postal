@@ -50,15 +50,26 @@ fn contract() -> FakeBody {
     ])
 }
 
-/// The marker left of the subject on the card of `sender`; `None` when no
-/// card names it.
+/// The marker at the end of the subject's row on the card of `sender`;
+/// `None` when no card names it.
 fn marker(screen: &Screen, sender: &str) -> Option<String> {
     let row = (0..screen.rows()).find(|&row| {
         let text = screen.row_text(row);
         text.get(..text.len().min(40))
             .is_some_and(|left| left.contains(sender))
     })?;
-    Some(screen.cell(row + 1, 2)?.contents().trim().to_owned())
+    let border = (1..screen.cols()).find(|&col| {
+        screen
+            .cell(row + 1, col)
+            .is_some_and(|cell| cell.contents() == "│")
+    })?;
+    Some(
+        screen
+            .cell(row + 1, border - 2)?
+            .contents()
+            .trim()
+            .to_owned(),
+    )
 }
 
 fn shown(screen: &Screen, text: &str) -> bool {

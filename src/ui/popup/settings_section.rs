@@ -55,7 +55,7 @@ impl Section {
     pub const fn about(self) -> &'static str {
         match self {
             Self::Accounts => "the Accounts Postal signs in to, each with its Signature",
-            Self::Icons => "Nerd Font glyphs in the lists, or symbols any font draws",
+            Self::Icons => "Nerd Font glyphs or plain symbols, and the senders' avatars",
             Self::Notify => "when new mail in an Inbox raises a desktop notification",
             Self::Name => "your name in the From line of the Messages you send",
             Self::Send => "how a Draft's body is sent, and how long u can take it back",

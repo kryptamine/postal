@@ -4,6 +4,7 @@
 use crate::support;
 
 use support::{
+    card::selected_subject,
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage},
     home::Home,
@@ -51,19 +52,10 @@ fn ready(server: &FakeImap, home: &Home) -> Terminal {
     t
 }
 
-/// The subject line of the card drawn in reverse video, the selection.
-fn selected_subject(screen: &Screen) -> Option<String> {
-    let first =
-        (0..screen.rows()).find(|&row| screen.cell(row, 3).is_some_and(|c| c.style().reverse))?;
-    let subject = screen.row_text(first + 1);
-    let subject = subject.split('│').nth(1)?;
-    Some(subject.trim().to_owned())
-}
-
-/// Whether the card of `subject` shows the Unread marker on its sender line.
+/// Whether the card of `subject` shows the Unread marker.
 fn unread(screen: &Screen, subject: &str) -> Option<bool> {
-    let row = (0..screen.rows()).find(|&row| screen.row_text(row).contains(subject))?;
-    Some(screen.cell(row.checked_sub(1)?, 2)?.contents() == "●")
+    let row = support::card::row_of(screen, subject)?;
+    Some(support::card::unread(screen, row.checked_sub(1)?))
 }
 
 fn shows(screen: &Screen, selected: u32, position: &str) -> bool {

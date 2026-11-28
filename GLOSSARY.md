@@ -100,6 +100,10 @@ _Avoid_: file, enclosure
 A meeting a Message carries in a calendar part, inline or attached. Its card sits over the body in the Preview, Reading and `$PAGER`: the title, when in the local zone (and in the event's own when that differs), how it repeats, where, the link to join by, the organizer and the user's own answer. A cancelled one is marked so; an answer to the user's own invitation is one line, `Alice accepted`. Postal does not answer one: the RSVP links the sender puts in the body do, through Hint mode.
 _Avoid_: event, meeting request, calendar invite
 
+**Avatar**:
+The tile that starts a card in the Message List: the initials of the newest Message's sender on a tint its address picks, the same on every card and every run (ADR 0039).
+_Avoid_: picture, icon, logo
+
 **Snippet**:
 The first words of a Message's body, shown under its subject in the Message List.
 _Avoid_: preview, excerpt, summary

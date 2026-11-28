@@ -118,6 +118,16 @@ written! {
 }
 
 written! {
+    /// Whether a card in the Message List starts with its sender's avatar.
+    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    pub enum AvatarChoice {
+        #[default]
+        Show = "show",
+        Hide = "hide",
+    }
+}
+
+written! {
     /// When new mail in an Inbox raises a desktop notification.
     #[derive(Default, Clone, Copy, PartialEq, Eq)]
     pub enum NotifyChoice {

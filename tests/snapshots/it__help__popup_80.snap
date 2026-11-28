@@ -4,12 +4,12 @@ expression: screen
 ---
 size: 80x24  cursor: hidden
 ┌─ 2024 ┌ Help ───────────────────────────────────────────────────────┐────────┐
-│   Bob │                                                             │4-11-18 │
-│   Newe│ / to filter by key or description                           │        │
-│   Newe│                                                             │        │
-│   Ada │ Navigate                                                  ▐ │4-11-17 │
-│   Olde│ j / k        ↓ / ↑        next / previous Message         ▐ │        │
-│   Olde│ g / G        Home / End   first / last Message            ▐ │        │
+│   ▄▄▄▄│                                                             │4-11-18 │
+│    BO │ / to filter by key or description                           │        │
+│   ▀▀▀▀│                                                             │        │
+│   ▄▄▄▄│ Navigate                                                  ▐ │4-11-17 │
+│    AD │ j / k        ↓ / ↑        next / previous Message         ▐ │        │
+│   ▀▀▀▀│ g / G        Home / End   first / last Message            ▐ │        │
 │       │                                                           ▐ │        │
 │       │ Message                                                     │        │
 └───────│ ^d / ^u      PgDn / PgUp  scroll the Preview half a page    │────────┘

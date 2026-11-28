@@ -7,7 +7,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    account::config::{Terminal, TerminalApp},
+    account::config::{AvatarChoice, Terminal, TerminalApp},
     ui::frame::theme::Theme,
     ui::popup::settings::{Row, Settings},
     ui::popup::settings_mode::{Field, Mode},
@@ -35,6 +35,7 @@ const GAP: u16 = 2;
 const TEXT: u16 = 3;
 const MARKER: &str = "▸";
 const CURRENT: &str = "✓";
+const AVATARS: &str = "an avatar beside each card";
 const ESC: &str = "esc";
 const CLOSE: &str = "close";
 const CANCEL: &str = "cancel";
@@ -182,6 +183,8 @@ impl SettingsPopup<'_> {
             },
             Row::Handler if settings.handler => ("Postal opens mailto: links", "on", style),
             Row::Handler => ("Postal opens mailto: links", "off", muted),
+            Row::Avatars if settings.avatars == AvatarChoice::Show => (AVATARS, "on", style),
+            Row::Avatars => (AVATARS, "off", muted),
             Row::TerminalCommand => match (settings.mode(), &settings.terminal) {
                 (Mode::Typing(Field::TerminalCommand, typed), _) => {
                     return input::draw(buf, area, typed, style);
@@ -340,6 +343,8 @@ fn primary(settings: &Settings) -> Option<&'static str> {
         Row::Signature(_) | Row::Name | Row::SendDelay | Row::TerminalCommand => Some(" ↵ edit "),
         Row::Handler if settings.handler => Some(" ↵ remove "),
         Row::Handler => Some(" ↵ set up "),
+        Row::Avatars if settings.avatars == AvatarChoice::Show => Some(" ↵ hide "),
+        Row::Avatars => Some(" ↵ show "),
         Row::Add => Some(" ↵ add "),
         Row::Choice(_) => Some(" ↵ apply "),
     }

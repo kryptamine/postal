@@ -15,6 +15,7 @@ use crate::{
     render::stack_str::StackStr,
     ui::frame::layout::{MIN_LIST_WIDTH, PADDING},
     ui::frame::theme::Theme,
+    ui::list::avatar,
     ui::list::date_group::DateGroup,
     ui::list::date_label::DateLabel,
     ui::list::inbox_view::InboxView,
@@ -38,6 +39,14 @@ const MIN_WIDTH_WITH_DATE: u16 = 29;
 const DATE_ROOM: u16 = 11;
 /// Down the padding left of a picked card's text, on each of its rows.
 const PICKED: &str = "▌";
+/// The Unread mark beside an avatar, the plain dot in either look.
+const UNREAD_DOT: &str = "●";
+/// Below this card width there is no avatar, so the text keeps 25 columns.
+const AVATAR_MIN_WIDTH: u16 = 34;
+/// The marks' column and its blank, since a Nerd Font glyph spills over it.
+const MARKS_ROOM: u16 = 2;
+/// The padding, the marks and the avatar.
+const AVATAR_ROOM: u16 = PADDING + MARKS_ROOM + avatar::WIDTH;
 
 /// How many cards a list `height` rows tall shows at most, its border and
 /// a cut last card included; Date Group headers can leave room for fewer.
@@ -214,6 +223,24 @@ struct Cards<'a> {
 }
 
 impl Cards<'_> {
+    /// Whether `card` has an avatar: when they are shown and it is wide enough.
+    const fn avatar(&self, card: Rect) -> bool {
+        self.theme.avatars && card.width >= AVATAR_MIN_WIDTH
+    }
+
+    /// The card right of its avatar, or the whole card without one.
+    const fn body(&self, card: Rect) -> Rect {
+        if !self.avatar(card) {
+            return card;
+        }
+
+        Rect {
+            x: card.x + AVATAR_ROOM,
+            width: card.width - AVATAR_ROOM,
+            ..card
+        }
+    }
+
     fn draw(&self, shown: &Shown<'_>, card: Rect, buf: &mut Buffer) {
         let (thread, newest) = (shown.thread, shown.newest());
         let base = if shown.selected {
@@ -246,19 +273,16 @@ impl Cards<'_> {
             }
         }
 
-        let text = text_area(card);
-        if thread.unread {
-            let style = strong.patch(tone(self.theme.marker));
-            buf.set_string(text.x, text.y, self.theme.icons.unread(), style);
-        } else if let Some(icon) = self.theme.icons.answered().filter(|_| thread.answered) {
-            buf.set_string(text.x, text.y, icon, tone(self.theme.muted));
+        if self.avatar(card) {
+            let at = (card.x + PADDING + MARKS_ROOM, card.y, card.height);
+            avatar::draw(buf, at, newest, shown.selected, self.theme);
         }
 
-        let [senders, subject, snippet] = self.fields(card);
-        if thread.attachments && !subject.is_empty() {
-            let icon = self.theme.icons.attachment();
-            buf.set_string(text.x, subject.y, icon, tone(self.theme.muted));
-        }
+        let [senders, subject, snippet] = self.fields(card, thread.attachments);
+        let marker = strong.patch(tone(self.theme.marker));
+        self.marks(thread, card, [marker, tone(self.theme.muted)], buf);
+        let card = self.body(card);
+        let text = text_area(card);
 
         let count = count(thread);
         let style = strong.patch(tone(self.theme.sender));
@@ -288,6 +312,45 @@ impl Cards<'_> {
         }
     }
 
+    /// The Unread or answered mark and the attachment mark, left of the text;
+    /// beside an avatar the first on its middle row, the second ending the
+    /// subject's row. `styles` are the Unread mark's and the others'.
+    fn marks(&self, thread: &Thread, card: Rect, styles: [Style; 2], buf: &mut Buffer) {
+        let [unread, muted] = styles;
+        let text = text_area(card);
+        if !self.avatar(card) {
+            if thread.unread {
+                buf.set_string(text.x, text.y, self.theme.icons.unread(), unread);
+            } else if let Some(icon) = self.theme.icons.answered().filter(|_| thread.answered) {
+                buf.set_string(text.x, text.y, icon, muted);
+            }
+
+            if thread.attachments && card.height > 1 {
+                buf.set_string(text.x, text.y + 1, self.theme.icons.attachment(), muted);
+            }
+
+            return;
+        }
+
+        // Beside the avatar, on its middle row, so the mark sits level with
+        // the letters; the attachment ends the subject's row.
+        let middle = card.y + 1;
+        if middle >= card.bottom() {
+            return;
+        }
+
+        if thread.unread {
+            buf.set_string(text.x, middle, UNREAD_DOT, unread);
+        } else if let Some(icon) = self.theme.icons.answered().filter(|_| thread.answered) {
+            buf.set_string(text.x, middle, icon, muted);
+        }
+
+        if thread.attachments {
+            let icon = self.theme.icons.attachment();
+            buf.set_string(text.right().saturating_sub(1), middle, icon, muted);
+        }
+    }
+
     /// Restyles the characters a Query matched on a drawn card, whose
     /// haystack `Search` joins as the card shows it.
     fn highlight(&self, shown: &Shown<'_>, matched: &Matched<'_>, card: Rect, buf: &mut Buffer) {
@@ -297,7 +360,7 @@ impl Cards<'_> {
             self.theme.matched
         };
 
-        let [senders, subject_area, snippet_area] = self.fields(card);
+        let [senders, subject_area, snippet_area] = self.fields(card, shown.thread.attachments);
         let thread = shown.thread;
         let gap = matched.len(SENDER_GAP);
         let start = |n: usize| -> u32 {
@@ -328,15 +391,20 @@ impl Cards<'_> {
     }
 
     /// Where a card's senders, subject and Snippet go; a row past the card
-    /// is empty. The senders leave room for the date.
-    fn fields(&self, card: Rect) -> [Rect; 3] {
+    /// is empty. The senders leave room for the date. The marks indent the
+    /// text only when no avatar stands before it.
+    fn fields(&self, card: Rect, attached: bool) -> [Rect; 3] {
+        let avatar = self.avatar(card);
+        let indent = if avatar { 0 } else { INDENT };
+        let clip = if avatar && attached { MARKS_ROOM } else { 0 };
+        let card = self.body(card);
         let text = text_area(card);
-        let text_width = text.width.saturating_sub(INDENT);
+        let text_width = text.width.saturating_sub(indent);
         let date = if self.now.is_some() { DATE_ROOM } else { 0 };
-        let x = text.x + INDENT;
+        let x = text.x + indent;
         [
             Rect::new(x, text.y, text_width.saturating_sub(date), 1),
-            Rect::new(x, text.y + 1, text_width, 1),
+            Rect::new(x, text.y + 1, text_width.saturating_sub(clip), 1),
             Rect::new(x, text.y + 2, text_width, 1),
         ]
         .map(|field| field.intersection(card))

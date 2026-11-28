@@ -3,6 +3,7 @@ use crate::support;
 use std::time::Duration;
 
 use support::{
+    card::selected_subject,
     fake_body::FakeBody,
     fake_imap::{FIRST_UID, FakeImap, FakeMessage, Stall},
     home::Home,
@@ -31,20 +32,11 @@ fn idling(server: &FakeImap, home: &Home) -> Terminal {
     t
 }
 
-/// The subject line of the card drawn in reverse video, the selection.
-fn selected_subject(screen: &Screen) -> Option<String> {
-    let first =
-        (0..screen.rows()).find(|&row| screen.cell(row, 3).is_some_and(|c| c.style().reverse))?;
-    let subject = screen.row_text(first + 1);
-    let subject = subject.split('│').nth(1)?;
-    Some(subject.trim().to_owned())
-}
-
 /// Whether the card naming `sender` shows the Unread marker; `None` when
 /// no card on screen names it.
 fn card(screen: &Screen, sender: &str) -> Option<bool> {
-    let row = (0..screen.rows()).find(|&row| screen.row_text(row).contains(sender))?;
-    Some(screen.cell(row, 2)?.contents() == "●")
+    let row = support::card::row_of(screen, sender)?;
+    Some(support::card::unread(screen, row))
 }
 
 fn message(sender: &'static str, subject: &str, date: &str) -> FakeMessage {
@@ -209,14 +201,12 @@ fn an_expunge_older_than_the_cache_renumbers_the_cached_rows() {
     quit(t);
 
     let marked = |subject: &str| {
-        let card = format!("│   {subject}");
-        let row = (0..screen.rows()).find(|&row| screen.row_text(row).starts_with(&card));
-        row.and_then(|row| screen.cell(row - 1, 2))
-            .map(|cell| cell.contents() == "●")
+        let row = (1..screen.rows()).find(|&row| support::card::text(&screen, row) == subject);
+        row.map(|row| support::card::unread(&screen, row - 1))
     };
 
-    assert_eq!(marked("Message 503 "), Some(true), "{screen}");
-    assert_eq!(marked("Message 502 "), Some(false), "{screen}");
+    assert_eq!(marked("Message 503"), Some(true), "{screen}");
+    assert_eq!(marked("Message 502"), Some(false), "{screen}");
 }
 
 // The IMAP library keeps at most 100 announcements and drops the rest

@@ -12,8 +12,8 @@ use toml::Spanned;
 use crate::{
     account::autoconfig::Autoconfig,
     account::config::{
-        ComposeFormat, Config, ContactsChoice, Error, IconChoice, Imap, NotifyChoice, SEND_DELAY,
-        SecretStore, Smtp, Terminal,
+        AvatarChoice, ComposeFormat, Config, ContactsChoice, Error, IconChoice, Imap, NotifyChoice,
+        SEND_DELAY, SecretStore, Smtp, Terminal,
     },
     account::oauth::Endpoints,
     account::provider::Provider,
@@ -35,6 +35,7 @@ pub struct PartialConfig {
     pub oauth: Endpoints,
     pub autoconfig: Autoconfig,
     pub icons: IconChoice,
+    pub avatars: AvatarChoice,
     pub notify: NotifyChoice,
     pub terminal: Terminal,
     pub contacts: ContactsChoice,
@@ -66,6 +67,8 @@ struct RawConfig {
     autoconfig: Autoconfig,
     #[serde(default)]
     icons: IconChoice,
+    #[serde(default)]
+    avatars: AvatarChoice,
     #[serde(default)]
     notify: NotifyChoice,
     #[serde(default)]
@@ -197,6 +200,7 @@ impl PartialConfig {
                 oauth: Endpoints::google(),
                 autoconfig: Autoconfig::default(),
                 icons: IconChoice::default(),
+                avatars: AvatarChoice::default(),
                 notify: NotifyChoice::default(),
                 terminal: Terminal::default(),
                 contacts: ContactsChoice::default(),
@@ -268,6 +272,7 @@ impl PartialConfig {
             },
             autoconfig: raw.autoconfig,
             icons: raw.icons,
+            avatars: raw.avatars,
             notify: raw.notify,
             terminal: raw.terminal,
             contacts: raw.contacts,
