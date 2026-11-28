@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     cache::{Cache, Indexed},
-    mail::fetch::body_fetch::open,
+    mail::fetch::examine::open,
     mail::imap::ImapSession,
     mail::passes::snippet,
     mail::passes::snippets,

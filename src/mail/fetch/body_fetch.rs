@@ -1,12 +1,7 @@
 use crate::{
-    cache::Cache,
-    domain::folder_name::FolderName,
-    domain::message_ref::MessageRef,
-    domain::uid::Uid,
-    mail::fetch::attachment_fetch::AttachmentRequest,
-    mail::fetch::inline_fetch::InlineRequest,
-    mail::imap::{ImapSession, Mode},
-    mail::sync::{self, Error},
+    cache::Cache, domain::folder_name::FolderName, domain::message_ref::MessageRef,
+    domain::uid::Uid, mail::fetch::attachment_fetch::AttachmentRequest,
+    mail::fetch::inline_fetch::InlineRequest, mail::imap::ImapSession, mail::sync::Error,
     mail::update::Update,
 };
 
@@ -91,19 +86,6 @@ pub async fn fetch_each(
     }
 
     Ok(answered)
-}
-
-/// Examines `folder` unless it is open already; false when the server no
-/// longer has it.
-pub async fn open(server: &mut ImapSession, folder: &FolderName) -> Result<bool, Error> {
-    match sync::open(server, folder, Mode::Examine).await {
-        Ok(()) => Ok(true),
-        Err(Error::Gone(error)) => {
-            tracing::warn!("{folder} is gone: {error}");
-            Ok(false)
-        }
-        Err(error) => Err(error),
-    }
 }
 
 async fn fetch(
